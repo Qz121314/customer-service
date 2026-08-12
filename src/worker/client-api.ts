@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 
 type ClientBindings = {
@@ -883,9 +883,7 @@ async function readJson<T>(request: Request): Promise<T | null> {
 }
 
 function error(
-  c: Parameters<typeof clientApi.get>[1] extends (context: infer C) => unknown
-    ? C
-    : never,
+  c: Context<ClientEnv>,
   status: 400 | 401 | 404 | 409 | 426,
   code: string,
   message: string,
