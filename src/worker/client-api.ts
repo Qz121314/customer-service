@@ -301,7 +301,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     type: 'message.created',
     conversationId,
   });
-  await broadcastRoom(c.env, 'admin:inbox', {
+  await broadcastRoom(c.env, 'admin-inbox', {
     type: 'conversation.changed',
     conversationId,
   });
@@ -395,7 +395,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     type: 'message.created',
     conversationId: conversation.id,
   });
-  await broadcastRoom(c.env, 'admin:inbox', {
+  await broadcastRoom(c.env, 'admin-inbox', {
     type: 'conversation.changed',
     conversationId: conversation.id,
   });
@@ -486,7 +486,7 @@ export async function broadcastClientConversationEvent(
     type,
     conversationId,
   });
-  await broadcastRoom(env, 'admin:inbox', {
+  await broadcastRoom(env, 'admin-inbox', {
     type: 'conversation.changed',
     conversationId,
   });
