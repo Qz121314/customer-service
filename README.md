@@ -49,15 +49,58 @@ service-catalog-site-assets
 
 ## GitHub Secrets
 
-仓库需要：
+仓库部署只需要：
 
 ```text
 CLOUDFLARE_ACCOUNT_ID   必需
 CLOUDFLARE_API_TOKEN    必需
-ADMIN_PASSWORD          推荐；未配置时部署可完成，但管理后台登录会被禁用
 ```
 
 `CLOUDFLARE_API_TOKEN` 应只承担本仓库部署需要的 Workers / D1 / R2 权限。
+
+`ADMIN_PASSWORD` 不放在 GitHub Secrets，也不由 CI 写入 Cloudflare。
+
+## Worker 运行时变量
+
+管理员密码由 `customer-service-app` 自己的 Cloudflare Worker Secret 管理：
+
+```text
+ADMIN_PASSWORD
+```
+
+推荐在 Cloudflare Dashboard 中进入：
+
+```text
+Workers & Pages
+→ customer-service-app
+→ Settings
+→ Variables and Secrets
+→ Add
+```
+
+配置：
+
+```text
+Type:  Secret
+Name:  ADMIN_PASSWORD
+Value: 自定义后台登录密码
+```
+
+密码属于敏感数据，不要放进 `wrangler.jsonc` 的 `vars`，也不要提交到 GitHub。
+
+部署配置启用了：
+
+```jsonc
+"keep_vars": true
+```
+
+生产 CI 同时使用：
+
+```text
+wrangler deploy --keep-vars
+```
+
+因此 Cloudflare Dashboard 中维护的普通 Worker Variables 会在代码更新部署时保留；`ADMIN_PASSWORD` 使用 Worker Secret 管理，部署流程不会主动覆盖或删除它。只有显式修改或删除该 Secret 时才会变化。
 
 ## 数据边界
 
