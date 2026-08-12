@@ -57,7 +57,9 @@ export async function getOverview(): Promise<Overview> {
   return request('/api/admin/overview');
 }
 
-export async function getConversations(status?: Conversation['status']): Promise<Conversation[]> {
+export async function getConversations(
+  status?: Conversation['status'],
+): Promise<Conversation[]> {
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
   const response = await request<{ conversations: Conversation[] }>(
     `/api/admin/conversations${query}`,
@@ -70,10 +72,13 @@ export async function getConversation(id: string): Promise<ConversationDetail> {
 }
 
 export async function sendMessage(id: string, body: string): Promise<Message> {
-  const response = await request<{ message: Message }>(`/api/admin/conversations/${id}/messages`, {
-    method: 'POST',
-    body: JSON.stringify({ body }),
-  });
+  const response = await request<{ message: Message }>(
+    `/api/admin/conversations/${id}/messages`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    },
+  );
   return response.message;
 }
 
@@ -104,9 +109,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
 
   if (response.status === 204) return undefined as T;
-  const payload = (await response.json().catch(() => ({}))) as { message?: string; error?: string } & T;
+  const payload = (await response.json().catch(() => ({}))) as {
+    message?: string;
+    error?: string;
+  } & T;
   if (!response.ok) {
-    throw new Error(payload.message || payload.error || `Request failed (${response.status})`);
+    throw new Error(
+      payload.message || payload.error || `Request failed (${response.status})`,
+    );
   }
   return payload;
 }

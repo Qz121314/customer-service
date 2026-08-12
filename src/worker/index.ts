@@ -51,8 +51,12 @@ app.get('/api/health', (c) =>
 );
 
 app.get('/api/auth/session', async (c) => {
-  if (!c.env.ADMIN_PASSWORD) return c.json({ authenticated: false, configured: false });
-  const authenticated = await verifyAdminSession(c.req.raw, c.env.ADMIN_PASSWORD);
+  if (!c.env.ADMIN_PASSWORD)
+    return c.json({ authenticated: false, configured: false });
+  const authenticated = await verifyAdminSession(
+    c.req.raw,
+    c.env.ADMIN_PASSWORD,
+  );
   return c.json({ authenticated, configured: true });
 });
 
@@ -68,7 +72,10 @@ app.post('/api/auth/login', async (c) => {
   }
 
   const body = await readJson<{ password?: string }>(c.req.raw);
-  if (!body?.password || !timingSafeEqual(body.password, c.env.ADMIN_PASSWORD)) {
+  if (
+    !body?.password ||
+    !timingSafeEqual(body.password, c.env.ADMIN_PASSWORD)
+  ) {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
   }
 
@@ -88,7 +95,8 @@ app.post('/api/auth/logout', (c) => {
 });
 
 app.use('/api/admin/*', async (c, next) => {
-  if (!c.env.ADMIN_PASSWORD) return c.json({ error: 'ADMIN_NOT_CONFIGURED' }, 503);
+  if (!c.env.ADMIN_PASSWORD)
+    return c.json({ error: 'ADMIN_NOT_CONFIGURED' }, 503);
   if (!(await verifyAdminSession(c.req.raw, c.env.ADMIN_PASSWORD))) {
     return c.json({ error: 'UNAUTHORIZED' }, 401);
   }
@@ -97,9 +105,15 @@ app.use('/api/admin/*', async (c, next) => {
 
 app.get('/api/admin/overview', async (c) => {
   const [open, pending, closed, visitors, messages] = await c.env.DB.batch([
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM conversations WHERE status = 'open'"),
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM conversations WHERE status = 'pending'"),
-    c.env.DB.prepare("SELECT COUNT(*) AS count FROM conversations WHERE status = 'closed'"),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM conversations WHERE status = 'open'",
+    ),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM conversations WHERE status = 'pending'",
+    ),
+    c.env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM conversations WHERE status = 'closed'",
+    ),
     c.env.DB.prepare('SELECT COUNT(*) AS count FROM visitors'),
     c.env.DB.prepare('SELECT COUNT(*) AS count FROM messages'),
   ]);
@@ -114,7 +128,8 @@ app.get('/api/admin/overview', async (c) => {
 
 app.get('/api/admin/conversations', async (c) => {
   const status = c.req.query('status');
-  const filtered = status === 'open' || status === 'pending' || status === 'closed';
+  const filtered =
+    status === 'open' || status === 'pending' || status === 'closed';
   let query = c.env.DB.prepare(`
     SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.assigned_agent,
       c.last_message_at, c.created_at, v.display_name AS visitor_name,
@@ -157,7 +172,9 @@ app.post('/api/admin/conversations/:id/messages', async (c) => {
   const text = body?.body?.trim();
   if (!validMessage(text)) return c.json({ error: 'INVALID_MESSAGE' }, 400);
 
-  const exists = await c.env.DB.prepare('SELECT id FROM conversations WHERE id = ?1')
+  const exists = await c.env.DB.prepare(
+    'SELECT id FROM conversations WHERE id = ?1',
+  )
     .bind(id)
     .first();
   if (!exists) return c.json({ error: 'NOT_FOUND' }, 404);
@@ -179,11 +196,16 @@ app.post('/api/admin/conversations/:id/status', async (c) => {
     .bind(body.status, id)
     .run();
   if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-  await broadcast(c.env, id, { type: 'conversation.status', status: body.status });
+  await broadcast(c.env, id, {
+    type: 'conversation.status',
+    status: body.status,
+  });
   return c.json({ ok: true });
 });
 
-app.get('/api/admin/realtime/:id', (c) => room(c.env, c.req.param('id')).fetch(c.req.raw));
+app.get('/api/admin/realtime/:id', (c) =>
+  room(c.env, c.req.param('id')).fetch(c.req.raw),
+);
 
 app.get('/api/public/sites/:publicKey', async (c) => {
   const site = await c.env.DB.prepare(
@@ -215,10 +237,15 @@ app.post('/api/public/conversations', async (c) => {
 
   const visitorId = crypto.randomUUID();
   const conversationId = crypto.randomUUID();
-  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
+  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll(
+    '-',
+    '',
+  );
   const tokenHash = await sha256(token);
   const displayName = body.displayName?.trim().slice(0, 80) || 'Visitor';
-  const metadata = body.metadata ? JSON.stringify(body.metadata).slice(0, 10000) : null;
+  const metadata = body.metadata
+    ? JSON.stringify(body.metadata).slice(0, 10000)
+    : null;
 
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -228,7 +255,12 @@ app.post('/api/public/conversations', async (c) => {
     c.env.DB.prepare(
       `INSERT INTO conversations (id, site_id, visitor_id, subject)
        VALUES (?1, ?2, ?3, ?4)`,
-    ).bind(conversationId, site.id, visitorId, body.message?.trim().slice(0, 80) || null),
+    ).bind(
+      conversationId,
+      site.id,
+      visitorId,
+      body.message?.trim().slice(0, 80) || null,
+    ),
   ]);
 
   let message: MessageRow | null = null;
@@ -247,7 +279,11 @@ app.post('/api/public/conversations', async (c) => {
 
 app.post('/api/public/conversations/:id/messages', async (c) => {
   const id = c.req.param('id');
-  const visitor = await authenticateVisitor(c.env, id, c.req.header('Authorization'));
+  const visitor = await authenticateVisitor(
+    c.env,
+    id,
+    c.req.header('Authorization'),
+  );
   if (!visitor) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
   const body = await readJson<{ body?: string }>(c.req.raw);
@@ -255,7 +291,9 @@ app.post('/api/public/conversations/:id/messages', async (c) => {
   if (!validMessage(text)) return c.json({ error: 'INVALID_MESSAGE' }, 400);
 
   const message = await persistMessage(c.env, id, 'visitor', visitor.id, text!);
-  await c.env.DB.prepare('UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1')
+  await c.env.DB.prepare(
+    'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
+  )
     .bind(visitor.id)
     .run();
   await broadcast(c.env, id, { type: 'message', message });
@@ -265,7 +303,11 @@ app.post('/api/public/conversations/:id/messages', async (c) => {
 app.get('/api/public/realtime/:id', async (c) => {
   const id = c.req.param('id');
   const token = c.req.query('token');
-  const visitor = await authenticateVisitor(c.env, id, token ? `Bearer ${token}` : undefined);
+  const visitor = await authenticateVisitor(
+    c.env,
+    id,
+    token ? `Bearer ${token}` : undefined,
+  );
   if (!visitor) return c.json({ error: 'UNAUTHORIZED' }, 401);
   return room(c.env, id).fetch(c.req.raw);
 });
@@ -298,13 +340,17 @@ export class ConversationRoom extends DurableObject<Bindings> {
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({ connectedAt: Date.now() });
-    server.send(JSON.stringify({ type: 'ready', time: new Date().toISOString() }));
+    server.send(
+      JSON.stringify({ type: 'ready', time: new Date().toISOString() }),
+    );
     return new Response(null, { status: 101, webSocket: client });
   }
 
   webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
     if (message === 'ping') {
-      socket.send(JSON.stringify({ type: 'pong', time: new Date().toISOString() }));
+      socket.send(
+        JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
+      );
     }
   }
 
@@ -358,10 +404,16 @@ async function authenticateVisitor(
 }
 
 function room(env: Bindings, conversationId: string): DurableObjectStub {
-  return env.CONVERSATION_ROOMS.get(env.CONVERSATION_ROOMS.idFromName(conversationId));
+  return env.CONVERSATION_ROOMS.get(
+    env.CONVERSATION_ROOMS.idFromName(conversationId),
+  );
 }
 
-async function broadcast(env: Bindings, conversationId: string, payload: unknown): Promise<void> {
+async function broadcast(
+  env: Bindings,
+  conversationId: string,
+  payload: unknown,
+): Promise<void> {
   await room(env, conversationId).fetch('https://conversation-room/broadcast', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -382,7 +434,9 @@ async function readJson<T>(request: Request): Promise<T | null> {
 }
 
 function count(result: D1Result): number {
-  return Number((result.results?.[0] as { count?: number } | undefined)?.count ?? 0);
+  return Number(
+    (result.results?.[0] as { count?: number } | undefined)?.count ?? 0,
+  );
 }
 
 function timingSafeEqual(left: string, right: string): boolean {
@@ -395,11 +449,16 @@ function timingSafeEqual(left: string, right: string): boolean {
 }
 
 async function createAdminSession(password: string): Promise<string> {
-  const payload = encode(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL }));
+  const payload = encode(
+    JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL }),
+  );
   return `${payload}.${await hmac(password, payload)}`;
 }
 
-async function verifyAdminSession(request: Request, password: string): Promise<boolean> {
+async function verifyAdminSession(
+  request: Request,
+  password: string,
+): Promise<boolean> {
   const header = request.headers.get('Cookie') ?? '';
   const token = header
     .split(';')
@@ -429,13 +488,22 @@ async function hmac(secret: string, value: string): Promise<string> {
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(value),
+  );
   return toBase64Url(new Uint8Array(signature));
 }
 
 async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
 function encode(value: string): string {
@@ -453,5 +521,8 @@ function decode(value: string): string {
 function toBase64Url(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  return btoa(binary)
+    .replaceAll('+', '-')
+    .replaceAll('/', '_')
+    .replaceAll('=', '');
 }

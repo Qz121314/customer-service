@@ -22,7 +22,8 @@ try {
 
 const values = Array.isArray(data) ? data : [data];
 const match = values.find(
-  (item) => item?.name === name || item?.database_name === name || item?.title === name,
+  (item) =>
+    item?.name === name || item?.database_name === name || item?.title === name,
 );
 const id = match?.uuid ?? match?.id ?? match?.database_id;
 if (!id) process.exit(1);

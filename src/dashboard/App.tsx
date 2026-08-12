@@ -18,7 +18,13 @@ import {
 type AuthState = 'loading' | 'authenticated' | 'signed-out' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
 
-const emptyOverview: Overview = { open: 0, pending: 0, closed: 0, visitors: 0, messages: 0 };
+const emptyOverview: Overview = {
+  open: 0,
+  pending: 0,
+  closed: 0,
+  visitors: 0,
+  messages: 0,
+};
 
 export function App() {
   const [auth, setAuth] = useState<AuthState>('loading');
@@ -89,7 +95,11 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
   useEffect(() => {
     setBusy(true);
     refresh()
-      .catch((reason) => setError(reason instanceof Error ? reason.message : 'Could not load inbox'))
+      .catch((reason) =>
+        setError(
+          reason instanceof Error ? reason.message : 'Could not load inbox',
+        ),
+      )
       .finally(() => setBusy(false));
   }, [refresh]);
 
@@ -105,7 +115,12 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
         if (active) setDetail(value);
       })
       .catch((reason) => {
-        if (active) setError(reason instanceof Error ? reason.message : 'Could not load conversation');
+        if (active)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : 'Could not load conversation',
+          );
       });
 
     const socket = openConversationSocket(selectedId);
@@ -119,10 +134,16 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
 
         if (payload.type === 'message') {
           setDetail((current) => {
-            if (!current || current.messages.some((item) => item.id === payload.message.id)) {
+            if (
+              !current ||
+              current.messages.some((item) => item.id === payload.message.id)
+            ) {
               return current;
             }
-            return { ...current, messages: [...current.messages, payload.message] };
+            return {
+              ...current,
+              messages: [...current.messages, payload.message],
+            };
           });
           void refresh();
         }
@@ -132,7 +153,10 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
             current
               ? {
                   ...current,
-                  conversation: { ...current.conversation, status: payload.status },
+                  conversation: {
+                    ...current.conversation,
+                    status: payload.status,
+                  },
                 }
               : current,
           );
@@ -157,13 +181,16 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
     try {
       const message = await sendMessage(selectedId, text);
       setDetail((current) => {
-        if (!current || current.messages.some((item) => item.id === message.id)) return current;
+        if (!current || current.messages.some((item) => item.id === message.id))
+          return current;
         return { ...current, messages: [...current.messages, message] };
       });
       await refresh();
     } catch (reason) {
       setDraft(text);
-      setError(reason instanceof Error ? reason.message : 'Message could not be sent');
+      setError(
+        reason instanceof Error ? reason.message : 'Message could not be sent',
+      );
     }
   }
 
@@ -178,7 +205,11 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
       );
       await refresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Status could not be updated');
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : 'Status could not be updated',
+      );
     }
   }
 
@@ -195,7 +226,11 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
         <button className="rail-item" title="Settings" disabled>
           ⚙
         </button>
-        <button className="avatar" onClick={() => void onLogout()} title="Sign out">
+        <button
+          className="avatar"
+          onClick={() => void onLogout()}
+          title="Sign out"
+        >
           A
         </button>
       </aside>
@@ -206,7 +241,9 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
             <span className="eyebrow">Workspace</span>
             <h1>Inbox</h1>
           </div>
-          <span className="live"><i /> Live</span>
+          <span className="live">
+            <i /> Live
+          </span>
         </header>
 
         <div className="metrics">
@@ -239,16 +276,24 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
             conversations.map((conversation) => (
               <button
                 key={conversation.id}
-                className={conversation.id === selectedId ? 'conversation active' : 'conversation'}
+                className={
+                  conversation.id === selectedId
+                    ? 'conversation active'
+                    : 'conversation'
+                }
                 onClick={() => setSelectedId(conversation.id)}
               >
-                <span className="person">{initials(conversation.visitor_name || 'Visitor')}</span>
+                <span className="person">
+                  {initials(conversation.visitor_name || 'Visitor')}
+                </span>
                 <span className="conversation-copy">
                   <span className="conversation-line">
                     <strong>{conversation.visitor_name || 'Visitor'}</strong>
                     <time>{relativeTime(conversation.last_message_at)}</time>
                   </span>
-                  <span className="preview">{conversation.last_message || 'Conversation created'}</span>
+                  <span className="preview">
+                    {conversation.last_message || 'Conversation created'}
+                  </span>
                 </span>
                 <i className={`dot ${conversation.status}`} />
               </button>
@@ -271,15 +316,23 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
             <p>Messages and conversation controls will appear here.</p>
           </div>
         ) : !detail ? (
-          <div className="thread-empty"><p>Loading conversation…</p></div>
+          <div className="thread-empty">
+            <p>Loading conversation…</p>
+          </div>
         ) : (
           <>
             <header className="thread-head">
-              <button className="back" onClick={() => setSelectedId(null)} aria-label="Back">
+              <button
+                className="back"
+                onClick={() => setSelectedId(null)}
+                aria-label="Back"
+              >
                 ←
               </button>
               <span className="person large">
-                {initials(String(detail.conversation.visitor_name || 'Visitor'))}
+                {initials(
+                  String(detail.conversation.visitor_name || 'Visitor'),
+                )}
               </span>
               <div className="identity">
                 <h2>{String(detail.conversation.visitor_name || 'Visitor')}</h2>
@@ -287,7 +340,11 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
               </div>
               <select
                 value={String(detail.conversation.status)}
-                onChange={(event) => void changeStatus(event.target.value as Conversation['status'])}
+                onChange={(event) =>
+                  void changeStatus(
+                    event.target.value as Conversation['status'],
+                  )
+                }
               >
                 <option value="open">Open</option>
                 <option value="pending">Pending</option>
@@ -296,11 +353,16 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
             </header>
 
             <div className="messages">
-              <div className="day">Conversation started {formatDate(String(detail.conversation.created_at))}</div>
+              <div className="day">
+                Conversation started{' '}
+                {formatDate(String(detail.conversation.created_at))}
+              </div>
               {detail.messages.length === 0 ? (
                 <div className="no-messages">No messages yet.</div>
               ) : (
-                detail.messages.map((message) => <Bubble key={message.id} message={message} />)
+                detail.messages.map((message) => (
+                  <Bubble key={message.id} message={message} />
+                ))
               )}
             </div>
 
@@ -318,7 +380,12 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                 }}
               />
               <div className="composer-foot">
-                <button className="attach" type="button" disabled title="Attachments are next">
+                <button
+                  className="attach"
+                  type="button"
+                  disabled
+                  title="Attachments are next"
+                >
                   ＋
                 </button>
                 <span>Enter to send · Shift + Enter for newline</span>
@@ -335,11 +402,17 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
 }
 
 function Metric({ label, value }: { label: string; value: number }) {
-  return <div className="metric"><strong>{value}</strong><span>{label}</span></div>;
+  return (
+    <div className="metric">
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
 }
 
 function Bubble({ message }: { message: Message }) {
-  if (message.sender_type === 'system') return <div className="system">{message.body}</div>;
+  if (message.sender_type === 'system')
+    return <div className="system">{message.body}</div>;
   const agent = message.sender_type === 'agent';
   return (
     <div className={agent ? 'message agent' : 'message visitor'}>
@@ -381,7 +454,9 @@ function Login({
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
-        <button className="primary" disabled={!password}>Continue</button>
+        <button className="primary" disabled={!password}>
+          Continue
+        </button>
       </form>
     </div>
   );
@@ -394,18 +469,32 @@ function Setup() {
         <div className="logo auth-logo">CS</div>
         <span className="eyebrow">Setup required</span>
         <h1>Deployment is online</h1>
-        <p>Add an <code>ADMIN_PASSWORD</code> repository secret and redeploy to enable login.</p>
+        <p>
+          Add an <code>ADMIN_PASSWORD</code> repository secret and redeploy to
+          enable login.
+        </p>
       </div>
     </div>
   );
 }
 
 function Startup() {
-  return <div className="startup"><div className="logo">CS</div><span>Loading workspace…</span></div>;
+  return (
+    <div className="startup">
+      <div className="logo">CS</div>
+      <span>Loading workspace…</span>
+    </div>
+  );
 }
 
 function initials(value: string): string {
-  return value.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }
 
 function parseUtc(value: string): Date {
@@ -413,7 +502,10 @@ function parseUtc(value: string): Date {
 }
 
 function relativeTime(value: string): string {
-  const seconds = Math.max(0, Math.floor((Date.now() - parseUtc(value).getTime()) / 1000));
+  const seconds = Math.max(
+    0,
+    Math.floor((Date.now() - parseUtc(value).getTime()) / 1000),
+  );
   if (seconds < 60) return 'now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
@@ -421,9 +513,16 @@ function relativeTime(value: string): string {
 }
 
 function formatTime(value: string): string {
-  return parseUtc(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return parseUtc(value).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function formatDate(value: string): string {
-  return parseUtc(value).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  return parseUtc(value).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
