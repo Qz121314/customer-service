@@ -109,6 +109,38 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
   }, [refresh]);
 
   useEffect(() => {
+    let active = true;
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+
+    const connect = () => {
+      if (!active) return;
+      socket = openConversationSocket('admin-inbox');
+      socket.addEventListener('message', (event) => {
+        if (!active) return;
+        try {
+          const payload = JSON.parse(String(event.data)) as { type?: string };
+          if (payload.type === 'conversation.changed') void refresh();
+        } catch {
+          // 忽略非 JSON WebSocket 帧。
+        }
+      });
+      socket.addEventListener('close', () => {
+        if (!active) return;
+        reconnectTimer = window.setTimeout(connect, 1000);
+      });
+      socket.addEventListener('error', () => socket?.close());
+    };
+
+    connect();
+    return () => {
+      active = false;
+      socket?.close();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+    };
+  }, [refresh]);
+
+  useEffect(() => {
     if (!selectedId) {
       setDetail(null);
       return;
