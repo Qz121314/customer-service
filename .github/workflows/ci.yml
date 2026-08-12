@@ -127,18 +127,6 @@ jobs:
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Configure administrator password
-        env:
-          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
-            echo '::warning::ADMIN_PASSWORD is not configured. The Worker is deployed, but dashboard login remains disabled.'
-            exit 0
-          fi
-          printf '%s' "$ADMIN_PASSWORD" | pnpm exec wrangler secret put ADMIN_PASSWORD --config wrangler.production.jsonc
-
       - name: Smoke test production
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
