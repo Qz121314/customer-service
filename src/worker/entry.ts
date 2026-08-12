@@ -1,9 +1,6 @@
 import { Hono } from 'hono';
 import legacyApp, { ConversationRoom } from './index';
-import {
-  broadcastClientConversationEvent,
-  clientApi,
-} from './client-api';
+import { broadcastClientConversationEvent, clientApi } from './client-api';
 
 interface Bindings {
   DB: D1Database;
@@ -25,7 +22,8 @@ const app = new Hono<AppEnv>();
 // the visitor-level realtime channel used by the Site Storefront.
 app.use('/api/admin/conversations/:id/messages', async (c, next) => {
   await next();
-  if (c.req.method !== 'POST' || c.res.status < 200 || c.res.status >= 300) return;
+  if (c.req.method !== 'POST' || c.res.status < 200 || c.res.status >= 300)
+    return;
 
   const id = c.req.param('id');
   await c.env.DB.prepare(
@@ -44,7 +42,8 @@ app.use('/api/admin/conversations/:id/messages', async (c, next) => {
 
 app.use('/api/admin/conversations/:id/status', async (c, next) => {
   await next();
-  if (c.req.method !== 'POST' || c.res.status < 200 || c.res.status >= 300) return;
+  if (c.req.method !== 'POST' || c.res.status < 200 || c.res.status >= 300)
+    return;
 
   const id = c.req.param('id');
   const row = await c.env.DB.prepare(
