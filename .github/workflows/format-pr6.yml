@@ -1,0 +1,49 @@
+name: Format realtime bridge
+
+on:
+  push:
+    branches: [feat/site-realtime-bridge]
+    paths:
+      - src/worker/client-api.ts
+      - src/worker/entry.ts
+      - .github/workflows/format-pr6.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/site-realtime-bridge
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format changed worker files
+        run: pnpm exec prettier --write src/worker/client-api.ts src/worker/entry.ts
+
+      - name: Commit formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No formatting changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/worker/client-api.ts src/worker/entry.ts
+          git commit -m 'style: format realtime bridge'
+          git push origin HEAD:feat/site-realtime-bridge
