@@ -1,0 +1,162 @@
+name: CI and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: customer-service-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
+
+      - name: Format
+        run: pnpm format
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: customer-service-cloudflare-production
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build dashboard
+        run: pnpm build:ui
+
+      - name: Ensure isolated D1 database
+        id: d1
+        shell: bash
+        run: |
+          set -euo pipefail
+          list="$(pnpm exec wrangler d1 list --json)"
+          database_id="$(printf '%s' "$list" | node scripts/find-d1-id.mjs customer-service-db || true)"
+          if [[ -z "$database_id" ]]; then
+            echo 'Creating D1 database customer-service-db'
+            pnpm exec wrangler d1 create customer-service-db
+            list="$(pnpm exec wrangler d1 list --json)"
+            database_id="$(printf '%s' "$list" | node scripts/find-d1-id.mjs customer-service-db)"
+          fi
+          test -n "$database_id"
+          echo "database_id=$database_id" >> "$GITHUB_OUTPUT"
+          echo "Using D1 customer-service-db ($database_id)"
+
+      - name: Ensure isolated R2 bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          if pnpm exec wrangler r2 bucket info customer-service-media --json >/dev/null 2>&1; then
+            echo 'Using existing R2 bucket customer-service-media'
+          else
+            echo 'Creating R2 bucket customer-service-media'
+            pnpm exec wrangler r2 bucket create customer-service-media
+          fi
+
+      - name: Generate production Wrangler config
+        run: node scripts/write-production-config.mjs "${{ steps.d1.outputs.database_id }}"
+
+      - name: Apply D1 migrations
+        run: pnpm exec wrangler d1 migrations apply customer-service-db --remote --config wrangler.production.json
+
+      - name: Deploy customer service Worker
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler deploy --config wrangler.production.json --keep-vars | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Configure administrator password
+        env:
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
+            echo '::warning::ADMIN_PASSWORD is not configured. The Worker is deployed, but dashboard login remains disabled.'
+            exit 0
+          fi
+          printf '%s' "$ADMIN_PASSWORD" | pnpm exec wrangler secret put ADMIN_PASSWORD --config wrangler.production.json
+
+      - name: Smoke test production
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          health=""
+          for attempt in {1..20}; do
+            health="$(curl --fail --silent --show-error "$BASE_URL/api/health" || true)"
+            if printf '%s' "$health" | node -e '
+              const fs = require("fs");
+              const value = JSON.parse(fs.readFileSync(0, "utf8"));
+              process.exit(value.ok === true && value.service === "customer-service" ? 0 : 1);
+            '; then
+              echo "Production health check passed: $BASE_URL"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Health check failed. Last response: $health" >&2
+          exit 1
