@@ -7,4 +7,5 @@ dist/
 !.env.example
 src/worker/worker-configuration.d.ts
 wrangler.production.json
+wrangler.production.jsonc
 .DS_Store

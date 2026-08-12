@@ -115,14 +115,14 @@ jobs:
         run: node scripts/write-production-config.mjs "${{ steps.d1.outputs.database_id }}"
 
       - name: Apply D1 migrations
-        run: pnpm exec wrangler d1 migrations apply customer-service-db --remote --config wrangler.production.json
+        run: pnpm exec wrangler d1 migrations apply customer-service-db --remote --config wrangler.production.jsonc
 
       - name: Deploy customer service Worker
         id: deploy
         shell: bash
         run: |
           set -euo pipefail
-          pnpm exec wrangler deploy --config wrangler.production.json --keep-vars | tee /tmp/deploy.log
+          pnpm exec wrangler deploy --config wrangler.production.jsonc --keep-vars | tee /tmp/deploy.log
           url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -137,7 +137,7 @@ jobs:
             echo '::warning::ADMIN_PASSWORD is not configured. The Worker is deployed, but dashboard login remains disabled.'
             exit 0
           fi
-          printf '%s' "$ADMIN_PASSWORD" | pnpm exec wrangler secret put ADMIN_PASSWORD --config wrangler.production.json
+          printf '%s' "$ADMIN_PASSWORD" | pnpm exec wrangler secret put ADMIN_PASSWORD --config wrangler.production.jsonc
 
       - name: Smoke test production
         env:
