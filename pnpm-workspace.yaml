@@ -1,0 +1,10 @@
+packages:
+  - '.'
+
+engineStrict: true
+strictPeerDependencies: true
+saveExact: true
+
+allowBuilds:
+  esbuild: true
+  workerd: true
