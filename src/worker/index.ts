@@ -65,7 +65,8 @@ app.post('/api/auth/login', async (c) => {
     return c.json(
       {
         error: 'ADMIN_NOT_CONFIGURED',
-        message: 'Set the ADMIN_PASSWORD repository secret and redeploy.',
+        message:
+          'Set the ADMIN_PASSWORD Worker Secret on customer-service-app.',
       },
       503,
     );
@@ -118,372 +119,467 @@ app.get('/api/admin/overview', async (c) => {
     c.env.DB.prepare('SELECT COUNT(*) AS count FROM messages'),
   ]);
   return c.json({
-    open: count(open),
-    pending: count(pending),
-    closed: count(closed),
-    visitors: count(visitors),
-    messages: count(messages),
+    open: countFrom(open),
+    pending: countFrom(pending),
+    closed: countFrom(closed),
+    visitors: countFrom(visitors),
+    messages: countFrom(messages),
   });
 });
 
 app.get('/api/admin/conversations', async (c) => {
   const status = c.req.query('status');
-  const filtered =
-    status === 'open' || status === 'pending' || status === 'closed';
-  let query = c.env.DB.prepare(`
-    SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.assigned_agent,
-      c.last_message_at, c.created_at, v.display_name AS visitor_name,
-      (SELECT body FROM messages m WHERE m.conversation_id = c.id
-        ORDER BY m.created_at DESC LIMIT 1) AS last_message
+  const where =
+    status && ['open', 'pending', 'closed'].includes(status)
+      ? 'WHERE c.status = ?'
+      : '';
+  const statement = c.env.DB.prepare(`
+    SELECT
+      c.id,
+      c.status,
+      c.subject,
+      c.assigned_to,
+      c.last_message_at,
+      c.created_at,
+      v.id AS visitor_id,
+      v.name AS visitor_name,
+      v.email AS visitor_email,
+      v.external_id AS visitor_external_id,
+      s.id AS site_id,
+      s.name AS site_name,
+      (
+        SELECT body FROM messages m
+        WHERE m.conversation_id = c.id
+        ORDER BY m.created_at DESC LIMIT 1
+      ) AS last_message
     FROM conversations c
     JOIN visitors v ON v.id = c.visitor_id
-    ${filtered ? 'WHERE c.status = ?1' : ''}
+    JOIN sites s ON s.id = c.site_id
+    ${where}
     ORDER BY c.last_message_at DESC
     LIMIT 100
   `);
-  if (filtered) query = query.bind(status);
-  const result = await query.all();
-  return c.json({ conversations: result.results ?? [] });
+  const result = where
+    ? await statement.bind(status).all()
+    : await statement.all();
+  return c.json({ conversations: result.results });
 });
 
 app.get('/api/admin/conversations/:id/messages', async (c) => {
-  const id = c.req.param('id');
-  const conversation = await c.env.DB.prepare(
-    `SELECT c.*, v.display_name AS visitor_name
-     FROM conversations c JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.id = ?1`,
-  )
-    .bind(id)
-    .first();
+  const conversationId = c.req.param('id');
+  const conversation = await getConversation(c.env.DB, conversationId);
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-
-  const messages = await c.env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body, created_at
-     FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC LIMIT 500`,
-  )
-    .bind(id)
-    .all<MessageRow>();
-  return c.json({ conversation, messages: messages.results ?? [] });
+  const messages = await listMessages(c.env.DB, conversationId);
+  return c.json({ conversation, messages });
 });
 
 app.post('/api/admin/conversations/:id/messages', async (c) => {
-  const id = c.req.param('id');
+  const conversationId = c.req.param('id');
+  const conversation = await getConversation(c.env.DB, conversationId);
+  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   const body = await readJson<{ body?: string }>(c.req.raw);
-  const text = body?.body?.trim();
-  if (!validMessage(text)) return c.json({ error: 'INVALID_MESSAGE' }, 400);
-
-  const exists = await c.env.DB.prepare(
-    'SELECT id FROM conversations WHERE id = ?1',
-  )
-    .bind(id)
-    .first();
-  if (!exists) return c.json({ error: 'NOT_FOUND' }, 404);
-
-  const message = await persistMessage(c.env, id, 'agent', 'admin', text!);
-  await broadcast(c.env, id, { type: 'message', message });
+  const messageBody = normalizeMessageBody(body?.body);
+  if (!messageBody) return c.json({ error: 'MESSAGE_REQUIRED' }, 400);
+  const message = await insertMessage(c.env.DB, {
+    conversationId,
+    senderType: 'agent',
+    senderId: 'admin',
+    body: messageBody,
+  });
+  await publishRealtime(c.env.CONVERSATION_ROOMS, conversationId, {
+    type: 'message.created',
+    message,
+  });
   return c.json({ message }, 201);
 });
 
 app.post('/api/admin/conversations/:id/status', async (c) => {
-  const id = c.req.param('id');
+  const conversationId = c.req.param('id');
   const body = await readJson<{ status?: Status }>(c.req.raw);
-  if (!body || !['open', 'pending', 'closed'].includes(body.status ?? '')) {
+  if (!body?.status || !['open', 'pending', 'closed'].includes(body.status)) {
     return c.json({ error: 'INVALID_STATUS' }, 400);
   }
+  const now = new Date().toISOString();
   const result = await c.env.DB.prepare(
-    'UPDATE conversations SET status = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2',
+    'UPDATE conversations SET status = ?, updated_at = ? WHERE id = ?',
   )
-    .bind(body.status, id)
+    .bind(body.status, now, conversationId)
     .run();
   if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-  await broadcast(c.env, id, {
+  await publishRealtime(c.env.CONVERSATION_ROOMS, conversationId, {
     type: 'conversation.status',
     status: body.status,
   });
-  return c.json({ ok: true });
+  return c.json({ ok: true, status: body.status });
 });
 
-app.get('/api/admin/realtime/:id', (c) =>
-  room(c.env, c.req.param('id')).fetch(c.req.raw),
-);
+app.get('/api/admin/realtime/:id', async (c) => {
+  const conversationId = c.req.param('id');
+  return proxyRealtime(c.env.CONVERSATION_ROOMS, conversationId, c.req.raw);
+});
 
 app.get('/api/public/sites/:publicKey', async (c) => {
+  const publicKey = c.req.param('publicKey');
   const site = await c.env.DB.prepare(
-    'SELECT id, name FROM sites WHERE public_key = ?1 AND is_enabled = 1',
+    'SELECT id, name, public_key, status FROM sites WHERE public_key = ?',
   )
-    .bind(c.req.param('publicKey'))
+    .bind(publicKey)
     .first();
-  return site ? c.json({ site }) : c.json({ error: 'SITE_NOT_FOUND' }, 404);
+  if (!site || site.status !== 'active') return c.json({ error: 'NOT_FOUND' }, 404);
+  return c.json({ site });
 });
 
 app.post('/api/public/conversations', async (c) => {
   const body = await readJson<{
     siteKey?: string;
-    displayName?: string;
+    visitorId?: string;
+    name?: string;
+    email?: string;
+    subject?: string;
     message?: string;
-    metadata?: Record<string, unknown>;
   }>(c.req.raw);
   if (!body?.siteKey) return c.json({ error: 'SITE_KEY_REQUIRED' }, 400);
-  if (body.message?.trim() && !validMessage(body.message.trim())) {
-    return c.json({ error: 'INVALID_MESSAGE' }, 400);
-  }
-
   const site = await c.env.DB.prepare(
-    'SELECT id FROM sites WHERE public_key = ?1 AND is_enabled = 1',
+    'SELECT id, name, public_key, status FROM sites WHERE public_key = ?',
   )
     .bind(body.siteKey)
-    .first<{ id: string }>();
-  if (!site) return c.json({ error: 'SITE_NOT_FOUND' }, 404);
+    .first<{ id: string; name: string; public_key: string; status: string }>();
+  if (!site || site.status !== 'active') return c.json({ error: 'SITE_NOT_FOUND' }, 404);
 
-  const visitorId = crypto.randomUUID();
+  const visitor = await upsertVisitor(c.env.DB, {
+    siteId: site.id,
+    externalId: normalizeOptional(body.visitorId),
+    name: normalizeOptional(body.name),
+    email: normalizeOptional(body.email),
+  });
   const conversationId = crypto.randomUUID();
-  const token = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll(
-    '-',
-    '',
-  );
-  const tokenHash = await sha256(token);
-  const displayName = body.displayName?.trim().slice(0, 80) || 'Visitor';
-  const metadata = body.metadata
-    ? JSON.stringify(body.metadata).slice(0, 10000)
-    : null;
-
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      `INSERT INTO visitors (id, site_id, token_hash, display_name, metadata_json)
-       VALUES (?1, ?2, ?3, ?4, ?5)`,
-    ).bind(visitorId, site.id, tokenHash, displayName, metadata),
-    c.env.DB.prepare(
-      `INSERT INTO conversations (id, site_id, visitor_id, subject)
-       VALUES (?1, ?2, ?3, ?4)`,
-    ).bind(
+  const visitorToken = createVisitorToken();
+  const now = new Date().toISOString();
+  await c.env.DB.prepare(
+    `INSERT INTO conversations
+      (id, site_id, visitor_id, status, subject, visitor_token, last_message_at, created_at, updated_at)
+     VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?)`,
+  )
+    .bind(
       conversationId,
       site.id,
-      visitorId,
-      body.message?.trim().slice(0, 80) || null,
-    ),
-  ]);
+      visitor.id,
+      normalizeOptional(body.subject),
+      visitorToken,
+      now,
+      now,
+      now,
+    )
+    .run();
 
   let message: MessageRow | null = null;
-  if (body.message?.trim()) {
-    message = await persistMessage(
-      c.env,
+  const initialMessage = normalizeMessageBody(body.message);
+  if (initialMessage) {
+    message = await insertMessage(c.env.DB, {
       conversationId,
-      'visitor',
-      visitorId,
-      body.message.trim(),
-    );
-    await broadcast(c.env, conversationId, { type: 'message', message });
+      senderType: 'visitor',
+      senderId: visitor.id,
+      body: initialMessage,
+    });
   }
-  return c.json({ conversationId, visitorId, token, message }, 201);
+
+  return c.json(
+    {
+      conversation: {
+        id: conversationId,
+        siteId: site.id,
+        visitorId: visitor.id,
+        visitorToken,
+        status: 'open',
+      },
+      message,
+    },
+    201,
+  );
 });
 
 app.post('/api/public/conversations/:id/messages', async (c) => {
-  const id = c.req.param('id');
-  const visitor = await authenticateVisitor(
-    c.env,
-    id,
-    c.req.header('Authorization'),
-  );
-  if (!visitor) return c.json({ error: 'UNAUTHORIZED' }, 401);
-
+  const conversationId = c.req.param('id');
+  const token = extractBearer(c.req.raw);
+  if (!(await verifyVisitorToken(c.env.DB, conversationId, token))) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
   const body = await readJson<{ body?: string }>(c.req.raw);
-  const text = body?.body?.trim();
-  if (!validMessage(text)) return c.json({ error: 'INVALID_MESSAGE' }, 400);
-
-  const message = await persistMessage(c.env, id, 'visitor', visitor.id, text!);
-  await c.env.DB.prepare(
-    'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
-  )
-    .bind(visitor.id)
-    .run();
-  await broadcast(c.env, id, { type: 'message', message });
+  const messageBody = normalizeMessageBody(body?.body);
+  if (!messageBody) return c.json({ error: 'MESSAGE_REQUIRED' }, 400);
+  const conversation = await getConversation(c.env.DB, conversationId);
+  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+  const message = await insertMessage(c.env.DB, {
+    conversationId,
+    senderType: 'visitor',
+    senderId: String(conversation.visitor_id),
+    body: messageBody,
+  });
+  await publishRealtime(c.env.CONVERSATION_ROOMS, conversationId, {
+    type: 'message.created',
+    message,
+  });
   return c.json({ message }, 201);
 });
 
 app.get('/api/public/realtime/:id', async (c) => {
-  const id = c.req.param('id');
+  const conversationId = c.req.param('id');
   const token = c.req.query('token');
-  const visitor = await authenticateVisitor(
-    c.env,
-    id,
-    token ? `Bearer ${token}` : undefined,
-  );
-  if (!visitor) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  return room(c.env, id).fetch(c.req.raw);
+  if (!(await verifyVisitorToken(c.env.DB, conversationId, token))) {
+    return c.json({ error: 'UNAUTHORIZED' }, 401);
+  }
+  return proxyRealtime(c.env.CONVERSATION_ROOMS, conversationId, c.req.raw);
 });
 
-app.all('/api/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
-app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
+app.notFound(async (c) => {
+  if (c.req.path.startsWith('/api/')) return c.json({ error: 'NOT_FOUND' }, 404);
+  return c.env.ASSETS.fetch(c.req.raw);
+});
 
-export default app;
-
-export class ConversationRoom extends DurableObject<Bindings> {
-  async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (request.method === 'POST' && url.pathname.endsWith('/broadcast')) {
-      const payload = await request.text();
-      for (const socket of this.ctx.getWebSockets()) {
-        try {
-          socket.send(payload);
-        } catch {
-          // Dead sockets are cleaned up by the runtime.
-        }
-      }
-      return new Response(null, { status: 204 });
+export class ConversationRoom extends DurableObject {
+  fetch(request: Request): Response {
+    if (request.headers.get('Upgrade')?.toLowerCase() !== 'websocket') {
+      return new Response('Expected WebSocket', { status: 426 });
     }
-
-    if (request.headers.get('Upgrade') !== 'websocket') {
-      return new Response('Expected WebSocket upgrade', { status: 426 });
-    }
-
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ connectedAt: Date.now() });
-    server.send(
-      JSON.stringify({ type: 'ready', time: new Date().toISOString() }),
-    );
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
-    if (message === 'ping') {
-      socket.send(
-        JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
-      );
+  webSocketMessage(_webSocket: WebSocket, message: string | ArrayBuffer): void {
+    const payload =
+      typeof message === 'string'
+        ? message
+        : new TextDecoder().decode(new Uint8Array(message));
+    for (const socket of this.ctx.getWebSockets()) {
+      try {
+        socket.send(payload);
+      } catch {
+        // A stale socket will be cleaned up by the runtime.
+      }
     }
   }
 
-  webSocketClose(socket: WebSocket, code: number, reason: string): void {
-    socket.close(code, reason);
+  webSocketClose(
+    webSocket: WebSocket,
+    code: number,
+    reason: string,
+    wasClean: boolean,
+  ): void {
+    webSocket.close(code, reason);
+    void wasClean;
+  }
+
+  webSocketError(webSocket: WebSocket): void {
+    webSocket.close(1011, 'WebSocket error');
   }
 }
 
-async function persistMessage(
-  env: Bindings,
-  conversationId: string,
-  senderType: SenderType,
-  senderId: string,
-  body: string,
-): Promise<MessageRow> {
-  const id = crypto.randomUUID();
-  await env.DB.batch([
-    env.DB.prepare(
-      `INSERT INTO messages (id, conversation_id, sender_type, sender_id, body)
-       VALUES (?1, ?2, ?3, ?4, ?5)`,
-    ).bind(id, conversationId, senderType, senderId, body),
-    env.DB.prepare(
-      `UPDATE conversations SET last_message_at = CURRENT_TIMESTAMP,
-       updated_at = CURRENT_TIMESTAMP WHERE id = ?1`,
-    ).bind(conversationId),
-  ]);
-  const message = await env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body, created_at
-     FROM messages WHERE id = ?1`,
-  )
-    .bind(id)
-    .first<MessageRow>();
-  if (!message) throw new Error('Message persistence failed');
-  return message;
-}
-
-async function authenticateVisitor(
-  env: Bindings,
-  conversationId: string,
-  authorization?: string,
-): Promise<{ id: string } | null> {
-  const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-  if (!token) return null;
-  return env.DB.prepare(
-    `SELECT v.id FROM visitors v
-     JOIN conversations c ON c.visitor_id = v.id
-     WHERE c.id = ?1 AND v.token_hash = ?2`,
-  )
-    .bind(conversationId, await sha256(token))
-    .first<{ id: string }>();
-}
-
-function room(env: Bindings, conversationId: string): DurableObjectStub {
-  return env.CONVERSATION_ROOMS.get(
-    env.CONVERSATION_ROOMS.idFromName(conversationId),
-  );
-}
-
-async function broadcast(
-  env: Bindings,
-  conversationId: string,
-  payload: unknown,
-): Promise<void> {
-  await room(env, conversationId).fetch('https://conversation-room/broadcast', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-}
-
-function validMessage(value?: string): value is string {
-  return Boolean(value && value.length <= 8000);
-}
+export default app;
 
 async function readJson<T>(request: Request): Promise<T | null> {
   try {
-    return (await request.json()) as T;
+    return await request.json<T>();
   } catch {
     return null;
   }
 }
 
-function count(result: D1Result): number {
-  return Number(
-    (result.results?.[0] as { count?: number } | undefined)?.count ?? 0,
-  );
+function normalizeOptional(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, 300) : null;
 }
 
-function timingSafeEqual(left: string, right: string): boolean {
-  const a = new TextEncoder().encode(left);
-  const b = new TextEncoder().encode(right);
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let index = 0; index < a.length; index += 1) diff |= a[index] ^ b[index];
-  return diff === 0;
+function normalizeMessageBody(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim();
+  return normalized ? normalized.slice(0, 8000) : null;
+}
+
+function countFrom(result: D1Result): number {
+  const value = result.results[0] as { count?: number | string } | undefined;
+  return Number(value?.count ?? 0);
+}
+
+async function getConversation(db: D1Database, id: string) {
+  return db
+    .prepare(
+      `SELECT
+        c.*,
+        v.name AS visitor_name,
+        v.email AS visitor_email,
+        v.external_id AS visitor_external_id,
+        s.name AS site_name
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       JOIN sites s ON s.id = c.site_id
+       WHERE c.id = ?`,
+    )
+    .bind(id)
+    .first();
+}
+
+async function listMessages(db: D1Database, conversationId: string) {
+  const result = await db
+    .prepare(
+      `SELECT id, conversation_id, sender_type, sender_id, body, created_at
+       FROM messages
+       WHERE conversation_id = ?
+       ORDER BY created_at ASC
+       LIMIT 500`,
+    )
+    .bind(conversationId)
+    .all<MessageRow>();
+  return result.results;
+}
+
+async function insertMessage(
+  db: D1Database,
+  input: {
+    conversationId: string;
+    senderType: SenderType;
+    senderId: string | null;
+    body: string;
+  },
+): Promise<MessageRow> {
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO messages
+          (id, conversation_id, sender_type, sender_id, body, created_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        id,
+        input.conversationId,
+        input.senderType,
+        input.senderId,
+        input.body,
+        now,
+      ),
+    db
+      .prepare(
+        'UPDATE conversations SET last_message_at = ?, updated_at = ? WHERE id = ?',
+      )
+      .bind(now, now, input.conversationId),
+  ]);
+  return {
+    id,
+    conversation_id: input.conversationId,
+    sender_type: input.senderType,
+    sender_id: input.senderId,
+    body: input.body,
+    created_at: now,
+  };
+}
+
+async function upsertVisitor(
+  db: D1Database,
+  input: {
+    siteId: string;
+    externalId: string | null;
+    name: string | null;
+    email: string | null;
+  },
+) {
+  if (input.externalId) {
+    const existing = await db
+      .prepare(
+        'SELECT id, external_id, name, email FROM visitors WHERE site_id = ? AND external_id = ?',
+      )
+      .bind(input.siteId, input.externalId)
+      .first<{
+        id: string;
+        external_id: string;
+        name: string | null;
+        email: string | null;
+      }>();
+    if (existing) return existing;
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      'INSERT INTO visitors (id, site_id, external_id, name, email, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    )
+    .bind(
+      id,
+      input.siteId,
+      input.externalId,
+      input.name,
+      input.email,
+      now,
+      now,
+    )
+    .run();
+  return {
+    id,
+    external_id: input.externalId,
+    name: input.name,
+    email: input.email,
+  };
+}
+
+async function verifyVisitorToken(
+  db: D1Database,
+  conversationId: string,
+  token?: string | null,
+): Promise<boolean> {
+  if (!token) return false;
+  const row = await db
+    .prepare('SELECT visitor_token FROM conversations WHERE id = ?')
+    .bind(conversationId)
+    .first<{ visitor_token: string }>();
+  return Boolean(row && timingSafeEqual(row.visitor_token, token));
+}
+
+function extractBearer(request: Request): string | null {
+  const value = request.headers.get('Authorization');
+  if (!value?.startsWith('Bearer ')) return null;
+  return value.slice(7).trim() || null;
+}
+
+function createVisitorToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return base64UrlEncode(bytes);
 }
 
 async function createAdminSession(password: string): Promise<string> {
-  const payload = encode(
-    JSON.stringify({ exp: Math.floor(Date.now() / 1000) + SESSION_TTL }),
-  );
-  return `${payload}.${await hmac(password, payload)}`;
+  const timestamp = Math.floor(Date.now() / 1000);
+  const payload = `${timestamp}.admin`;
+  return `${payload}.${await signHmac(password, payload)}`;
 }
 
 async function verifyAdminSession(
   request: Request,
   password: string,
 ): Promise<boolean> {
-  const header = request.headers.get('Cookie') ?? '';
-  const token = header
-    .split(';')
+  const cookie = request.headers.get('Cookie');
+  const token = cookie
+    ?.split(';')
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${SESSION_COOKIE}=`))
     ?.slice(SESSION_COOKIE.length + 1);
   if (!token) return false;
-
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature) return false;
-  if (!timingSafeEqual(signature, await hmac(password, payload))) return false;
-
-  try {
-    const session = JSON.parse(decode(payload)) as { exp?: number };
-    return typeof session.exp === 'number' && session.exp > Date.now() / 1000;
-  } catch {
-    return false;
-  }
+  const [timestampText, identity, signature] = token.split('.');
+  if (!timestampText || identity !== 'admin' || !signature) return false;
+  const timestamp = Number(timestampText);
+  if (!Number.isFinite(timestamp)) return false;
+  if (Math.floor(Date.now() / 1000) - timestamp > SESSION_TTL) return false;
+  const payload = `${timestampText}.${identity}`;
+  const expected = await signHmac(password, payload);
+  return timingSafeEqual(signature, expected);
 }
 
-async function hmac(secret: string, value: string): Promise<string> {
-  const encoder = new TextEncoder();
+async function signHmac(secret: string, value: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(secret),
+    new TextEncoder().encode(secret),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
@@ -491,38 +587,48 @@ async function hmac(secret: string, value: string): Promise<string> {
   const signature = await crypto.subtle.sign(
     'HMAC',
     key,
-    encoder.encode(value),
-  );
-  return toBase64Url(new Uint8Array(signature));
-}
-
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
     new TextEncoder().encode(value),
   );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
+  return base64UrlEncode(new Uint8Array(signature));
 }
 
-function encode(value: string): string {
-  return toBase64Url(new TextEncoder().encode(value));
-}
-
-function decode(value: string): string {
-  const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return new TextDecoder().decode(
-    Uint8Array.from(atob(padded), (character) => character.charCodeAt(0)),
-  );
-}
-
-function toBase64Url(bytes: Uint8Array): string {
+function base64UrlEncode(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary)
     .replaceAll('+', '-')
     .replaceAll('/', '_')
     .replaceAll('=', '');
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const left = new TextEncoder().encode(a);
+  const right = new TextEncoder().encode(b);
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left[index] ^ right[index];
+  }
+  return difference === 0;
+}
+
+async function publishRealtime(
+  rooms: DurableObjectNamespace,
+  conversationId: string,
+  payload: unknown,
+): Promise<void> {
+  const stub = rooms.get(rooms.idFromName(conversationId));
+  await stub.fetch('https://conversation-room.internal/broadcast', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+async function proxyRealtime(
+  rooms: DurableObjectNamespace,
+  conversationId: string,
+  request: Request,
+): Promise<Response> {
+  const stub = rooms.get(rooms.idFromName(conversationId));
+  return stub.fetch(request);
 }
