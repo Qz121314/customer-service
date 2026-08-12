@@ -26,8 +26,7 @@
 - D1 会话、访客、消息数据模型；
 - R2 独立媒体 Bucket 预留；
 - GitHub Actions 代码质量 CI；
-- Cloudflare Workers Builds 原生生产部署；
-- GitHub Actions 手动应急部署入口。
+- GitHub Hosted Runner + Wrangler 生产部署。
 
 ## 管理系统语言
 
@@ -67,17 +66,42 @@ service-catalog-site-assets
 
 ## 生产部署
 
-### 主部署：Cloudflare Workers Builds
+生产发布由 GitHub Actions 的单个 Hosted Runner 完成，不需要把 GitHub 仓库绑定到 Cloudflare Workers Builds。
 
-生产发布不再依赖 GitHub Hosted Runner 执行 Wrangler。将 `customer-service-app` 连接到 GitHub 仓库：
+流程：
 
 ```text
-Repository: Qz121314/customer-service
-Production branch: main
-Build command: pnpm build
-Deploy command: pnpm deploy:cloudflare
-Non-production branch builds: Disabled
+PR / main push
+→ 安装依赖
+→ D1 migration 本地校验
+→ Prettier
+→ ESLint
+→ TypeScript
+→ Test
+→ Build
+→ Wrangler dry-run
 ```
+
+PR 到这里结束，不接触 Cloudflare 生产资源。
+
+`main` 分支在同一个 Runner 上继续：
+
+```text
+D1 remote migrations
+→ wrangler deploy --keep-vars
+→ /api/health 生产冒烟检查
+```
+
+这样不会在代码校验完成后再启动第二个 `deploy` Job，也就避免了第二次等待 GitHub Hosted Runner 的问题。
+
+生产部署需要以下 GitHub Repository Secrets：
+
+```text
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+```
+
+`workflow_dispatch` 保留为手动重跑入口。如果自动部署需要重新执行，可以在 GitHub Actions 中手动运行同一个 `CI and Deploy` 工作流，不维护第二套部署脚本。
 
 `pnpm deploy:cloudflare` 会按顺序执行：
 
@@ -86,42 +110,7 @@ D1 remote migrations
 → wrangler deploy --keep-vars
 ```
 
-关闭非生产分支 Builds，是为了避免当前阶段的预览版本复用生产 D1 / R2 绑定。后续如果需要正式的 staging 环境，再使用独立 Wrangler Environment 和独立数据资源。
-
-### GitHub Actions
-
-`.github/workflows/ci.yml` 只负责：
-
-```text
-D1 migration 本地校验
-Prettier
-ESLint
-TypeScript
-Test
-Build
-Wrangler dry-run
-```
-
-不再在 `main` push 后自动执行 Cloudflare 生产部署。
-
-### 手动应急部署
-
-如果 Cloudflare Workers Builds 临时不可用，可以手动运行：
-
-```text
-GitHub Actions
-→ Manual Cloudflare Deploy
-→ Run workflow
-```
-
-这个应急流程仍使用：
-
-```text
-CLOUDFLARE_ACCOUNT_ID
-CLOUDFLARE_API_TOKEN
-```
-
-因此这两个 GitHub Repository Secrets 建议保留，但日常生产部署不会依赖它们。
+现有 D1 / R2 已经初始化完成，日常部署不会重复创建或重新命名 Cloudflare 资源。
 
 ## Worker 运行时变量
 
