@@ -38,6 +38,16 @@ export type ConversationDetail = {
   messages: Message[];
 };
 
+const errorMessages: Record<string, string> = {
+  INVALID_CREDENTIALS: '管理员密码错误',
+  UNAUTHORIZED: '登录已失效，请重新登录',
+  ADMIN_NOT_CONFIGURED: '管理员密码尚未配置',
+  NOT_FOUND: '请求的内容不存在',
+  INVALID_MESSAGE: '消息内容无效',
+  INVALID_STATUS: '会话状态无效',
+  SITE_NOT_FOUND: '接入站点不存在或已停用',
+};
+
 export async function getSession(): Promise<SessionState> {
   return request('/api/auth/session');
 }
@@ -110,12 +120,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (response.status === 204) return undefined as T;
   const payload = (await response.json().catch(() => ({}))) as {
-    message?: string;
     error?: string;
   } & T;
   if (!response.ok) {
     throw new Error(
-      payload.message || payload.error || `Request failed (${response.status})`,
+      (payload.error && errorMessages[payload.error]) ||
+        `请求失败（状态码 ${response.status}）`,
     );
   }
   return payload;
