@@ -15,9 +15,9 @@
 → Durable Object 负责实时连接与广播
 ```
 
-当前基础版本已经包含：
+当前基础版本包含：
 
-- React 19 + Vite 客服工作台；
+- React 19 + Vite 中文客服管理工作台；
 - Hono Worker API；
 - 单管理员密码登录；
 - 会话列表、状态筛选、会话详情和回复；
@@ -25,12 +25,28 @@
 - Durable Object + WebSocket Hibernation 实时会话通道；
 - D1 会话、访客、消息数据模型；
 - R2 独立媒体 Bucket 预留；
-- GitHub Actions CI + Cloudflare 自动部署；
-- 首次部署自动创建独立 D1 / R2 资源。
+- GitHub Actions 代码质量 CI；
+- Cloudflare Workers Builds 原生生产部署；
+- GitHub Actions 手动应急部署入口。
+
+## 管理系统语言
+
+客服管理系统统一使用简体中文，包括：
+
+```text
+登录与配置提示
+会话列表与筛选
+会话状态
+空状态与错误提示
+回复编辑器
+日期与相对时间
+```
+
+对外访客接口仍保持稳定的 API 字段和错误码，不把后台中文文案耦合进接口协议。
 
 ## Cloudflare 资源命名
 
-本项目与 `site` 使用同一个 Cloudflare Account，但资源必须完全隔离：
+本项目与 `site` 使用同一个 Cloudflare Account，但资源完全隔离：
 
 ```text
 Worker  customer-service-app
@@ -47,18 +63,65 @@ service-catalog-site-db
 service-catalog-site-assets
 ```
 
-## GitHub Secrets
+`wrangler.jsonc` 是 Cloudflare 绑定的代码侧来源，D1 已固定绑定到 `customer-service-db`，不再通过 CI 动态生成生产配置。
 
-仓库部署只需要：
+## 生产部署
+
+### 主部署：Cloudflare Workers Builds
+
+生产发布不再依赖 GitHub Hosted Runner 执行 Wrangler。将 `customer-service-app` 连接到 GitHub 仓库：
 
 ```text
-CLOUDFLARE_ACCOUNT_ID   必需
-CLOUDFLARE_API_TOKEN    必需
+Repository: Qz121314/customer-service
+Production branch: main
+Build command: pnpm build
+Deploy command: pnpm deploy:cloudflare
+Non-production branch builds: Disabled
 ```
 
-`CLOUDFLARE_API_TOKEN` 应只承担本仓库部署需要的 Workers / D1 / R2 权限。
+`pnpm deploy:cloudflare` 会按顺序执行：
 
-`ADMIN_PASSWORD` 不放在 GitHub Secrets，也不由 CI 写入 Cloudflare。
+```text
+D1 remote migrations
+→ wrangler deploy --keep-vars
+```
+
+关闭非生产分支 Builds，是为了避免当前阶段的预览版本复用生产 D1 / R2 绑定。后续如果需要正式的 staging 环境，再使用独立 Wrangler Environment 和独立数据资源。
+
+### GitHub Actions
+
+`.github/workflows/ci.yml` 只负责：
+
+```text
+D1 migration 本地校验
+Prettier
+ESLint
+TypeScript
+Test
+Build
+Wrangler dry-run
+```
+
+不再在 `main` push 后自动执行 Cloudflare 生产部署。
+
+### 手动应急部署
+
+如果 Cloudflare Workers Builds 临时不可用，可以手动运行：
+
+```text
+GitHub Actions
+→ Manual Cloudflare Deploy
+→ Run workflow
+```
+
+这个应急流程仍使用：
+
+```text
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+```
+
+因此这两个 GitHub Repository Secrets 建议保留，但日常生产部署不会依赖它们。
 
 ## Worker 运行时变量
 
@@ -68,7 +131,7 @@ CLOUDFLARE_API_TOKEN    必需
 ADMIN_PASSWORD
 ```
 
-推荐在 Cloudflare Dashboard 中进入：
+在 Cloudflare Dashboard 中配置：
 
 ```text
 Workers & Pages
@@ -76,17 +139,13 @@ Workers & Pages
 → Settings
 → Variables and Secrets
 → Add
-```
 
-配置：
-
-```text
 Type:  Secret
 Name:  ADMIN_PASSWORD
 Value: 自定义后台登录密码
 ```
 
-密码属于敏感数据，不要放进 `wrangler.jsonc` 的 `vars`，也不要提交到 GitHub。
+密码不要写入 `wrangler.jsonc`，也不要提交到 GitHub。
 
 部署配置启用了：
 
@@ -94,13 +153,13 @@ Value: 自定义后台登录密码
 "keep_vars": true
 ```
 
-生产 CI 同时使用：
+部署命令同时使用：
 
 ```text
 wrangler deploy --keep-vars
 ```
 
-因此 Cloudflare Dashboard 中维护的普通 Worker Variables 会在代码更新部署时保留；`ADMIN_PASSWORD` 使用 Worker Secret 管理，部署流程不会主动覆盖或删除它。只有显式修改或删除该 Secret 时才会变化。
+因此 Dashboard 中维护的 Worker Variables 会被保留；`ADMIN_PASSWORD` 由 Worker Secret 独立管理，普通代码部署不会主动覆盖或删除它。
 
 ## 数据边界
 
@@ -191,7 +250,7 @@ site id:    default
 public key: pk_default
 ```
 
-后续会由客服后台的“接入站点”模块管理，不会长期依赖这个默认值。
+后续由客服后台的“接入站点”模块管理，不长期依赖默认值。
 
 ## 设计原则
 
@@ -200,6 +259,7 @@ public key: pk_default
 简单稳定
 实时优先
 数据可恢复
+后台统一中文
 不做大型企业 RBAC
 不做无需求的微服务拆分
 不把 site 数据库直接暴露给客服系统

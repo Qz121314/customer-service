@@ -15,6 +15,7 @@
     "build:ui": "vite build",
     "cf:types": "wrangler types src/worker/worker-configuration.d.ts",
     "cf:check": "pnpm build:ui && wrangler deploy --dry-run",
+    "deploy:cloudflare": "pnpm db:migrate:remote && wrangler deploy --keep-vars",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply customer-service-db --remote",
     "lint": "eslint .",

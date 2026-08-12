@@ -26,6 +26,13 @@ const emptyOverview: Overview = {
   messages: 0,
 };
 
+const filterLabels: Record<Filter, string> = {
+  all: '全部',
+  open: '进行中',
+  pending: '待处理',
+  closed: '已关闭',
+};
+
 export function App() {
   const [auth, setAuth] = useState<AuthState>('loading');
   const [password, setPassword] = useState('');
@@ -56,7 +63,7 @@ export function App() {
             setPassword('');
             setAuth('authenticated');
           } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Login failed');
+            setError(reason instanceof Error ? reason.message : '登录失败');
           }
         }}
       />
@@ -96,9 +103,7 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
     setBusy(true);
     refresh()
       .catch((reason) =>
-        setError(
-          reason instanceof Error ? reason.message : 'Could not load inbox',
-        ),
+        setError(reason instanceof Error ? reason.message : '无法加载会话列表'),
       )
       .finally(() => setBusy(false));
   }, [refresh]);
@@ -116,11 +121,7 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
       })
       .catch((reason) => {
         if (active)
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : 'Could not load conversation',
-          );
+          setError(reason instanceof Error ? reason.message : '无法加载会话');
       });
 
     const socket = openConversationSocket(selectedId);
@@ -163,7 +164,7 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
           void refresh();
         }
       } catch {
-        // Ignore non-JSON WebSocket frames.
+        // 忽略非 JSON WebSocket 帧。
       }
     });
 
@@ -188,9 +189,7 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
       await refresh();
     } catch (reason) {
       setDraft(text);
-      setError(
-        reason instanceof Error ? reason.message : 'Message could not be sent',
-      );
+      setError(reason instanceof Error ? reason.message : '消息发送失败');
     }
   }
 
@@ -205,51 +204,47 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
       );
       await refresh();
     } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : 'Status could not be updated',
-      );
+      setError(reason instanceof Error ? reason.message : '会话状态更新失败');
     }
   }
 
   return (
     <div className="shell">
       <aside className="rail">
-        <div className="logo">CS</div>
-        <button className="rail-item active" title="Inbox">
+        <div className="logo">客</div>
+        <button className="rail-item active" title="会话">
           ◫
         </button>
-        <button className="rail-item" title="Contacts" disabled>
+        <button className="rail-item" title="联系人" disabled>
           ◎
         </button>
-        <button className="rail-item" title="Settings" disabled>
+        <button className="rail-item" title="设置" disabled>
           ⚙
         </button>
         <button
           className="avatar"
           onClick={() => void onLogout()}
-          title="Sign out"
+          title="退出登录"
         >
-          A
+          管
         </button>
       </aside>
 
       <section className="inbox">
         <header className="inbox-head">
           <div>
-            <span className="eyebrow">Workspace</span>
-            <h1>Inbox</h1>
+            <span className="eyebrow">客服工作台</span>
+            <h1>会话</h1>
           </div>
           <span className="live">
-            <i /> Live
+            <i /> 实时
           </span>
         </header>
 
         <div className="metrics">
-          <Metric label="Open" value={overview.open} />
-          <Metric label="Pending" value={overview.pending} />
-          <Metric label="Closed" value={overview.closed} />
+          <Metric label="进行中" value={overview.open} />
+          <Metric label="待处理" value={overview.pending} />
+          <Metric label="已关闭" value={overview.closed} />
         </div>
 
         <div className="filters">
@@ -259,18 +254,18 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
               className={filter === item ? 'filter active' : 'filter'}
               onClick={() => setFilter(item)}
             >
-              {item[0].toUpperCase() + item.slice(1)}
+              {filterLabels[item]}
             </button>
           ))}
         </div>
 
         <div className="list">
           {busy ? (
-            <div className="loading-list">Loading conversations…</div>
+            <div className="loading-list">正在加载会话…</div>
           ) : conversations.length === 0 ? (
             <div className="empty-list">
-              <strong>No conversations</strong>
-              <span>New visitor conversations will appear here.</span>
+              <strong>暂无会话</strong>
+              <span>新的访客会话会显示在这里。</span>
             </div>
           ) : (
             conversations.map((conversation) => (
@@ -284,15 +279,15 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                 onClick={() => setSelectedId(conversation.id)}
               >
                 <span className="person">
-                  {initials(conversation.visitor_name || 'Visitor')}
+                  {initials(conversation.visitor_name || '访客')}
                 </span>
                 <span className="conversation-copy">
                   <span className="conversation-line">
-                    <strong>{conversation.visitor_name || 'Visitor'}</strong>
+                    <strong>{conversation.visitor_name || '访客'}</strong>
                     <time>{relativeTime(conversation.last_message_at)}</time>
                   </span>
                   <span className="preview">
-                    {conversation.last_message || 'Conversation created'}
+                    {conversation.last_message || '会话已创建'}
                   </span>
                 </span>
                 <i className={`dot ${conversation.status}`} />
@@ -305,19 +300,19 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
       <main className="thread">
         {error && (
           <button className="error" onClick={() => setError('')}>
-            {error} <small>Dismiss</small>
+            {error} <small>关闭</small>
           </button>
         )}
 
         {!selectedId ? (
           <div className="thread-empty">
             <div className="empty-symbol">↔</div>
-            <h2>Select a conversation</h2>
-            <p>Messages and conversation controls will appear here.</p>
+            <h2>选择一个会话</h2>
+            <p>选择左侧会话后，可查看消息并进行回复和状态管理。</p>
           </div>
         ) : !detail ? (
           <div className="thread-empty">
-            <p>Loading conversation…</p>
+            <p>正在加载会话…</p>
           </div>
         ) : (
           <>
@@ -325,18 +320,16 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
               <button
                 className="back"
                 onClick={() => setSelectedId(null)}
-                aria-label="Back"
+                aria-label="返回"
               >
                 ←
               </button>
               <span className="person large">
-                {initials(
-                  String(detail.conversation.visitor_name || 'Visitor'),
-                )}
+                {initials(String(detail.conversation.visitor_name || '访客'))}
               </span>
               <div className="identity">
-                <h2>{String(detail.conversation.visitor_name || 'Visitor')}</h2>
-                <p>Site: {String(detail.conversation.site_id)}</p>
+                <h2>{String(detail.conversation.visitor_name || '访客')}</h2>
+                <p>站点：{String(detail.conversation.site_id)}</p>
               </div>
               <select
                 value={String(detail.conversation.status)}
@@ -345,20 +338,20 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                     event.target.value as Conversation['status'],
                   )
                 }
+                aria-label="会话状态"
               >
-                <option value="open">Open</option>
-                <option value="pending">Pending</option>
-                <option value="closed">Closed</option>
+                <option value="open">进行中</option>
+                <option value="pending">待处理</option>
+                <option value="closed">已关闭</option>
               </select>
             </header>
 
             <div className="messages">
               <div className="day">
-                Conversation started{' '}
-                {formatDate(String(detail.conversation.created_at))}
+                会话开始于 {formatDate(String(detail.conversation.created_at))}
               </div>
               {detail.messages.length === 0 ? (
-                <div className="no-messages">No messages yet.</div>
+                <div className="no-messages">暂无消息。</div>
               ) : (
                 detail.messages.map((message) => (
                   <Bubble key={message.id} message={message} />
@@ -371,7 +364,7 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                 rows={3}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Write a reply…"
+                placeholder="输入回复内容…"
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
@@ -384,13 +377,13 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                   className="attach"
                   type="button"
                   disabled
-                  title="Attachments are next"
+                  title="附件功能稍后开放"
                 >
                   ＋
                 </button>
-                <span>Enter to send · Shift + Enter for newline</span>
+                <span>Enter 发送 · Shift + Enter 换行</span>
                 <button className="send" type="submit" disabled={!draft.trim()}>
-                  Send →
+                  发送 →
                 </button>
               </div>
             </form>
@@ -416,7 +409,7 @@ function Bubble({ message }: { message: Message }) {
   const agent = message.sender_type === 'agent';
   return (
     <div className={agent ? 'message agent' : 'message visitor'}>
-      {!agent && <span className="person mini">V</span>}
+      {!agent && <span className="person mini">访</span>}
       <div>
         <p>{message.body}</p>
         <time>{formatTime(message.created_at)}</time>
@@ -439,12 +432,12 @@ function Login({
   return (
     <div className="auth-page">
       <form className="auth-card" onSubmit={onSubmit}>
-        <div className="logo auth-logo">CS</div>
-        <span className="eyebrow">Customer Service</span>
-        <h1>Sign in to your workspace</h1>
-        <p>Use the administrator password configured for this deployment.</p>
+        <div className="logo auth-logo">客</div>
+        <span className="eyebrow">客服管理系统</span>
+        <h1>登录客服工作台</h1>
+        <p>请输入当前部署配置的管理员密码。</p>
         <label>
-          Password
+          管理员密码
           <input
             type="password"
             autoComplete="current-password"
@@ -455,7 +448,7 @@ function Login({
         </label>
         {error && <div className="auth-error">{error}</div>}
         <button className="primary" disabled={!password}>
-          Continue
+          登录
         </button>
       </form>
     </div>
@@ -466,12 +459,12 @@ function Setup() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="logo auth-logo">CS</div>
-        <span className="eyebrow">Setup required</span>
-        <h1>Deployment is online</h1>
+        <div className="logo auth-logo">客</div>
+        <span className="eyebrow">需要配置</span>
+        <h1>客服服务已上线</h1>
         <p>
-          Add an <code>ADMIN_PASSWORD</code> repository secret and redeploy to
-          enable login.
+          请在 Cloudflare 的 <code>customer-service-app</code> Worker 中添加
+          <code> ADMIN_PASSWORD</code> Secret，配置后即可登录。
         </p>
       </div>
     </div>
@@ -481,14 +474,17 @@ function Setup() {
 function Startup() {
   return (
     <div className="startup">
-      <div className="logo">CS</div>
-      <span>Loading workspace…</span>
+      <div className="logo">客</div>
+      <span>正在加载工作台…</span>
     </div>
   );
 }
 
 function initials(value: string): string {
-  return value
+  const trimmed = value.trim();
+  if (!trimmed) return '访';
+  if (/^[\u3400-\u9fff]/.test(trimmed)) return trimmed.slice(0, 2);
+  return trimmed
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -506,23 +502,23 @@ function relativeTime(value: string): string {
     0,
     Math.floor((Date.now() - parseUtc(value).getTime()) / 1000),
   );
-  if (seconds < 60) return 'now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
-  return `${Math.floor(seconds / 86400)}d`;
+  if (seconds < 60) return '刚刚';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
+  return `${Math.floor(seconds / 86400)} 天前`;
 }
 
 function formatTime(value: string): string {
-  return parseUtc(value).toLocaleTimeString([], {
+  return parseUtc(value).toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
   });
 }
 
 function formatDate(value: string): string {
-  return parseUtc(value).toLocaleDateString([], {
-    month: 'short',
-    day: 'numeric',
+  return parseUtc(value).toLocaleDateString('zh-CN', {
     year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 }
