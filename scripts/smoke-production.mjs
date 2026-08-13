@@ -64,7 +64,10 @@ async function assertManagementGroups() {
     `Management groups endpoint returned HTTP ${response.status}.`,
   );
   const value = await readJson(response);
-  assert.ok(Array.isArray(value.groups), 'Management response must contain groups.');
+  assert.ok(
+    Array.isArray(value.groups),
+    'Management response must contain groups.',
+  );
   const general = value.groups.find((group) => group?.id === 'general');
   assert.ok(general, 'Default support group "general" is missing.');
   assert.equal(general.isEnabled, true, 'Default support group must be enabled.');
@@ -106,7 +109,10 @@ async function assertClientRest() {
     `Client conversations endpoint returned HTTP ${response.status}.`,
   );
   const value = await readJson(response);
-  assert.ok(Array.isArray(value.conversations), 'Client response must contain conversations.');
+  assert.ok(
+    Array.isArray(value.conversations),
+    'Client response must contain conversations.',
+  );
   console.log('CLIENT_REST=ready');
 }
 
@@ -129,7 +135,9 @@ async function assertClientWebSocket() {
     const timeout = setTimeout(
       () =>
         finish(() =>
-          reject(new Error('Client WebSocket did not become ready within 10 seconds.')),
+          reject(
+            new Error('Client WebSocket did not become ready within 10 seconds.'),
+          ),
         ),
       10_000,
     );
@@ -156,4 +164,6 @@ await assertBrowserCors();
 await assertClientRest();
 await assertClientWebSocket();
 
-console.log(`PROTOCOL_SMOKE=ready version=${health.version ?? 'unknown'} base=${baseUrl}`);
+console.log(
+  `PROTOCOL_SMOKE=ready version=${health.version ?? 'unknown'} base=${baseUrl}`,
+);
