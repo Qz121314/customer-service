@@ -36,7 +36,14 @@ jobs:
         run: pnpm db:migrate:local
 
       - name: Format
-        run: pnpm format
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write scripts/smoke-production.mjs
+          echo '---FORMATTED_SMOKE_START---'
+          cat scripts/smoke-production.mjs
+          echo '---FORMATTED_SMOKE_END---'
+          git diff --exit-code -- scripts/smoke-production.mjs
 
       - name: Lint
         run: pnpm lint
