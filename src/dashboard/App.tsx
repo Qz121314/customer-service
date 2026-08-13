@@ -123,7 +123,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    const [nextAgents, nextGroups] = await Promise.all([getAgents(), getGroups()]);
+    const [nextAgents, nextGroups] = await Promise.all([
+      getAgents(),
+      getGroups(),
+    ]);
     setAgents(nextAgents);
     setGroups(nextGroups);
   }, []);
@@ -236,7 +239,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <span className="eyebrow">SEATS</span>
               <h2>客服账号</h2>
             </div>
-            <button className="primary-button" onClick={() => setDraft(emptyAgentDraft)}>
+            <button
+              className="primary-button"
+              onClick={() => setDraft(emptyAgentDraft)}
+            >
               新增客服
             </button>
           </div>
@@ -253,7 +259,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               {agents.map((agent) => (
                 <button
                   key={agent.id}
-                  className={draft.id === agent.id ? 'agent-row selected' : 'agent-row'}
+                  className={
+                    draft.id === agent.id ? 'agent-row selected' : 'agent-row'
+                  }
                   onClick={() => editAgent(agent)}
                 >
                   <span className={`presence ${presenceClass(agent)}`} />
@@ -285,12 +293,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             </div>
           </div>
 
-          <form className="form-stack" onSubmit={(event) => void saveAgent(event)}>
+          <form
+            className="form-stack"
+            onSubmit={(event) => void saveAgent(event)}
+          >
             <label>
               显示名称
               <input
                 value={draft.name}
-                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                onChange={(event) =>
+                  setDraft({ ...draft, name: event.target.value })
+                }
                 placeholder="例如：Alice"
               />
             </label>
@@ -298,7 +311,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               登录账号
               <input
                 value={draft.username}
-                onChange={(event) => setDraft({ ...draft, username: event.target.value })}
+                onChange={(event) =>
+                  setDraft({ ...draft, username: event.target.value })
+                }
                 placeholder="例如：alice"
                 autoComplete="off"
               />
@@ -308,7 +323,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <input
                 type="password"
                 value={draft.password}
-                onChange={(event) => setDraft({ ...draft, password: event.target.value })}
+                onChange={(event) =>
+                  setDraft({ ...draft, password: event.target.value })
+                }
                 autoComplete="new-password"
               />
             </label>
@@ -332,21 +349,23 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <fieldset>
               <legend>所属客服分组</legend>
               <div className="check-grid">
-                {groups.filter((group) => group.isEnabled).map((group) => (
-                  <label className="check-card" key={group.id}>
-                    <input
-                      type="checkbox"
-                      checked={draft.groupIds.includes(group.id)}
-                      onChange={(event) => {
-                        const groupIds = event.target.checked
-                          ? [...draft.groupIds, group.id]
-                          : draft.groupIds.filter((id) => id !== group.id);
-                        setDraft({ ...draft, groupIds });
-                      }}
-                    />
-                    <span>{group.name}</span>
-                  </label>
-                ))}
+                {groups
+                  .filter((group) => group.isEnabled)
+                  .map((group) => (
+                    <label className="check-card" key={group.id}>
+                      <input
+                        type="checkbox"
+                        checked={draft.groupIds.includes(group.id)}
+                        onChange={(event) => {
+                          const groupIds = event.target.checked
+                            ? [...draft.groupIds, group.id]
+                            : draft.groupIds.filter((id) => id !== group.id);
+                          setDraft({ ...draft, groupIds });
+                        }}
+                      />
+                      <span>{group.name}</span>
+                    </label>
+                  ))}
                 {groups.filter((group) => group.isEnabled).length === 0 && (
                   <span className="muted">请先创建并启用客服分组。</span>
                 )}
@@ -357,18 +376,27 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <input
                 type="checkbox"
                 checked={draft.isEnabled}
-                onChange={(event) => setDraft({ ...draft, isEnabled: event.target.checked })}
+                onChange={(event) =>
+                  setDraft({ ...draft, isEnabled: event.target.checked })
+                }
               />
               <span>启用这个客服账号</span>
             </label>
 
             <div className="form-actions">
               {draft.id && (
-                <button type="button" className="ghost-button" onClick={() => setDraft(emptyAgentDraft)}>
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setDraft(emptyAgentDraft)}
+                >
                   取消编辑
                 </button>
               )}
-              <button className="primary-button" disabled={saving || !draft.name || !draft.username}>
+              <button
+                className="primary-button"
+                disabled={saving || !draft.name || !draft.username}
+              >
                 {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
               </button>
             </div>
@@ -383,13 +411,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             </div>
           </div>
 
-          <form className="inline-form" onSubmit={(event) => void addGroup(event)}>
+          <form
+            className="inline-form"
+            onSubmit={(event) => void addGroup(event)}
+          >
             <input
               value={groupName}
               onChange={(event) => setGroupName(event.target.value)}
               placeholder="新分组名称"
             />
-            <button className="primary-button" disabled={!groupName.trim() || saving}>
+            <button
+              className="primary-button"
+              disabled={!groupName.trim() || saving}
+            >
               添加分组
             </button>
           </form>
@@ -399,7 +433,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <div className="group-row" key={group.id}>
                 <div>
                   <strong>{group.name}</strong>
-                  <small>{group.agentIds.length} 个客服 · 最少进行中会话优先</small>
+                  <small>
+                    {group.agentIds.length} 个客服 · 最少进行中会话优先
+                  </small>
                 </div>
                 <label className="switch-line compact">
                   <input
@@ -407,7 +443,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                     checked={group.isEnabled}
                     onChange={async (event) => {
                       try {
-                        await updateGroup(group.id, { isEnabled: event.target.checked });
+                        await updateGroup(group.id, {
+                          isEnabled: event.target.checked,
+                        });
                         await refresh();
                       } catch (reason) {
                         setError(message(reason, '更新分组失败'));
@@ -486,7 +524,12 @@ function AgentWorkspace({
   onLogout: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
-  const [overview, setOverview] = useState({ open: 0, pending: 0, closed: 0, total: 0 });
+  const [overview, setOverview] = useState({
+    open: 0,
+    pending: 0,
+    closed: 0,
+    total: 0,
+  });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -511,9 +554,13 @@ function AgentWorkspace({
   }, [refresh]);
 
   useEffect(() => {
-    void heartbeat().then(refresh).catch(() => undefined);
+    void heartbeat()
+      .then(refresh)
+      .catch(() => undefined);
     const timer = window.setInterval(() => {
-      void heartbeat().then(refresh).catch(() => undefined);
+      void heartbeat()
+        .then(refresh)
+        .catch(() => undefined);
     }, 30_000);
     return () => window.clearInterval(timer);
   }, [refresh]);
@@ -649,16 +696,26 @@ function AgentWorkspace({
             conversations.map((conversation) => (
               <button
                 key={conversation.id}
-                className={conversation.id === selectedId ? 'conversation-row selected' : 'conversation-row'}
+                className={
+                  conversation.id === selectedId
+                    ? 'conversation-row selected'
+                    : 'conversation-row'
+                }
                 onClick={() => setSelectedId(conversation.id)}
               >
-                <span className="avatar small">{initials(conversation.visitor_name || '访客')}</span>
+                <span className="avatar small">
+                  {initials(conversation.visitor_name || '访客')}
+                </span>
                 <span className="conversation-copy">
                   <span>
                     <strong>{conversation.visitor_name || '访客'}</strong>
                     <time>{relativeTime(conversation.last_message_at)}</time>
                   </span>
-                  <small>{conversation.product_title || conversation.subject || '访客咨询'}</small>
+                  <small>
+                    {conversation.product_title ||
+                      conversation.subject ||
+                      '访客咨询'}
+                  </small>
                   <p>{conversation.last_message || '会话已创建'}</p>
                 </span>
               </button>
@@ -669,7 +726,10 @@ function AgentWorkspace({
 
       <main className="thread-pane">
         {error && (
-          <button className="notice error floating" onClick={() => setError('')}>
+          <button
+            className="notice error floating"
+            onClick={() => setError('')}
+          >
             {error}
           </button>
         )}
@@ -686,11 +746,21 @@ function AgentWorkspace({
               <div>
                 <span className="eyebrow">VISITOR</span>
                 <h2>{String(detail.conversation.visitor_name || '访客')}</h2>
-                <p>{String(detail.conversation.product_title || detail.conversation.subject || '访客咨询')}</p>
+                <p>
+                  {String(
+                    detail.conversation.product_title ||
+                      detail.conversation.subject ||
+                      '访客咨询',
+                  )}
+                </p>
               </div>
               <select
                 value={String(detail.conversation.status)}
-                onChange={(event) => void changeStatus(event.target.value as Conversation['status'])}
+                onChange={(event) =>
+                  void changeStatus(
+                    event.target.value as Conversation['status'],
+                  )
+                }
                 aria-label="会话状态"
               >
                 <option value="open">新会话</option>
@@ -700,7 +770,11 @@ function AgentWorkspace({
             </header>
             <div className="messages">
               {(detail.messages as Message[]).map((item) => (
-                <Bubble key={item.id} message={item} currentAgentId={identity.id} />
+                <Bubble
+                  key={item.id}
+                  message={item}
+                  currentAgentId={identity.id}
+                />
               ))}
             </div>
             <form className="composer" onSubmit={(event) => void submit(event)}>
@@ -709,7 +783,11 @@ function AgentWorkspace({
                 rows={3}
                 disabled={detail.conversation.status === 'closed'}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder={detail.conversation.status === 'closed' ? '会话已关闭' : '输入回复内容…'}
+                placeholder={
+                  detail.conversation.status === 'closed'
+                    ? '会话已关闭'
+                    : '输入回复内容…'
+                }
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
@@ -719,7 +797,12 @@ function AgentWorkspace({
               />
               <div className="composer-foot">
                 <span>Enter 发送 · Shift + Enter 换行</span>
-                <button className="primary-button" disabled={!draft.trim() || detail.conversation.status === 'closed'}>
+                <button
+                  className="primary-button"
+                  disabled={
+                    !draft.trim() || detail.conversation.status === 'closed'
+                  }
+                >
                   发送
                 </button>
               </div>
@@ -743,7 +826,11 @@ function AdminLogin({
   onSubmit: (event: FormEvent) => void;
 }) {
   return (
-    <AuthPage eyebrow="MANAGEMENT" title="登录客服管理中心" description="管理员只负责客服账号、分组和分流配置。">
+    <AuthPage
+      eyebrow="MANAGEMENT"
+      title="登录客服管理中心"
+      description="管理员只负责客服账号、分组和分流配置。"
+    >
       <form className="auth-form" onSubmit={onSubmit}>
         <label>
           管理员密码
@@ -756,8 +843,12 @@ function AdminLogin({
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
-        <button className="primary-button" disabled={!password}>登录管理中心</button>
-        <a className="auth-link" href="/agent">我是客服，进入客服登录</a>
+        <button className="primary-button" disabled={!password}>
+          登录管理中心
+        </button>
+        <a className="auth-link" href="/agent">
+          我是客服，进入客服登录
+        </a>
       </form>
     </AuthPage>
   );
@@ -779,7 +870,11 @@ function AgentLogin({
   onSubmit: (event: FormEvent) => void;
 }) {
   return (
-    <AuthPage eyebrow="AGENT WORKSPACE" title="客服登录" description="所有客服使用同一个入口，登录后只进入自己的会话工作台。">
+    <AuthPage
+      eyebrow="AGENT WORKSPACE"
+      title="客服登录"
+      description="所有客服使用同一个入口，登录后只进入自己的会话工作台。"
+    >
       <form className="auth-form" onSubmit={onSubmit}>
         <label>
           客服账号
@@ -800,8 +895,15 @@ function AgentLogin({
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
-        <button className="primary-button" disabled={!username.trim() || !password}>进入工作台</button>
-        <a className="auth-link" href="/">返回管理中心</a>
+        <button
+          className="primary-button"
+          disabled={!username.trim() || !password}
+        >
+          进入工作台
+        </button>
+        <a className="auth-link" href="/">
+          返回管理中心
+        </a>
       </form>
     </AuthPage>
   );
@@ -833,8 +935,14 @@ function AuthPage({
 
 function AdminSetup() {
   return (
-    <AuthPage eyebrow="SETUP" title="管理中心需要初始化" description="在 Cloudflare Worker 中配置 ADMIN_PASSWORD Secret 后即可登录管理中心。">
-      <a className="auth-link" href="/agent">客服登录入口</a>
+    <AuthPage
+      eyebrow="SETUP"
+      title="管理中心需要初始化"
+      description="在 Cloudflare Worker 中配置 ADMIN_PASSWORD Secret 后即可登录管理中心。"
+    >
+      <a className="auth-link" href="/agent">
+        客服登录入口
+      </a>
     </AuthPage>
   );
 }
@@ -857,9 +965,17 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Bubble({ message: item, currentAgentId }: { message: Message; currentAgentId: string }) {
-  if (item.sender_type === 'system') return <div className="system-message">{item.body}</div>;
-  const mine = item.sender_type === 'agent' && item.sender_id === currentAgentId;
+function Bubble({
+  message: item,
+  currentAgentId,
+}: {
+  message: Message;
+  currentAgentId: string;
+}) {
+  if (item.sender_type === 'system')
+    return <div className="system-message">{item.body}</div>;
+  const mine =
+    item.sender_type === 'agent' && item.sender_id === currentAgentId;
   return (
     <div className={mine ? 'message mine' : 'message visitor'}>
       {!mine && <span className="avatar tiny">访</span>}
