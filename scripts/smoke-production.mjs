@@ -11,6 +11,10 @@ function endpoint(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
 async function readJson(response) {
   const contentType = response.headers.get('content-type') ?? '';
   assert.ok(
@@ -20,15 +24,25 @@ async function readJson(response) {
   return response.json();
 }
 
-async function assertHealth() {
-  const response = await fetch(endpoint('/api/health'), {
-    headers: { Accept: 'application/json' },
-  });
-  assert.equal(response.status, 200, 'Health endpoint must return HTTP 200.');
-  const value = await readJson(response);
-  assert.equal(value.ok, true);
-  assert.equal(value.service, 'customer-service');
-  return value;
+async function waitForHealth() {
+  let lastError;
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    try {
+      const response = await fetch(endpoint('/api/health'), {
+        headers: { Accept: 'application/json' },
+      });
+      assert.equal(response.status, 200, 'Health endpoint must return HTTP 200.');
+      const value = await readJson(response);
+      assert.equal(value.ok, true);
+      assert.equal(value.service, 'customer-service');
+      console.log(`HEALTH=ready attempt=${attempt}`);
+      return value;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 20) await sleep(3_000);
+    }
+  }
+  throw lastError ?? new Error('Production health check failed.');
 }
 
 async function assertManagementGroups() {
@@ -104,16 +118,21 @@ async function assertClientWebSocket() {
 
   await new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
-    const timeout = setTimeout(() => {
-      socket.close();
-      reject(new Error('Client WebSocket did not become ready within 10 seconds.'));
-    }, 10_000);
-
+    let settled = false;
     const finish = (callback) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeout);
       socket.close();
       callback();
     };
+    const timeout = setTimeout(
+      () =>
+        finish(() =>
+          reject(new Error('Client WebSocket did not become ready within 10 seconds.')),
+        ),
+      10_000,
+    );
 
     socket.addEventListener('message', (event) => {
       try {
@@ -131,7 +150,7 @@ async function assertClientWebSocket() {
   console.log('CLIENT_WEBSOCKET=ready');
 }
 
-const health = await assertHealth();
+const health = await waitForHealth();
 await assertManagementGroups();
 await assertBrowserCors();
 await assertClientRest();
