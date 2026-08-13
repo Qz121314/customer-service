@@ -1,51 +1,124 @@
 # Customer Service
 
-面向个人运营者和小团队的轻量客服管理系统，独立于 `Qz121314/site` 开发和部署。
+面向个人运营者和小团队的轻量客服系统，独立于 `Qz121314/site` 开发和部署。
 
-## 当前阶段
+## 产品定位
 
-第一阶段目标不是堆功能，而是先形成稳定的客服闭环：
+本项目分成两个明确边界：
 
 ```text
-访客创建会话
-→ 访客发送消息
-→ 客服工作台实时收到
-→ 客服回复
-→ D1 持久化历史消息
-→ Durable Object 负责实时连接与广播
+客服管理中心
+→ 管理员配置客服账号、客服分组、分组成员和分流规则
+→ 不在管理中心处理访客聊天
+
+客服坐席端
+→ 所有客服访问同一个 /agent 登录入口
+→ 每个客服使用自己的账号 + 密码登录
+→ 登录后只看到系统分配给自己的会话
 ```
 
-当前基础版本包含：
+访客链路：
 
-- React 19 + Vite 中文客服管理工作台；
+```text
+Site 产品
+→ 在线客服转化组
+→ customer-service 客服分组
+→ 分流引擎选择在线客服
+→ 具体客服账号的坐席工作台
+→ 客服回复访客
+```
+
+`site` 不参与客服系统内部的客服账号、分流和聊天处理。
+
+## 与 Site 的接入模型
+
+`site` 只保存：
+
+```text
+客服系统公网 URL
+验证 Token
+```
+
+验证由 Site 管理员浏览器直接调用：
+
+```text
+POST {customer-service-public-url}/integration/v1/verify
+Authorization: Bearer <token>
+```
+
+验证成功后返回：
+
+```text
+clientApiUrl
+realtimeUrl
+groups
+```
+
+因此客服系统可以部署在任意 Cloudflare Account，也可以部署在其他提供公网 HTTPS / WebSocket 的平台；不依赖 Cloudflare Service Binding、固定 Worker 名称或同账号资源。
+
+## 当前功能
+
+- React 19 + Vite 中文管理中心和客服坐席工作台；
 - Hono Worker API；
-- 单管理员密码登录；
-- 会话列表、状态筛选、会话详情和回复；
-- 公共访客会话 / 消息 API；
-- Durable Object + WebSocket Hibernation 实时会话通道；
-- D1 会话、访客、消息数据模型；
-- R2 独立媒体 Bucket 预留；
-- GitHub Actions 代码质量 CI；
-- GitHub Hosted Runner + Wrangler 生产部署。
+- 管理员使用 `ADMIN_PASSWORD` 登录管理中心；
+- D1 独立客服账号、密码凭据和登录 Session；
+- 客服分组与客服成员配置；
+- 客服启用 / 停用、最大同时会话数；
+- 客服在线心跳；
+- 只向已登录且心跳有效的客服分流；
+- 最少进行中会话优先分流；
+- 客服只读取和回复分配给自己的会话；
+- Durable Object + WebSocket 实时消息广播；
+- D1 持久化访客、会话和消息；
+- `integration/v1` 跨域公网验证；
+- `client/v1` Storefront REST / WebSocket 协议；
+- GitHub Actions 校验和 Cloudflare 生产部署。
 
-## 管理系统语言
+## 界面入口
 
-客服管理系统统一使用简体中文，包括：
+管理中心：
 
 ```text
-登录与配置提示
-会话列表与筛选
-会话状态
-空状态与错误提示
-回复编辑器
-日期与相对时间
+/
 ```
 
-对外访客接口仍保持稳定的 API 字段和错误码，不把后台中文文案耦合进接口协议。
+管理员使用 Cloudflare Worker Secret 中的 `ADMIN_PASSWORD` 登录。
 
-## Cloudflare 资源命名
+客服统一登录入口：
 
-本项目与 `site` 使用同一个 Cloudflare Account，但资源完全隔离：
+```text
+/agent
+```
+
+所有客服访问同一个地址，使用管理中心创建的客服账号和密码登录。
+
+## 客服在线与分流
+
+客服登录成功后状态变为在线，坐席端每 30 秒发送一次心跳。
+
+分流只选择：
+
+```text
+账号已启用
+属于目标客服分组
+分组已启用
+客服状态为 online
+最近 2 分钟内有有效心跳
+未超过最大同时会话数
+```
+
+排序策略：
+
+```text
+进行中会话最少
+→ 分组成员优先级
+→ 最久未分配
+→ 客服 ID
+```
+
+如果访客发起会话时目标分组没有在线客服，会话保持未分配；当符合条件的客服登录或发送心跳时，会重新尝试分流。
+
+## Cloudflare 资源
 
 ```text
 Worker  customer-service-app
@@ -54,26 +127,128 @@ R2      customer-service-media
 DO      ConversationRoom
 ```
 
-禁止复用 `site` 的以下资源：
+这些资源独立于 `site`。
+
+`wrangler.jsonc` 是 Cloudflare 绑定的代码侧来源，生产部署使用：
 
 ```text
-service-catalog-site
-service-catalog-site-db
-service-catalog-site-assets
+wrangler deploy --keep-vars
 ```
 
-`wrangler.jsonc` 是 Cloudflare 绑定的代码侧来源，D1 已固定绑定到 `customer-service-db`，不再通过 CI 动态生成生产配置。
+## Worker Secrets
 
-## 生产部署
-
-生产发布由 GitHub Actions 的单个 Hosted Runner 完成，不需要把 GitHub 仓库绑定到 Cloudflare Workers Builds。
-
-流程：
+生产运行至少需要：
 
 ```text
-PR / main push
-→ 安装依赖
-→ D1 migration 本地校验
+ADMIN_PASSWORD
+INTEGRATION_VERIFY_TOKEN
+```
+
+用途：
+
+```text
+ADMIN_PASSWORD
+→ 管理中心管理员登录
+
+INTEGRATION_VERIFY_TOKEN
+→ 外部 Site 验证 customer-service 接入协议
+```
+
+这两个值都应在 Cloudflare Dashboard 的 `Variables and Secrets` 中配置为 Secret，不写入 `wrangler.jsonc`，不提交到 GitHub。
+
+`keep_vars: true` 会保留 Dashboard 管理的变量和 Secret。
+
+## 数据模型
+
+D1 主要表：
+
+```text
+sites
+support_groups
+agents
+group_agents
+agent_sessions
+visitors
+conversations
+messages
+```
+
+关系：
+
+```text
+support_groups
+  └─ group_agents
+       └─ agents
+            └─ agent_sessions
+
+conversations
+  ├─ group_id
+  └─ assigned_agent
+```
+
+管理员账号和客服账号不是同一身份体系。管理员只负责配置；客服账号才可以进入坐席工作台处理会话。
+
+## API 基线
+
+管理中心认证：
+
+```text
+GET  /api/auth/session
+POST /api/auth/login
+POST /api/auth/logout
+```
+
+管理中心配置：
+
+```text
+GET   /api/admin/agents
+POST  /api/admin/agents
+PATCH /api/admin/agents/:id
+
+GET   /api/admin/groups
+POST  /api/admin/groups
+PATCH /api/admin/groups/:id
+```
+
+旧的管理员聊天接口已禁止使用：
+
+```text
+/api/admin/conversations*
+/api/admin/realtime/*
+```
+
+客服坐席：
+
+```text
+GET  /api/agent/auth/session
+POST /api/agent/auth/login
+POST /api/agent/auth/logout
+POST /api/agent/auth/heartbeat
+
+GET  /api/agent/overview
+GET  /api/agent/conversations
+GET  /api/agent/conversations/:id/messages
+POST /api/agent/conversations/:id/messages
+POST /api/agent/conversations/:id/status
+GET  /api/agent/realtime/inbox
+GET  /api/agent/realtime/:id
+```
+
+Site / Storefront 接入：
+
+```text
+GET  /integration/v1/status
+POST /integration/v1/verify
+
+GET/POST /client/v1/...
+```
+
+## 部署流程
+
+PR：
+
+```text
+D1 migration 本地校验
 → Prettier
 → ESLint
 → TypeScript
@@ -82,103 +257,20 @@ PR / main push
 → Wrangler dry-run
 ```
 
-PR 到这里结束，不接触 Cloudflare 生产资源。
-
-`main` 分支在同一个 Runner 上继续：
+`main`：
 
 ```text
 D1 remote migrations
 → wrangler deploy --keep-vars
-→ /api/health 生产冒烟检查
+→ 生产协议 Smoke Test
 ```
 
-这样不会在代码校验完成后再启动第二个 `deploy` Job，也就避免了第二次等待 GitHub Hosted Runner 的问题。
-
-生产部署需要以下 GitHub Repository Secrets：
+生产部署需要 GitHub Repository Secrets：
 
 ```text
 CLOUDFLARE_ACCOUNT_ID
 CLOUDFLARE_API_TOKEN
 ```
-
-`workflow_dispatch` 保留为手动重跑入口。如果自动部署需要重新执行，可以在 GitHub Actions 中手动运行同一个 `CI and Deploy` 工作流，不维护第二套部署脚本。
-
-`pnpm deploy:cloudflare` 会按顺序执行：
-
-```text
-D1 remote migrations
-→ wrangler deploy --keep-vars
-```
-
-现有 D1 / R2 已经初始化完成，日常部署不会重复创建或重新命名 Cloudflare 资源。
-
-## Worker 运行时变量
-
-管理员密码由 `customer-service-app` 自己的 Cloudflare Worker Secret 管理：
-
-```text
-ADMIN_PASSWORD
-```
-
-在 Cloudflare Dashboard 中配置：
-
-```text
-Workers & Pages
-→ customer-service-app
-→ Settings
-→ Variables and Secrets
-→ Add
-
-Type:  Secret
-Name:  ADMIN_PASSWORD
-Value: 自定义后台登录密码
-```
-
-密码不要写入 `wrangler.jsonc`，也不要提交到 GitHub。
-
-部署配置启用了：
-
-```jsonc
-"keep_vars": true
-```
-
-部署命令同时使用：
-
-```text
-wrangler deploy --keep-vars
-```
-
-因此 Dashboard 中维护的 Worker Variables 会被保留；`ADMIN_PASSWORD` 由 Worker Secret 独立管理，普通代码部署不会主动覆盖或删除它。
-
-## 数据边界
-
-### D1
-
-`customer-service-db` 保存长期业务数据：
-
-```text
-sites
-visitors
-conversations
-messages
-```
-
-### Durable Object
-
-`ConversationRoom` 只负责实时协调：
-
-```text
-WebSocket 连接
-消息广播
-连接恢复
-实时状态
-```
-
-正式历史消息仍以 D1 为准，避免把长期会话历史绑定到实时运行时状态。
-
-### R2
-
-`customer-service-media` 用于后续客服附件、截图和文件。当前第一阶段只建立独立资源边界，不开放附件 UI。
 
 ## 本地开发
 
@@ -189,69 +281,22 @@ Node.js >= 22
 pnpm >= 11
 ```
 
-安装：
-
 ```bash
 pnpm install
 pnpm db:migrate:local
 pnpm dev
 ```
 
-如果需要分别开发 UI：
-
-```bash
-pnpm dev
-pnpm dev:ui
-```
-
-Vite 会把 `/api` 代理到本地 Worker `127.0.0.1:8787`。
-
-## API 基线
-
-管理端：
-
-```text
-GET  /api/health
-POST /api/auth/login
-POST /api/auth/logout
-GET  /api/auth/session
-GET  /api/admin/overview
-GET  /api/admin/conversations
-GET  /api/admin/conversations/:id/messages
-POST /api/admin/conversations/:id/messages
-POST /api/admin/conversations/:id/status
-GET  /api/admin/realtime/:id
-```
-
-访客端：
-
-```text
-GET  /api/public/sites/:publicKey
-POST /api/public/conversations
-POST /api/public/conversations/:id/messages
-GET  /api/public/realtime/:id?token=...
-```
-
-默认 migration 会建立一个开发接入站点：
-
-```text
-site id:    default
-public key: pk_default
-```
-
-后续由客服后台的“接入站点”模块管理，不长期依赖默认值。
-
 ## 设计原则
 
 ```text
 独立项目
 简单稳定
-实时优先
-数据可恢复
-后台统一中文
+管理员配置与客服聊天分离
+客服账号独立登录
+按客服分组进行自动分流
+实时消息与长期数据分离
 不做大型企业 RBAC
-不做无需求的微服务拆分
-不把 site 数据库直接暴露给客服系统
+不依赖 Site 数据库
+不依赖同 Cloudflare Account
 ```
-
-`site` 与本项目最终只通过 HTTPS / WebSocket 公共协议连接。
