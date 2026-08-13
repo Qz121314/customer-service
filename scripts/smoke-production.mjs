@@ -68,16 +68,13 @@ async function waitForIntegrationProtocol() {
         method: 'POST',
         headers: { Accept: 'application/json' },
       });
-      assert.ok(
-        verifyResponse.status === 401 || verifyResponse.status === 503,
-        `Unauthenticated integration verify returned HTTP ${verifyResponse.status}.`,
+      assert.equal(
+        verifyResponse.status,
+        401,
+        `Integration verification token is not active; expected HTTP 401, got ${verifyResponse.status}.`,
       );
       console.log(`INTEGRATION_ROLLOUT=ready attempt=${attempt}`);
-      console.log(
-        verifyResponse.status === 401
-          ? 'INTEGRATION_API=ready_auth_required'
-          : 'INTEGRATION_API=ready_token_not_configured',
-      );
+      console.log('INTEGRATION_API=ready_auth_required');
       return;
     } catch (error) {
       lastError = error;
