@@ -1,0 +1,82 @@
+name: One-shot admin UI repair
+
+on:
+  push:
+    branches: [fix/admin-ui-500]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/admin-ui-500
+          fetch-depth: 0
+
+      - name: Apply repair
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f'expected block not found in {path}')
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'src/worker/admin-config-api.ts',
+              """      salt,\n      iterations: PASSWORD_ITERATIONS,\n""",
+              """      salt: new Uint8Array(salt).buffer,\n      iterations: PASSWORD_ITERATIONS,\n""",
+          )
+
+          replace_once(
+              'src/worker/agent-api.ts',
+              """    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PASSWORD_ITERATIONS },\n""",
+              """    {\n      name: 'PBKDF2',\n      hash: 'SHA-256',\n      salt: new Uint8Array(salt).buffer,\n      iterations: PASSWORD_ITERATIONS,\n    },\n""",
+          )
+
+          replace_once(
+              'src/dashboard/App.tsx',
+              """        <div className=\"topbar-actions\">\n          <a className=\"secondary-button\" href=\"/agent\">\n            客服登录入口\n          </a>\n          <button className=\"ghost-button\" onClick={() => void onLogout()}>\n""",
+              """        <div className=\"topbar-actions\">\n          <div className=\"agent-workspace-link\">\n            <span>客服坐席工作台</span>\n            <a\n              href=\"/agent\"\n              target=\"_blank\"\n              rel=\"noreferrer\"\n              title=\"在新窗口打开客服坐席工作台\"\n            >\n              {`${window.location.origin}/agent`}\n            </a>\n          </div>\n          <button className=\"ghost-button\" onClick={() => void onLogout()}>\n""",
+          )
+
+          styles = Path('src/dashboard/styles.css')
+          css = styles.read_text()
+          marker = '/* Admin agent workspace address */'
+          if marker not in css:
+              css += """\n\n/* Admin agent workspace address */\n.agent-workspace-link {\n  min-width: 280px;\n  padding: 9px 12px;\n  border: 1px solid #dfe2e7;\n  border-radius: 10px;\n  background: #fff;\n  display: grid;\n  gap: 3px;\n}\n\n.agent-workspace-link span {\n  color: #777c86;\n  font-size: 11px;\n  font-weight: 700;\n}\n\n.agent-workspace-link a {\n  color: #1f2329;\n  font-size: 12px;\n  font-weight: 700;\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  text-decoration: underline;\n  text-underline-offset: 3px;\n}\n\n@media (max-width: 760px) {\n  .agent-workspace-link {\n    width: 100%;\n    min-width: 0;\n  }\n}\n"""
+              styles.write_text(css)
+
+          ci = Path('.github/workflows/ci.yml')
+          ci_text = ci.read_text()
+          old_ci = """      - name: Format\n        run: |\n          pnpm exec prettier --write \\\n            src/dashboard/api.ts \\\n            src/dashboard/App.tsx \\\n            src/dashboard/styles.css \\\n            src/worker/admin-config-api.ts \\\n            src/worker/agent-api.ts \\\n            src/worker/entry.ts \\\n            test/agent-workspace-boundary.test.mjs\n\n      - name: Upload formatted sources\n        if: github.event_name == 'pull_request'\n        uses: actions/upload-artifact@v4\n        with:\n          name: formatted-sources\n          path: |\n            src/dashboard/api.ts\n            src/dashboard/App.tsx\n            src/dashboard/styles.css\n            src/worker/admin-config-api.ts\n            src/worker/agent-api.ts\n            src/worker/entry.ts\n            test/agent-workspace-boundary.test.mjs\n"""
+          new_ci = """      - name: Format\n        run: pnpm format\n"""
+          if old_ci not in ci_text:
+              raise SystemExit('temporary formatting CI block not found')
+          ci.write_text(ci_text.replace(old_ci, new_ci, 1))
+
+          compat = Path('src/worker/runtime-crypto-compat.d.ts')
+          if compat.exists():
+              compat.unlink()
+
+          Path('migrations/0005_agent_display_name_index.sql').write_text("""PRAGMA foreign_keys = ON;\n\n-- Display names are labels, not identities. Login usernames remain unique.\nDROP INDEX IF EXISTS idx_agents_site_name;\nCREATE INDEX IF NOT EXISTS idx_agents_site_name\n  ON agents(site_id, name);\n""")
+
+          Path('test/agent-account-create-boundary.test.mjs').write_text("""import assert from 'node:assert/strict';\nimport { readFile } from 'node:fs/promises';\nimport test from 'node:test';\n\nconst [adminApi, agentApi, app, migration] = await Promise.all([\n  readFile(new URL('../src/worker/admin-config-api.ts', import.meta.url), 'utf8'),\n  readFile(new URL('../src/worker/agent-api.ts', import.meta.url), 'utf8'),\n  readFile(new URL('../src/dashboard/App.tsx', import.meta.url), 'utf8'),\n  readFile(new URL('../migrations/0005_agent_display_name_index.sql', import.meta.url), 'utf8'),\n]);\n\ntest('PBKDF2 salt is passed as an ArrayBuffer in both account paths', () => {\n  assert.match(adminApi, /salt: new Uint8Array\\(salt\\)\\.buffer/u);\n  assert.match(agentApi, /salt: new Uint8Array\\(salt\\)\\.buffer/u);\n});\n\ntest('admin center visibly exposes the employee workspace address', () => {\n  assert.match(app, /客服坐席工作台/u);\n  assert.match(app, /window\\.location\\.origin}\\/agent/u);\n});\n\ntest('agent display names are no longer unique identities', () => {\n  assert.match(migration, /DROP INDEX IF EXISTS idx_agents_site_name/u);\n  assert.doesNotMatch(migration, /CREATE UNIQUE INDEX/u);\n});\n""")
+
+          Path('.github/workflows/one-shot-admin-ui-fix.yml').unlink()
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: repair admin agent creation and workspace link"
+          git push origin HEAD:fix/admin-ui-500
