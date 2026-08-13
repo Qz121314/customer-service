@@ -1,8 +1,8 @@
 import { Hono, type Context } from 'hono';
+import { cors } from 'hono/cors';
 
 type IntegrationBindings = {
   DB: D1Database;
-  INTEGRATION_VERIFY_TOKEN?: string;
 };
 
 type IntegrationEnv = { Bindings: IntegrationBindings };
@@ -13,7 +13,21 @@ type SupportGroupRow = {
   is_enabled: number;
 };
 
+type IntegrationSettingsRow = {
+  verify_token: string;
+};
+
 export const integrationApi = new Hono<IntegrationEnv>();
+
+integrationApi.use(
+  '/integration/v1/*',
+  cors({
+    origin: '*',
+    allowHeaders: ['Authorization', 'Content-Type'],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    maxAge: 86400,
+  }),
+);
 
 integrationApi.get('/integration/v1/status', (c) =>
   c.json({
@@ -22,13 +36,8 @@ integrationApi.get('/integration/v1/status', (c) =>
   }),
 );
 
-/**
- * Control-plane endpoint used only when an external site admin configures this
- * customer-service installation. The verification token is never returned to
- * Storefront and is never part of visitor conversation traffic.
- */
 integrationApi.post('/integration/v1/verify', async (c) => {
-  const configuredToken = c.env.INTEGRATION_VERIFY_TOKEN?.trim();
+  const configuredToken = await readConfiguredToken(c.env.DB);
   if (!configuredToken) {
     return integrationError(
       c,
@@ -89,6 +98,14 @@ integrationApi.post('/integration/v1/verify', async (c) => {
     })),
   });
 });
+
+async function readConfiguredToken(db: D1Database): Promise<string | null> {
+  const row = await db
+    .prepare('SELECT verify_token FROM integration_settings WHERE id = 1')
+    .first<IntegrationSettingsRow>();
+  const token = row?.verify_token?.trim();
+  return token || null;
+}
 
 function bearerToken(authorization?: string): string | null {
   const match = authorization?.match(/^Bearer\s+(.+)$/iu);
