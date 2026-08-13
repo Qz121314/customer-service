@@ -23,7 +23,7 @@ test('new agent credentials use a Workers-friendly versioned KDF cost', () => {
   assert.match(migration, /DEFAULT 120000/u);
 });
 
-test('admin UI is separated into management navigation and modal editing', () => {
+test('admin console uses management navigation and modal account editing', () => {
   assert.match(app, /className="admin-console"/u);
   assert.match(app, /客服账号/u);
   assert.match(app, /客服分组/u);
