@@ -23,7 +23,8 @@ test('PBKDF2 salt is passed as an ArrayBuffer in both account paths', () => {
 
 test('admin center visibly exposes the employee workspace address', () => {
   assert.match(app, /客服坐席工作台/u);
-  assert.match(app, /window\.location\.origin}\/agent/u);
+  assert.match(app, /window\.location\.origin/u);
+  assert.match(app, /href="\/agent"/u);
 });
 
 test('agent display names are no longer unique identities', () => {
