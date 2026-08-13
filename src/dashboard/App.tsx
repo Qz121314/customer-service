@@ -1,57 +1,90 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  AgentAccount,
+  AgentIdentity,
   Conversation,
   ConversationDetail,
   Message,
-  Overview,
+  SupportGroup,
+  adminLogin,
+  adminLogout,
+  agentLogin,
+  agentLogout,
+  createAgent,
+  createGroup,
+  getAdminSession,
+  getAgentSession,
+  getAgents,
   getConversation,
   getConversations,
+  getGroups,
   getOverview,
-  getSession,
-  login,
-  logout,
+  heartbeat,
+  openAgentInboxSocket,
   openConversationSocket,
   sendMessage,
   setConversationStatus,
+  updateAgent,
+  updateGroup,
 } from './api';
 
-type AuthState = 'loading' | 'authenticated' | 'signed-out' | 'not-configured';
+type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
 
-const emptyOverview: Overview = {
-  open: 0,
-  pending: 0,
-  closed: 0,
-  visitors: 0,
-  messages: 0,
+type AgentDraft = {
+  id: string | null;
+  name: string;
+  username: string;
+  password: string;
+  groupIds: string[];
+  maxActiveConversations: number;
+  isEnabled: boolean;
+};
+
+const emptyAgentDraft: AgentDraft = {
+  id: null,
+  name: '',
+  username: '',
+  password: '',
+  groupIds: [],
+  maxActiveConversations: 0,
+  isEnabled: true,
 };
 
 const filterLabels: Record<Filter, string> = {
   all: '全部',
-  open: '进行中',
-  pending: '待处理',
+  open: '新会话',
+  pending: '处理中',
   closed: '已关闭',
 };
 
 export function App() {
-  const [auth, setAuth] = useState<AuthState>('loading');
+  return window.location.pathname.startsWith('/agent') ? (
+    <AgentPortal />
+  ) : (
+    <AdminPortal />
+  );
+}
+
+function AdminPortal() {
+  const [state, setState] = useState<LoadState>('loading');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    getSession()
+    getAdminSession()
       .then((session) => {
-        if (!session.configured) setAuth('not-configured');
-        else setAuth(session.authenticated ? 'authenticated' : 'signed-out');
+        if (!session.configured) setState('not-configured');
+        else setState(session.authenticated ? 'authenticated' : 'signed-out');
       })
-      .catch(() => setAuth('signed-out'));
+      .catch(() => setState('signed-out'));
   }, []);
 
-  if (auth === 'loading') return <Startup />;
-  if (auth === 'not-configured') return <Setup />;
-  if (auth === 'signed-out') {
+  if (state === 'loading') return <Startup label="正在加载管理中心…" />;
+  if (state === 'not-configured') return <AdminSetup />;
+  if (state === 'signed-out') {
     return (
-      <Login
+      <AdminLogin
         password={password}
         error={error}
         onChange={setPassword}
@@ -59,11 +92,11 @@ export function App() {
           event.preventDefault();
           setError('');
           try {
-            await login(password);
+            await adminLogin(password);
             setPassword('');
-            setAuth('authenticated');
+            setState('authenticated');
           } catch (reason) {
-            setError(reason instanceof Error ? reason.message : '登录失败');
+            setError(message(reason, '登录失败'));
           }
         }}
       />
@@ -71,18 +104,432 @@ export function App() {
   }
 
   return (
-    <Workspace
+    <AdminCenter
       onLogout={async () => {
-        await logout();
-        setAuth('signed-out');
+        await adminLogout();
+        setState('signed-out');
       }}
     />
   );
 }
 
-function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
-  const [overview, setOverview] = useState<Overview>(emptyOverview);
+function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
+  const [agents, setAgents] = useState<AgentAccount[]>([]);
+  const [groups, setGroups] = useState<SupportGroup[]>([]);
+  const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
+  const [groupName, setGroupName] = useState('');
+  const [busy, setBusy] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const refresh = useCallback(async () => {
+    const [nextAgents, nextGroups] = await Promise.all([
+      getAgents(),
+      getGroups(),
+    ]);
+    setAgents(nextAgents);
+    setGroups(nextGroups);
+  }, []);
+
+  useEffect(() => {
+    refresh()
+      .catch((reason) => setError(message(reason, '无法加载配置')))
+      .finally(() => setBusy(false));
+  }, [refresh]);
+
+  const groupById = useMemo(
+    () => new Map(groups.map((group) => [group.id, group])),
+    [groups],
+  );
+
+  function editAgent(agent: AgentAccount) {
+    setDraft({
+      id: agent.id,
+      name: agent.name,
+      username: agent.username ?? '',
+      password: '',
+      groupIds: agent.groupIds,
+      maxActiveConversations: agent.maxActiveConversations,
+      isEnabled: agent.isEnabled,
+    });
+  }
+
+  async function saveAgent(event: FormEvent) {
+    event.preventDefault();
+    if (!draft.name.trim() || !draft.username.trim()) return;
+    if (!draft.id && draft.password.length < 4) {
+      setError('新客服必须设置至少 4 个字符的登录密码。');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      if (draft.id) {
+        await updateAgent(draft.id, {
+          name: draft.name,
+          username: draft.username,
+          password: draft.password || undefined,
+          groupIds: draft.groupIds,
+          maxActiveConversations: draft.maxActiveConversations,
+          isEnabled: draft.isEnabled,
+        });
+      } else {
+        await createAgent({
+          name: draft.name,
+          username: draft.username,
+          password: draft.password,
+          groupIds: draft.groupIds,
+          maxActiveConversations: draft.maxActiveConversations,
+          isEnabled: draft.isEnabled,
+        });
+      }
+      setDraft(emptyAgentDraft);
+      await refresh();
+    } catch (reason) {
+      setError(message(reason, '保存客服失败'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addGroup(event: FormEvent) {
+    event.preventDefault();
+    if (!groupName.trim()) return;
+    setSaving(true);
+    setError('');
+    try {
+      await createGroup(groupName.trim());
+      setGroupName('');
+      await refresh();
+    } catch (reason) {
+      setError(message(reason, '创建分组失败'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="admin-shell">
+      <header className="topbar">
+        <div>
+          <span className="eyebrow">CUSTOMER SERVICE</span>
+          <h1>客服管理中心</h1>
+          <p>这里只配置客服账号、客服分组和分流关系，不处理访客聊天。</p>
+        </div>
+        <div className="topbar-actions">
+          <a className="secondary-button" href="/agent">
+            客服登录入口
+          </a>
+          <button className="ghost-button" onClick={() => void onLogout()}>
+            退出管理
+          </button>
+        </div>
+      </header>
+
+      {error && (
+        <button className="notice error" onClick={() => setError('')}>
+          {error}
+        </button>
+      )}
+
+      <main className="admin-grid">
+        <section className="panel agents-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">SEATS</span>
+              <h2>客服账号</h2>
+            </div>
+            <button
+              className="primary-button"
+              onClick={() => setDraft(emptyAgentDraft)}
+            >
+              新增客服
+            </button>
+          </div>
+
+          {busy ? (
+            <div className="empty-state">正在加载客服账号…</div>
+          ) : agents.length === 0 ? (
+            <div className="empty-state">
+              <strong>还没有客服账号</strong>
+              <span>先创建客服账号，再将账号加入对应客服分组。</span>
+            </div>
+          ) : (
+            <div className="agent-list">
+              {agents.map((agent) => (
+                <button
+                  key={agent.id}
+                  className={
+                    draft.id === agent.id ? 'agent-row selected' : 'agent-row'
+                  }
+                  onClick={() => editAgent(agent)}
+                >
+                  <span className={`presence ${presenceClass(agent)}`} />
+                  <span className="agent-main">
+                    <strong>{agent.name}</strong>
+                    <small>@{agent.username || '未设置账号'}</small>
+                  </span>
+                  <span className="agent-groups">
+                    {agent.groupIds.length
+                      ? agent.groupIds
+                          .map((id) => groupById.get(id)?.name || '未知分组')
+                          .join(' · ')
+                      : '未加入分组'}
+                  </span>
+                  <span className="status-label">
+                    {agent.isEnabled ? statusLabel(agent.status) : '已停用'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel editor-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">ACCOUNT</span>
+              <h2>{draft.id ? '编辑客服' : '新增客服'}</h2>
+            </div>
+          </div>
+
+          <form
+            className="form-stack"
+            onSubmit={(event) => void saveAgent(event)}
+          >
+            <label>
+              显示名称
+              <input
+                value={draft.name}
+                onChange={(event) =>
+                  setDraft({ ...draft, name: event.target.value })
+                }
+                placeholder="例如：Alice"
+              />
+            </label>
+            <label>
+              登录账号
+              <input
+                value={draft.username}
+                onChange={(event) =>
+                  setDraft({ ...draft, username: event.target.value })
+                }
+                placeholder="例如：alice"
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              {draft.id ? '重置密码（留空则不修改）' : '登录密码'}
+              <input
+                type="password"
+                value={draft.password}
+                onChange={(event) =>
+                  setDraft({ ...draft, password: event.target.value })
+                }
+                autoComplete="new-password"
+              />
+            </label>
+            <label>
+              最大同时会话数
+              <input
+                type="number"
+                min="0"
+                max="999"
+                value={draft.maxActiveConversations}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    maxActiveConversations: Number(event.target.value) || 0,
+                  })
+                }
+              />
+              <small>0 表示不限制。</small>
+            </label>
+
+            <fieldset>
+              <legend>所属客服分组</legend>
+              <div className="check-grid">
+                {groups
+                  .filter((group) => group.isEnabled)
+                  .map((group) => (
+                    <label className="check-card" key={group.id}>
+                      <input
+                        type="checkbox"
+                        checked={draft.groupIds.includes(group.id)}
+                        onChange={(event) => {
+                          const groupIds = event.target.checked
+                            ? [...draft.groupIds, group.id]
+                            : draft.groupIds.filter((id) => id !== group.id);
+                          setDraft({ ...draft, groupIds });
+                        }}
+                      />
+                      <span>{group.name}</span>
+                    </label>
+                  ))}
+                {groups.filter((group) => group.isEnabled).length === 0 && (
+                  <span className="muted">请先创建并启用客服分组。</span>
+                )}
+              </div>
+            </fieldset>
+
+            <label className="switch-line">
+              <input
+                type="checkbox"
+                checked={draft.isEnabled}
+                onChange={(event) =>
+                  setDraft({ ...draft, isEnabled: event.target.checked })
+                }
+              />
+              <span>启用这个客服账号</span>
+            </label>
+
+            <div className="form-actions">
+              {draft.id && (
+                <button
+                  type="button"
+                  className="ghost-button"
+                  onClick={() => setDraft(emptyAgentDraft)}
+                >
+                  取消编辑
+                </button>
+              )}
+              <button
+                className="primary-button"
+                disabled={saving || !draft.name || !draft.username}
+              >
+                {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <section className="panel groups-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">ROUTING</span>
+              <h2>客服分组</h2>
+            </div>
+          </div>
+
+          <form
+            className="inline-form"
+            onSubmit={(event) => void addGroup(event)}
+          >
+            <input
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              placeholder="新分组名称"
+            />
+            <button
+              className="primary-button"
+              disabled={!groupName.trim() || saving}
+            >
+              添加分组
+            </button>
+          </form>
+
+          <div className="group-list">
+            {groups.map((group) => (
+              <div className="group-row" key={group.id}>
+                <div>
+                  <strong>{group.name}</strong>
+                  <small>
+                    {group.agentIds.length} 个客服 · 最少进行中会话优先
+                  </small>
+                </div>
+                <label className="switch-line compact">
+                  <input
+                    type="checkbox"
+                    checked={group.isEnabled}
+                    onChange={async (event) => {
+                      try {
+                        await updateGroup(group.id, {
+                          isEnabled: event.target.checked,
+                        });
+                        await refresh();
+                      } catch (reason) {
+                        setError(message(reason, '更新分组失败'));
+                      }
+                    }}
+                  />
+                  <span>{group.isEnabled ? '启用' : '停用'}</span>
+                </label>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function AgentPortal() {
+  const [state, setState] = useState<LoadState>('loading');
+  const [identity, setIdentity] = useState<AgentIdentity | null>(null);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getAgentSession()
+      .then((session) => {
+        setIdentity(session.agent);
+        setState(session.authenticated ? 'authenticated' : 'signed-out');
+      })
+      .catch(() => setState('signed-out'));
+  }, []);
+
+  if (state === 'loading') return <Startup label="正在加载客服工作台…" />;
+  if (state === 'signed-out' || !identity) {
+    return (
+      <AgentLogin
+        username={username}
+        password={password}
+        error={error}
+        onUsername={setUsername}
+        onPassword={setPassword}
+        onSubmit={async (event) => {
+          event.preventDefault();
+          setError('');
+          try {
+            const agent = await agentLogin(username, password);
+            setIdentity(agent);
+            setPassword('');
+            setState('authenticated');
+          } catch (reason) {
+            setError(message(reason, '登录失败'));
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <AgentWorkspace
+      identity={identity}
+      onLogout={async () => {
+        await agentLogout();
+        setIdentity(null);
+        setState('signed-out');
+      }}
+    />
+  );
+}
+
+function AgentWorkspace({
+  identity,
+  onLogout,
+}: {
+  identity: AgentIdentity;
+  onLogout: () => Promise<void>;
+}) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [overview, setOverview] = useState({
+    open: 0,
+    pending: 0,
+    closed: 0,
+    total: 0,
+  });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -102,41 +549,42 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
   useEffect(() => {
     setBusy(true);
     refresh()
-      .catch((reason) =>
-        setError(reason instanceof Error ? reason.message : '无法加载会话列表'),
-      )
+      .catch((reason) => setError(message(reason, '无法加载会话')))
       .finally(() => setBusy(false));
+  }, [refresh]);
+
+  useEffect(() => {
+    void heartbeat()
+      .then(refresh)
+      .catch(() => undefined);
+    const timer = window.setInterval(() => {
+      void heartbeat()
+        .then(refresh)
+        .catch(() => undefined);
+    }, 30_000);
+    return () => window.clearInterval(timer);
   }, [refresh]);
 
   useEffect(() => {
     let active = true;
     let socket: WebSocket | null = null;
-    let reconnectTimer: number | null = null;
-
+    let timer: number | null = null;
     const connect = () => {
       if (!active) return;
-      socket = openConversationSocket('admin-inbox');
-      socket.addEventListener('message', (event) => {
-        if (!active) return;
-        try {
-          const payload = JSON.parse(String(event.data)) as { type?: string };
-          if (payload.type === 'conversation.changed') void refresh();
-        } catch {
-          // 忽略非 JSON WebSocket 帧。
-        }
+      socket = openAgentInboxSocket();
+      socket.addEventListener('message', () => {
+        if (active) void refresh();
       });
       socket.addEventListener('close', () => {
-        if (!active) return;
-        reconnectTimer = window.setTimeout(connect, 1000);
+        if (active) timer = window.setTimeout(connect, 1200);
       });
       socket.addEventListener('error', () => socket?.close());
     };
-
     connect();
     return () => {
       active = false;
       socket?.close();
-      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (timer !== null) window.clearTimeout(timer);
     };
   }, [refresh]);
 
@@ -145,61 +593,24 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
       setDetail(null);
       return;
     }
-
     let active = true;
-    getConversation(selectedId)
-      .then((value) => {
-        if (active) setDetail(value);
-      })
-      .catch((reason) => {
-        if (active)
-          setError(reason instanceof Error ? reason.message : '无法加载会话');
-      });
-
+    const load = () =>
+      getConversation(selectedId)
+        .then((value) => {
+          if (active) setDetail(value);
+        })
+        .catch((reason) => {
+          if (active) setError(message(reason, '无法加载会话'));
+        });
+    void load();
     const socket = openConversationSocket(selectedId);
-    socket.addEventListener('message', (event) => {
-      if (!active) return;
-      try {
-        const payload = JSON.parse(String(event.data)) as
-          | { type: 'message'; message: Message }
-          | { type: 'conversation.status'; status: Conversation['status'] }
-          | { type: 'ready' };
-
-        if (payload.type === 'message') {
-          setDetail((current) => {
-            if (
-              !current ||
-              current.messages.some((item) => item.id === payload.message.id)
-            ) {
-              return current;
-            }
-            return {
-              ...current,
-              messages: [...current.messages, payload.message],
-            };
-          });
-          void refresh();
-        }
-
-        if (payload.type === 'conversation.status') {
-          setDetail((current) =>
-            current
-              ? {
-                  ...current,
-                  conversation: {
-                    ...current.conversation,
-                    status: payload.status,
-                  },
-                }
-              : current,
-          );
-          void refresh();
-        }
-      } catch {
-        // 忽略非 JSON WebSocket 帧。
+    socket.addEventListener('message', () => {
+      if (active) {
+        void load();
+        void refresh();
       }
     });
-
+    socket.addEventListener('error', () => socket.close());
     return () => {
       active = false;
       socket.close();
@@ -212,16 +623,12 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
     const text = draft.trim();
     setDraft('');
     try {
-      const message = await sendMessage(selectedId, text);
-      setDetail((current) => {
-        if (!current || current.messages.some((item) => item.id === message.id))
-          return current;
-        return { ...current, messages: [...current.messages, message] };
-      });
+      await sendMessage(selectedId, text);
+      setDetail(await getConversation(selectedId));
       await refresh();
     } catch (reason) {
       setDraft(text);
-      setError(reason instanceof Error ? reason.message : '消息发送失败');
+      setError(message(reason, '发送失败'));
     }
   }
 
@@ -229,58 +636,45 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
     if (!selectedId) return;
     try {
       await setConversationStatus(selectedId, status);
-      setDetail((current) =>
-        current
-          ? { ...current, conversation: { ...current.conversation, status } }
-          : current,
-      );
+      setDetail(await getConversation(selectedId));
       await refresh();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '会话状态更新失败');
+      setError(message(reason, '更新会话状态失败'));
     }
   }
 
   return (
-    <div className="shell">
-      <aside className="rail">
-        <div className="logo">客</div>
-        <button className="rail-item active" title="会话">
-          ◫
-        </button>
-        <button className="rail-item" title="联系人" disabled>
-          ◎
-        </button>
-        <button className="rail-item" title="设置" disabled>
-          ⚙
-        </button>
-        <button
-          className="avatar"
-          onClick={() => void onLogout()}
-          title="退出登录"
-        >
-          管
+    <div className="workspace-shell">
+      <aside className="workspace-sidebar">
+        <div className="workspace-brand">CS</div>
+        <div className="agent-profile">
+          <span className="avatar">{initials(identity.name)}</span>
+          <div>
+            <strong>{identity.name}</strong>
+            <small>@{identity.username}</small>
+          </div>
+          <i className="presence online" />
+        </div>
+        <div className="workspace-metrics">
+          <Metric label="处理中" value={overview.pending} />
+          <Metric label="新会话" value={overview.open} />
+          <Metric label="已关闭" value={overview.closed} />
+        </div>
+        <button className="ghost-button full" onClick={() => void onLogout()}>
+          退出客服账号
         </button>
       </aside>
 
-      <section className="inbox">
-        <header className="inbox-head">
+      <section className="conversation-pane">
+        <header className="conversation-head">
           <div>
-            <span className="eyebrow">客服工作台</span>
-            <h1>会话</h1>
+            <span className="eyebrow">MY INBOX</span>
+            <h1>我的会话</h1>
           </div>
-          <span className="live">
-            <i /> 实时
-          </span>
+          <span className="online-pill">在线接待</span>
         </header>
-
-        <div className="metrics">
-          <Metric label="进行中" value={overview.open} />
-          <Metric label="待处理" value={overview.pending} />
-          <Metric label="已关闭" value={overview.closed} />
-        </div>
-
         <div className="filters">
-          {(['all', 'open', 'pending', 'closed'] as Filter[]).map((item) => (
+          {(Object.keys(filterLabels) as Filter[]).map((item) => (
             <button
               key={item}
               className={filter === item ? 'filter active' : 'filter'}
@@ -290,14 +684,13 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
             </button>
           ))}
         </div>
-
-        <div className="list">
+        <div className="conversation-list">
           {busy ? (
-            <div className="loading-list">正在加载会话…</div>
+            <div className="empty-state">正在加载…</div>
           ) : conversations.length === 0 ? (
-            <div className="empty-list">
-              <strong>暂无会话</strong>
-              <span>新的访客会话会显示在这里。</span>
+            <div className="empty-state">
+              <strong>当前没有分配给你的会话</strong>
+              <span>保持此页面在线，系统会按客服分组和负载自动分流。</span>
             </div>
           ) : (
             conversations.map((conversation) => (
@@ -305,63 +698,61 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                 key={conversation.id}
                 className={
                   conversation.id === selectedId
-                    ? 'conversation active'
-                    : 'conversation'
+                    ? 'conversation-row selected'
+                    : 'conversation-row'
                 }
                 onClick={() => setSelectedId(conversation.id)}
               >
-                <span className="person">
+                <span className="avatar small">
                   {initials(conversation.visitor_name || '访客')}
                 </span>
                 <span className="conversation-copy">
-                  <span className="conversation-line">
+                  <span>
                     <strong>{conversation.visitor_name || '访客'}</strong>
                     <time>{relativeTime(conversation.last_message_at)}</time>
                   </span>
-                  <span className="preview">
-                    {conversation.last_message || '会话已创建'}
-                  </span>
+                  <small>
+                    {conversation.product_title ||
+                      conversation.subject ||
+                      '访客咨询'}
+                  </small>
+                  <p>{conversation.last_message || '会话已创建'}</p>
                 </span>
-                <i className={`dot ${conversation.status}`} />
               </button>
             ))
           )}
         </div>
       </section>
 
-      <main className="thread">
+      <main className="thread-pane">
         {error && (
-          <button className="error" onClick={() => setError('')}>
-            {error} <small>关闭</small>
+          <button
+            className="notice error floating"
+            onClick={() => setError('')}
+          >
+            {error}
           </button>
         )}
-
         {!selectedId ? (
           <div className="thread-empty">
-            <div className="empty-symbol">↔</div>
-            <h2>选择一个会话</h2>
-            <p>选择左侧会话后，可查看消息并进行回复和状态管理。</p>
+            <strong>选择一个会话</strong>
+            <span>这里只显示系统已经分配给当前客服账号的会话。</span>
           </div>
         ) : !detail ? (
-          <div className="thread-empty">
-            <p>正在加载会话…</p>
-          </div>
+          <div className="thread-empty">正在加载会话…</div>
         ) : (
           <>
             <header className="thread-head">
-              <button
-                className="back"
-                onClick={() => setSelectedId(null)}
-                aria-label="返回"
-              >
-                ←
-              </button>
-              <span className="person large">
-                {initials(String(detail.conversation.visitor_name || '访客'))}
-              </span>
-              <div className="identity">
+              <div>
+                <span className="eyebrow">VISITOR</span>
                 <h2>{String(detail.conversation.visitor_name || '访客')}</h2>
-                <p>站点：{String(detail.conversation.site_id)}</p>
+                <p>
+                  {String(
+                    detail.conversation.product_title ||
+                      detail.conversation.subject ||
+                      '访客咨询',
+                  )}
+                </p>
               </div>
               <select
                 value={String(detail.conversation.status)}
@@ -372,31 +763,31 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                 }
                 aria-label="会话状态"
               >
-                <option value="open">进行中</option>
-                <option value="pending">待处理</option>
+                <option value="open">新会话</option>
+                <option value="pending">处理中</option>
                 <option value="closed">已关闭</option>
               </select>
             </header>
-
             <div className="messages">
-              <div className="day">
-                会话开始于 {formatDate(String(detail.conversation.created_at))}
-              </div>
-              {detail.messages.length === 0 ? (
-                <div className="no-messages">暂无消息。</div>
-              ) : (
-                detail.messages.map((message) => (
-                  <Bubble key={message.id} message={message} />
-                ))
-              )}
+              {(detail.messages as Message[]).map((item) => (
+                <Bubble
+                  key={item.id}
+                  message={item}
+                  currentAgentId={identity.id}
+                />
+              ))}
             </div>
-
             <form className="composer" onSubmit={(event) => void submit(event)}>
               <textarea
-                rows={3}
                 value={draft}
+                rows={3}
+                disabled={detail.conversation.status === 'closed'}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="输入回复内容…"
+                placeholder={
+                  detail.conversation.status === 'closed'
+                    ? '会话已关闭'
+                    : '输入回复内容…'
+                }
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault();
@@ -405,23 +796,162 @@ function Workspace({ onLogout }: { onLogout: () => Promise<void> }) {
                 }}
               />
               <div className="composer-foot">
-                <button
-                  className="attach"
-                  type="button"
-                  disabled
-                  title="附件功能稍后开放"
-                >
-                  ＋
-                </button>
                 <span>Enter 发送 · Shift + Enter 换行</span>
-                <button className="send" type="submit" disabled={!draft.trim()}>
-                  发送 →
+                <button
+                  className="primary-button"
+                  disabled={
+                    !draft.trim() || detail.conversation.status === 'closed'
+                  }
+                >
+                  发送
                 </button>
               </div>
             </form>
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function AdminLogin({
+  password,
+  error,
+  onChange,
+  onSubmit,
+}: {
+  password: string;
+  error: string;
+  onChange: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  return (
+    <AuthPage
+      eyebrow="MANAGEMENT"
+      title="登录客服管理中心"
+      description="管理员只负责客服账号、分组和分流配置。"
+    >
+      <form className="auth-form" onSubmit={onSubmit}>
+        <label>
+          管理员密码
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => onChange(event.target.value)}
+            autoFocus
+          />
+        </label>
+        {error && <div className="auth-error">{error}</div>}
+        <button className="primary-button" disabled={!password}>
+          登录管理中心
+        </button>
+        <a className="auth-link" href="/agent">
+          我是客服，进入客服登录
+        </a>
+      </form>
+    </AuthPage>
+  );
+}
+
+function AgentLogin({
+  username,
+  password,
+  error,
+  onUsername,
+  onPassword,
+  onSubmit,
+}: {
+  username: string;
+  password: string;
+  error: string;
+  onUsername: (value: string) => void;
+  onPassword: (value: string) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  return (
+    <AuthPage
+      eyebrow="AGENT WORKSPACE"
+      title="客服登录"
+      description="所有客服使用同一个入口，登录后只进入自己的会话工作台。"
+    >
+      <form className="auth-form" onSubmit={onSubmit}>
+        <label>
+          客服账号
+          <input
+            value={username}
+            onChange={(event) => onUsername(event.target.value)}
+            autoComplete="username"
+            autoFocus
+          />
+        </label>
+        <label>
+          登录密码
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => onPassword(event.target.value)}
+            autoComplete="current-password"
+          />
+        </label>
+        {error && <div className="auth-error">{error}</div>}
+        <button
+          className="primary-button"
+          disabled={!username.trim() || !password}
+        >
+          进入工作台
+        </button>
+        <a className="auth-link" href="/">
+          返回管理中心
+        </a>
+      </form>
+    </AuthPage>
+  );
+}
+
+function AuthPage({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-mark">CS</div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function AdminSetup() {
+  return (
+    <AuthPage
+      eyebrow="SETUP"
+      title="管理中心需要初始化"
+      description="在 Cloudflare Worker 中配置 ADMIN_PASSWORD Secret 后即可登录管理中心。"
+    >
+      <a className="auth-link" href="/agent">
+        客服登录入口
+      </a>
+    </AuthPage>
+  );
+}
+
+function Startup({ label }: { label: string }) {
+  return (
+    <div className="startup">
+      <div className="auth-mark">CS</div>
+      <span>{label}</span>
     </div>
   );
 }
@@ -435,122 +965,62 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Bubble({ message }: { message: Message }) {
-  if (message.sender_type === 'system')
-    return <div className="system">{message.body}</div>;
-  const agent = message.sender_type === 'agent';
-  return (
-    <div className={agent ? 'message agent' : 'message visitor'}>
-      {!agent && <span className="person mini">访</span>}
-      <div>
-        <p>{message.body}</p>
-        <time>{formatTime(message.created_at)}</time>
-      </div>
-    </div>
-  );
-}
-
-function Login({
-  password,
-  error,
-  onChange,
-  onSubmit,
+function Bubble({
+  message: item,
+  currentAgentId,
 }: {
-  password: string;
-  error: string;
-  onChange: (value: string) => void;
-  onSubmit: (event: FormEvent) => void;
+  message: Message;
+  currentAgentId: string;
 }) {
+  if (item.sender_type === 'system')
+    return <div className="system-message">{item.body}</div>;
+  const mine =
+    item.sender_type === 'agent' && item.sender_id === currentAgentId;
   return (
-    <div className="auth-page">
-      <form className="auth-card" onSubmit={onSubmit}>
-        <div className="logo auth-logo">客</div>
-        <span className="eyebrow">客服管理系统</span>
-        <h1>登录客服工作台</h1>
-        <p>请输入当前部署配置的管理员密码。</p>
-        <label>
-          管理员密码
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => onChange(event.target.value)}
-            autoFocus
-          />
-        </label>
-        {error && <div className="auth-error">{error}</div>}
-        <button className="primary" disabled={!password}>
-          登录
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function Setup() {
-  return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="logo auth-logo">客</div>
-        <span className="eyebrow">需要配置</span>
-        <h1>客服服务已上线</h1>
-        <p>
-          请在 Cloudflare 的 <code>customer-service-app</code> Worker 中添加
-          <code> ADMIN_PASSWORD</code> Secret，配置后即可登录。
-        </p>
+    <div className={mine ? 'message mine' : 'message visitor'}>
+      {!mine && <span className="avatar tiny">访</span>}
+      <div>
+        <p>{item.body}</p>
+        <time>{formatTime(item.created_at)}</time>
       </div>
     </div>
   );
 }
 
-function Startup() {
-  return (
-    <div className="startup">
-      <div className="logo">客</div>
-      <span>正在加载工作台…</span>
-    </div>
-  );
+function presenceClass(agent: AgentAccount): string {
+  if (!agent.isEnabled) return 'offline';
+  return agent.status;
+}
+
+function statusLabel(status: AgentAccount['status']): string {
+  if (status === 'online') return '在线';
+  if (status === 'busy') return '忙碌';
+  return '离线';
 }
 
 function initials(value: string): string {
   const trimmed = value.trim();
-  if (!trimmed) return '访';
-  if (/^[\u3400-\u9fff]/.test(trimmed)) return trimmed.slice(0, 2);
-  return trimmed
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
-
-function parseUtc(value: string): Date {
-  return new Date(`${value.replace(' ', 'T')}Z`);
+  return trimmed ? [...trimmed].slice(0, 2).join('').toUpperCase() : '访';
 }
 
 function relativeTime(value: string): string {
-  const seconds = Math.max(
-    0,
-    Math.floor((Date.now() - parseUtc(value).getTime()) / 1000),
-  );
-  if (seconds < 60) return '刚刚';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)} 分钟前`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)} 小时前`;
-  return `${Math.floor(seconds / 86400)} 天前`;
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+  if (minutes < 1) return '刚刚';
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return new Date(value).toLocaleDateString('zh-CN');
 }
 
 function formatTime(value: string): string {
-  return parseUtc(value).toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    : '';
 }
 
-function formatDate(value: string): string {
-  return parseUtc(value).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
+function message(reason: unknown, fallback: string): string {
+  return reason instanceof Error ? reason.message : fallback;
 }

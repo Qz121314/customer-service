@@ -18,13 +18,14 @@ type AgentCandidateRow = {
 /**
  * Assigns one conversation to an available agent in its support group.
  *
- * MVP routing policy:
- * 1. enabled + online agents only;
+ * Routing policy:
+ * 1. enabled agents with a fresh online heartbeat only;
  * 2. respect per-agent active conversation capacity when configured;
  * 3. least active conversations first;
- * 4. group priority, then least recently assigned, break remaining ties by id.
+ * 4. group priority, then least recently assigned, then id.
  *
- * If the group has no available agent the conversation remains unassigned.
+ * If the group has no available agent the conversation remains unassigned and
+ * will be retried when an eligible agent logs in or sends a heartbeat.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -63,6 +64,9 @@ export async function assignConversationAgent(
        JOIN agents a
          ON a.id = ga.agent_id
         AND a.site_id = ga.site_id
+       JOIN support_groups sg
+         ON sg.site_id = ga.site_id
+        AND sg.id = ga.group_id
        LEFT JOIN (
          SELECT assigned_agent, COUNT(*) AS active_count
          FROM conversations
@@ -73,8 +77,13 @@ export async function assignConversationAgent(
        WHERE ga.site_id = ?1
          AND ga.group_id = ?2
          AND ga.is_enabled = 1
+         AND sg.is_enabled = 1
          AND a.is_enabled = 1
          AND a.status = 'online'
+         AND a.username IS NOT NULL
+         AND a.password_hash IS NOT NULL
+         AND a.last_seen_at IS NOT NULL
+         AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
          AND (
            a.max_active_conversations = 0
            OR COALESCE(load.active_count, 0) < a.max_active_conversations
