@@ -29,4 +29,5 @@ test('admin UI is separated into management navigation and modal editing', () =>
   assert.match(app, /客服分组/u);
   assert.match(app, /坐席工作台/u);
   assert.match(app, /className="agent-modal"/u);
+  assert.doesNotMatch(app, /className="admin-grid"/u);
 });
