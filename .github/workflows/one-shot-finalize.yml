@@ -1,0 +1,24 @@
+name: One-shot finalize
+on:
+  push:
+    branches: [ui-admin-repair]
+permissions:
+  contents: write
+jobs:
+  finalize:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/finalize-agent-repair.py
+      - run: |
+          npm install --global pnpm@11.19.0
+          pnpm install --frozen-lockfile
+          pnpm format:write
+      - run: rm scripts/finalize-agent-repair.py .github/workflows/one-shot-finalize.yml
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: finalize creation repair"
+          git push
