@@ -1,4 +1,8 @@
 import { Hono, type Context } from 'hono';
+import {
+  CURRENT_AGENT_PASSWORD_ITERATIONS,
+  hashAgentPassword,
+} from './agent-password';
 
 type Bindings = {
   DB: D1Database;
@@ -18,6 +22,7 @@ type AgentRow = {
   last_seen_at: string | null;
   password_hash: string | null;
   password_salt: string | null;
+  password_iterations: number;
 };
 
 type GroupRow = {
@@ -28,7 +33,6 @@ type GroupRow = {
 };
 
 const SESSION_COOKIE = 'cs_session';
-const PASSWORD_ITERATIONS = 120_000;
 
 export const adminConfigApi = new Hono<Env>();
 
@@ -38,7 +42,7 @@ adminConfigApi.get('/api/admin/agents', async (c) => {
   const [agentsResult, membershipsResult] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, name, username, status, is_enabled, max_active_conversations,
-         last_login_at, last_seen_at, password_hash, password_salt
+         last_login_at, last_seen_at, password_hash, password_salt, password_iterations
        FROM agents
        WHERE id <> 'admin'
        ORDER BY is_enabled DESC, name ASC, id ASC`,
@@ -99,22 +103,26 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
 
   const groupIds = await validGroupIds(c.env.DB, body?.groupIds ?? []);
   const maxActive = normalizeCapacity(body?.maxActiveConversations);
-  const credentials = await hashPassword(password);
+  const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
   const enabled = body?.isEnabled === false ? 0 : 1;
+  if (credentials.iterations !== CURRENT_AGENT_PASSWORD_ITERATIONS) {
+    return c.json({ error: 'AGENT_CREATE_FAILED' }, 500);
+  }
 
   const statements: D1PreparedStatement[] = [
     c.env.DB.prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, max_active_conversations
-       ) VALUES (?1, 'default', ?2, ?3, ?4, ?5, 'offline', ?6, ?7)`,
+         password_iterations, status, is_enabled, max_active_conversations
+       ) VALUES (?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8)`,
     ).bind(
       id,
       name,
       username,
       credentials.hash,
       credentials.salt,
+      credentials.iterations,
       enabled,
       maxActive,
     ),
@@ -138,7 +146,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   const current = await c.env.DB.prepare(
     `SELECT id, name, username, status, is_enabled, max_active_conversations,
-       last_login_at, last_seen_at, password_hash, password_salt
+       last_login_at, last_seen_at, password_hash, password_salt, password_iterations
      FROM agents WHERE id = ?1 AND site_id = 'default'`,
   )
     .bind(id)
@@ -168,10 +176,11 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   let passwordHash = current.password_hash;
   let passwordSalt = current.password_salt;
+  let passwordIterations = current.password_iterations;
   if (body.password !== undefined && body.password !== '') {
     const password = normalizePassword(body.password);
     if (!password) return c.json({ error: 'INVALID_PASSWORD' }, 400);
-    const credentials = await hashPassword(password);
+    const credentials = await hashAgentPassword(password);
     passwordHash = credentials.hash;
     passwordSalt = credentials.salt;
   }
@@ -197,13 +206,23 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            username = ?2,
            password_hash = ?3,
            password_salt = ?4,
-           is_enabled = ?5,
-           max_active_conversations = ?6,
-           status = CASE WHEN ?5 = 0 THEN 'offline' ELSE status END,
-           last_seen_at = CASE WHEN ?5 = 0 THEN NULL ELSE last_seen_at END,
+           password_iterations = ?5,
+           is_enabled = ?6,
+           max_active_conversations = ?7,
+           status = CASE WHEN ?6 = 0 THEN 'offline' ELSE status END,
+           last_seen_at = CASE WHEN ?6 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?7 AND site_id = 'default'`,
-    ).bind(name, username, passwordHash, passwordSalt, enabled, maxActive, id),
+       WHERE id = ?8 AND site_id = 'default'`,
+    ).bind(
+      name,
+      username,
+      passwordHash,
+      passwordSalt,
+      passwordIterations,
+      enabled,
+      maxActive,
+      id,
+    ),
     c.env.DB.prepare(
       `DELETE FROM group_agents
        WHERE site_id = 'default' AND agent_id = ?1`,
@@ -403,38 +422,6 @@ function normalizePassword(value?: string | null): string | null {
 function normalizeCapacity(value?: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(999, Math.trunc(value ?? 0)));
-}
-
-async function hashPassword(
-  password: string,
-): Promise<{ hash: string; salt: string }> {
-  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-  const salt = toHex(saltBytes);
-  return { hash: await derivePassword(password, saltBytes), salt };
-}
-
-async function derivePassword(
-  password: string,
-  salt: Uint8Array,
-): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits'],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      hash: 'SHA-256',
-      salt: new Uint8Array(salt).buffer,
-      iterations: PASSWORD_ITERATIONS,
-    },
-    key,
-    256,
-  );
-  return toHex(new Uint8Array(bits));
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {

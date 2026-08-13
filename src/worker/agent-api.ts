@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { assignConversationAgent } from './routing';
 import { broadcastClientConversationEvent } from './client-api';
+import { verifyAgentPassword } from './agent-password';
 
 type Bindings = {
   DB: D1Database;
@@ -21,6 +22,7 @@ type AgentSession = {
 type AgentCredentialRow = AgentSession & {
   password_hash: string;
   password_salt: string;
+  password_iterations: number;
 };
 
 type MessageRow = {
@@ -34,7 +36,6 @@ type MessageRow = {
 
 const COOKIE = 'cs_agent_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
-const PASSWORD_ITERATIONS = 120_000;
 const MESSAGE_LIMIT = 8000;
 
 export const agentApi = new Hono<Env>();
@@ -54,7 +55,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
 
   const agent = await c.env.DB.prepare(
-    `SELECT id, name, username, status, password_hash, password_salt
+    `SELECT id, name, username, status, password_hash, password_salt, password_iterations
      FROM agents
      WHERE lower(username) = lower(?1)
        AND is_enabled = 1
@@ -66,7 +67,12 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     .first<AgentCredentialRow>();
   if (
     !agent ||
-    !(await verifyPassword(password, agent.password_hash, agent.password_salt))
+    !(await verifyAgentPassword(
+      password,
+      agent.password_hash,
+      agent.password_salt,
+      agent.password_iterations,
+    ))
   ) {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
   }
@@ -386,40 +392,6 @@ async function assignWaitingConversations(
   }
 }
 
-async function verifyPassword(
-  password: string,
-  expectedHash: string,
-  saltHex: string,
-): Promise<boolean> {
-  const salt = fromHex(saltHex);
-  const actual = await derivePassword(password, salt);
-  return timingSafeEqual(actual, expectedHash);
-}
-
-async function derivePassword(
-  password: string,
-  salt: Uint8Array,
-): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(password),
-    'PBKDF2',
-    false,
-    ['deriveBits'],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      hash: 'SHA-256',
-      salt: new Uint8Array(salt).buffer,
-      iterations: PASSWORD_ITERATIONS,
-    },
-    key,
-    256,
-  );
-  return toHex(new Uint8Array(bits));
-}
-
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     'SHA-256',
@@ -470,25 +442,6 @@ async function readJson<T>(request: Request): Promise<T | null> {
   } catch {
     return null;
   }
-}
-
-function timingSafeEqual(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  }
-  return diff === 0;
-}
-
-function fromHex(value: string): Uint8Array {
-  if (!/^[0-9a-f]+$/iu.test(value) || value.length % 2 !== 0)
-    return new Uint8Array();
-  const bytes = new Uint8Array(value.length / 2);
-  for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
-  }
-  return bytes;
 }
 
 function toHex(bytes: Uint8Array): string {
