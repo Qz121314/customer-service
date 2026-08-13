@@ -155,7 +155,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   }>(c.req.raw);
   if (!body) return c.json({ error: 'INVALID_AGENT' }, 400);
 
-  const name = body.name === undefined ? current.name : normalizeName(body.name);
+  const name =
+    body.name === undefined ? current.name : normalizeName(body.name);
   const username =
     body.username === undefined
       ? current.username
@@ -202,15 +203,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            last_seen_at = CASE WHEN ?5 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?7 AND site_id = 'default'`,
-    ).bind(
-      name,
-      username,
-      passwordHash,
-      passwordSalt,
-      enabled,
-      maxActive,
-      id,
-    ),
+    ).bind(name, username, passwordHash, passwordSalt, enabled, maxActive, id),
     c.env.DB.prepare(
       `DELETE FROM group_agents
        WHERE site_id = 'default' AND agent_id = ?1`,
@@ -226,7 +219,9 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   }
   if (enabled === 0) {
     statements.push(
-      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(id),
+      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
+        id,
+      ),
     );
   }
   await c.env.DB.batch(statements);
@@ -298,7 +293,8 @@ adminConfigApi.patch('/api/admin/groups/:id', async (c) => {
     c.req.raw,
   );
   if (!body) return c.json({ error: 'INVALID_GROUP' }, 400);
-  const name = body.name === undefined ? current.name : normalizeName(body.name);
+  const name =
+    body.name === undefined ? current.name : normalizeName(body.name);
   if (!name) return c.json({ error: 'INVALID_GROUP' }, 400);
   const enabled =
     body.isEnabled === undefined ? current.is_enabled : body.isEnabled ? 1 : 0;
@@ -354,7 +350,10 @@ async function usernameExists(
   return Boolean(row);
 }
 
-async function currentGroupIds(db: D1Database, agentId: string): Promise<string[]> {
+async function currentGroupIds(
+  db: D1Database,
+  agentId: string,
+): Promise<string[]> {
   const result = await db
     .prepare(
       `SELECT group_id FROM group_agents
@@ -366,8 +365,13 @@ async function currentGroupIds(db: D1Database, agentId: string): Promise<string[
   return (result.results ?? []).map((item) => item.group_id);
 }
 
-async function validGroupIds(db: D1Database, values: string[]): Promise<string[]> {
-  const requested = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+async function validGroupIds(
+  db: D1Database,
+  values: string[],
+): Promise<string[]> {
+  const requested = [
+    ...new Set(values.map((value) => value.trim()).filter(Boolean)),
+  ];
   if (!requested.length) return [];
   const result = await db
     .prepare(
@@ -386,7 +390,8 @@ function normalizeName(value?: string): string | null {
 
 function normalizeUsername(value?: string | null): string | null {
   const trimmed = value?.trim() ?? '';
-  if (trimmed.length < 2 || trimmed.length > 40 || /\s/u.test(trimmed)) return null;
+  if (trimmed.length < 2 || trimmed.length > 40 || /\s/u.test(trimmed))
+    return null;
   return trimmed;
 }
 
@@ -400,13 +405,18 @@ function normalizeCapacity(value?: number): number {
   return Math.max(0, Math.min(999, Math.trunc(value ?? 0)));
 }
 
-async function hashPassword(password: string): Promise<{ hash: string; salt: string }> {
+async function hashPassword(
+  password: string,
+): Promise<{ hash: string; salt: string }> {
   const saltBytes = crypto.getRandomValues(new Uint8Array(16));
   const salt = toHex(saltBytes);
   return { hash: await derivePassword(password, saltBytes), salt };
 }
 
-async function derivePassword(password: string, salt: Uint8Array): Promise<string> {
+async function derivePassword(
+  password: string,
+  salt: Uint8Array,
+): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -453,7 +463,11 @@ async function hmac(secret: string, value: string): Promise<string> {
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(value),
+  );
   return toBase64Url(new Uint8Array(signature));
 }
 
@@ -475,5 +489,7 @@ function toBase64Url(bytes: Uint8Array): string {
 }
 
 function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+    '',
+  );
 }
