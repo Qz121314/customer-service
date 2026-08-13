@@ -9,7 +9,10 @@ const migration = await readFile(
 );
 
 test('message timestamps are normalized before text ordering is used', () => {
-  assert.match(migration, /UPDATE messages[\s\S]*strftime\('%Y-%m-%dT%H:%M:%fZ', created_at\)/u);
+  assert.match(
+    migration,
+    /UPDATE messages[\s\S]*strftime\('%Y-%m-%dT%H:%M:%fZ', created_at\)/u,
+  );
   assert.match(migration, /WHERE instr\(created_at, 'T'\) = 0/u);
 });
 
