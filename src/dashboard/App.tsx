@@ -59,6 +59,8 @@ const filterLabels: Record<Filter, string> = {
   closed: '已关闭',
 };
 
+const CHAT_TIME_ZONE = 'America/Los_Angeles';
+
 export function App() {
   return window.location.pathname.startsWith('/agent') ? (
     <AgentPortal />
@@ -1182,18 +1184,16 @@ function Metric({ label, value }: { label: string; value: number }) {
 
 function Bubble({
   message: item,
-  currentAgentId,
 }: {
   message: Message;
   currentAgentId: string;
 }) {
   if (item.sender_type === 'system')
     return <div className="system-message">{item.body}</div>;
-  const mine =
-    item.sender_type === 'agent' && item.sender_id === currentAgentId;
+  const isAgent = item.sender_type === 'agent';
   return (
-    <div className={mine ? 'message mine' : 'message visitor'}>
-      {!mine && <span className="avatar tiny">访</span>}
+    <div className={isAgent ? 'message mine' : 'message visitor'}>
+      {!isAgent && <span className="avatar tiny">访</span>}
       <div>
         <p>{item.body}</p>
         <time>{formatTime(item.created_at)}</time>
@@ -1226,13 +1226,19 @@ function relativeTime(value: string): string {
   if (minutes < 60) return `${minutes} 分钟前`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours} 小时前`;
-  return new Date(value).toLocaleDateString('zh-CN');
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: CHAT_TIME_ZONE,
+  }).format(new Date(value));
 }
 
 function formatTime(value: string): string {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
-    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    ? date.toLocaleTimeString('zh-CN', {
+        timeZone: CHAT_TIME_ZONE,
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : '';
 }
 
