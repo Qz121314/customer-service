@@ -42,3 +42,10 @@ test('routing requires a fresh online heartbeat', () => {
     /datetime\(a\.last_seen_at\) >= datetime\('now', '-2 minutes'\)/u,
   );
 });
+
+test('newly assigned conversations notify the agent inbox after assignment', () => {
+  assert.match(entry, /assignConversationAgent\(c\.env\.DB, conversationId\)/u);
+  assert.match(entry, /broadcastAgentInbox\(c\.env, conversationId\)/u);
+  assert.match(entry, /idFromName\('admin-inbox'\)/u);
+  assert.match(entry, /type: 'conversation\.changed'/u);
+});
