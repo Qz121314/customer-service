@@ -6,6 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "keep_vars": true,
+  "secrets": {
+    "required": ["ADMIN_PASSWORD", "MANAGEMENT_TOKEN"],
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
