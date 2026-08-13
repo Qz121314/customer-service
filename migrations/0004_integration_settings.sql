@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS integration_settings (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  verify_token TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
