@@ -1,17 +1,24 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 const [entry, migration, app, routing] = await Promise.all([
   readFile(new URL('../src/worker/entry.ts', import.meta.url), 'utf8'),
-  readFile(new URL('../migrations/0004_agent_accounts.sql', import.meta.url), 'utf8'),
+  readFile(
+    new URL('../migrations/0004_agent_accounts.sql', import.meta.url),
+    'utf8',
+  ),
   readFile(new URL('../src/dashboard/App.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/worker/routing.ts', import.meta.url), 'utf8'),
 ]);
 
 test('management center cannot use legacy admin chat routes', () => {
   assert.match(entry, /app\.all\('\/api\/admin\/conversations'/u);
-  assert.match(entry, /Chat traffic belongs exclusively to authenticated seat accounts/u);
+  assert.match(
+    entry,
+    /Chat traffic belongs exclusively to authenticated seat accounts/u,
+  );
   assert.match(entry, /app\.route\('\/', agentApi\)/u);
 });
 
@@ -30,5 +37,8 @@ test('all seats share one agent login route', () => {
 
 test('routing requires a fresh online heartbeat', () => {
   assert.match(routing, /a\.status = 'online'/u);
-  assert.match(routing, /datetime\(a\.last_seen_at\) >= datetime\('now', '-2 minutes'\)/u);
+  assert.match(
+    routing,
+    /datetime\(a\.last_seen_at\) >= datetime\('now', '-2 minutes'\)/u,
+  );
 });
