@@ -48,32 +48,43 @@ async function waitForHealth() {
   throw lastError ?? new Error('Production health check failed.');
 }
 
-async function assertIntegrationProtocol() {
-  const statusResponse = await fetch(endpoint('/integration/v1/status'), {
-    headers: { Accept: 'application/json' },
-  });
-  assert.equal(
-    statusResponse.status,
-    200,
-    `Integration status endpoint returned HTTP ${statusResponse.status}.`,
-  );
-  const status = await readJson(statusResponse);
-  assert.equal(status.ok, true);
-  assert.equal(status.protocolVersion, 'v1');
+async function waitForIntegrationProtocol() {
+  let lastError;
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    try {
+      const statusResponse = await fetch(endpoint('/integration/v1/status'), {
+        headers: { Accept: 'application/json' },
+      });
+      assert.equal(
+        statusResponse.status,
+        200,
+        `Integration status endpoint returned HTTP ${statusResponse.status}.`,
+      );
+      const status = await readJson(statusResponse);
+      assert.equal(status.ok, true);
+      assert.equal(status.protocolVersion, 'v1');
 
-  const verifyResponse = await fetch(endpoint('/integration/v1/verify'), {
-    method: 'POST',
-    headers: { Accept: 'application/json' },
-  });
-  assert.ok(
-    verifyResponse.status === 401 || verifyResponse.status === 503,
-    `Unauthenticated integration verify returned HTTP ${verifyResponse.status}.`,
-  );
-  console.log(
-    verifyResponse.status === 401
-      ? 'INTEGRATION_API=ready_auth_required'
-      : 'INTEGRATION_API=ready_token_not_configured',
-  );
+      const verifyResponse = await fetch(endpoint('/integration/v1/verify'), {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      });
+      assert.ok(
+        verifyResponse.status === 401 || verifyResponse.status === 503,
+        `Unauthenticated integration verify returned HTTP ${verifyResponse.status}.`,
+      );
+      console.log(`INTEGRATION_ROLLOUT=ready attempt=${attempt}`);
+      console.log(
+        verifyResponse.status === 401
+          ? 'INTEGRATION_API=ready_auth_required'
+          : 'INTEGRATION_API=ready_token_not_configured',
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 20) await sleep(3_000);
+    }
+  }
+  throw lastError ?? new Error('Integration protocol rollout check failed.');
 }
 
 async function assertBrowserCors() {
@@ -161,7 +172,7 @@ async function assertClientWebSocket() {
 }
 
 const health = await waitForHealth();
-await assertIntegrationProtocol();
+await waitForIntegrationProtocol();
 await assertBrowserCors();
 await assertClientRest();
 await assertClientWebSocket();
