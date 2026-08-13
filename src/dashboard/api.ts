@@ -106,7 +106,9 @@ export async function adminLogout(): Promise<void> {
 }
 
 export async function getAgents(): Promise<AgentAccount[]> {
-  const response = await request<{ agents: AgentAccount[] }>('/api/admin/agents');
+  const response = await request<{ agents: AgentAccount[] }>(
+    '/api/admin/agents',
+  );
   return response.agents;
 }
 
@@ -142,7 +144,9 @@ export async function updateAgent(
 }
 
 export async function getGroups(): Promise<SupportGroup[]> {
-  const response = await request<{ groups: SupportGroup[] }>('/api/admin/groups');
+  const response = await request<{ groups: SupportGroup[] }>(
+    '/api/admin/groups',
+  );
   return response.groups;
 }
 
@@ -167,11 +171,17 @@ export async function getAgentSession(): Promise<AgentSessionState> {
   return request('/api/agent/auth/session');
 }
 
-export async function agentLogin(username: string, password: string): Promise<AgentIdentity> {
-  const response = await request<{ agent: AgentIdentity }>('/api/agent/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({ username, password }),
-  });
+export async function agentLogin(
+  username: string,
+  password: string,
+): Promise<AgentIdentity> {
+  const response = await request<{ agent: AgentIdentity }>(
+    '/api/agent/auth/login',
+    {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    },
+  );
   return response.agent;
 }
 
