@@ -1,4 +1,5 @@
 import { Hono, type Context } from 'hono';
+import { cors } from 'hono/cors';
 
 type IntegrationBindings = {
   DB: D1Database;
@@ -15,6 +16,16 @@ type SupportGroupRow = {
 
 export const integrationApi = new Hono<IntegrationEnv>();
 
+integrationApi.use(
+  '/integration/v1/*',
+  cors({
+    origin: '*',
+    allowHeaders: ['Authorization', 'Content-Type'],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    maxAge: 86400,
+  }),
+);
+
 integrationApi.get('/integration/v1/status', (c) =>
   c.json({
     ok: true,
@@ -23,11 +34,13 @@ integrationApi.get('/integration/v1/status', (c) =>
 );
 
 /**
- * Control-plane endpoint used only when an external site admin configures this
- * customer-service installation. The verification token is never returned to
- * Storefront and is never part of visitor conversation traffic.
+ * Public control-plane endpoint used when an external Site admin connects this
+ * customer-service installation. The caller may be hosted in any Cloudflare
+ * account or on any other HTTPS origin. The verification token is never
+ * returned and is never part of visitor conversation traffic.
  */
 integrationApi.post('/integration/v1/verify', async (c) => {
+  c.header('Cache-Control', 'no-store');
   const configuredToken = c.env.INTEGRATION_VERIFY_TOKEN?.trim();
   if (!configuredToken) {
     return integrationError(
