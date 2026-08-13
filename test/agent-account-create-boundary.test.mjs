@@ -3,10 +3,16 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const [adminApi, agentApi, app, migration] = await Promise.all([
-  readFile(new URL('../src/worker/admin-config-api.ts', import.meta.url), 'utf8'),
+  readFile(
+    new URL('../src/worker/admin-config-api.ts', import.meta.url),
+    'utf8',
+  ),
   readFile(new URL('../src/worker/agent-api.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/dashboard/App.tsx', import.meta.url), 'utf8'),
-  readFile(new URL('../migrations/0005_agent_display_name_index.sql', import.meta.url), 'utf8'),
+  readFile(
+    new URL('../migrations/0005_agent_display_name_index.sql', import.meta.url),
+    'utf8',
+  ),
 ]);
 
 test('PBKDF2 salt is passed as an ArrayBuffer in both account paths', () => {

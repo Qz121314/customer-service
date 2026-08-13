@@ -45,10 +45,13 @@ agentApi.get('/api/agent/auth/session', async (c) => {
 });
 
 agentApi.post('/api/agent/auth/login', async (c) => {
-  const body = await readJson<{ username?: string; password?: string }>(c.req.raw);
+  const body = await readJson<{ username?: string; password?: string }>(
+    c.req.raw,
+  );
   const username = body?.username?.trim() ?? '';
   const password = body?.password ?? '';
-  if (!username || !password) return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
+  if (!username || !password)
+    return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
 
   const agent = await c.env.DB.prepare(
     `SELECT id, name, username, status, password_hash, password_salt
@@ -61,13 +64,18 @@ agentApi.post('/api/agent/auth/login', async (c) => {
   )
     .bind(username)
     .first<AgentCredentialRow>();
-  if (!agent || !(await verifyPassword(password, agent.password_hash, agent.password_salt))) {
+  if (
+    !agent ||
+    !(await verifyPassword(password, agent.password_hash, agent.password_salt))
+  ) {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
   }
 
   const token = randomToken();
   const sessionId = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+  const expiresAt = new Date(
+    Date.now() + SESSION_TTL_SECONDS * 1000,
+  ).toISOString();
   const now = new Date().toISOString();
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -96,7 +104,12 @@ agentApi.post('/api/agent/auth/login', async (c) => {
   await assignWaitingConversations(c.env, agent.id);
   return c.json({
     ok: true,
-    agent: { id: agent.id, name: agent.name, username: agent.username, status: 'online' },
+    agent: {
+      id: agent.id,
+      name: agent.name,
+      username: agent.username,
+      status: 'online',
+    },
   });
 });
 
@@ -148,15 +161,20 @@ agentApi.get('/api/agent/overview', async (c) => {
     .bind(agent.id)
     .all<{ status: ConversationStatus; count: number }>();
   const counts = { open: 0, pending: 0, closed: 0 };
-  for (const row of result.results ?? []) counts[row.status] = Number(row.count ?? 0);
-  return c.json({ ...counts, total: counts.open + counts.pending + counts.closed });
+  for (const row of result.results ?? [])
+    counts[row.status] = Number(row.count ?? 0);
+  return c.json({
+    ...counts,
+    total: counts.open + counts.pending + counts.closed,
+  });
 });
 
 agentApi.get('/api/agent/conversations', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const status = c.req.query('status');
-  const filtered = status === 'open' || status === 'pending' || status === 'closed';
+  const filtered =
+    status === 'open' || status === 'pending' || status === 'closed';
   let statement = c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
        c.product_id, c.product_title, c.product_cover_url, c.product_href,
@@ -172,7 +190,9 @@ agentApi.get('/api/agent/conversations', async (c) => {
        c.last_message_at DESC, c.id DESC
      LIMIT 100`,
   );
-  statement = filtered ? statement.bind(agent.id, status) : statement.bind(agent.id);
+  statement = filtered
+    ? statement.bind(agent.id, status)
+    : statement.bind(agent.id);
   const result = await statement.all();
   return c.json({ conversations: result.results ?? [] });
 });
@@ -180,7 +200,11 @@ agentApi.get('/api/agent/conversations', async (c) => {
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const conversation = await assignedConversation(c.env.DB, c.req.param('id'), agent.id);
+  const conversation = await assignedConversation(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   const messages = await c.env.DB.prepare(
     `SELECT id, conversation_id, sender_type, sender_id, body, created_at
@@ -200,11 +224,13 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   const id = c.req.param('id');
   const conversation = await assignedConversation(c.env.DB, id, agent.id);
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  if (conversation.status === 'closed') return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
+  if (conversation.status === 'closed')
+    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
 
   const body = await readJson<{ body?: string }>(c.req.raw);
   const text = body?.body?.trim() ?? '';
-  if (!text || text.length > MESSAGE_LIMIT) return c.json({ error: 'INVALID_MESSAGE' }, 400);
+  if (!text || text.length > MESSAGE_LIMIT)
+    return c.json({ error: 'INVALID_MESSAGE' }, 400);
 
   const messageId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -270,18 +296,27 @@ agentApi.get('/api/agent/realtime/inbox', async (c) => {
 agentApi.get('/api/agent/realtime/:id', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const conversation = await assignedConversation(c.env.DB, c.req.param('id'), agent.id);
+  const conversation = await assignedConversation(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   return room(c.env, c.req.param('id')).fetch(c.req.raw);
 });
 
-async function authenticateAgent(c: Context<Env>): Promise<AgentSession | null> {
+async function authenticateAgent(
+  c: Context<Env>,
+): Promise<AgentSession | null> {
   const token = cookieValue(c.req.header('Cookie'), COOKIE);
   if (!token) return null;
   return authenticateAgentToken(c.env.DB, token);
 }
 
-async function authenticateAgentToken(db: D1Database, token: string): Promise<AgentSession | null> {
+async function authenticateAgentToken(
+  db: D1Database,
+  token: string,
+): Promise<AgentSession | null> {
   return db
     .prepare(
       `SELECT a.id, a.name, a.username, a.status
@@ -297,7 +332,11 @@ async function authenticateAgentToken(db: D1Database, token: string): Promise<Ag
     .first<AgentSession>();
 }
 
-async function assignedConversation(db: D1Database, id: string, agentId: string) {
+async function assignedConversation(
+  db: D1Database,
+  id: string,
+  agentId: string,
+) {
   return db
     .prepare(
       `SELECT c.*, v.display_name AS visitor_name
@@ -310,7 +349,10 @@ async function assignedConversation(db: D1Database, id: string, agentId: string)
     .first<Record<string, unknown> & { status: ConversationStatus }>();
 }
 
-async function assignWaitingConversations(env: Bindings, agentId: string): Promise<void> {
+async function assignWaitingConversations(
+  env: Bindings,
+  agentId: string,
+): Promise<void> {
   const waiting = await env.DB.prepare(
     `SELECT DISTINCT c.id
      FROM conversations c
@@ -332,7 +374,11 @@ async function assignWaitingConversations(env: Bindings, agentId: string): Promi
   for (const conversation of waiting.results ?? []) {
     const assignment = await assignConversationAgent(env.DB, conversation.id);
     if (!assignment) continue;
-    await broadcastClientConversationEvent(env, conversation.id, 'conversation.assigned');
+    await broadcastClientConversationEvent(
+      env,
+      conversation.id,
+      'conversation.assigned',
+    );
     await broadcastConversationRoom(env, 'admin-inbox', {
       type: 'conversation.changed',
       conversationId: conversation.id,
@@ -340,13 +386,20 @@ async function assignWaitingConversations(env: Bindings, agentId: string): Promi
   }
 }
 
-async function verifyPassword(password: string, expectedHash: string, saltHex: string): Promise<boolean> {
+async function verifyPassword(
+  password: string,
+  expectedHash: string,
+  saltHex: string,
+): Promise<boolean> {
   const salt = fromHex(saltHex);
   const actual = await derivePassword(password, salt);
   return timingSafeEqual(actual, expectedHash);
 }
 
-async function derivePassword(password: string, salt: Uint8Array): Promise<string> {
+async function derivePassword(
+  password: string,
+  salt: Uint8Array,
+): Promise<string> {
   const key = await crypto.subtle.importKey(
     'raw',
     new TextEncoder().encode(password),
@@ -368,7 +421,10 @@ async function derivePassword(password: string, salt: Uint8Array): Promise<strin
 }
 
 async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(value),
+  );
   return toHex(new Uint8Array(digest));
 }
 
@@ -392,7 +448,11 @@ function room(env: Bindings, id: string): DurableObjectStub {
   return env.CONVERSATION_ROOMS.get(env.CONVERSATION_ROOMS.idFromName(id));
 }
 
-async function broadcastConversationRoom(env: Bindings, id: string, payload: unknown): Promise<void> {
+async function broadcastConversationRoom(
+  env: Bindings,
+  id: string,
+  payload: unknown,
+): Promise<void> {
   await room(env, id).fetch('https://conversation-room/broadcast', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -422,7 +482,8 @@ function timingSafeEqual(left: string, right: string): boolean {
 }
 
 function fromHex(value: string): Uint8Array {
-  if (!/^[0-9a-f]+$/iu.test(value) || value.length % 2 !== 0) return new Uint8Array();
+  if (!/^[0-9a-f]+$/iu.test(value) || value.length % 2 !== 0)
+    return new Uint8Array();
   const bytes = new Uint8Array(value.length / 2);
   for (let index = 0; index < bytes.length; index += 1) {
     bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
@@ -431,5 +492,7 @@ function fromHex(value: string): Uint8Array {
 }
 
 function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
+    '',
+  );
 }

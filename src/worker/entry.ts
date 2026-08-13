@@ -85,7 +85,9 @@ app.route('/', clientApi);
 // Chat traffic belongs exclusively to authenticated seat accounts under
 // /api/agent/*.
 app.all('/api/admin/conversations', (c) => c.json({ error: 'NOT_FOUND' }, 404));
-app.all('/api/admin/conversations/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
+app.all('/api/admin/conversations/*', (c) =>
+  c.json({ error: 'NOT_FOUND' }, 404),
+);
 app.all('/api/admin/realtime/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
 
 // Keep the existing admin-password login endpoints and static asset handling
