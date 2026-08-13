@@ -3,3 +3,9 @@
 .avatar.tiny {
   display: none;
 }
+
+.composer {
+  width: 100%;
+  max-width: 464px;
+  margin-inline: auto;
+}
