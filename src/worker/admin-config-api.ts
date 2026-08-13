@@ -1,8 +1,5 @@
 import { Hono, type Context } from 'hono';
-import {
-  CURRENT_AGENT_PASSWORD_ITERATIONS,
-  hashAgentPassword,
-} from './agent-password';
+import { hashAgentPassword } from './agent-password';
 
 type Bindings = {
   DB: D1Database;
@@ -106,10 +103,6 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
   const enabled = body?.isEnabled === false ? 0 : 1;
-  if (credentials.iterations !== CURRENT_AGENT_PASSWORD_ITERATIONS) {
-    return c.json({ error: 'AGENT_CREATE_FAILED' }, 500);
-  }
-
   const statements: D1PreparedStatement[] = [
     c.env.DB.prepare(
       `INSERT INTO agents (
@@ -135,7 +128,15 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       ).bind(groupId, id),
     );
   }
-  await c.env.DB.batch(statements);
+  try {
+    await c.env.DB.batch(statements);
+  } catch (error) {
+    console.error('agent.create.failed', error);
+    if (String(error).includes('idx_agents_username')) {
+      return c.json({ error: 'USERNAME_EXISTS' }, 409);
+    }
+    return c.json({ error: 'AGENT_CREATE_FAILED' }, 500);
+  }
   return c.json({ ok: true, id }, 201);
 });
 
@@ -183,6 +184,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     const credentials = await hashAgentPassword(password);
     passwordHash = credentials.hash;
     passwordSalt = credentials.salt;
+    passwordIterations = credentials.iterations;
   }
   if (!passwordHash || !passwordSalt) {
     return c.json({ error: 'PASSWORD_REQUIRED' }, 400);
