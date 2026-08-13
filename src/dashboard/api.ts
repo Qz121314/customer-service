@@ -87,6 +87,7 @@ const errorMessages: Record<string, string> = {
   PASSWORD_REQUIRED: '请先为客服设置登录密码',
   USERNAME_EXISTS: '登录账号已存在',
   INVALID_GROUP: '客服分组名称无效',
+  AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
 };
 

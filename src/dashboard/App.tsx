@@ -30,6 +30,7 @@ import {
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
+type AdminSection = 'agents' | 'groups' | 'workspace';
 
 type AgentDraft = {
   id: string | null;
@@ -116,10 +117,13 @@ function AdminPortal() {
 function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [groups, setGroups] = useState<SupportGroup[]>([]);
+  const [section, setSection] = useState<AdminSection>('agents');
   const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
+  const [editorOpen, setEditorOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
@@ -141,6 +145,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     () => new Map(groups.map((group) => [group.id, group])),
     [groups],
   );
+  const workspaceUrl = `${window.location.origin}/agent`;
+  const onlineCount = agents.filter(
+    (agent) => agent.isEnabled && agent.status === 'online',
+  ).length;
+  const enabledCount = agents.filter((agent) => agent.isEnabled).length;
+
+  function createNewAgent() {
+    setDraft(emptyAgentDraft);
+    setEditorOpen(true);
+    setError('');
+  }
 
   function editAgent(agent: AgentAccount) {
     setDraft({
@@ -152,6 +167,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       maxActiveConversations: agent.maxActiveConversations,
       isEnabled: agent.isEnabled,
     });
+    setEditorOpen(true);
+    setError('');
   }
 
   async function saveAgent(event: FormEvent) {
@@ -183,6 +200,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           isEnabled: draft.isEnabled,
         });
       }
+      setEditorOpen(false);
       setDraft(emptyAgentDraft);
       await refresh();
     } catch (reason) {
@@ -208,265 +226,454 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
+  async function copyWorkspaceUrl() {
+    try {
+      await navigator.clipboard.writeText(workspaceUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setError('无法复制链接，请手动复制。');
+    }
+  }
+
+  const sectionTitle =
+    section === 'agents'
+      ? '客服账号'
+      : section === 'groups'
+        ? '客服分组'
+        : '坐席工作台';
+  const sectionHint =
+    section === 'agents'
+      ? '管理员在这里创建员工账号、设置所属分组和接待容量。'
+      : section === 'groups'
+        ? '按业务场景组织客服，Site 只需要绑定这里的客服分组。'
+        : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
+
   return (
-    <div className="admin-shell">
-      <header className="topbar">
-        <div>
-          <span className="eyebrow">CUSTOMER SERVICE</span>
-          <h1>客服管理中心</h1>
-          <p>这里只配置客服账号、客服分组和分流关系，不处理访客聊天。</p>
-        </div>
-        <div className="topbar-actions">
-          <div className="agent-workspace-link">
-            <span>客服坐席工作台</span>
-            <a
-              href="/agent"
-              target="_blank"
-              rel="noreferrer"
-              title="在新窗口打开客服坐席工作台"
-            >
-              {`${window.location.origin}/agent`}
-            </a>
+    <div className="admin-console">
+      <aside className="admin-sidebar">
+        <div className="admin-brand">
+          <span>CS</span>
+          <div>
+            <strong>客服管理</strong>
+            <small>管理员后台</small>
           </div>
-          <button className="ghost-button" onClick={() => void onLogout()}>
-            退出管理
-          </button>
         </div>
-      </header>
+        <nav className="admin-nav" aria-label="客服管理导航">
+          <button
+            className={section === 'agents' ? 'active' : ''}
+            onClick={() => setSection('agents')}
+          >
+            <span>客服账号</span>
+            <small>{agents.length}</small>
+          </button>
+          <button
+            className={section === 'groups' ? 'active' : ''}
+            onClick={() => setSection('groups')}
+          >
+            <span>客服分组</span>
+            <small>{groups.length}</small>
+          </button>
+          <button
+            className={section === 'workspace' ? 'active' : ''}
+            onClick={() => setSection('workspace')}
+          >
+            <span>坐席工作台</span>
+            <small>员工入口</small>
+          </button>
+        </nav>
+        <div className="admin-sidebar-foot">
+          <a href="/agent" target="_blank" rel="noreferrer">
+            打开坐席工作台<span>↗</span>
+          </a>
+          <button onClick={() => void onLogout()}>退出管理</button>
+        </div>
+      </aside>
 
-      {error && (
-        <button className="notice error" onClick={() => setError('')}>
-          {error}
-        </button>
-      )}
-
-      <main className="admin-grid">
-        <section className="panel agents-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">SEATS</span>
-              <h2>客服账号</h2>
-            </div>
-            <button
-              className="primary-button"
-              onClick={() => setDraft(emptyAgentDraft)}
-            >
+      <main className="admin-content">
+        <header className="admin-content-head">
+          <div>
+            <h1>{sectionTitle}</h1>
+            <p>{sectionHint}</p>
+          </div>
+          {section === 'agents' && (
+            <button className="primary-button" onClick={createNewAgent}>
               新增客服
             </button>
-          </div>
-
-          {busy ? (
-            <div className="empty-state">正在加载客服账号…</div>
-          ) : agents.length === 0 ? (
-            <div className="empty-state">
-              <strong>还没有客服账号</strong>
-              <span>先创建客服账号，再将账号加入对应客服分组。</span>
-            </div>
-          ) : (
-            <div className="agent-list">
-              {agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  className={
-                    draft.id === agent.id ? 'agent-row selected' : 'agent-row'
-                  }
-                  onClick={() => editAgent(agent)}
-                >
-                  <span className={`presence ${presenceClass(agent)}`} />
-                  <span className="agent-main">
-                    <strong>{agent.name}</strong>
-                    <small>@{agent.username || '未设置账号'}</small>
-                  </span>
-                  <span className="agent-groups">
-                    {agent.groupIds.length
-                      ? agent.groupIds
-                          .map((id) => groupById.get(id)?.name || '未知分组')
-                          .join(' · ')
-                      : '未加入分组'}
-                  </span>
-                  <span className="status-label">
-                    {agent.isEnabled ? statusLabel(agent.status) : '已停用'}
-                  </span>
-                </button>
-              ))}
-            </div>
           )}
-        </section>
+        </header>
 
-        <section className="panel editor-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">ACCOUNT</span>
-              <h2>{draft.id ? '编辑客服' : '新增客服'}</h2>
-            </div>
-          </div>
+        {error && (
+          <button className="notice error" onClick={() => setError('')}>
+            {error}
+          </button>
+        )}
 
-          <form
-            className="form-stack"
-            onSubmit={(event) => void saveAgent(event)}
-          >
-            <label>
-              显示名称
-              <input
-                value={draft.name}
-                onChange={(event) =>
-                  setDraft({ ...draft, name: event.target.value })
-                }
-                placeholder="例如：Alice"
-              />
-            </label>
-            <label>
-              登录账号
-              <input
-                value={draft.username}
-                onChange={(event) =>
-                  setDraft({ ...draft, username: event.target.value })
-                }
-                placeholder="例如：alice"
-                autoComplete="off"
-              />
-            </label>
-            <label>
-              {draft.id ? '重置密码（留空则不修改）' : '登录密码'}
-              <input
-                type="password"
-                value={draft.password}
-                onChange={(event) =>
-                  setDraft({ ...draft, password: event.target.value })
-                }
-                autoComplete="new-password"
-              />
-            </label>
-            <label>
-              最大同时会话数
-              <input
-                type="number"
-                min="0"
-                max="999"
-                value={draft.maxActiveConversations}
-                onChange={(event) =>
-                  setDraft({
-                    ...draft,
-                    maxActiveConversations: Number(event.target.value) || 0,
-                  })
-                }
-              />
-              <small>0 表示不限制。</small>
-            </label>
-
-            <fieldset>
-              <legend>所属客服分组</legend>
-              <div className="check-grid">
-                {groups
-                  .filter((group) => group.isEnabled)
-                  .map((group) => (
-                    <label className="check-card" key={group.id}>
-                      <input
-                        type="checkbox"
-                        checked={draft.groupIds.includes(group.id)}
-                        onChange={(event) => {
-                          const groupIds = event.target.checked
-                            ? [...draft.groupIds, group.id]
-                            : draft.groupIds.filter((id) => id !== group.id);
-                          setDraft({ ...draft, groupIds });
-                        }}
-                      />
-                      <span>{group.name}</span>
-                    </label>
-                  ))}
-                {groups.filter((group) => group.isEnabled).length === 0 && (
-                  <span className="muted">请先创建并启用客服分组。</span>
-                )}
+        {section === 'agents' && (
+          <>
+            <section className="admin-stats">
+              <div>
+                <span>客服总数</span>
+                <strong>{agents.length}</strong>
               </div>
-            </fieldset>
-
-            <label className="switch-line">
-              <input
-                type="checkbox"
-                checked={draft.isEnabled}
-                onChange={(event) =>
-                  setDraft({ ...draft, isEnabled: event.target.checked })
-                }
-              />
-              <span>启用这个客服账号</span>
-            </label>
-
-            <div className="form-actions">
-              {draft.id && (
-                <button
-                  type="button"
-                  className="ghost-button"
-                  onClick={() => setDraft(emptyAgentDraft)}
-                >
-                  取消编辑
-                </button>
-              )}
-              <button
-                className="primary-button"
-                disabled={saving || !draft.name || !draft.username}
-              >
-                {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
-              </button>
-            </div>
-          </form>
-        </section>
-
-        <section className="panel groups-panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">ROUTING</span>
-              <h2>客服分组</h2>
-            </div>
-          </div>
-
-          <form
-            className="inline-form"
-            onSubmit={(event) => void addGroup(event)}
-          >
-            <input
-              value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
-              placeholder="新分组名称"
-            />
-            <button
-              className="primary-button"
-              disabled={!groupName.trim() || saving}
-            >
-              添加分组
-            </button>
-          </form>
-
-          <div className="group-list">
-            {groups.map((group) => (
-              <div className="group-row" key={group.id}>
+              <div>
+                <span>当前在线</span>
+                <strong>{onlineCount}</strong>
+              </div>
+              <div>
+                <span>已启用账号</span>
+                <strong>{enabledCount}</strong>
+              </div>
+              <div>
+                <span>客服分组</span>
+                <strong>{groups.length}</strong>
+              </div>
+            </section>
+            <section className="admin-table-card">
+              <div className="admin-table-title">
                 <div>
-                  <strong>{group.name}</strong>
-                  <small>
-                    {group.agentIds.length} 个客服 · 最少进行中会话优先
-                  </small>
+                  <strong>客服账号列表</strong>
+                  <span>员工使用各自账号登录坐席工作台</span>
                 </div>
-                <label className="switch-line compact">
+              </div>
+              {busy ? (
+                <div className="empty-state">正在加载客服账号…</div>
+              ) : agents.length === 0 ? (
+                <div className="empty-state admin-empty">
+                  <strong>还没有客服账号</strong>
+                  <span>创建第一个客服账号后，再按需要加入客服分组。</span>
+                  <button className="primary-button" onClick={createNewAgent}>
+                    新增客服
+                  </button>
+                </div>
+              ) : (
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>客服</th>
+                        <th>登录账号</th>
+                        <th>所属分组</th>
+                        <th>状态</th>
+                        <th>最大会话</th>
+                        <th>最后在线</th>
+                        <th aria-label="操作" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agents.map((agent) => (
+                        <tr key={agent.id}>
+                          <td>
+                            <div className="admin-agent-cell">
+                              <span
+                                className={`presence ${presenceClass(agent)}`}
+                              />
+                              <strong>{agent.name}</strong>
+                            </div>
+                          </td>
+                          <td>{agent.username || '—'}</td>
+                          <td>
+                            <div className="group-tags">
+                              {agent.groupIds.length ? (
+                                agent.groupIds.map((id) => (
+                                  <span key={id}>
+                                    {groupById.get(id)?.name || '未知分组'}
+                                  </span>
+                                ))
+                              ) : (
+                                <em>未分组</em>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <span
+                              className={`account-status ${presenceClass(agent)}`}
+                            >
+                              {agent.isEnabled
+                                ? statusLabel(agent.status)
+                                : '已停用'}
+                            </span>
+                          </td>
+                          <td>{agent.maxActiveConversations || '不限'}</td>
+                          <td>
+                            {agent.lastSeenAt
+                              ? relativeTime(agent.lastSeenAt)
+                              : '从未登录'}
+                          </td>
+                          <td>
+                            <button
+                              className="table-action"
+                              onClick={() => editAgent(agent)}
+                            >
+                              编辑
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        {section === 'groups' && (
+          <section className="admin-table-card">
+            <div className="admin-table-title groups-title">
+              <div>
+                <strong>客服分组</strong>
+                <span>分组负责承接 Site 绑定，并由系统分流给在线客服。</span>
+              </div>
+              <form
+                className="group-create"
+                onSubmit={(event) => void addGroup(event)}
+              >
+                <input
+                  value={groupName}
+                  onChange={(event) => setGroupName(event.target.value)}
+                  placeholder="输入分组名称"
+                />
+                <button
+                  className="primary-button"
+                  disabled={!groupName.trim() || saving}
+                >
+                  新增分组
+                </button>
+              </form>
+            </div>
+            {groups.length === 0 ? (
+              <div className="empty-state">
+                <strong>还没有客服分组</strong>
+                <span>先创建分组，再把客服账号加入对应分组。</span>
+              </div>
+            ) : (
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>分组名称</th>
+                      <th>客服人数</th>
+                      <th>分流方式</th>
+                      <th>状态</th>
+                      <th aria-label="操作" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groups.map((group) => (
+                      <tr key={group.id}>
+                        <td>
+                          <strong>{group.name}</strong>
+                        </td>
+                        <td>{group.agentIds.length}</td>
+                        <td>最少进行中会话优先</td>
+                        <td>
+                          <span
+                            className={`account-status ${group.isEnabled ? 'online' : 'offline'}`}
+                          >
+                            {group.isEnabled ? '已启用' : '已停用'}
+                          </span>
+                        </td>
+                        <td>
+                          <button
+                            className="table-action"
+                            onClick={async () => {
+                              try {
+                                await updateGroup(group.id, {
+                                  isEnabled: !group.isEnabled,
+                                });
+                                await refresh();
+                              } catch (reason) {
+                                setError(message(reason, '更新分组失败'));
+                              }
+                            }}
+                          >
+                            {group.isEnabled ? '停用' : '启用'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
+        {section === 'workspace' && (
+          <section className="workspace-access-card">
+            <div className="workspace-access-icon">CS</div>
+            <div className="workspace-access-copy">
+              <span>员工统一入口</span>
+              <h2>客服坐席工作台</h2>
+              <p>
+                所有客服员工访问同一个地址，再使用管理员创建的登录账号和密码进入自己的聊天工作台。
+              </p>
+              <div className="workspace-url-row">
+                <code>{workspaceUrl}</code>
+                <button
+                  className="secondary-button"
+                  onClick={() => void copyWorkspaceUrl()}
+                >
+                  {copied ? '已复制' : '复制链接'}
+                </button>
+                <a
+                  className="primary-button"
+                  href="/agent"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  打开工作台
+                </a>
+              </div>
+            </div>
+          </section>
+        )}
+      </main>
+
+      {editorOpen && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={() => !saving && setEditorOpen(false)}
+        >
+          <section
+            className="agent-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <h2>{draft.id ? '编辑客服账号' : '新增客服账号'}</h2>
+                <p>账号只用于员工登录坐席工作台。</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label="关闭"
+                onClick={() => !saving && setEditorOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <form
+              className="agent-editor-form"
+              onSubmit={(event) => void saveAgent(event)}
+            >
+              <div className="form-two-columns">
+                <label>
+                  <span>显示名称</span>
                   <input
-                    type="checkbox"
-                    checked={group.isEnabled}
-                    onChange={async (event) => {
-                      try {
-                        await updateGroup(group.id, {
-                          isEnabled: event.target.checked,
-                        });
-                        await refresh();
-                      } catch (reason) {
-                        setError(message(reason, '更新分组失败'));
-                      }
-                    }}
+                    value={draft.name}
+                    onChange={(event) =>
+                      setDraft({ ...draft, name: event.target.value })
+                    }
+                    placeholder="例如 Amy"
+                    autoFocus
                   />
-                  <span>{group.isEnabled ? '启用' : '停用'}</span>
+                </label>
+                <label>
+                  <span>登录账号</span>
+                  <input
+                    value={draft.username}
+                    onChange={(event) =>
+                      setDraft({ ...draft, username: event.target.value })
+                    }
+                    placeholder="例如 amy01"
+                    autoComplete="off"
+                  />
                 </label>
               </div>
-            ))}
-          </div>
-        </section>
-      </main>
+              <label>
+                <span>{draft.id ? '重置登录密码' : '登录密码'}</span>
+                <input
+                  type="password"
+                  value={draft.password}
+                  onChange={(event) =>
+                    setDraft({ ...draft, password: event.target.value })
+                  }
+                  placeholder={
+                    draft.id ? '留空表示不修改密码' : '至少 4 个字符'
+                  }
+                  autoComplete="new-password"
+                />
+              </label>
+              <label>
+                <span>最大同时会话数</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="999"
+                  value={draft.maxActiveConversations}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      maxActiveConversations: Number(event.target.value) || 0,
+                    })
+                  }
+                />
+                <small>填写 0 表示不限制。</small>
+              </label>
+              <fieldset>
+                <legend>所属客服分组</legend>
+                <div className="modal-group-grid">
+                  {groups
+                    .filter((group) => group.isEnabled)
+                    .map((group) => (
+                      <label key={group.id} className="modal-group-option">
+                        <input
+                          type="checkbox"
+                          checked={draft.groupIds.includes(group.id)}
+                          onChange={(event) => {
+                            const groupIds = event.target.checked
+                              ? [...draft.groupIds, group.id]
+                              : draft.groupIds.filter((id) => id !== group.id);
+                            setDraft({ ...draft, groupIds });
+                          }}
+                        />
+                        <span>{group.name}</span>
+                      </label>
+                    ))}
+                  {groups.filter((group) => group.isEnabled).length === 0 && (
+                    <span className="muted">
+                      当前没有可用客服分组，可以先创建账号后再配置。
+                    </span>
+                  )}
+                </div>
+              </fieldset>
+              <label className="account-enable-line">
+                <input
+                  type="checkbox"
+                  checked={draft.isEnabled}
+                  onChange={(event) =>
+                    setDraft({ ...draft, isEnabled: event.target.checked })
+                  }
+                />
+                <span>
+                  <strong>启用客服账号</strong>
+                  <small>停用后该客服无法登录，也不会参与新会话分流。</small>
+                </span>
+              </label>
+              <footer>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={saving}
+                  onClick={() => setEditorOpen(false)}
+                >
+                  取消
+                </button>
+                <button
+                  className="primary-button"
+                  disabled={
+                    saving || !draft.name.trim() || !draft.username.trim()
+                  }
+                >
+                  {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
+                </button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
 
-const [adminApi, agentApi, app, migration] = await Promise.all([
+const [passwordModule, adminApi, agentApi, app, migration] = await Promise.all([
+  readFile(new URL('../src/worker/agent-password.ts', import.meta.url), 'utf8'),
   readFile(
     new URL('../src/worker/admin-config-api.ts', import.meta.url),
     'utf8',
@@ -16,9 +17,10 @@ const [adminApi, agentApi, app, migration] = await Promise.all([
   ),
 ]);
 
-test('PBKDF2 salt is passed as an ArrayBuffer in both account paths', () => {
-  assert.match(adminApi, /salt: new Uint8Array\(salt\)\.buffer/u);
-  assert.match(agentApi, /salt: new Uint8Array\(salt\)\.buffer/u);
+test('PBKDF2 implementation is shared and passes salt as an ArrayBuffer', () => {
+  assert.match(passwordModule, /salt: new Uint8Array\(salt\)\.buffer/u);
+  assert.match(adminApi, /hashAgentPassword/u);
+  assert.match(agentApi, /verifyAgentPassword/u);
 });
 
 test('admin center visibly exposes the employee workspace address', () => {
