@@ -428,7 +428,7 @@ async function derivePassword(
     {
       name: 'PBKDF2',
       hash: 'SHA-256',
-      salt,
+      salt: new Uint8Array(salt).buffer,
       iterations: PASSWORD_ITERATIONS,
     },
     key,
