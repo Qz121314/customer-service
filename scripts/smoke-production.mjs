@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 
 const baseUrl = process.env.BASE_URL?.replace(/\/$/u, '');
-const managementToken = process.env.MANAGEMENT_TOKEN?.trim() || null;
 
 if (!baseUrl) {
   throw new Error('BASE_URL is required.');
@@ -49,38 +48,32 @@ async function waitForHealth() {
   throw lastError ?? new Error('Production health check failed.');
 }
 
-async function assertManagementGroups() {
-  const headers = new Headers({
-    Accept: 'application/json',
-    'X-Project-Id': 'default',
+async function assertIntegrationProtocol() {
+  const statusResponse = await fetch(endpoint('/integration/v1/status'), {
+    headers: { Accept: 'application/json' },
   });
-  if (managementToken)
-    headers.set('Authorization', `Bearer ${managementToken}`);
-
-  const response = await fetch(endpoint('/management/v1/groups'), { headers });
-  if (response.status === 401 && !managementToken) {
-    console.log('MANAGEMENT_API=reachable_auth_required');
-    return;
-  }
-
   assert.equal(
-    response.status,
+    statusResponse.status,
     200,
-    `Management groups endpoint returned HTTP ${response.status}.`,
+    `Integration status endpoint returned HTTP ${statusResponse.status}.`,
   );
-  const value = await readJson(response);
+  const status = await readJson(statusResponse);
+  assert.equal(status.ok, true);
+  assert.equal(status.protocolVersion, 'v1');
+
+  const verifyResponse = await fetch(endpoint('/integration/v1/verify'), {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+  });
   assert.ok(
-    Array.isArray(value.groups),
-    'Management response must contain groups.',
+    verifyResponse.status === 401 || verifyResponse.status === 503,
+    `Unauthenticated integration verify returned HTTP ${verifyResponse.status}.`,
   );
-  const general = value.groups.find((group) => group?.id === 'general');
-  assert.ok(general, 'Default support group "general" is missing.');
-  assert.equal(
-    general.isEnabled,
-    true,
-    'Default support group must be enabled.',
+  console.log(
+    verifyResponse.status === 401
+      ? 'INTEGRATION_API=ready_auth_required'
+      : 'INTEGRATION_API=ready_token_not_configured',
   );
-  console.log('MANAGEMENT_API=ready');
 }
 
 async function assertBrowserCors() {
@@ -107,7 +100,6 @@ async function assertBrowserCors() {
 async function assertClientRest() {
   const url = new URL(endpoint('/client/v1/conversations'));
   url.searchParams.set('visitorId', 'SMK123');
-  url.searchParams.set('projectId', 'default');
 
   const response = await fetch(url, {
     headers: { Accept: 'application/json' },
@@ -129,7 +121,6 @@ async function assertClientWebSocket() {
   const url = new URL(endpoint('/client/v1/realtime'));
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('visitorId', 'SMK123');
-  url.searchParams.set('projectId', 'default');
 
   await new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
@@ -170,7 +161,7 @@ async function assertClientWebSocket() {
 }
 
 const health = await waitForHealth();
-await assertManagementGroups();
+await assertIntegrationProtocol();
 await assertBrowserCors();
 await assertClientRest();
 await assertClientWebSocket();

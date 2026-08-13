@@ -71,5 +71,4 @@ jobs:
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
-          MANAGEMENT_TOKEN: ${{ secrets.MANAGEMENT_TOKEN }}
         run: pnpm smoke:production
