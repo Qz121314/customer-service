@@ -476,4 +476,3 @@ function toBase64Url(bytes: Uint8Array): string {
     .replaceAll('/', '_')
     .replaceAll('=', '');
 }
-
