@@ -31,7 +31,11 @@ async function waitForHealth() {
       const response = await fetch(endpoint('/api/health'), {
         headers: { Accept: 'application/json' },
       });
-      assert.equal(response.status, 200, 'Health endpoint must return HTTP 200.');
+      assert.equal(
+        response.status,
+        200,
+        'Health endpoint must return HTTP 200.',
+      );
       const value = await readJson(response);
       assert.equal(value.ok, true);
       assert.equal(value.service, 'customer-service');
@@ -50,7 +54,8 @@ async function assertManagementGroups() {
     Accept: 'application/json',
     'X-Project-Id': 'default',
   });
-  if (managementToken) headers.set('Authorization', `Bearer ${managementToken}`);
+  if (managementToken)
+    headers.set('Authorization', `Bearer ${managementToken}`);
 
   const response = await fetch(endpoint('/management/v1/groups'), { headers });
   if (response.status === 401 && !managementToken) {
@@ -70,7 +75,11 @@ async function assertManagementGroups() {
   );
   const general = value.groups.find((group) => group?.id === 'general');
   assert.ok(general, 'Default support group "general" is missing.');
-  assert.equal(general.isEnabled, true, 'Default support group must be enabled.');
+  assert.equal(
+    general.isEnabled,
+    true,
+    'Default support group must be enabled.',
+  );
   console.log('MANAGEMENT_API=ready');
 }
 
@@ -136,7 +145,9 @@ async function assertClientWebSocket() {
       () =>
         finish(() =>
           reject(
-            new Error('Client WebSocket did not become ready within 10 seconds.'),
+            new Error(
+              'Client WebSocket did not become ready within 10 seconds.',
+            ),
           ),
         ),
       10_000,
