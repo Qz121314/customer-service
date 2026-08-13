@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import legacyApp, { ConversationRoom } from './index';
-import { broadcastClientConversationEvent, clientApi } from './client-api';
+import { clientApi, broadcastClientConversationEvent } from './client-api';
 import { integrationApi } from './integration-api';
 import { assignConversationAgent } from './routing';
+import { adminConfigApi } from './admin-config-api';
+import { agentApi } from './agent-api';
 
 interface Bindings {
   DB: D1Database;
@@ -38,9 +40,8 @@ app.all('/management/v1/*', (c) =>
   c.json({ error: { code: 'NOT_FOUND', message: 'Not found.' } }, 404),
 );
 
-// Storefront creates the conversation directly on customer-service. After the
-// conversation is persisted, route it to an available agent in the selected
-// support group. No site/backend proxy participates in this data path.
+// Storefront creates conversations directly on this service. Routing is done
+// here against the configured support group and currently-online seat accounts.
 app.use('/client/v1/conversations', async (c, next) => {
   await next();
   if (c.req.method !== 'POST' || c.res.status !== 201) return;
@@ -76,48 +77,19 @@ app.use('/client/v1/conversations', async (c, next) => {
   });
 });
 
-// Keep the existing authenticated Admin API as the source of truth. After a
-// successful agent mutation, update the visitor-facing projection and notify
-// the visitor-level realtime channel used by the Site Storefront.
-app.use('/api/admin/conversations/:id/messages', async (c, next) => {
-  await next();
-  if (c.req.method !== 'POST' || c.res.status < 200 || c.res.status >= 300)
-    return;
-
-  const id = c.req.param('id');
-  await c.env.DB.prepare(
-    `UPDATE conversations
-     SET assigned_agent = COALESCE(assigned_agent, 'admin'),
-         status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-         visitor_unread_count = visitor_unread_count + 1,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?1`,
-  )
-    .bind(id)
-    .run();
-
-  await broadcastClientConversationEvent(c.env, id, 'message.created');
-});
-
-app.use('/api/admin/conversations/:id/status', async (c, next) => {
-  await next();
-  if (c.req.method !== 'POST' || c.res.status < 200 || c.res.status >= 300)
-    return;
-
-  const id = c.req.param('id');
-  const row = await c.env.DB.prepare(
-    'SELECT status FROM conversations WHERE id = ?1',
-  )
-    .bind(id)
-    .first<{ status: string }>();
-  await broadcastClientConversationEvent(
-    c.env,
-    id,
-    row?.status === 'closed' ? 'conversation.closed' : 'conversation.assigned',
-  );
-});
-
+app.route('/', adminConfigApi);
+app.route('/', agentApi);
 app.route('/', clientApi);
+
+// Management-center administrators must not use the legacy conversation API.
+// Chat traffic belongs exclusively to authenticated seat accounts under
+// /api/agent/*.
+app.all('/api/admin/conversations', (c) => c.json({ error: 'NOT_FOUND' }, 404));
+app.all('/api/admin/conversations/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
+app.all('/api/admin/realtime/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
+
+// Keep the existing admin-password login endpoints and static asset handling
+// while the management UI uses the new configuration APIs above.
 app.route('/', legacyApp);
 
 export default app;
