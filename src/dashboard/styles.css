@@ -969,3 +969,38 @@ p {
     max-width: 86%;
   }
 }
+
+/* Admin agent workspace address */
+.agent-workspace-link {
+  min-width: 280px;
+  padding: 9px 12px;
+  border: 1px solid #dfe2e7;
+  border-radius: 10px;
+  background: #fff;
+  display: grid;
+  gap: 3px;
+}
+
+.agent-workspace-link span {
+  color: #777c86;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-workspace-link a {
+  color: #1f2329;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+  .agent-workspace-link {
+    width: 100%;
+    min-width: 0;
+  }
+}

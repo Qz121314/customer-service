@@ -36,29 +36,7 @@ jobs:
         run: pnpm db:migrate:local
 
       - name: Format
-        run: |
-          pnpm exec prettier --write \
-            src/dashboard/api.ts \
-            src/dashboard/App.tsx \
-            src/dashboard/styles.css \
-            src/worker/admin-config-api.ts \
-            src/worker/agent-api.ts \
-            src/worker/entry.ts \
-            test/agent-workspace-boundary.test.mjs
-
-      - name: Upload formatted sources
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-sources
-          path: |
-            src/dashboard/api.ts
-            src/dashboard/App.tsx
-            src/dashboard/styles.css
-            src/worker/admin-config-api.ts
-            src/worker/agent-api.ts
-            src/worker/entry.ts
-            test/agent-workspace-boundary.test.mjs
+        run: pnpm format
 
       - name: Lint
         run: pnpm lint

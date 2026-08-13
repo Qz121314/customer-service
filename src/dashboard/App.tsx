@@ -217,9 +217,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           <p>这里只配置客服账号、客服分组和分流关系，不处理访客聊天。</p>
         </div>
         <div className="topbar-actions">
-          <a className="secondary-button" href="/agent">
-            客服登录入口
-          </a>
+          <div className="agent-workspace-link">
+            <span>客服坐席工作台</span>
+            <a
+              href="/agent"
+              target="_blank"
+              rel="noreferrer"
+              title="在新窗口打开客服坐席工作台"
+            >
+              {`${window.location.origin}/agent`}
+            </a>
+          </div>
           <button className="ghost-button" onClick={() => void onLogout()}>
             退出管理
           </button>
