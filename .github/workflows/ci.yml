@@ -67,25 +67,9 @@ jobs:
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Smoke test production
+      - name: Smoke test production protocols
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          health=""
-          for attempt in {1..20}; do
-            health="$(curl --fail --silent --show-error "$BASE_URL/api/health" || true)"
-            if printf '%s' "$health" | node -e '
-              const fs = require("fs");
-              const value = JSON.parse(fs.readFileSync(0, "utf8"));
-              process.exit(value.ok === true && value.service === "customer-service" ? 0 : 1);
-            '; then
-              echo "Production health check passed: $BASE_URL"
-              exit 0
-            fi
-            sleep 3
-          done
-          echo "Health check failed. Last response: $health" >&2
-          exit 1
+          MANAGEMENT_TOKEN: ${{ secrets.MANAGEMENT_TOKEN }}
+        run: pnpm smoke:production
