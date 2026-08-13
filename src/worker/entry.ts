@@ -59,11 +59,14 @@ app.use('/client/v1/conversations', async (c, next) => {
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
   if (!assignment) return;
 
-  await broadcastClientConversationEvent(
-    c.env,
-    conversationId,
-    'conversation.assigned',
-  );
+  await Promise.all([
+    broadcastClientConversationEvent(
+      c.env,
+      conversationId,
+      'conversation.assigned',
+    ),
+    broadcastAgentInbox(c.env, conversationId),
+  ]);
 
   const headers = new Headers(c.res.headers);
   payload.conversation = {
@@ -93,6 +96,23 @@ app.all('/api/admin/realtime/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
 // Keep the existing admin-password login endpoints and static asset handling
 // while the management UI uses the new configuration APIs above.
 app.route('/', legacyApp);
+
+async function broadcastAgentInbox(
+  env: Pick<Bindings, 'CONVERSATION_ROOMS'>,
+  conversationId: string,
+): Promise<void> {
+  const room = env.CONVERSATION_ROOMS.get(
+    env.CONVERSATION_ROOMS.idFromName('admin-inbox'),
+  );
+  await room.fetch('https://conversation-room/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'conversation.changed',
+      conversationId,
+    }),
+  });
+}
 
 export default app;
 export { ConversationRoom };
