@@ -5,7 +5,7 @@ on:
     branches: [codex/full-flow-e2e-20260814]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: codex-customer-service-full-flow-test
@@ -18,6 +18,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: codex/full-flow-e2e-20260814
+          fetch-depth: 0
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -26,5 +29,17 @@ jobs:
         run: npm install --global pnpm@11.19.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Format test
+        run: pnpm exec prettier --write test/customer-service-full-flow.test.mjs
       - name: Verify project
         run: pnpm verify
+      - name: Commit verified test
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f .github/workflows/codex-full-flow-test.yml
+          git add test/customer-service-full-flow.test.mjs
+          git config user.name 'OpenAI Codex'
+          git config user.email 'codex@openai.com'
+          git commit -m 'test: cover isolated client-agent full flow'
+          git push origin HEAD:codex/full-flow-e2e-20260814
