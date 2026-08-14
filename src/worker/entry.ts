@@ -5,6 +5,7 @@ import { integrationApi } from './integration-api';
 import { assignConversationAgent } from './routing';
 import { adminConfigApi } from './admin-config-api';
 import { agentApi } from './agent-api';
+import { mediaApi } from './media-api';
 
 interface Bindings {
   DB: D1Database;
@@ -14,6 +15,10 @@ interface Bindings {
   ADMIN_PASSWORD?: string;
   MANAGEMENT_TOKEN?: string;
   INTEGRATION_VERIFY_TOKEN?: string;
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
   ENVIRONMENT: string;
   APP_VERSION: string;
 }
@@ -81,6 +86,7 @@ app.use('/client/v1/conversations', async (c, next) => {
 });
 
 app.route('/', adminConfigApi);
+app.route('/', mediaApi);
 app.route('/', agentApi);
 app.route('/', clientApi);
 
