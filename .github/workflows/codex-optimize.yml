@@ -31,7 +31,9 @@ jobs:
         run: npm install --global pnpm@11.19.0
 
       - name: Apply ordered optimization patch
-        run: python .github/scripts/apply_codex_optimization.py
+        run: |
+          python .github/scripts/apply_codex_optimization.py
+          python .github/scripts/fix_codex_optimization.py
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -61,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm -f .github/workflows/codex-optimize.yml .github/scripts/apply_codex_optimization.py
+          git rm -f .github/workflows/codex-optimize.yml .github/scripts/apply_codex_optimization.py .github/scripts/fix_codex_optimization.py
           git add -A
           git config user.name 'OpenAI Codex'
           git config user.email 'codex@openai.com'
