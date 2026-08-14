@@ -6,6 +6,8 @@ import { assignConversationAgent } from './routing';
 import { adminConfigApi } from './admin-config-api';
 import { agentApi } from './agent-api';
 import { mediaApi } from './media-api';
+import { pushApi } from './push-api';
+import { sendVisitorPushForConversation } from './visitor-push';
 
 interface Bindings {
   DB: D1Database;
@@ -35,7 +37,15 @@ type CreatedConversationPayload = {
   [key: string]: unknown;
 };
 
+type MediaCompletePayload = {
+  conversationId?: string;
+  [key: string]: unknown;
+};
+
 const app = new Hono<AppEnv>();
+const AGENT_TEXT_MESSAGE_PATH =
+  /^\/api\/agent\/conversations\/([^/]+)\/messages$/u;
+const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 
 app.route('/', integrationApi);
 
@@ -85,9 +95,45 @@ app.use('/client/v1/conversations', async (c, next) => {
   });
 });
 
+// Agent replies are persisted by the existing APIs first. A successful text or
+// image reply then wakes subscribed visitor devices. Push delivery never owns
+// the chat transaction, so a push-service failure cannot make a sent message fail.
+app.use('/api/agent/*', async (c, next) => {
+  await next();
+  if (c.req.method !== 'POST' || !c.res.ok) return;
+
+  const pathname = new URL(c.req.url).pathname;
+  const textMatch = pathname.match(AGENT_TEXT_MESSAGE_PATH);
+  if (textMatch?.[1] && c.res.status === 201) {
+    const conversationId = decodeURIComponent(textMatch[1]);
+    c.executionCtx.waitUntil(
+      sendVisitorPushForConversation(c.env, conversationId).catch((error) => {
+        console.warn('Visitor push dispatch failed.', error);
+      }),
+    );
+    return;
+  }
+
+  if (!AGENT_MEDIA_COMPLETE_PATH.test(pathname)) return;
+  try {
+    const payload = (await c.res.clone().json()) as MediaCompletePayload;
+    if (!payload.conversationId) return;
+    c.executionCtx.waitUntil(
+      sendVisitorPushForConversation(c.env, payload.conversationId).catch(
+        (error) => {
+          console.warn('Visitor push dispatch failed.', error);
+        },
+      ),
+    );
+  } catch {
+    // Media completion still succeeds if a response cannot be inspected for push.
+  }
+});
+
 app.route('/', adminConfigApi);
 app.route('/', mediaApi);
 app.route('/', agentApi);
+app.route('/', pushApi);
 app.route('/', clientApi);
 
 // Management-center administrators must not use the legacy conversation API.
