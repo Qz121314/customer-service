@@ -1598,3 +1598,90 @@ p {
   font-style: normal;
   line-height: 1;
 }
+
+/* Ephemeral 24-hour conversation state */
+.conversation-expiry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface, #fff) 86%, #f2b84b 14%);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted, #6a6257);
+}
+
+.conversation-expiry.is-warning {
+  color: #8a5a00;
+}
+
+.conversation-expiry.is-urgent {
+  color: #a62c2c;
+}
+
+.message.is-uploading > div {
+  opacity: 0.96;
+}
+
+.message-image-pending {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.media-inline-status {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 48%);
+  color: #fff;
+  font-weight: 800;
+}
+
+.media-inline-status:disabled {
+  opacity: 1;
+}
+
+.media-inline-status.is-failed {
+  cursor: pointer;
+  font-size: 24px;
+}
+
+.media-inline-ring {
+  --media-upload-progress: 0deg;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    #fff var(--media-upload-progress),
+    rgb(255 255 255 / 28%) 0
+  );
+  font-size: 11px;
+}
+
+.media-inline-ring::before {
+  content: '';
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 58%);
+}
+
+.media-inline-ring {
+  position: relative;
+}
+
+.media-inline-ring > * {
+  position: relative;
+}

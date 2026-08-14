@@ -169,6 +169,7 @@ agentApi.get('/api/agent/overview', async (c) => {
     `SELECT status, COUNT(*) AS count
      FROM conversations
      WHERE assigned_agent = ?1
+       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
      GROUP BY status`,
   )
     .bind(agent.id)
@@ -192,12 +193,14 @@ agentApi.get('/api/agent/conversations', async (c) => {
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
        c.product_id, c.product_title, c.product_cover_url, c.product_href,
        c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
+       c.expires_at,
        v.display_name AS visitor_name,
        (SELECT body FROM messages m WHERE m.conversation_id = c.id
         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      WHERE c.assigned_agent = ?1
+       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        ${filtered ? 'AND c.status = ?2' : ''}
      ORDER BY CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END,
        c.last_message_at DESC, c.id DESC
@@ -320,7 +323,8 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
            agent_unread_count = 0,
            last_message_at = ?1,
            updated_at = ?1
-       WHERE id = ?2 AND assigned_agent = ?3`,
+       WHERE id = ?2 AND assigned_agent = ?3
+       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
     ).bind(now, id, agent.id),
   ]);
   const message = await c.env.DB.prepare(
@@ -419,6 +423,7 @@ async function assignedConversation(
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.id = ?1 AND c.assigned_agent = ?2
+         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(id, agentId)
@@ -438,6 +443,7 @@ async function assignWaitingConversations(
        ON sg.site_id = c.site_id AND sg.id = c.group_id
      WHERE c.assigned_agent IS NULL
        AND c.status IN ('open', 'pending')
+       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        AND ga.agent_id = ?1
        AND ga.is_enabled = 1
        AND sg.is_enabled = 1

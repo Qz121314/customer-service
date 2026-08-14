@@ -58,6 +58,7 @@ export type Conversation = {
   agent_unread_count: number;
   last_message_at: string;
   created_at: string;
+  expires_at: string | null;
   visitor_name: string | null;
   last_message: string | null;
 };
