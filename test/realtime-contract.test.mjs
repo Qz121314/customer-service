@@ -22,4 +22,6 @@ test('realtime protocol carries deltas instead of forcing REST refreshes', () =>
     dashboard.includes("payload.type === 'message' && payload.message"),
   );
   assert.ok(dashboard.includes('setMediaItems('));
+  assert.ok(!dashboard.includes('setInterval(beat, 30_000)'));
+  assert.ok(dashboard.includes('void heartbeat()'));
 });

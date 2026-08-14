@@ -27,6 +27,7 @@ import {
   getConversations,
   getOverview,
   getProductCatalog,
+  heartbeat,
   markConversationRead,
   openAgentInboxSocket,
   openConversationSocket,
@@ -735,7 +736,9 @@ function AgentWorkspace({
   useEffect(() => {
     const recover = () => {
       if (document.visibilityState !== 'visible') return;
-      void refresh().catch(() => undefined);
+      void heartbeat()
+        .catch(() => undefined)
+        .finally(() => void refresh().catch(() => undefined));
       if (selectedId) {
         void acknowledgeConversation(
           selectedId,
@@ -768,7 +771,11 @@ function AgentWorkspace({
       socket.addEventListener('open', () => {
         if (!active) return;
         setInboxConnected(true);
-        if (openedOnce) void refresh().catch(() => undefined);
+        if (openedOnce) {
+          void heartbeat()
+            .catch(() => undefined)
+            .finally(() => void refresh().catch(() => undefined));
+        }
         openedOnce = true;
       });
       socket.addEventListener('message', (event) => {
