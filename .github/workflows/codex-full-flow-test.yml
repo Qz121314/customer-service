@@ -29,6 +29,18 @@ jobs:
         run: npm install --global pnpm@11.19.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Fix Node URL import
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = 'test/customer-service-full-flow.test.mjs';
+          let source = fs.readFileSync(path, 'utf8');
+          source = source.replace(
+            "import { fileURLToPath } from 'node:url';",
+            "import { fileURLToPath, URL } from 'node:url';",
+          );
+          fs.writeFileSync(path, source);
+          NODE
       - name: Format test
         run: pnpm exec prettier --write test/customer-service-full-flow.test.mjs
       - name: Verify project
