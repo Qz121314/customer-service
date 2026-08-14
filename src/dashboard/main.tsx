@@ -1,9 +1,15 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { setupAgentMobileNavigation } from './agent-mobile';
 import './styles.css';
 import './chat-dialogue.css';
 import './dialogue-flow.css';
+import './agent-mobile-layout.css';
+import './agent-mobile-thread.css';
+import './agent-mobile-composer.css';
+
+setupAgentMobileNavigation();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
