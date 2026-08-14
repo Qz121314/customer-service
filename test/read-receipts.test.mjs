@@ -30,7 +30,13 @@ test('read receipt migration adds persistent agent read state', () => {
     `INSERT INTO messages (
       id, conversation_id, sender_type, created_at, read_by_agent_at
     ) VALUES (?, ?, ?, ?, ?)`,
-  ).run('message-1', 'conversation-1', 'visitor', '2026-08-14T10:00:00.000Z', null);
+  ).run(
+    'message-1',
+    'conversation-1',
+    'visitor',
+    '2026-08-14T10:00:00.000Z',
+    null,
+  );
 
   const row = db
     .prepare('SELECT read_by_agent_at FROM messages WHERE id = ?')

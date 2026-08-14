@@ -6,7 +6,10 @@ import {
 } from '../src/worker/agent-password.ts';
 
 test('agent passwords round-trip and reject the wrong password', async () => {
-  const credential = await hashAgentPassword('correct horse battery staple', 1_000);
+  const credential = await hashAgentPassword(
+    'correct horse battery staple',
+    1_000,
+  );
 
   assert.equal(
     await verifyAgentPassword(
@@ -29,6 +32,12 @@ test('agent passwords round-trip and reject the wrong password', async () => {
 });
 
 test('agent password verification rejects invalid credential metadata', async () => {
-  assert.equal(await verifyAgentPassword('password', 'deadbeef', 'not-hex', 1_000), false);
-  assert.equal(await verifyAgentPassword('password', 'deadbeef', '0011', 999), false);
+  assert.equal(
+    await verifyAgentPassword('password', 'deadbeef', 'not-hex', 1_000),
+    false,
+  );
+  assert.equal(
+    await verifyAgentPassword('password', 'deadbeef', '0011', 999),
+    false,
+  );
 });

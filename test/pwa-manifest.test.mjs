@@ -3,7 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const manifest = JSON.parse(
-  await readFile(new URL('../public/agent.webmanifest', import.meta.url), 'utf8'),
+  await readFile(
+    new URL('../public/agent.webmanifest', import.meta.url),
+    'utf8',
+  ),
 );
 
 test('agent PWA opens directly into the standalone workspace', () => {
