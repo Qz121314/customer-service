@@ -1,0 +1,30 @@
+name: Codex full-flow test
+
+on:
+  push:
+    branches: [codex/full-flow-e2e-20260814]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-customer-service-full-flow-test
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify project
+        run: pnpm verify
