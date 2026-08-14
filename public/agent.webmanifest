@@ -1,0 +1,28 @@
+{
+  "id": "/agent",
+  "name": "客服坐席工作台",
+  "short_name": "客服坐席",
+  "description": "客服员工用于处理访客实时会话的坐席工作台",
+  "lang": "zh-CN",
+  "start_url": "/agent",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f6f8",
+  "theme_color": "#111315",
+  "orientation": "any",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "https://service-catalog-site.fcqz121314.workers.dev/icons/app-icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://service-catalog-site.fcqz121314.workers.dev/icons/app-icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
