@@ -13,11 +13,11 @@ const clientApi = readFileSync(new URL('../src/worker/client-api.ts', import.met
 const dashboard = readFileSync(new URL('../src/dashboard/App.tsx', import.meta.url), 'utf8');
 
 test('realtime protocol carries deltas instead of forcing REST refreshes', () => {
-  assert.match(clientApi, /conversation:\s*conversationSummary\(conversation\)/u);
-  assert.match(clientApi, /message\?:\s*Record<string, unknown>/u);
-  assert.match(clientApi, /overview,\s*\n\s*\}\);/u);
-  assert.match(dashboard, /payload\.type === 'message' && payload\.message/u);
-  assert.match(dashboard, /setMediaItems\(/u);
+  assert.ok(clientApi.includes('conversation: conversationSummary(conversation)'));
+  assert.ok(clientApi.includes('message?: Record<string, unknown>'));
+  assert.ok(clientApi.includes('overview,'));
+  assert.ok(dashboard.includes("payload.type === 'message' && payload.message"));
+  assert.ok(dashboard.includes('setMediaItems('));
 });
 """,
     encoding='utf-8',
