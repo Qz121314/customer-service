@@ -460,11 +460,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
            OR created_at < ?3
            OR (created_at = ?3 AND id <= ?2)
          )`,
-    ).bind(
-      conversation.id,
-      boundary?.id ?? null,
-      boundary?.created_at ?? null,
-    ),
+    ).bind(conversation.id, boundary?.id ?? null, boundary?.created_at ?? null),
     c.env.DB.prepare(
       `UPDATE conversations
        SET visitor_unread_count = (

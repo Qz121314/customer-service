@@ -832,9 +832,10 @@ function AgentWorkspace({
       beat();
       void refresh().catch(() => undefined);
       if (selectedId) {
-        void acknowledgeConversation(selectedId, lastVisibleVisitorMessageId).catch(
-          () => undefined,
-        );
+        void acknowledgeConversation(
+          selectedId,
+          lastVisibleVisitorMessageId,
+        ).catch(() => undefined);
       }
     };
 

@@ -110,7 +110,9 @@ export async function adminLogout(): Promise<void> {
 }
 
 export async function getAgents(): Promise<AgentAccount[]> {
-  const response = await request<{ agents: AgentAccount[] }>('/api/admin/agents');
+  const response = await request<{ agents: AgentAccount[] }>(
+    '/api/admin/agents',
+  );
   return response.agents;
 }
 
@@ -146,7 +148,9 @@ export async function updateAgent(
 }
 
 export async function getGroups(): Promise<SupportGroup[]> {
-  const response = await request<{ groups: SupportGroup[] }>('/api/admin/groups');
+  const response = await request<{ groups: SupportGroup[] }>(
+    '/api/admin/groups',
+  );
   return response.groups;
 }
 
