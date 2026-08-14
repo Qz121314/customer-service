@@ -3,27 +3,16 @@ export type AdminSessionState = {
   configured: boolean;
 };
 
-export type RoutingRule = {
-  isDefault: boolean;
+export type ProductCatalogItem = {
+  id: string;
+  title: string;
+  href: string | null;
+  coverUrl: string | null;
   sectionId: string | null;
   sectionName: string | null;
   categoryId: string | null;
   categoryName: string | null;
-};
-
-export type RoutingCatalogSection = {
-  id: string;
-  name: string;
-  categories: Array<{ id: string; name: string }>;
-};
-
-export type SupportGroup = {
-  id: string;
-  name: string;
   isEnabled: boolean;
-  routingStrategy: string;
-  agentIds: string[];
-  routingRules: RoutingRule[];
 };
 
 export type AgentAccount = {
@@ -36,7 +25,7 @@ export type AgentAccount = {
   lastLoginAt: string | null;
   lastSeenAt: string | null;
   hasPassword: boolean;
-  groupIds: string[];
+  productIds: string[];
 };
 
 export type AgentIdentity = {
@@ -137,7 +126,7 @@ export async function createAgent(input: {
   name: string;
   username: string;
   password: string;
-  groupIds: string[];
+  productIds: string[];
   maxActiveConversations: number;
   isEnabled: boolean;
 }): Promise<void> {
@@ -153,7 +142,7 @@ export async function updateAgent(
     name: string;
     username: string;
     password?: string;
-    groupIds: string[];
+    productIds: string[];
     maxActiveConversations: number;
     isEnabled: boolean;
   },
@@ -164,48 +153,11 @@ export async function updateAgent(
   });
 }
 
-export async function getGroups(): Promise<SupportGroup[]> {
-  const response = await request<{ groups: SupportGroup[] }>(
-    '/api/admin/groups',
+export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
+  const response = await request<{ products: ProductCatalogItem[] }>(
+    '/api/admin/products',
   );
-  return response.groups;
-}
-
-export async function createGroup(name: string): Promise<void> {
-  await request('/api/admin/groups', {
-    method: 'POST',
-    body: JSON.stringify({ name }),
-  });
-}
-
-export async function updateGroup(
-  id: string,
-  input: { name?: string; isEnabled?: boolean },
-): Promise<void> {
-  await request(`/api/admin/groups/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    body: JSON.stringify(input),
-  });
-}
-
-export async function getRoutingCatalog(): Promise<RoutingCatalogSection[]> {
-  const response = await request<{ sections: RoutingCatalogSection[] }>(
-    '/api/admin/routing/catalog',
-  );
-  return response.sections;
-}
-
-export async function updateGroupRouting(
-  id: string,
-  input: {
-    isDefault: boolean;
-    routes: Array<{ sectionId: string; categoryId: string | null }>;
-  },
-): Promise<void> {
-  await request(`/api/admin/groups/${encodeURIComponent(id)}/routing`, {
-    method: 'PUT',
-    body: JSON.stringify(input),
-  });
+  return response.products;
 }
 
 export async function getAgentSession(): Promise<AgentSessionState> {

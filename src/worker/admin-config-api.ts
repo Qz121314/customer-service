@@ -22,25 +22,16 @@ type AgentRow = {
   password_iterations: number;
 };
 
-type GroupRow = {
+type ProductRow = {
   id: string;
-  name: string;
-  is_enabled: number;
-  routing_strategy: string;
-};
-
-type RoutingRuleRow = {
-  group_id: string;
-  section_id: string;
-  category_id: string;
-  is_default: number;
+  title: string;
+  href: string | null;
+  cover_url: string | null;
+  section_id: string | null;
   section_name: string | null;
+  category_id: string | null;
   category_name: string | null;
-};
-
-type RoutingSelection = {
-  sectionId: string;
-  categoryId: string | null;
+  is_enabled: number;
 };
 
 const SESSION_COOKIE = 'cs_session';
@@ -50,7 +41,7 @@ export const adminConfigApi = new Hono<Env>();
 adminConfigApi.get('/api/admin/agents', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
 
-  const [agentsResult, membershipsResult] = await Promise.all([
+  const [agentsResult, assignmentsResult] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, name, username, status, is_enabled, max_active_conversations,
          last_login_at, last_seen_at, password_hash, password_salt, password_iterations
@@ -59,20 +50,22 @@ adminConfigApi.get('/api/admin/agents', async (c) => {
        ORDER BY is_enabled DESC, name ASC, id ASC`,
     ).all<AgentRow>(),
     c.env.DB.prepare(
-      `SELECT ga.agent_id, ga.group_id
-       FROM group_agents ga
-       JOIN support_groups sg
-         ON sg.site_id = ga.site_id AND sg.id = ga.group_id
-       WHERE ga.site_id = 'default' AND ga.is_enabled = 1
-       ORDER BY sg.name ASC, ga.group_id ASC`,
-    ).all<{ agent_id: string; group_id: string }>(),
+      `SELECT ap.agent_id, ap.product_id
+       FROM agent_products ap
+       JOIN product_catalog p
+         ON p.site_id = ap.site_id AND p.id = ap.product_id
+       WHERE ap.site_id = 'default'
+         AND ap.is_enabled = 1
+         AND p.is_enabled = 1
+       ORDER BY p.title COLLATE NOCASE ASC, ap.product_id ASC`,
+    ).all<{ agent_id: string; product_id: string }>(),
   ]);
 
-  const groupIdsByAgent = new Map<string, string[]>();
-  for (const membership of membershipsResult.results ?? []) {
-    const current = groupIdsByAgent.get(membership.agent_id) ?? [];
-    current.push(membership.group_id);
-    groupIdsByAgent.set(membership.agent_id, current);
+  const productIdsByAgent = new Map<string, string[]>();
+  for (const assignment of assignmentsResult.results ?? []) {
+    const current = productIdsByAgent.get(assignment.agent_id) ?? [];
+    current.push(assignment.product_id);
+    productIdsByAgent.set(assignment.agent_id, current);
   }
 
   return c.json({
@@ -86,7 +79,7 @@ adminConfigApi.get('/api/admin/agents', async (c) => {
       lastLoginAt: agent.last_login_at,
       lastSeenAt: agent.last_seen_at,
       hasPassword: Boolean(agent.password_hash && agent.password_salt),
-      groupIds: groupIdsByAgent.get(agent.id) ?? [],
+      productIds: productIdsByAgent.get(agent.id) ?? [],
     })),
   });
 });
@@ -97,7 +90,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     name?: string;
     username?: string;
     password?: string;
-    groupIds?: string[];
+    productIds?: string[];
     maxActiveConversations?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
@@ -112,7 +105,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     return c.json({ error: 'USERNAME_EXISTS' }, 409);
   }
 
-  const groupIds = await validGroupIds(c.env.DB, body?.groupIds ?? []);
+  const productIds = await validProductIds(c.env.DB, body?.productIds ?? []);
   const maxActive = normalizeCapacity(body?.maxActiveConversations);
   const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
@@ -134,12 +127,12 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       maxActive,
     ),
   ];
-  for (const groupId of groupIds) {
+  for (const productId of productIds) {
     statements.push(
       c.env.DB.prepare(
-        `INSERT INTO group_agents (site_id, group_id, agent_id, is_enabled)
+        `INSERT INTO agent_products (site_id, agent_id, product_id, is_enabled)
          VALUES ('default', ?1, ?2, 1)`,
-      ).bind(groupId, id),
+      ).bind(id, productId),
     );
   }
   try {
@@ -172,7 +165,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     name?: string;
     username?: string;
     password?: string;
-    groupIds?: string[];
+    productIds?: string[];
     maxActiveConversations?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
@@ -210,10 +203,10 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     body.maxActiveConversations === undefined
       ? current.max_active_conversations
       : normalizeCapacity(body.maxActiveConversations);
-  const groupIds =
-    body.groupIds === undefined
-      ? await currentGroupIds(c.env.DB, id)
-      : await validGroupIds(c.env.DB, body.groupIds);
+  const productIds =
+    body.productIds === undefined
+      ? await currentProductIds(c.env.DB, id)
+      : await validProductIds(c.env.DB, body.productIds);
 
   const statements: D1PreparedStatement[] = [
     c.env.DB.prepare(
@@ -240,16 +233,16 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       id,
     ),
     c.env.DB.prepare(
-      `DELETE FROM group_agents
+      `DELETE FROM agent_products
        WHERE site_id = 'default' AND agent_id = ?1`,
     ).bind(id),
   ];
-  for (const groupId of groupIds) {
+  for (const productId of productIds) {
     statements.push(
       c.env.DB.prepare(
-        `INSERT INTO group_agents (site_id, group_id, agent_id, is_enabled)
+        `INSERT INTO agent_products (site_id, agent_id, product_id, is_enabled)
          VALUES ('default', ?1, ?2, 1)`,
-      ).bind(groupId, id),
+      ).bind(id, productId),
     );
   }
   if (enabled === 0) {
@@ -263,215 +256,33 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-adminConfigApi.get('/api/admin/groups', async (c) => {
+adminConfigApi.get('/api/admin/products', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const [groupsResult, membershipsResult, routingResult] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT id, name, is_enabled, routing_strategy
-       FROM support_groups
-       WHERE site_id = 'default'
-       ORDER BY is_enabled DESC, name ASC, id ASC`,
-    ).all<GroupRow>(),
-    c.env.DB.prepare(
-      `SELECT group_id, agent_id
-       FROM group_agents
-       WHERE site_id = 'default' AND is_enabled = 1`,
-    ).all<{ group_id: string; agent_id: string }>(),
-    c.env.DB.prepare(
-      `SELECT r.group_id, r.section_id, r.category_id, r.is_default,
-         s.name AS section_name, cat.name AS category_name
-       FROM group_routing_rules r
-       LEFT JOIN routing_catalog_sections s
-         ON s.site_id = r.site_id AND s.id = r.section_id
-       LEFT JOIN routing_catalog_categories cat
-         ON cat.site_id = r.site_id AND cat.id = r.category_id
-       WHERE r.site_id = 'default' AND r.is_enabled = 1
-       ORDER BY r.is_default DESC, s.name ASC, cat.name ASC, r.id ASC`,
-    ).all<RoutingRuleRow>(),
-  ]);
-
-  const agentIdsByGroup = new Map<string, string[]>();
-  for (const membership of membershipsResult.results ?? []) {
-    if (membership.agent_id === 'admin') continue;
-    const current = agentIdsByGroup.get(membership.group_id) ?? [];
-    current.push(membership.agent_id);
-    agentIdsByGroup.set(membership.group_id, current);
-  }
-
-  const routingRulesByGroup = new Map<string, RoutingRuleRow[]>();
-  for (const rule of routingResult.results ?? []) {
-    const current = routingRulesByGroup.get(rule.group_id) ?? [];
-    current.push(rule);
-    routingRulesByGroup.set(rule.group_id, current);
-  }
+  const result = await c.env.DB.prepare(
+    `SELECT id, title, href, cover_url, section_id, section_name,
+       category_id, category_name, is_enabled
+     FROM product_catalog
+     WHERE site_id = 'default'
+     ORDER BY is_enabled DESC,
+       COALESCE(section_name, '') COLLATE NOCASE ASC,
+       COALESCE(category_name, '') COLLATE NOCASE ASC,
+       title COLLATE NOCASE ASC,
+       id ASC`,
+  ).all<ProductRow>();
 
   return c.json({
-    groups: (groupsResult.results ?? []).map((group) => ({
-      id: group.id,
-      name: group.name,
-      isEnabled: group.is_enabled === 1,
-      routingStrategy: 'round_robin',
-      agentIds: agentIdsByGroup.get(group.id) ?? [],
-      routingRules: (routingRulesByGroup.get(group.id) ?? []).map((rule) => ({
-        isDefault: rule.is_default === 1,
-        sectionId: rule.section_id || null,
-        sectionName: rule.section_name,
-        categoryId: rule.category_id || null,
-        categoryName: rule.category_name,
-      })),
+    products: (result.results ?? []).map((product) => ({
+      id: product.id,
+      title: product.title,
+      href: product.href,
+      coverUrl: product.cover_url,
+      sectionId: product.section_id,
+      sectionName: product.section_name,
+      categoryId: product.category_id,
+      categoryName: product.category_name,
+      isEnabled: product.is_enabled === 1,
     })),
   });
-});
-
-adminConfigApi.post('/api/admin/groups', async (c) => {
-  if (!(await adminAuthorized(c))) return unauthorized(c);
-  const body = await readJson<{ name?: string }>(c.req.raw);
-  const name = normalizeName(body?.name);
-  if (!name) return c.json({ error: 'INVALID_GROUP' }, 400);
-  const id = crypto.randomUUID();
-  await c.env.DB.prepare(
-    `INSERT INTO support_groups (site_id, id, name, is_enabled, routing_strategy)
-     VALUES ('default', ?1, ?2, 1, 'least_active')`,
-  )
-    .bind(id, name)
-    .run();
-  return c.json({ ok: true, id }, 201);
-});
-
-adminConfigApi.patch('/api/admin/groups/:id', async (c) => {
-  if (!(await adminAuthorized(c))) return unauthorized(c);
-  const id = c.req.param('id');
-  const current = await c.env.DB.prepare(
-    `SELECT id, name, is_enabled, routing_strategy
-     FROM support_groups WHERE site_id = 'default' AND id = ?1`,
-  )
-    .bind(id)
-    .first<GroupRow>();
-  if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
-
-  const body = await readJson<{ name?: string; isEnabled?: boolean }>(
-    c.req.raw,
-  );
-  if (!body) return c.json({ error: 'INVALID_GROUP' }, 400);
-  const name =
-    body.name === undefined ? current.name : normalizeName(body.name);
-  if (!name) return c.json({ error: 'INVALID_GROUP' }, 400);
-  const enabled =
-    body.isEnabled === undefined ? current.is_enabled : body.isEnabled ? 1 : 0;
-  await c.env.DB.prepare(
-    `UPDATE support_groups
-     SET name = ?1, is_enabled = ?2, updated_at = CURRENT_TIMESTAMP
-     WHERE site_id = 'default' AND id = ?3`,
-  )
-    .bind(name, enabled, id)
-    .run();
-  return c.json({ ok: true });
-});
-
-adminConfigApi.get('/api/admin/routing/catalog', async (c) => {
-  if (!(await adminAuthorized(c))) return unauthorized(c);
-  const [sectionsResult, categoriesResult] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT id, name
-       FROM routing_catalog_sections
-       WHERE site_id = 'default'
-       ORDER BY name COLLATE NOCASE ASC, id ASC`,
-    ).all<{ id: string; name: string }>(),
-    c.env.DB.prepare(
-      `SELECT id, section_id, name
-       FROM routing_catalog_categories
-       WHERE site_id = 'default'
-       ORDER BY name COLLATE NOCASE ASC, id ASC`,
-    ).all<{ id: string; section_id: string; name: string }>(),
-  ]);
-
-  const categoriesBySection = new Map<
-    string,
-    Array<{ id: string; name: string }>
-  >();
-  for (const category of categoriesResult.results ?? []) {
-    const current = categoriesBySection.get(category.section_id) ?? [];
-    current.push({ id: category.id, name: category.name });
-    categoriesBySection.set(category.section_id, current);
-  }
-
-  return c.json({
-    sections: (sectionsResult.results ?? []).map((section) => ({
-      id: section.id,
-      name: section.name,
-      categories: categoriesBySection.get(section.id) ?? [],
-    })),
-  });
-});
-
-adminConfigApi.put('/api/admin/groups/:id/routing', async (c) => {
-  if (!(await adminAuthorized(c))) return unauthorized(c);
-  const groupId = c.req.param('id');
-  const group = await c.env.DB.prepare(
-    `SELECT id FROM support_groups
-     WHERE site_id = 'default' AND id = ?1
-     LIMIT 1`,
-  )
-    .bind(groupId)
-    .first<{ id: string }>();
-  if (!group) return c.json({ error: 'NOT_FOUND' }, 404);
-
-  const body = await readJson<{
-    isDefault?: boolean;
-    routes?: Array<{ sectionId?: string; categoryId?: string | null }>;
-  }>(c.req.raw);
-  if (
-    !body ||
-    typeof body.isDefault !== 'boolean' ||
-    !Array.isArray(body.routes)
-  ) {
-    return c.json({ error: 'INVALID_ROUTING_RULES' }, 400);
-  }
-
-  const routes = await normalizeRoutingSelections(c.env.DB, body.routes);
-  if (!routes) return c.json({ error: 'INVALID_ROUTING_RULES' }, 400);
-
-  const statements: D1PreparedStatement[] = [
-    c.env.DB.prepare(
-      `DELETE FROM group_routing_rules
-       WHERE site_id = 'default' AND group_id = ?1`,
-    ).bind(groupId),
-  ];
-
-  if (body.isDefault) {
-    statements.push(
-      c.env.DB.prepare(
-        `DELETE FROM group_routing_rules
-         WHERE site_id = 'default' AND is_default = 1`,
-      ),
-      c.env.DB.prepare(
-        `INSERT INTO group_routing_rules (
-           id, site_id, group_id, section_id, category_id, is_default, is_enabled
-         ) VALUES (?1, 'default', ?2, '', '', 1, 1)`,
-      ).bind(crypto.randomUUID(), groupId),
-    );
-  }
-
-  for (const route of routes) {
-    const categoryId = route.categoryId ?? '';
-    statements.push(
-      c.env.DB.prepare(
-        `DELETE FROM group_routing_rules
-         WHERE site_id = 'default'
-           AND is_default = 0
-           AND section_id = ?1
-           AND category_id = ?2`,
-      ).bind(route.sectionId, categoryId),
-      c.env.DB.prepare(
-        `INSERT INTO group_routing_rules (
-           id, site_id, group_id, section_id, category_id, is_default, is_enabled
-         ) VALUES (?1, 'default', ?2, ?3, ?4, 0, 1)`,
-      ).bind(crypto.randomUUID(), groupId, route.sectionId, categoryId),
-    );
-  }
-
-  await c.env.DB.batch(statements);
-  return c.json({ ok: true });
 });
 
 async function adminAuthorized(c: Context<Env>): Promise<boolean> {
@@ -516,22 +327,28 @@ async function usernameExists(
   return Boolean(row);
 }
 
-async function currentGroupIds(
+async function currentProductIds(
   db: D1Database,
   agentId: string,
 ): Promise<string[]> {
   const result = await db
     .prepare(
-      `SELECT group_id FROM group_agents
-       WHERE site_id = 'default' AND agent_id = ?1 AND is_enabled = 1
-       ORDER BY group_id ASC`,
+      `SELECT ap.product_id
+       FROM agent_products ap
+       JOIN product_catalog p
+         ON p.site_id = ap.site_id AND p.id = ap.product_id
+       WHERE ap.site_id = 'default'
+         AND ap.agent_id = ?1
+         AND ap.is_enabled = 1
+         AND p.is_enabled = 1
+       ORDER BY p.title COLLATE NOCASE ASC, ap.product_id ASC`,
     )
     .bind(agentId)
-    .all<{ group_id: string }>();
-  return (result.results ?? []).map((item) => item.group_id);
+    .all<{ product_id: string }>();
+  return (result.results ?? []).map((item) => item.product_id);
 }
 
-async function validGroupIds(
+async function validProductIds(
   db: D1Database,
   values: string[],
 ): Promise<string[]> {
@@ -541,7 +358,7 @@ async function validGroupIds(
   if (!requested.length) return [];
   const result = await db
     .prepare(
-      `SELECT id FROM support_groups
+      `SELECT id FROM product_catalog
        WHERE site_id = 'default' AND is_enabled = 1`,
     )
     .all<{ id: string }>();
@@ -549,54 +366,9 @@ async function validGroupIds(
   return requested.filter((id) => allowed.has(id));
 }
 
-async function normalizeRoutingSelections(
-  db: D1Database,
-  values: Array<{ sectionId?: string; categoryId?: string | null }>,
-): Promise<RoutingSelection[] | null> {
-  if (values.length > 500) return null;
-  const [sectionsResult, categoriesResult] = await Promise.all([
-    db
-      .prepare(
-        `SELECT id FROM routing_catalog_sections WHERE site_id = 'default'`,
-      )
-      .all<{ id: string }>(),
-    db
-      .prepare(
-        `SELECT id, section_id
-         FROM routing_catalog_categories WHERE site_id = 'default'`,
-      )
-      .all<{ id: string; section_id: string }>(),
-  ]);
-  const sections = new Set(
-    (sectionsResult.results ?? []).map((item) => item.id),
-  );
-  const categories = new Map(
-    (categoriesResult.results ?? []).map((item) => [item.id, item.section_id]),
-  );
-  const unique = new Map<string, RoutingSelection>();
-
-  for (const value of values) {
-    const sectionId = normalizeText(value.sectionId, 100);
-    const categoryId = value.categoryId
-      ? normalizeText(value.categoryId, 100)
-      : null;
-    if (!sectionId || !sections.has(sectionId)) return null;
-    if (categoryId && categories.get(categoryId) !== sectionId) return null;
-    const key = `${sectionId}:${categoryId ?? ''}`;
-    unique.set(key, { sectionId, categoryId });
-  }
-  return [...unique.values()];
-}
-
 function normalizeName(value?: string): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 80 ? trimmed : null;
-}
-
-function normalizeText(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed && trimmed.length <= maxLength ? trimmed : null;
 }
 
 function normalizeUsername(value?: string | null): string | null {

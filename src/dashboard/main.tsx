@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { setupAgentMobileNavigation } from './agent-mobile';
 import './styles.css';
-import './routing.css';
+import './product-assignment.css';
 import './chat-dialogue.css';
 import './dialogue-flow.css';
 import './agent-mobile-layout.css';

@@ -14,19 +14,20 @@ type SupportGroupRow = {
   is_enabled: number;
 };
 
-type RoutingCatalogCategory = {
+type ProductCatalogItem = {
   id: string;
-  name: string;
+  title: string;
+  href: string | null;
+  coverUrl: string | null;
+  sectionId: string | null;
+  sectionName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  isEnabled: boolean;
 };
 
-type RoutingCatalogSection = {
-  id: string;
-  name: string;
-  categories: RoutingCatalogCategory[];
-};
-
-type RoutingCatalogInput = {
-  sections: RoutingCatalogSection[];
+type ProductCatalogInput = {
+  products: ProductCatalogItem[];
 };
 
 export const integrationApi = new Hono<IntegrationEnv>();
@@ -49,14 +50,9 @@ integrationApi.get('/integration/v1/status', (c) =>
 );
 
 /**
- * Public control-plane endpoint used when an external Site admin connects this
- * customer-service installation. The caller may be hosted in any Cloudflare
- * account or on any other HTTPS origin. The verification token is never
- * returned and is never part of visitor conversation traffic.
- *
- * Site may include its current section/category catalog. That catalog is only
- * control-plane metadata used by the customer-service admin when configuring
- * demand routing; conversation traffic still goes browser -> customer-service.
+ * Control-plane verification used by Site admin. Site may include the current
+ * product catalog so this customer-service admin can assign products to agents.
+ * The catalog is never used as a proxy for visitor conversation traffic.
  */
 integrationApi.post('/integration/v1/verify', async (c) => {
   c.header('Cache-Control', 'no-store');
@@ -95,21 +91,24 @@ integrationApi.post('/integration/v1/verify', async (c) => {
     );
   }
 
-  const body = await readJson<{ routingCatalog?: unknown }>(c.req.raw);
-  let catalogCounts = { sectionCount: 0, categoryCount: 0 };
-  if (body?.routingCatalog !== undefined) {
-    const catalog = normalizeRoutingCatalog(body.routingCatalog);
+  const body = await readJson<{ productCatalog?: unknown }>(c.req.raw);
+  let productCount = 0;
+  if (body?.productCatalog !== undefined) {
+    const catalog = normalizeProductCatalog(body.productCatalog);
     if (!catalog) {
       return integrationError(
         c,
         400,
-        'INVALID_ROUTING_CATALOG',
-        'Routing catalog is invalid.',
+        'INVALID_PRODUCT_CATALOG',
+        'Product catalog is invalid.',
       );
     }
-    catalogCounts = await replaceRoutingCatalog(c.env.DB, site.id, catalog);
+    productCount = await syncProductCatalog(c.env.DB, site.id, catalog);
   }
 
+  // Kept in the verification envelope during migration so an older Site admin
+  // can still validate this installation. Runtime product routing does not use
+  // these groups once a product has agent assignments.
   const groups = await c.env.DB.prepare(
     `SELECT id, name, is_enabled
      FROM support_groups
@@ -129,7 +128,7 @@ integrationApi.post('/integration/v1/verify', async (c) => {
     protocolVersion: 'v1',
     clientApiUrl: new URL('/client/v1', origin).toString().replace(/\/$/u, ''),
     realtimeUrl: realtimeUrl.toString(),
-    routingCatalog: catalogCounts,
+    productCatalog: { productCount },
     groups: (groups.results ?? []).map((group) => ({
       id: group.id,
       name: group.name,
@@ -138,79 +137,108 @@ integrationApi.post('/integration/v1/verify', async (c) => {
   });
 });
 
-function normalizeRoutingCatalog(value: unknown): RoutingCatalogInput | null {
+function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
   if (
     !isRecord(value) ||
-    !Array.isArray(value.sections) ||
-    value.sections.length > 200
+    !Array.isArray(value.products) ||
+    value.products.length > 5000
   ) {
     return null;
   }
 
-  const sections: RoutingCatalogSection[] = [];
-  let categoryCount = 0;
-  for (const rawSection of value.sections) {
-    if (!isRecord(rawSection) || !Array.isArray(rawSection.categories))
-      return null;
-    const id = normalizeText(rawSection.id, 100);
-    const name = normalizeText(rawSection.name, 120);
-    if (!id || !name || rawSection.categories.length > 500) return null;
+  const products: ProductCatalogItem[] = [];
+  const seen = new Set<string>();
+  for (const rawProduct of value.products) {
+    if (!isRecord(rawProduct)) return null;
+    const id = normalizeText(rawProduct.id, 100);
+    const title = normalizeText(rawProduct.title, 300);
+    if (!id || !title || seen.has(id)) return null;
+    seen.add(id);
 
-    const categories: RoutingCatalogCategory[] = [];
-    for (const rawCategory of rawSection.categories) {
-      if (!isRecord(rawCategory)) return null;
-      const categoryId = normalizeText(rawCategory.id, 100);
-      const categoryName = normalizeText(rawCategory.name, 120);
-      if (!categoryId || !categoryName) return null;
-      categories.push({ id: categoryId, name: categoryName });
-      categoryCount += 1;
-      if (categoryCount > 2000) return null;
+    const href = normalizeNullableText(rawProduct.href, 1000);
+    const coverUrl = normalizeNullableText(rawProduct.coverUrl, 2000);
+    const sectionId = normalizeNullableText(rawProduct.sectionId, 100);
+    const sectionName = normalizeNullableText(rawProduct.sectionName, 120);
+    const categoryId = normalizeNullableText(rawProduct.categoryId, 100);
+    const categoryName = normalizeNullableText(rawProduct.categoryName, 120);
+    if (
+      href === undefined ||
+      coverUrl === undefined ||
+      sectionId === undefined ||
+      sectionName === undefined ||
+      categoryId === undefined ||
+      categoryName === undefined
+    ) {
+      return null;
     }
-    sections.push({ id, name, categories });
+
+    products.push({
+      id,
+      title,
+      href,
+      coverUrl,
+      sectionId,
+      sectionName,
+      categoryId,
+      categoryName,
+      isEnabled: rawProduct.isEnabled !== false,
+    });
   }
-  return { sections };
+  return { products };
 }
 
-async function replaceRoutingCatalog(
+async function syncProductCatalog(
   db: D1Database,
   siteId: string,
-  catalog: RoutingCatalogInput,
-): Promise<{ sectionCount: number; categoryCount: number }> {
+  catalog: ProductCatalogInput,
+): Promise<number> {
   const statements: D1PreparedStatement[] = [
     db
-      .prepare('DELETE FROM routing_catalog_categories WHERE site_id = ?1')
-      .bind(siteId),
-    db
-      .prepare('DELETE FROM routing_catalog_sections WHERE site_id = ?1')
+      .prepare(
+        `UPDATE product_catalog
+         SET is_enabled = 0, updated_at = CURRENT_TIMESTAMP
+         WHERE site_id = ?1`,
+      )
       .bind(siteId),
   ];
-  let categoryCount = 0;
 
-  for (const section of catalog.sections) {
+  for (const product of catalog.products) {
     statements.push(
       db
         .prepare(
-          `INSERT INTO routing_catalog_sections (site_id, id, name, updated_at)
-           VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)`,
+          `INSERT INTO product_catalog (
+             site_id, id, title, href, cover_url,
+             section_id, section_name, category_id, category_name,
+             is_enabled, updated_at
+           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, CURRENT_TIMESTAMP)
+           ON CONFLICT(site_id, id) DO UPDATE SET
+             title = excluded.title,
+             href = excluded.href,
+             cover_url = excluded.cover_url,
+             section_id = excluded.section_id,
+             section_name = excluded.section_name,
+             category_id = excluded.category_id,
+             category_name = excluded.category_name,
+             is_enabled = excluded.is_enabled,
+             updated_at = CURRENT_TIMESTAMP`,
         )
-        .bind(siteId, section.id, section.name),
+        .bind(
+          siteId,
+          product.id,
+          product.title,
+          product.href,
+          product.coverUrl,
+          product.sectionId,
+          product.sectionName,
+          product.categoryId,
+          product.categoryName,
+          product.isEnabled ? 1 : 0,
+        ),
     );
-    for (const category of section.categories) {
-      statements.push(
-        db
-          .prepare(
-            `INSERT INTO routing_catalog_categories (
-               site_id, id, section_id, name, updated_at
-             ) VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)`,
-          )
-          .bind(siteId, category.id, section.id, category.name),
-      );
-      categoryCount += 1;
-    }
   }
 
   await db.batch(statements);
-  return { sectionCount: catalog.sections.length, categoryCount };
+  return catalog.products.length;
 }
 
 function bearerToken(authorization?: string): string | null {
@@ -238,6 +266,16 @@ function normalizeText(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed && trimmed.length <= maxLength ? trimmed : null;
+}
+
+function normalizeNullableText(
+  value: unknown,
+  maxLength: number,
+): string | null | undefined {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= maxLength ? trimmed : undefined;
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
