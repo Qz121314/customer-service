@@ -135,9 +135,10 @@ async function hmac(
   key: ArrayBuffer | Uint8Array,
   value: string,
 ): Promise<ArrayBuffer> {
+  const rawKey = key instanceof Uint8Array ? new Uint8Array(key).buffer : key;
   const cryptoKey = await crypto.subtle.importKey(
     'raw',
-    key instanceof Uint8Array ? key.buffer : key,
+    rawKey,
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign'],
