@@ -1,0 +1,28 @@
+.message-image {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 420px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #eef1f5;
+}
+
+.media-picker input {
+  display: none;
+}
+
+.media-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 50%;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.media-upload-progress {
+  color: #667180;
+  font-size: 11px;
+}
