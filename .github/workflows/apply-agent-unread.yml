@@ -22,7 +22,7 @@ jobs:
       - run: npm install --global pnpm@11.19.0
       - run: pnpm install --frozen-lockfile
       - run: python3 scripts/patch-agent-unread.py
-      - run: pnpm exec prettier --write src/worker/client-api.ts src/worker/media-store.ts src/worker/agent-api.ts src/dashboard/api.ts src/dashboard/App.tsx src/dashboard/styles.css test/agent-unread.test.mjs migrations/0009_agent_unread.sql
+      - run: pnpm exec prettier --write src/worker/client-api.ts src/worker/media-store.ts src/worker/agent-api.ts src/dashboard/api.ts src/dashboard/App.tsx src/dashboard/styles.css test/agent-unread.test.mjs
       - run: pnpm db:migrate:local
       - run: pnpm lint
       - run: pnpm typecheck
