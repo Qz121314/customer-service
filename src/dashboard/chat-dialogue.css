@@ -43,11 +43,32 @@
 }
 
 .message time {
-  margin-top: 4px;
+  margin: 0;
   color: #687386;
   font-size: 11px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
+}
+
+.message-meta {
+  min-height: 14px;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.delivery-mark {
+  color: #65758a;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.16em;
+  line-height: 1;
+}
+
+.delivery-mark.is-read {
+  color: #2675c7;
 }
 
 .message.mine {
