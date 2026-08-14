@@ -1,4 +1,11 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   AgentAccount,
   AgentIdentity,
@@ -758,8 +765,12 @@ function AgentWorkspace({
   const [mediaItems, setMediaItems] = useState<AgentMediaItem[]>([]);
   const [mediaProgress, setMediaProgress] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [inboxConnected, setInboxConnected] = useState(false);
+  const [threadConnected, setThreadConnected] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
+  const messagesRef = useRef<HTMLDivElement | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextOverview, nextConversations] = await Promise.all([
@@ -778,35 +789,52 @@ function AgentWorkspace({
   }, [refresh]);
 
   useEffect(() => {
-    void heartbeat()
-      .then(refresh)
-      .catch(() => undefined);
-    const timer = window.setInterval(() => {
-      void heartbeat()
-        .then(refresh)
-        .catch(() => undefined);
-    }, 30_000);
-    return () => window.clearInterval(timer);
+    const beat = () => void heartbeat().catch(() => undefined);
+    const recover = () => {
+      if (document.visibilityState !== 'visible') return;
+      beat();
+      void refresh().catch(() => undefined);
+    };
+
+    beat();
+    const timer = window.setInterval(beat, 30_000);
+    document.addEventListener('visibilitychange', recover);
+    window.addEventListener('online', recover);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', recover);
+      window.removeEventListener('online', recover);
+    };
   }, [refresh]);
 
   useEffect(() => {
     let active = true;
     let socket: WebSocket | null = null;
     let timer: number | null = null;
+    let openedOnce = false;
     const connect = () => {
       if (!active) return;
       socket = openAgentInboxSocket();
+      socket.addEventListener('open', () => {
+        if (!active) return;
+        setInboxConnected(true);
+        if (openedOnce) void refresh().catch(() => undefined);
+        openedOnce = true;
+      });
       socket.addEventListener('message', () => {
-        if (active) void refresh();
+        if (active) void refresh().catch(() => undefined);
       });
       socket.addEventListener('close', () => {
-        if (active) timer = window.setTimeout(connect, 1200);
+        if (!active) return;
+        setInboxConnected(false);
+        timer = window.setTimeout(connect, 1200);
       });
       socket.addEventListener('error', () => socket?.close());
     };
     connect();
     return () => {
       active = false;
+      setInboxConnected(false);
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
     };
@@ -816,9 +844,13 @@ function AgentWorkspace({
     if (!selectedId) {
       setDetail(null);
       setMediaItems([]);
+      setThreadConnected(false);
       return;
     }
     let active = true;
+    let socket: WebSocket | null = null;
+    let timer: number | null = null;
+    let openedOnce = false;
     const load = () =>
       Promise.all([getConversation(selectedId), getAgentMedia(selectedId)])
         .then(([value, media]) => {
@@ -830,33 +862,59 @@ function AgentWorkspace({
         .catch((reason) => {
           if (active) setError(message(reason, '无法加载会话'));
         });
+    const connect = () => {
+      if (!active) return;
+      socket = openConversationSocket(selectedId);
+      socket.addEventListener('open', () => {
+        if (!active) return;
+        setThreadConnected(true);
+        if (openedOnce) void load();
+        openedOnce = true;
+      });
+      socket.addEventListener('message', () => {
+        if (active) void load();
+      });
+      socket.addEventListener('close', () => {
+        if (!active) return;
+        setThreadConnected(false);
+        timer = window.setTimeout(connect, 1200);
+      });
+      socket.addEventListener('error', () => socket?.close());
+    };
     void load();
-    const socket = openConversationSocket(selectedId);
-    socket.addEventListener('message', () => {
-      if (active) {
-        void load();
-        void refresh();
-      }
-    });
-    socket.addEventListener('error', () => socket.close());
+    connect();
     return () => {
       active = false;
-      socket.close();
+      setThreadConnected(false);
+      socket?.close();
+      if (timer !== null) window.clearTimeout(timer);
     };
-  }, [refresh, selectedId]);
+  }, [selectedId]);
+
+  const lastMessageId = detail?.messages.at(-1)?.id ?? null;
+  useEffect(() => {
+    const timeline = messagesRef.current;
+    if (!timeline) return;
+    const frame = window.requestAnimationFrame(() => {
+      timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [lastMessageId, selectedId]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!selectedId || !draft.trim()) return;
+    if (!selectedId || !draft.trim() || sending) return;
     const text = draft.trim();
+    setSending(true);
     setDraft('');
     try {
       await sendMessage(selectedId, text);
       setDetail(await getConversation(selectedId));
-      await refresh();
     } catch (reason) {
-      setDraft(text);
+      setDraft((current) => current || text);
       setError(message(reason, '发送失败'));
+    } finally {
+      setSending(false);
     }
   }
 
@@ -871,7 +929,6 @@ function AgentWorkspace({
       ]);
       setDetail(nextDetail);
       setMediaItems(nextMedia);
-      await refresh();
     } catch (reason) {
       setError(message(reason, '图片发送失败'));
     } finally {
@@ -918,7 +975,11 @@ function AgentWorkspace({
             <span className="eyebrow">MY INBOX</span>
             <h1>我的会话</h1>
           </div>
-          <span className="online-pill">在线接待</span>
+          <span className="online-pill" aria-live="polite">
+            {inboxConnected && (!selectedId || threadConnected)
+              ? '实时在线'
+              : '正在重连'}
+          </span>
         </header>
         <div className="filters">
           {(Object.keys(filterLabels) as Filter[]).map((item) => (
@@ -1015,7 +1076,7 @@ function AgentWorkspace({
                 <option value="closed">已关闭</option>
               </select>
             </header>
-            <div className="messages">
+            <div className="messages" ref={messagesRef}>
               {(detail.messages as Message[]).map((item) => (
                 <Bubble
                   key={item.id}
@@ -1056,7 +1117,11 @@ function AgentWorkspace({
                     : '输入回复内容…'
                 }
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
+                  if (
+                    event.key === 'Enter' &&
+                    !event.shiftKey &&
+                    !event.nativeEvent.isComposing
+                  ) {
                     event.preventDefault();
                     event.currentTarget.form?.requestSubmit();
                   }
@@ -1071,7 +1136,9 @@ function AgentWorkspace({
                 <button
                   className="primary-button"
                   disabled={
-                    !draft.trim() || detail.conversation.status === 'closed'
+                    sending ||
+                    !draft.trim() ||
+                    detail.conversation.status === 'closed'
                   }
                 >
                   发送
