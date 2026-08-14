@@ -51,7 +51,10 @@ export async function reserveMedia(
   return row;
 }
 
-export async function findMedia(db: D1Database, id: string): Promise<MediaRow | null> {
+export async function findMedia(
+  db: D1Database,
+  id: string,
+): Promise<MediaRow | null> {
   return db
     .prepare(
       `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
@@ -70,7 +73,10 @@ export async function storeProxyUpload(
 ): Promise<{ ok: true } | { ok: false; status: 400 | 409; code: string }> {
   if (media.status !== 'pending')
     return { ok: false, status: 409, code: 'MEDIA_NOT_PENDING' };
-  const contentType = request.headers.get('Content-Type')?.split(';')[0]?.trim();
+  const contentType = request.headers
+    .get('Content-Type')
+    ?.split(';')[0]
+    ?.trim();
   if (contentType !== media.mime_type)
     return { ok: false, status: 400, code: 'INVALID_MEDIA_TYPE' };
   const length = Number(request.headers.get('Content-Length') ?? 0);
@@ -170,7 +176,11 @@ export async function completeMedia(
         created_at: createdAt,
       },
     }),
-    broadcastClientConversationEvent(env, media.conversation_id, 'message.created'),
+    broadcastClientConversationEvent(
+      env,
+      media.conversation_id,
+      'message.created',
+    ),
     broadcastRoom(env, 'admin-inbox', {
       type: 'conversation.changed',
       conversationId: media.conversation_id,
@@ -184,7 +194,10 @@ export async function completeMedia(
       .bind(media.conversation_id)
       .first<{ assigned_agent: string | null }>();
     if (!conversation?.assigned_agent) {
-      const assignment = await assignConversationAgent(env.DB, media.conversation_id);
+      const assignment = await assignConversationAgent(
+        env.DB,
+        media.conversation_id,
+      );
       if (assignment) {
         await Promise.all([
           broadcastClientConversationEvent(
@@ -213,7 +226,8 @@ export async function completeMedia(
 }
 
 export async function readMediaObject(bucket: R2Bucket, media: MediaRow) {
-  if (media.status !== 'ready') return new Response('Not found', { status: 404 });
+  if (media.status !== 'ready')
+    return new Response('Not found', { status: 404 });
   const object = await bucket.get(media.object_key);
   if (!object) return new Response('Not found', { status: 404 });
   const headers = new Headers();
@@ -229,7 +243,9 @@ async function broadcastRoom(
   id: string,
   payload: unknown,
 ) {
-  const room = env.CONVERSATION_ROOMS.get(env.CONVERSATION_ROOMS.idFromName(id));
+  const room = env.CONVERSATION_ROOMS.get(
+    env.CONVERSATION_ROOMS.idFromName(id),
+  );
   await room.fetch('https://conversation-room/broadcast', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -110,8 +110,9 @@ async function presignPut(input: PresignInput): Promise<string> {
 }
 
 function awsEncode(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/gu, (char) =>
-    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  return encodeURIComponent(value).replace(
+    /[!'()*]/gu,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
   );
 }
 
@@ -121,7 +122,10 @@ async function signatureKey(
   region: string,
   service: string,
 ): Promise<ArrayBuffer> {
-  const kDate = await hmac(new TextEncoder().encode(`AWS4${secret}`), dateStamp);
+  const kDate = await hmac(
+    new TextEncoder().encode(`AWS4${secret}`),
+    dateStamp,
+  );
   const kRegion = await hmac(kDate, region);
   const kService = await hmac(kRegion, service);
   return hmac(kService, 'aws4_request');

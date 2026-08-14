@@ -18,7 +18,9 @@ export async function prepareChatImage(file: File): Promise<PreparedChatImage> {
   if (!file.type.startsWith('image/')) throw new Error('请选择图片文件');
   if (file.type === 'image/gif') return prepareGif(file);
 
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const bitmap = await createImageBitmap(file, {
+    imageOrientation: 'from-image',
+  });
   try {
     let width = bitmap.width;
     let height = bitmap.height;
@@ -34,7 +36,11 @@ export async function prepareChatImage(file: File): Promise<PreparedChatImage> {
       blob = await encodeWebp(bitmap, width, height, quality);
     }
     let shrinkCount = 0;
-    while (blob.size > TARGET_BYTES && Math.max(width, height) > 960 && shrinkCount < 4) {
+    while (
+      blob.size > TARGET_BYTES &&
+      Math.max(width, height) > 960 &&
+      shrinkCount < 4
+    ) {
       width = Math.max(1, Math.round(width * 0.85));
       height = Math.max(1, Math.round(height * 0.85));
       blob = await encodeWebp(bitmap, width, height, 0.58);
@@ -61,7 +67,9 @@ export function releasePreparedImage(image: PreparedChatImage | null) {
 
 async function prepareGif(file: File): Promise<PreparedChatImage> {
   if (file.size > MAX_GIF_BYTES) throw new Error('GIF 最大 5MB');
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const bitmap = await createImageBitmap(file, {
+    imageOrientation: 'from-image',
+  });
   try {
     return {
       blob: file,

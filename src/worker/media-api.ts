@@ -84,7 +84,10 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
 mediaApi.get('/client/v1/conversations/:id/media', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
   if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
-  const site = await findSite(c.env.DB, normalizeProjectId(c.req.query('projectId')));
+  const site = await findSite(
+    c.env.DB,
+    normalizeProjectId(c.req.query('projectId')),
+  );
   if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
   const conversation = await ownedVisitorConversation(
     c.env.DB,
@@ -93,7 +96,9 @@ mediaApi.get('/client/v1/conversations/:id/media', async (c) => {
     visitorId,
   );
   if (!conversation) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
-  return c.json({ items: await listConversationMedia(c.env.DB, conversation.id) });
+  return c.json({
+    items: await listConversationMedia(c.env.DB, conversation.id),
+  });
 });
 
 mediaApi.put('/client/v1/media/:id/content', async (c) => {
@@ -105,7 +110,9 @@ mediaApi.put('/client/v1/media/:id/content', async (c) => {
 });
 
 mediaApi.post('/client/v1/media/:id/complete', async (c) => {
-  const body = await readJson<{ visitorId?: string; projectId?: string }>(c.req.raw);
+  const body = await readJson<{ visitorId?: string; projectId?: string }>(
+    c.req.raw,
+  );
   const media = await authorizedVisitorMedia(c, false, body ?? undefined);
   if (!media.ok) return clientError(c, media.status, media.code);
   const result = await completeMedia(c.env, media.value);
@@ -122,7 +129,11 @@ mediaApi.get('/client/v1/media/:id/content', async (c) => {
 mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
   const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const conversation = await assignedConversation(c.env.DB, c.req.param('id'), agent.id);
+  const conversation = await assignedConversation(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   if (conversation.status === 'closed')
     return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
@@ -141,7 +152,10 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
     senderId: agent.id,
     media,
   });
-  const proxy = new URL(`/api/agent/media/${row.id}/content`, c.req.url).toString();
+  const proxy = new URL(
+    `/api/agent/media/${row.id}/content`,
+    c.req.url,
+  ).toString();
   return c.json(
     {
       conversationId: row.conversation_id,
@@ -160,9 +174,15 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
 mediaApi.get('/api/agent/conversations/:id/media', async (c) => {
   const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const conversation = await assignedConversation(c.env.DB, c.req.param('id'), agent.id);
+  const conversation = await assignedConversation(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  return c.json({ items: await listConversationMedia(c.env.DB, conversation.id) });
+  return c.json({
+    items: await listConversationMedia(c.env.DB, conversation.id),
+  });
 });
 
 mediaApi.put('/api/agent/media/:id/content', async (c) => {
@@ -210,19 +230,19 @@ async function authorizedVisitorMedia(
   readyOnly: boolean,
   body?: { visitorId?: string; projectId?: string },
 ): Promise<
-  | { ok: true; value: MediaRow }
-  | { ok: false; status: 400 | 404; code: string }
+  { ok: true; value: MediaRow } | { ok: false; status: 400 | 404; code: string }
 > {
-  const visitorId = normalizeVisitorId(body?.visitorId ?? c.req.query('visitorId'));
+  const visitorId = normalizeVisitorId(
+    body?.visitorId ?? c.req.query('visitorId'),
+  );
   if (!visitorId) return { ok: false, status: 400, code: 'INVALID_VISITOR_ID' };
   const site = await findSite(
     c.env.DB,
     normalizeProjectId(body?.projectId ?? c.req.query('projectId')),
   );
   if (!site) return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND' };
-  const media = await c.env.DB
-    .prepare(
-      `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
+  const media = await c.env.DB.prepare(
+    `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.status, mi.is_initial,
          mi.reserved_created_at
@@ -231,7 +251,7 @@ async function authorizedVisitorMedia(
        JOIN visitors v ON v.id = c.visitor_id
        WHERE mi.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
        LIMIT 1`,
-    )
+  )
     .bind(c.req.param('id'), site.id, visitorId)
     .first<MediaRow>();
   if (!media || (readyOnly && media.status !== 'ready'))
@@ -243,14 +263,12 @@ async function authorizedAgentMedia(
   c: Context<Env>,
   readyOnly: boolean,
 ): Promise<
-  | { ok: true; value: MediaRow }
-  | { ok: false; status: 401 | 404; code: string }
+  { ok: true; value: MediaRow } | { ok: false; status: 401 | 404; code: string }
 > {
   const agent = await requireAgentSession(c);
   if (!agent) return { ok: false, status: 401, code: 'UNAUTHORIZED' };
-  const media = await c.env.DB
-    .prepare(
-      `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
+  const media = await c.env.DB.prepare(
+    `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.status, mi.is_initial,
          mi.reserved_created_at
@@ -258,7 +276,7 @@ async function authorizedAgentMedia(
        JOIN conversations c ON c.id = mi.conversation_id
        WHERE mi.id = ?1 AND c.assigned_agent = ?2
        LIMIT 1`,
-    )
+  )
     .bind(c.req.param('id'), agent.id)
     .first<MediaRow>();
   if (!media || (readyOnly && media.status !== 'ready'))
@@ -293,12 +311,22 @@ async function ownedVisitorConversation(
        LIMIT 1`,
     )
     .bind(id, siteId, visitorId)
-    .first<{ id: string; visitor_id: string; status: 'open' | 'pending' | 'closed' }>();
+    .first<{
+      id: string;
+      visitor_id: string;
+      status: 'open' | 'pending' | 'closed';
+    }>();
 }
 
-async function assignedConversation(db: D1Database, id: string, agentId: string) {
+async function assignedConversation(
+  db: D1Database,
+  id: string,
+  agentId: string,
+) {
   return db
-    .prepare('SELECT id, status FROM conversations WHERE id = ?1 AND assigned_agent = ?2')
+    .prepare(
+      'SELECT id, status FROM conversations WHERE id = ?1 AND assigned_agent = ?2',
+    )
     .bind(id, agentId)
     .first<{ id: string; status: 'open' | 'pending' | 'closed' }>();
 }

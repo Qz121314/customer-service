@@ -20,7 +20,9 @@ type InitResponse = {
   upload: UploadTarget;
 };
 
-export async function getAgentMedia(conversationId: string): Promise<AgentMediaItem[]> {
+export async function getAgentMedia(
+  conversationId: string,
+): Promise<AgentMediaItem[]> {
   const response = await request<{ items: Array<Omit<AgentMediaItem, 'url'>> }>(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/media`,
   );
@@ -51,16 +53,22 @@ export async function sendAgentImage(
       },
     );
     await uploadPreparedImage(init.upload, image, onProgress);
-    await request(`/api/agent/media/${encodeURIComponent(init.media.id)}/complete`, {
-      method: 'POST',
-      body: '{}',
-    });
+    await request(
+      `/api/agent/media/${encodeURIComponent(init.media.id)}/complete`,
+      {
+        method: 'POST',
+        body: '{}',
+      },
+    );
   } finally {
     releasePreparedImage(image);
   }
 }
 
-async function request<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+async function request<T = unknown>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(path, {
     credentials: 'same-origin',
     headers: {
@@ -70,7 +78,9 @@ async function request<T = unknown>(path: string, init?: RequestInit): Promise<T
     },
     ...init,
   });
-  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
+  const payload = (await response.json().catch(() => ({}))) as T & {
+    error?: string;
+  };
   if (!response.ok) {
     throw new Error(payload.error || `请求失败（状态码 ${response.status}）`);
   }

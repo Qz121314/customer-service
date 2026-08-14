@@ -54,12 +54,15 @@ export const MIME_EXTENSIONS: Record<NormalizedMedia['mimeType'], string> = {
 const STATIC_IMAGE_LIMIT = 1024 * 1024;
 const GIF_LIMIT = 5 * 1024 * 1024;
 
-export function normalizeMediaInput(value: MediaInput | null): NormalizedMedia | null {
+export function normalizeMediaInput(
+  value: MediaInput | null,
+): NormalizedMedia | null {
   const mimeType = value?.mimeType?.trim().toLowerCase();
   if (!mimeType || !(mimeType in MIME_EXTENSIONS)) return null;
   const byteSize = Number(value?.byteSize ?? 0);
   const limit = mimeType === 'image/gif' ? GIF_LIMIT : STATIC_IMAGE_LIMIT;
-  if (!Number.isInteger(byteSize) || byteSize < 1 || byteSize > limit) return null;
+  if (!Number.isInteger(byteSize) || byteSize < 1 || byteSize > limit)
+    return null;
   const width = normalizeDimension(value?.width);
   const height = normalizeDimension(value?.height);
   if (mimeType !== 'image/gif' && (!width || !height)) return null;
@@ -85,7 +88,10 @@ export function publicMedia(media: MediaRow) {
   };
 }
 
-export function normalizeText(value: unknown, maxLength: number): string | null {
+export function normalizeText(
+  value: unknown,
+  maxLength: number,
+): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed && trimmed.length <= maxLength ? trimmed : null;
@@ -94,5 +100,7 @@ export function normalizeText(value: unknown, maxLength: number): string | null 
 function normalizeDimension(value: unknown): number | null {
   if (value === null || value === undefined) return null;
   const number = Number(value);
-  return Number.isInteger(number) && number > 0 && number <= 10000 ? number : null;
+  return Number.isInteger(number) && number > 0 && number <= 10000
+    ? number
+    : null;
 }

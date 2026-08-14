@@ -27,7 +27,11 @@ import {
   updateAgent,
   updateGroup,
 } from './api';
-import { getAgentMedia, sendAgentImage, type AgentMediaItem } from './agent-media';
+import {
+  getAgentMedia,
+  sendAgentImage,
+  type AgentMediaItem,
+} from './agent-media';
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
@@ -1017,7 +1021,10 @@ function AgentWorkspace({
                   key={item.id}
                   message={item}
                   currentAgentId={identity.id}
-                  media={mediaItems.find((media) => media.messageId === item.id) ?? null}
+                  media={
+                    mediaItems.find((media) => media.messageId === item.id) ??
+                    null
+                  }
                 />
               ))}
             </div>
@@ -1027,7 +1034,10 @@ function AgentWorkspace({
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
-                  disabled={detail.conversation.status === 'closed' || mediaProgress !== null}
+                  disabled={
+                    detail.conversation.status === 'closed' ||
+                    mediaProgress !== null
+                  }
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     event.currentTarget.value = '';
@@ -1054,7 +1064,9 @@ function AgentWorkspace({
               />
               <div className="composer-foot">
                 <span className="media-upload-progress">
-                  {mediaProgress === null ? 'Enter 发送 · Shift + Enter 换行' : `图片上传 ${Math.round(mediaProgress * 100)}%`}
+                  {mediaProgress === null
+                    ? 'Enter 发送 · Shift + Enter 换行'
+                    : `图片上传 ${Math.round(mediaProgress * 100)}%`}
                 </span>
                 <button
                   className="primary-button"
@@ -1241,7 +1253,12 @@ function Bubble({
       <div>
         {media ? (
           <a href={media.url} target="_blank" rel="noreferrer">
-            <img className="message-image" src={media.url} alt="聊天图片" loading="lazy" />
+            <img
+              className="message-image"
+              src={media.url}
+              alt="聊天图片"
+              loading="lazy"
+            />
           </a>
         ) : (
           <p>{item.body}</p>

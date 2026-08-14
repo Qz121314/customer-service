@@ -8,8 +8,14 @@ const [migration, mediaApi, mediaStore, compression, agentMedia, app] =
     readFile(new URL('../migrations/0008_media.sql', import.meta.url), 'utf8'),
     readFile(new URL('../src/worker/media-api.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/worker/media-store.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/dashboard/image-compress.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/dashboard/agent-media.ts', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/dashboard/image-compress.ts', import.meta.url),
+      'utf8',
+    ),
+    readFile(
+      new URL('../src/dashboard/agent-media.ts', import.meta.url),
+      'utf8',
+    ),
     readFile(new URL('../src/dashboard/App.tsx', import.meta.url), 'utf8'),
   ]);
 

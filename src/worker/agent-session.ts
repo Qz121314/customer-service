@@ -30,9 +30,9 @@ export async function authenticateAgentSession(
     .first<AgentSessionIdentity>();
 }
 
-export async function requireAgentSession<T extends { Bindings: { DB: D1Database } }>(
-  c: Context<T>,
-): Promise<AgentSessionIdentity | null> {
+export async function requireAgentSession<
+  T extends { Bindings: { DB: D1Database } },
+>(c: Context<T>): Promise<AgentSessionIdentity | null> {
   return authenticateAgentSession(c.env.DB, c.req.header('Cookie'));
 }
 
