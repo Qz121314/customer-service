@@ -31,6 +31,13 @@ type MessageRow = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
+  read_by_visitor_at: string | null;
+  read_by_agent_at: string | null;
+  created_at: string;
+};
+
+type ReadBoundary = {
+  id: string;
   created_at: string;
 };
 
@@ -213,7 +220,8 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   const messages = await c.env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body, created_at
+    `SELECT id, conversation_id, sender_type, sender_id, body,
+       read_by_visitor_at, read_by_agent_at, created_at
      FROM messages
      WHERE conversation_id = ?1
      ORDER BY created_at ASC, id ASC
@@ -228,18 +236,58 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const id = c.req.param('id');
-  const result = await c.env.DB.prepare(
-    `UPDATE conversations
-     SET agent_unread_count = 0, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?1 AND assigned_agent = ?2 AND agent_unread_count > 0`,
-  )
-    .bind(id, agent.id)
-    .run();
-  if (result.meta.changes) {
-    await broadcastConversationRoom(c.env, 'admin-inbox', {
-      type: 'conversation.changed',
-      conversationId: id,
-    });
+  const conversation = await assignedConversation(c.env.DB, id, agent.id);
+  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+
+  const body = await readJson<{ lastMessageId?: string | null }>(c.req.raw);
+  const requestedLastMessageId = normalizeMessageId(body?.lastMessageId);
+  let boundary: ReadBoundary | null = null;
+  if (requestedLastMessageId) {
+    boundary = await c.env.DB.prepare(
+      `SELECT id, created_at
+       FROM messages
+       WHERE id = ?1 AND conversation_id = ?2 AND sender_type = 'visitor'
+       LIMIT 1`,
+    )
+      .bind(requestedLastMessageId, id)
+      .first<ReadBoundary>();
+  }
+
+  const [readResult] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE messages
+       SET read_by_agent_at = COALESCE(read_by_agent_at, CURRENT_TIMESTAMP)
+       WHERE conversation_id = ?1
+         AND sender_type = 'visitor'
+         AND (
+           ?2 IS NULL
+           OR created_at < ?3
+           OR (created_at = ?3 AND id <= ?2)
+         )`,
+    ).bind(id, boundary?.id ?? null, boundary?.created_at ?? null),
+    c.env.DB.prepare(
+      `UPDATE conversations
+       SET agent_unread_count = (
+         SELECT COUNT(*)
+         FROM messages
+         WHERE conversation_id = ?1
+           AND sender_type = 'visitor'
+           AND read_by_agent_at IS NULL
+       ),
+       updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?1 AND assigned_agent = ?2`,
+    ).bind(id, agent.id),
+  ]);
+
+  if (readResult.meta.changes) {
+    await Promise.all([
+      broadcastConversationRoom(c.env, id, {
+        type: 'message.read',
+        reader: 'agent',
+        lastMessageId: boundary?.id ?? null,
+      }),
+      broadcastClientConversationEvent(c.env, id, 'message.read'),
+    ]);
   }
   return c.json({ ok: true });
 });
@@ -276,7 +324,8 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     ).bind(now, id, agent.id),
   ]);
   const message = await c.env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body, created_at
+    `SELECT id, conversation_id, sender_type, sender_id, body,
+       read_by_visitor_at, read_by_agent_at, created_at
      FROM messages WHERE id = ?1`,
   )
     .bind(messageId)
@@ -435,6 +484,11 @@ function cookieValue(header: string | undefined, name: string): string | null {
       .find((part) => part.startsWith(prefix))
       ?.slice(prefix.length) ?? null
   );
+}
+
+function normalizeMessageId(value?: string | null): string | null {
+  const trimmed = value?.trim() ?? '';
+  return trimmed && trimmed.length <= 200 ? trimmed : null;
 }
 
 function room(env: Bindings, id: string): DurableObjectStub {
