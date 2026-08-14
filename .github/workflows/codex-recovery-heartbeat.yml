@@ -1,0 +1,54 @@
+name: Codex recovery heartbeat
+
+on:
+  push:
+    branches: [codex/realtime-recovery-heartbeat-20260814]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-customer-service-recovery-heartbeat
+  cancel-in-progress: true
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: codex/realtime-recovery-heartbeat-20260814
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Apply recovery heartbeat patch
+        run: python .github/scripts/apply_recovery_heartbeat.py
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format changed sources
+        run: pnpm format:write
+
+      - name: Verify project
+        run: pnpm verify
+
+      - name: Commit verified patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f .github/workflows/codex-recovery-heartbeat.yml .github/scripts/apply_recovery_heartbeat.py
+          git add -A
+          git config user.name 'OpenAI Codex'
+          git config user.email 'codex@openai.com'
+          git commit -m 'fix: reconcile agent presence on realtime recovery'
+          git push origin HEAD:codex/realtime-recovery-heartbeat-20260814
