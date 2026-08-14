@@ -123,7 +123,10 @@ async function readVapidConfig(db: D1Database): Promise<VapidRow | null> {
     .first<VapidRow>();
 }
 
-async function sendDataLessPush(endpoint: string, config: VapidRow): Promise<Response> {
+async function sendDataLessPush(
+  endpoint: string,
+  config: VapidRow,
+): Promise<Response> {
   const endpointUrl = new URL(endpoint);
   const header = base64UrlJson({ typ: 'JWT', alg: 'ES256' });
   const payload = base64UrlJson({
@@ -173,5 +176,8 @@ function base64UrlJson(value: unknown): string {
 function base64UrlEncode(bytes: Uint8Array): string {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/gu, '');
+  return btoa(binary)
+    .replace(/\+/gu, '-')
+    .replace(/\//gu, '_')
+    .replace(/=+$/gu, '');
 }

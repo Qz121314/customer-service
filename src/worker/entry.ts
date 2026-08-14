@@ -43,7 +43,8 @@ type MediaCompletePayload = {
 };
 
 const app = new Hono<AppEnv>();
-const AGENT_TEXT_MESSAGE_PATH = /^\/api\/agent\/conversations\/([^/]+)\/messages$/u;
+const AGENT_TEXT_MESSAGE_PATH =
+  /^\/api\/agent\/conversations\/([^/]+)\/messages$/u;
 const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 
 app.route('/', integrationApi);
@@ -118,9 +119,11 @@ app.use('/api/agent/*', async (c, next) => {
     const payload = (await c.res.clone().json()) as MediaCompletePayload;
     if (!payload.conversationId) return;
     c.executionCtx.waitUntil(
-      sendVisitorPushForConversation(c.env, payload.conversationId).catch((error) => {
-        console.warn('Visitor push dispatch failed.', error);
-      }),
+      sendVisitorPushForConversation(c.env, payload.conversationId).catch(
+        (error) => {
+          console.warn('Visitor push dispatch failed.', error);
+        },
+      ),
     );
   } catch {
     // Media completion still succeeds if a response cannot be inspected for push.

@@ -10,7 +10,10 @@ const migration = await readFile(
 );
 const entry = await readFile(new URL('src/worker/entry.ts', root), 'utf8');
 const api = await readFile(new URL('src/worker/push-api.ts', root), 'utf8');
-const push = await readFile(new URL('src/worker/visitor-push.ts', root), 'utf8');
+const push = await readFile(
+  new URL('src/worker/visitor-push.ts', root),
+  'utf8',
+);
 
 test('visitor push subscriptions are isolated by site and visitor identity', () => {
   assert.match(migration, /visitor_push_subscriptions/u);
@@ -24,7 +27,10 @@ test('visitor push subscriptions are isolated by site and visitor identity', () 
 test('VAPID keys are persistent and push delivery has no payload dependency', () => {
   assert.match(migration, /visitor_push_vapid/u);
   assert.match(push, /crypto\.subtle\.generateKey/u);
-  assert.match(push, /Authorization: `vapid t=\$\{token\}, k=\$\{config\.public_key\}`/u);
+  assert.match(
+    push,
+    /Authorization: `vapid t=\$\{token\}, k=\$\{config\.public_key\}`/u,
+  );
   assert.match(push, /method: 'POST'/u);
   assert.doesNotMatch(push, /Content-Encoding/u);
   assert.match(push, /response\.status === 404 \|\| response\.status === 410/u);

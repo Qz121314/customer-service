@@ -31,7 +31,10 @@ pushApi.use(
 );
 
 pushApi.get('/client/v1/push/config', async (c) => {
-  const site = await findSite(c.env.DB, normalizeProjectId(c.req.query('projectId')));
+  const site = await findSite(
+    c.env.DB,
+    normalizeProjectId(c.req.query('projectId')),
+  );
   if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
   return c.json({
     enabled: true,
@@ -52,7 +55,9 @@ pushApi.post('/client/v1/push/subscriptions', async (c) => {
   const visitorId = normalizeVisitorId(body?.visitorId);
   const conversationId = normalizeId(body?.conversationId, 200);
   const endpoint = normalizePushEndpoint(body?.subscription?.endpoint);
-  const expirationTime = normalizeExpirationTime(body?.subscription?.expirationTime);
+  const expirationTime = normalizeExpirationTime(
+    body?.subscription?.expirationTime,
+  );
   if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
   if (!conversationId) return clientError(c, 400, 'INVALID_CONVERSATION_ID');
   if (!endpoint) return clientError(c, 400, 'INVALID_PUSH_SUBSCRIPTION');
@@ -159,7 +164,8 @@ function normalizePushEndpoint(value: unknown): string | null {
   if (!endpoint) return null;
   try {
     const url = new URL(endpoint);
-    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return null;
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash)
+      return null;
     return url.toString();
   } catch {
     return null;
@@ -168,7 +174,12 @@ function normalizePushEndpoint(value: unknown): string | null {
 
 function normalizeExpirationTime(value: unknown): number | null {
   if (value === null || value === undefined) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= Date.now()) return null;
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value <= Date.now()
+  )
+    return null;
   return Math.floor(value);
 }
 
