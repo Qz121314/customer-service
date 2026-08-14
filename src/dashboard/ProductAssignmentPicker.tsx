@@ -79,10 +79,7 @@ export function ProductAssignmentPicker({
     if (!categorySectionId) return [];
     const map = new Map<string, NamedCount>();
     for (const product of enabledProducts) {
-      if (
-        product.sectionId !== categorySectionId ||
-        !product.categoryId
-      ) {
+      if (product.sectionId !== categorySectionId || !product.categoryId) {
         continue;
       }
       const current = map.get(product.categoryId);
@@ -105,7 +102,8 @@ export function ProductAssignmentPicker({
     if (!filterSectionId) return [];
     const map = new Map<string, NamedCount>();
     for (const product of enabledProducts) {
-      if (product.sectionId !== filterSectionId || !product.categoryId) continue;
+      if (product.sectionId !== filterSectionId || !product.categoryId)
+        continue;
       const current = map.get(product.categoryId);
       if (current) current.count += 1;
       else {
@@ -152,8 +150,10 @@ export function ProductAssignmentPicker({
     if (!hasProductSearch) return [];
     return enabledProducts
       .filter((product) => {
-        if (filterSectionId && product.sectionId !== filterSectionId) return false;
-        if (filterCategoryId && product.categoryId !== filterCategoryId) return false;
+        if (filterSectionId && product.sectionId !== filterSectionId)
+          return false;
+        if (filterCategoryId && product.categoryId !== filterCategoryId)
+          return false;
         if (!normalizedQuery) return true;
         return [
           product.title,
@@ -252,8 +252,9 @@ export function ProductAssignmentPicker({
   }
 
   const sectionProductCount = selectedSectionId
-    ? enabledProducts.filter((product) => product.sectionId === selectedSectionId)
-        .length
+    ? enabledProducts.filter(
+        (product) => product.sectionId === selectedSectionId,
+      ).length
     : 0;
   const categoryProductCount =
     scope.type === 'category' ? selectedIds.length : 0;
@@ -264,7 +265,9 @@ export function ProductAssignmentPicker({
         <legend>负责范围</legend>
         <div className="product-assignment-empty">
           <strong>还没有同步产品目录</strong>
-          <span>回到 Site 后台重新验证客服系统，产品目录会自动同步到这里。</span>
+          <span>
+            回到 Site 后台重新验证客服系统，产品目录会自动同步到这里。
+          </span>
         </div>
       </fieldset>
     );
@@ -357,7 +360,10 @@ export function ProductAssignmentPicker({
             <div className="product-assignment-categories">
               {categories.length ? (
                 categories.map((category) => (
-                  <label key={category.id} className="product-assignment-category">
+                  <label
+                    key={category.id}
+                    className="product-assignment-category"
+                  >
                     <input
                       type="checkbox"
                       checked={selectedCategoryIds.has(category.id)}
@@ -438,7 +444,10 @@ export function ProductAssignmentPicker({
           {selectedProducts.length ? (
             <div className="product-assignment-selected">
               {selectedProducts.map((product) => (
-                <div key={product.id} className="product-assignment-selected-item">
+                <div
+                  key={product.id}
+                  className="product-assignment-selected-item"
+                >
                   <span>
                     <strong>{product.title}</strong>
                     <small>
@@ -466,7 +475,9 @@ export function ProductAssignmentPicker({
                 输入名称或选择分区 / 分类后再查找产品
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="product-assignment-empty compact">没有匹配的产品</div>
+              <div className="product-assignment-empty compact">
+                没有匹配的产品
+              </div>
             ) : (
               searchResults.map((product) => {
                 const checked = selectedProductIds.has(product.id);

@@ -117,11 +117,7 @@ function addConversation(
   database,
   id,
   productId,
-  {
-    groupId = 'legacy',
-    sectionId = 'west',
-    categoryId = 'escorts',
-  } = {},
+  { groupId = 'legacy', sectionId = 'west', categoryId = 'escorts' } = {},
 ) {
   database
     .prepare(
