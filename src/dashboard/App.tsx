@@ -27,6 +27,7 @@ import {
   updateAgent,
   updateGroup,
 } from './api';
+import { getAgentMedia, sendAgentImage, type AgentMediaItem } from './agent-media';
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
@@ -750,6 +751,8 @@ function AgentWorkspace({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
+  const [mediaItems, setMediaItems] = useState<AgentMediaItem[]>([]);
+  const [mediaProgress, setMediaProgress] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -808,13 +811,17 @@ function AgentWorkspace({
   useEffect(() => {
     if (!selectedId) {
       setDetail(null);
+      setMediaItems([]);
       return;
     }
     let active = true;
     const load = () =>
-      getConversation(selectedId)
-        .then((value) => {
-          if (active) setDetail(value);
+      Promise.all([getConversation(selectedId), getAgentMedia(selectedId)])
+        .then(([value, media]) => {
+          if (active) {
+            setDetail(value);
+            setMediaItems(media);
+          }
         })
         .catch((reason) => {
           if (active) setError(message(reason, '无法加载会话'));
@@ -846,6 +853,25 @@ function AgentWorkspace({
     } catch (reason) {
       setDraft(text);
       setError(message(reason, '发送失败'));
+    }
+  }
+
+  async function submitImage(file: File) {
+    if (!selectedId) return;
+    setMediaProgress(0);
+    try {
+      await sendAgentImage(selectedId, file, setMediaProgress);
+      const [nextDetail, nextMedia] = await Promise.all([
+        getConversation(selectedId),
+        getAgentMedia(selectedId),
+      ]);
+      setDetail(nextDetail);
+      setMediaItems(nextMedia);
+      await refresh();
+    } catch (reason) {
+      setError(message(reason, '图片发送失败'));
+    } finally {
+      setMediaProgress(null);
     }
   }
 
@@ -991,10 +1017,24 @@ function AgentWorkspace({
                   key={item.id}
                   message={item}
                   currentAgentId={identity.id}
+                  media={mediaItems.find((media) => media.messageId === item.id) ?? null}
                 />
               ))}
             </div>
             <form className="composer" onSubmit={(event) => void submit(event)}>
+              <label className="media-picker" aria-label="发送图片">
+                ＋
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  disabled={detail.conversation.status === 'closed' || mediaProgress !== null}
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.currentTarget.value = '';
+                    if (file) void submitImage(file);
+                  }}
+                />
+              </label>
               <textarea
                 value={draft}
                 rows={3}
@@ -1013,7 +1053,9 @@ function AgentWorkspace({
                 }}
               />
               <div className="composer-foot">
-                <span>Enter 发送 · Shift + Enter 换行</span>
+                <span className="media-upload-progress">
+                  {mediaProgress === null ? 'Enter 发送 · Shift + Enter 换行' : `图片上传 ${Math.round(mediaProgress * 100)}%`}
+                </span>
                 <button
                   className="primary-button"
                   disabled={
@@ -1184,9 +1226,11 @@ function Metric({ label, value }: { label: string; value: number }) {
 
 function Bubble({
   message: item,
+  media,
 }: {
   message: Message;
   currentAgentId: string;
+  media: AgentMediaItem | null;
 }) {
   if (item.sender_type === 'system')
     return <div className="system-message">{item.body}</div>;
@@ -1195,7 +1239,13 @@ function Bubble({
     <div className={isAgent ? 'message mine' : 'message visitor'}>
       {!isAgent && <span className="avatar tiny">访</span>}
       <div>
-        <p>{item.body}</p>
+        {media ? (
+          <a href={media.url} target="_blank" rel="noreferrer">
+            <img className="message-image" src={media.url} alt="聊天图片" loading="lazy" />
+          </a>
+        ) : (
+          <p>{item.body}</p>
+        )}
         <time>{formatTime(item.created_at)}</time>
       </div>
     </div>
