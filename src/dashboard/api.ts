@@ -3,12 +3,27 @@ export type AdminSessionState = {
   configured: boolean;
 };
 
+export type RoutingRule = {
+  isDefault: boolean;
+  sectionId: string | null;
+  sectionName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+};
+
+export type RoutingCatalogSection = {
+  id: string;
+  name: string;
+  categories: Array<{ id: string; name: string }>;
+};
+
 export type SupportGroup = {
   id: string;
   name: string;
   isEnabled: boolean;
   routingStrategy: string;
   agentIds: string[];
+  routingRules: RoutingRule[];
 };
 
 export type AgentAccount = {
@@ -91,6 +106,7 @@ const errorMessages: Record<string, string> = {
   PASSWORD_REQUIRED: '请先为客服设置登录密码',
   USERNAME_EXISTS: '登录账号已存在',
   INVALID_GROUP: '客服分组名称无效',
+  INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
 };
@@ -168,6 +184,26 @@ export async function updateGroup(
 ): Promise<void> {
   await request(`/api/admin/groups/${encodeURIComponent(id)}`, {
     method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getRoutingCatalog(): Promise<RoutingCatalogSection[]> {
+  const response = await request<{ sections: RoutingCatalogSection[] }>(
+    '/api/admin/routing/catalog',
+  );
+  return response.sections;
+}
+
+export async function updateGroupRouting(
+  id: string,
+  input: {
+    isDefault: boolean;
+    routes: Array<{ sectionId: string; categoryId: string | null }>;
+  },
+): Promise<void> {
+  await request(`/api/admin/groups/${encodeURIComponent(id)}/routing`, {
+    method: 'PUT',
     body: JSON.stringify(input),
   });
 }

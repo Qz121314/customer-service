@@ -29,6 +29,20 @@ type GroupRow = {
   routing_strategy: string;
 };
 
+type RoutingRuleRow = {
+  group_id: string;
+  section_id: string;
+  category_id: string;
+  is_default: number;
+  section_name: string | null;
+  category_name: string | null;
+};
+
+type RoutingSelection = {
+  sectionId: string;
+  categoryId: string | null;
+};
+
 const SESSION_COOKIE = 'cs_session';
 
 export const adminConfigApi = new Hono<Env>();
@@ -251,7 +265,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
 adminConfigApi.get('/api/admin/groups', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const [groupsResult, membershipsResult] = await Promise.all([
+  const [groupsResult, membershipsResult, routingResult] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, name, is_enabled, routing_strategy
        FROM support_groups
@@ -263,6 +277,17 @@ adminConfigApi.get('/api/admin/groups', async (c) => {
        FROM group_agents
        WHERE site_id = 'default' AND is_enabled = 1`,
     ).all<{ group_id: string; agent_id: string }>(),
+    c.env.DB.prepare(
+      `SELECT r.group_id, r.section_id, r.category_id, r.is_default,
+         s.name AS section_name, cat.name AS category_name
+       FROM group_routing_rules r
+       LEFT JOIN routing_catalog_sections s
+         ON s.site_id = r.site_id AND s.id = r.section_id
+       LEFT JOIN routing_catalog_categories cat
+         ON cat.site_id = r.site_id AND cat.id = r.category_id
+       WHERE r.site_id = 'default' AND r.is_enabled = 1
+       ORDER BY r.is_default DESC, s.name ASC, cat.name ASC, r.id ASC`,
+    ).all<RoutingRuleRow>(),
   ]);
 
   const agentIdsByGroup = new Map<string, string[]>();
@@ -273,13 +298,27 @@ adminConfigApi.get('/api/admin/groups', async (c) => {
     agentIdsByGroup.set(membership.group_id, current);
   }
 
+  const routingRulesByGroup = new Map<string, RoutingRuleRow[]>();
+  for (const rule of routingResult.results ?? []) {
+    const current = routingRulesByGroup.get(rule.group_id) ?? [];
+    current.push(rule);
+    routingRulesByGroup.set(rule.group_id, current);
+  }
+
   return c.json({
     groups: (groupsResult.results ?? []).map((group) => ({
       id: group.id,
       name: group.name,
       isEnabled: group.is_enabled === 1,
-      routingStrategy: group.routing_strategy,
+      routingStrategy: 'round_robin',
       agentIds: agentIdsByGroup.get(group.id) ?? [],
+      routingRules: (routingRulesByGroup.get(group.id) ?? []).map((rule) => ({
+        isDefault: rule.is_default === 1,
+        sectionId: rule.section_id || null,
+        sectionName: rule.section_name,
+        categoryId: rule.category_id || null,
+        categoryName: rule.category_name,
+      })),
     })),
   });
 });
@@ -326,6 +365,112 @@ adminConfigApi.patch('/api/admin/groups/:id', async (c) => {
   )
     .bind(name, enabled, id)
     .run();
+  return c.json({ ok: true });
+});
+
+adminConfigApi.get('/api/admin/routing/catalog', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const [sectionsResult, categoriesResult] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id, name
+       FROM routing_catalog_sections
+       WHERE site_id = 'default'
+       ORDER BY name COLLATE NOCASE ASC, id ASC`,
+    ).all<{ id: string; name: string }>(),
+    c.env.DB.prepare(
+      `SELECT id, section_id, name
+       FROM routing_catalog_categories
+       WHERE site_id = 'default'
+       ORDER BY name COLLATE NOCASE ASC, id ASC`,
+    ).all<{ id: string; section_id: string; name: string }>(),
+  ]);
+
+  const categoriesBySection = new Map<
+    string,
+    Array<{ id: string; name: string }>
+  >();
+  for (const category of categoriesResult.results ?? []) {
+    const current = categoriesBySection.get(category.section_id) ?? [];
+    current.push({ id: category.id, name: category.name });
+    categoriesBySection.set(category.section_id, current);
+  }
+
+  return c.json({
+    sections: (sectionsResult.results ?? []).map((section) => ({
+      id: section.id,
+      name: section.name,
+      categories: categoriesBySection.get(section.id) ?? [],
+    })),
+  });
+});
+
+adminConfigApi.put('/api/admin/groups/:id/routing', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const groupId = c.req.param('id');
+  const group = await c.env.DB.prepare(
+    `SELECT id FROM support_groups
+     WHERE site_id = 'default' AND id = ?1
+     LIMIT 1`,
+  )
+    .bind(groupId)
+    .first<{ id: string }>();
+  if (!group) return c.json({ error: 'NOT_FOUND' }, 404);
+
+  const body = await readJson<{
+    isDefault?: boolean;
+    routes?: Array<{ sectionId?: string; categoryId?: string | null }>;
+  }>(c.req.raw);
+  if (
+    !body ||
+    typeof body.isDefault !== 'boolean' ||
+    !Array.isArray(body.routes)
+  ) {
+    return c.json({ error: 'INVALID_ROUTING_RULES' }, 400);
+  }
+
+  const routes = await normalizeRoutingSelections(c.env.DB, body.routes);
+  if (!routes) return c.json({ error: 'INVALID_ROUTING_RULES' }, 400);
+
+  const statements: D1PreparedStatement[] = [
+    c.env.DB.prepare(
+      `DELETE FROM group_routing_rules
+       WHERE site_id = 'default' AND group_id = ?1`,
+    ).bind(groupId),
+  ];
+
+  if (body.isDefault) {
+    statements.push(
+      c.env.DB.prepare(
+        `DELETE FROM group_routing_rules
+         WHERE site_id = 'default' AND is_default = 1`,
+      ),
+      c.env.DB.prepare(
+        `INSERT INTO group_routing_rules (
+           id, site_id, group_id, section_id, category_id, is_default, is_enabled
+         ) VALUES (?1, 'default', ?2, '', '', 1, 1)`,
+      ).bind(crypto.randomUUID(), groupId),
+    );
+  }
+
+  for (const route of routes) {
+    const categoryId = route.categoryId ?? '';
+    statements.push(
+      c.env.DB.prepare(
+        `DELETE FROM group_routing_rules
+         WHERE site_id = 'default'
+           AND is_default = 0
+           AND section_id = ?1
+           AND category_id = ?2`,
+      ).bind(route.sectionId, categoryId),
+      c.env.DB.prepare(
+        `INSERT INTO group_routing_rules (
+           id, site_id, group_id, section_id, category_id, is_default, is_enabled
+         ) VALUES (?1, 'default', ?2, ?3, ?4, 0, 1)`,
+      ).bind(crypto.randomUUID(), groupId, route.sectionId, categoryId),
+    );
+  }
+
+  await c.env.DB.batch(statements);
   return c.json({ ok: true });
 });
 
@@ -404,9 +549,54 @@ async function validGroupIds(
   return requested.filter((id) => allowed.has(id));
 }
 
+async function normalizeRoutingSelections(
+  db: D1Database,
+  values: Array<{ sectionId?: string; categoryId?: string | null }>,
+): Promise<RoutingSelection[] | null> {
+  if (values.length > 500) return null;
+  const [sectionsResult, categoriesResult] = await Promise.all([
+    db
+      .prepare(
+        `SELECT id FROM routing_catalog_sections WHERE site_id = 'default'`,
+      )
+      .all<{ id: string }>(),
+    db
+      .prepare(
+        `SELECT id, section_id
+         FROM routing_catalog_categories WHERE site_id = 'default'`,
+      )
+      .all<{ id: string; section_id: string }>(),
+  ]);
+  const sections = new Set(
+    (sectionsResult.results ?? []).map((item) => item.id),
+  );
+  const categories = new Map(
+    (categoriesResult.results ?? []).map((item) => [item.id, item.section_id]),
+  );
+  const unique = new Map<string, RoutingSelection>();
+
+  for (const value of values) {
+    const sectionId = normalizeText(value.sectionId, 100);
+    const categoryId = value.categoryId
+      ? normalizeText(value.categoryId, 100)
+      : null;
+    if (!sectionId || !sections.has(sectionId)) return null;
+    if (categoryId && categories.get(categoryId) !== sectionId) return null;
+    const key = `${sectionId}:${categoryId ?? ''}`;
+    unique.set(key, { sectionId, categoryId });
+  }
+  return [...unique.values()];
+}
+
 function normalizeName(value?: string): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 80 ? trimmed : null;
+}
+
+function normalizeText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= maxLength ? trimmed : null;
 }
 
 function normalizeUsername(value?: string | null): string | null {
