@@ -1,26 +1,30 @@
-name: Apply media UI
+name: Format media changes
 
 on:
   push:
     branches: [feat/media-transfer]
     paths:
-      - scripts/patch-agent-media-ui.mjs
       - .github/workflows/apply-media-ui.yml
 
 permissions:
   contents: write
 
 jobs:
-  patch:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feat/media-transfer
-      - run: node scripts/patch-agent-media-ui.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --global pnpm@11.19.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write src/dashboard/App.tsx src/dashboard/agent-media.ts src/dashboard/image-compress.ts src/worker/agent-session.ts src/worker/media-api.ts src/worker/media-signing.ts src/worker/media-store.ts src/worker/media-types.ts test/media-transfer-boundary.test.mjs
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/dashboard/App.tsx
-          git commit -m "接入坐席图片消息UI"
+          git add src test
+          git commit -m "格式化图片消息代码"
           git push origin HEAD:feat/media-transfer
