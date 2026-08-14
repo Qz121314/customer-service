@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { URL } from 'node:url';
 
 const migration = await readFile(
   new URL('../migrations/0011_read_receipts.sql', import.meta.url),
