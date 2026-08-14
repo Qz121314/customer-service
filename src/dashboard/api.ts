@@ -158,13 +158,16 @@ export async function adminLogout(): Promise<void> {
 
 export async function getAgents(): Promise<AgentAccount[]> {
   const response = await getAdminBootstrap();
-  return response.agents.map((agent) => ({
-    ...agent,
-    productIds: attachProductSelectionScope(
-      agent.productIds,
-      normalizeRoutingScope(agent.routingScope, agent.productIds),
-    ),
-  }));
+  return response.agents.map((agent) => {
+    const scope = normalizeRoutingScope(agent.routingScope, agent.productIds);
+    return {
+      ...agent,
+      productIds: attachProductSelectionScope(
+        expandRoutingScopeProductIds(scope, response.products),
+        scope,
+      ),
+    };
+  });
 }
 
 export async function createAgent(input: {
@@ -285,7 +288,7 @@ export async function setConversationStatus(
 }
 
 export function openAgentInboxSocket(): WebSocket {
-  return openSocket('/api/agent/realtime/inbox');
+  return openSocket('/api/agent/realtime/inbox', true);
 }
 
 export function openConversationSocket(id: string): WebSocket {
@@ -330,6 +333,31 @@ function normalizeRoutingScope(
   return scope;
 }
 
+function expandRoutingScopeProductIds(
+  scope: AgentRoutingScope,
+  products: ProductCatalogItem[],
+): string[] {
+  if (scope.type === 'none') return [];
+  if (scope.type === 'product') return [...scope.productIds];
+  if (scope.type === 'section') {
+    return products
+      .filter(
+        (product) => product.isEnabled && product.sectionId === scope.sectionId,
+      )
+      .map((product) => product.id);
+  }
+  const categoryIds = new Set(scope.categoryIds);
+  return products
+    .filter(
+      (product) =>
+        product.isEnabled &&
+        product.sectionId === scope.sectionId &&
+        Boolean(product.categoryId) &&
+        categoryIds.has(product.categoryId as string),
+    )
+    .map((product) => product.id);
+}
+
 function scopeForRequest(productIds: string[]): AgentRoutingScope {
   return (
     getProductSelectionScope(productIds) ??
@@ -339,10 +367,32 @@ function scopeForRequest(productIds: string[]): AgentRoutingScope {
   );
 }
 
-function openSocket(path: string): WebSocket {
+function openSocket(path: string, keepAlive = false): WebSocket {
   const url = new URL(path, window.location.origin);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  return new WebSocket(url);
+  const socket = new WebSocket(url);
+  if (!keepAlive) return socket;
+
+  let timer: number | null = null;
+  const stop = () => {
+    if (timer !== null) window.clearInterval(timer);
+    timer = null;
+  };
+  const ping = () => {
+    if (socket.readyState !== WebSocket.OPEN) return;
+    try {
+      socket.send('ping');
+    } catch {
+      socket.close();
+    }
+  };
+  socket.addEventListener('open', () => {
+    ping();
+    stop();
+    timer = window.setInterval(ping, 60_000);
+  });
+  socket.addEventListener('close', stop);
+  return socket;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

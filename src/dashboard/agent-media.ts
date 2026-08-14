@@ -36,7 +36,7 @@ export async function sendAgentImage(
   conversationId: string,
   file: File,
   onProgress?: (progress: number) => void,
-): Promise<void> {
+): Promise<{ messageId: string; createdAt: string; media: AgentMediaItem }> {
   const image = await prepareChatImage(file);
   try {
     const init = await request<InitResponse>(
@@ -53,13 +53,23 @@ export async function sendAgentImage(
       },
     );
     await uploadPreparedImage(init.upload, image, onProgress);
-    await request(
-      `/api/agent/media/${encodeURIComponent(init.media.id)}/complete`,
-      {
-        method: 'POST',
-        body: '{}',
+    const complete = await request<{
+      messageId: string;
+      createdAt: string;
+      media: Omit<AgentMediaItem, 'messageId' | 'url'>;
+    }>(`/api/agent/media/${encodeURIComponent(init.media.id)}/complete`, {
+      method: 'POST',
+      body: '{}',
+    });
+    return {
+      messageId: complete.messageId,
+      createdAt: complete.createdAt,
+      media: {
+        ...complete.media,
+        messageId: complete.messageId,
+        url: `/api/agent/media/${encodeURIComponent(complete.media.id)}/content`,
       },
-    );
+    };
   } finally {
     releasePreparedImage(image);
   }

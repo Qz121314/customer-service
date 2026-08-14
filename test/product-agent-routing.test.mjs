@@ -88,15 +88,26 @@ function createDatabase() {
   return database;
 }
 
-function addAgent(database, { id, status = 'online', lastAssignedAt = null }) {
+function addAgent(
+  database,
+  { id, status = 'online', lastAssignedAt = null, maxActiveConversations = 0 },
+) {
   database
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, status, is_enabled,
          max_active_conversations, last_seen_at, last_assigned_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 1, 0, CURRENT_TIMESTAMP, ?)`,
+       ) VALUES (?, 'default', ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP, ?)`,
     )
-    .run(id, id, id, `hash-${id}`, status, lastAssignedAt);
+    .run(
+      id,
+      id,
+      id,
+      `hash-${id}`,
+      status,
+      maxActiveConversations,
+      lastAssignedAt,
+    );
 }
 
 function addScope(
@@ -253,5 +264,47 @@ test('legacy group is used only when no routing scope matches', async () => {
   );
 
   assert.equal(assignment?.id, 'legacy-agent');
+  database.close();
+});
+
+test('concurrent assignments respect capacity and spread work across eligible agents', async () => {
+  const database = createDatabase();
+  addAgent(database, { id: 'agent-a', maxActiveConversations: 1 });
+  addAgent(database, { id: 'agent-b', maxActiveConversations: 1 });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
+  addConversation(database, 'conversation-1', 'product-a');
+  addConversation(database, 'conversation-2', 'product-b');
+
+  const db = d1(database);
+  const [first, second] = await Promise.all([
+    assignConversationAgent(db, 'conversation-1'),
+    assignConversationAgent(db, 'conversation-2'),
+  ]);
+
+  assert.deepEqual(
+    new Set([first?.id, second?.id]),
+    new Set(['agent-a', 'agent-b']),
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM conversations
+         WHERE assigned_agent = 'agent-a'`,
+      )
+      .get().count,
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM conversations
+         WHERE assigned_agent = 'agent-b'`,
+      )
+      .get().count,
+    1,
+  );
   database.close();
 });

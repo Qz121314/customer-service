@@ -14,6 +14,7 @@ import {
   Conversation,
   ConversationDetail,
   Message,
+  Overview,
   adminLogin,
   adminLogout,
   agentLogin,
@@ -26,7 +27,6 @@ import {
   getConversations,
   getOverview,
   getProductCatalog,
-  heartbeat,
   markConversationRead,
   openAgentInboxSocket,
   openConversationSocket,
@@ -73,6 +73,37 @@ const filterLabels: Record<Filter, string> = {
 };
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
+
+type InboxRealtimeEvent = {
+  type?: string;
+  conversation?: Conversation;
+  overview?: Overview | null;
+};
+
+type ThreadRealtimeEvent = {
+  type?: string;
+  message?: Message;
+  media?: Omit<AgentMediaItem, 'url'>;
+  reader?: 'agent' | 'visitor';
+  lastMessageId?: string | null;
+  status?: Conversation['status'];
+};
+
+function parseRealtimeEvent<T>(event: MessageEvent): T | null {
+  try {
+    return JSON.parse(String(event.data)) as T;
+  } catch {
+    return null;
+  }
+}
+
+function sortedConversationList(items: Conversation[]): Conversation[] {
+  return [...items].sort((left, right) => {
+    const leftTime = Date.parse(left.last_message_at || left.created_at);
+    const rightTime = Date.parse(right.last_message_at || right.created_at);
+    return rightTime - leftTime;
+  });
+}
 
 export function App() {
   return window.location.pathname.startsWith('/agent') ? (
@@ -702,10 +733,8 @@ function AgentWorkspace({
   }, [refresh]);
 
   useEffect(() => {
-    const beat = () => void heartbeat().catch(() => undefined);
     const recover = () => {
       if (document.visibilityState !== 'visible') return;
-      beat();
       void refresh().catch(() => undefined);
       if (selectedId) {
         void acknowledgeConversation(
@@ -715,12 +744,9 @@ function AgentWorkspace({
       }
     };
 
-    beat();
-    const timer = window.setInterval(beat, 30_000);
     document.addEventListener('visibilitychange', recover);
     window.addEventListener('online', recover);
     return () => {
-      window.clearInterval(timer);
       document.removeEventListener('visibilitychange', recover);
       window.removeEventListener('online', recover);
     };
@@ -745,8 +771,25 @@ function AgentWorkspace({
         if (openedOnce) void refresh().catch(() => undefined);
         openedOnce = true;
       });
-      socket.addEventListener('message', () => {
-        if (active) void refresh().catch(() => undefined);
+      socket.addEventListener('message', (event) => {
+        if (!active) return;
+        const payload = parseRealtimeEvent<InboxRealtimeEvent>(event);
+        if (!payload || payload.type === 'ready' || payload.type === 'pong')
+          return;
+        if (payload.type !== 'conversation.changed' || !payload.conversation) {
+          void refresh().catch(() => undefined);
+          return;
+        }
+
+        const next = payload.conversation;
+        const belongsToAgent = next.assigned_agent === identity.id;
+        setConversations((current) => {
+          const withoutCurrent = current.filter((item) => item.id !== next.id);
+          if (!belongsToAgent) return withoutCurrent;
+          if (filter !== 'all' && next.status !== filter) return withoutCurrent;
+          return sortedConversationList([next, ...withoutCurrent]);
+        });
+        if (belongsToAgent && payload.overview) setOverview(payload.overview);
       });
       socket.addEventListener('close', () => {
         if (!active) return;
@@ -762,7 +805,7 @@ function AgentWorkspace({
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [refresh]);
+  }, [filter, identity.id, refresh]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -807,8 +850,112 @@ function AgentWorkspace({
         if (openedOnce) void load();
         openedOnce = true;
       });
-      socket.addEventListener('message', () => {
-        if (active) void load();
+      socket.addEventListener('message', (event) => {
+        if (!active) return;
+        const payload = parseRealtimeEvent<ThreadRealtimeEvent>(event);
+        if (!payload || payload.type === 'ready' || payload.type === 'pong')
+          return;
+
+        if (payload.type === 'message' && payload.message) {
+          const incoming = payload.message;
+          setDetail((current) => {
+            if (!current || current.conversation.id !== selectedId)
+              return current;
+            const exists = current.messages.some(
+              (item) => item.id === incoming.id,
+            );
+            return {
+              ...current,
+              conversation: {
+                ...current.conversation,
+                last_message: incoming.body,
+                last_message_at: incoming.created_at,
+              },
+              messages: exists
+                ? current.messages.map((item) =>
+                    item.id === incoming.id ? incoming : item,
+                  )
+                : [...current.messages, incoming],
+            };
+          });
+          if (payload.media?.id && payload.media.messageId) {
+            const media: AgentMediaItem = {
+              ...payload.media,
+              url: `/api/agent/media/${encodeURIComponent(payload.media.id)}/content`,
+            };
+            setMediaItems((current) =>
+              current.some((item) => item.id === media.id)
+                ? current.map((item) => (item.id === media.id ? media : item))
+                : [...current, media],
+            );
+          }
+          if (
+            incoming.sender_type === 'visitor' &&
+            document.visibilityState === 'visible'
+          ) {
+            void acknowledgeConversation(selectedId, incoming.id).catch(
+              () => undefined,
+            );
+          }
+          return;
+        }
+
+        if (payload.type === 'message.read') {
+          const readAt = new Date().toISOString();
+          setDetail((current) => {
+            if (!current || current.conversation.id !== selectedId)
+              return current;
+            return {
+              ...current,
+              messages: current.messages.map((item) => {
+                if (
+                  payload.reader === 'visitor' &&
+                  item.sender_type === 'agent'
+                ) {
+                  return {
+                    ...item,
+                    read_by_visitor_at: item.read_by_visitor_at ?? readAt,
+                  };
+                }
+                if (
+                  payload.reader === 'agent' &&
+                  item.sender_type === 'visitor'
+                ) {
+                  return {
+                    ...item,
+                    read_by_agent_at: item.read_by_agent_at ?? readAt,
+                  };
+                }
+                return item;
+              }),
+            };
+          });
+          return;
+        }
+
+        if (payload.type === 'conversation.status' && payload.status) {
+          setDetail((current) =>
+            current && current.conversation.id === selectedId
+              ? {
+                  ...current,
+                  conversation: {
+                    ...current.conversation,
+                    status: payload.status!,
+                  },
+                }
+              : current,
+          );
+          setConversations((current) =>
+            current.map((item) =>
+              item.id === selectedId
+                ? { ...item, status: payload.status! }
+                : item,
+            ),
+          );
+          return;
+        }
+
+        void load();
       });
       socket.addEventListener('close', () => {
         if (!active) return;
@@ -883,8 +1030,20 @@ function AgentWorkspace({
     setSending(true);
     setDraft('');
     try {
-      await sendMessage(selectedId, text);
-      setDetail(await getConversation(selectedId));
+      const sent = await sendMessage(selectedId, text);
+      setDetail((current) => {
+        if (!current || current.conversation.id !== selectedId) return current;
+        const exists = current.messages.some((item) => item.id === sent.id);
+        return {
+          ...current,
+          conversation: {
+            ...current.conversation,
+            last_message: sent.body,
+            last_message_at: sent.created_at,
+          },
+          messages: exists ? current.messages : [...current.messages, sent],
+        };
+      });
     } catch (reason) {
       setDraft((current) => current || text);
       setError(message(reason, '发送失败'));
@@ -898,13 +1057,37 @@ function AgentWorkspace({
     setMediaProgress(0);
     setMediaFailed(false);
     try {
-      await sendAgentImage(selectedId, file, setMediaProgress);
-      const [nextDetail, nextMedia] = await Promise.all([
-        getConversation(selectedId),
-        getAgentMedia(selectedId),
-      ]);
-      setDetail(nextDetail);
-      setMediaItems(nextMedia);
+      const sent = await sendAgentImage(selectedId, file, setMediaProgress);
+      const message: Message = {
+        id: sent.messageId,
+        conversation_id: selectedId,
+        sender_type: 'agent',
+        sender_id: identity.id,
+        body: '',
+        read_by_visitor_at: null,
+        read_by_agent_at: null,
+        created_at: sent.createdAt,
+      };
+      setDetail((current) => {
+        if (!current || current.conversation.id !== selectedId) return current;
+        const exists = current.messages.some((item) => item.id === message.id);
+        return {
+          ...current,
+          conversation: {
+            ...current.conversation,
+            last_message: '',
+            last_message_at: sent.createdAt,
+          },
+          messages: exists ? current.messages : [...current.messages, message],
+        };
+      });
+      setMediaItems((current) =>
+        current.some((item) => item.id === sent.media.id)
+          ? current.map((item) =>
+              item.id === sent.media.id ? sent.media : item,
+            )
+          : [...current, sent.media],
+      );
       setMediaPendingFile(null);
       setMediaPreviewUrl(null);
       URL.revokeObjectURL(previewUrl);
@@ -932,10 +1115,33 @@ function AgentWorkspace({
 
   async function changeStatus(status: Conversation['status']) {
     if (!selectedId) return;
+    const previousStatus = detail?.conversation.status as
+      Conversation['status'] | undefined;
     try {
       await setConversationStatus(selectedId, status);
-      setDetail(await getConversation(selectedId));
-      await refresh();
+      setDetail((current) =>
+        current && current.conversation.id === selectedId
+          ? {
+              ...current,
+              conversation: { ...current.conversation, status },
+            }
+          : current,
+      );
+      setConversations((current) => {
+        const updated = current.map((item) =>
+          item.id === selectedId ? { ...item, status } : item,
+        );
+        return filter !== 'all' && status !== filter
+          ? updated.filter((item) => item.id !== selectedId)
+          : updated;
+      });
+      if (previousStatus && previousStatus !== status) {
+        setOverview((current) => ({
+          ...current,
+          [previousStatus]: Math.max(0, current[previousStatus] - 1),
+          [status]: current[status] + 1,
+        }));
+      }
     } catch (reason) {
       setError(message(reason, '更新会话状态失败'));
     }

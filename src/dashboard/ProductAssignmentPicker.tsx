@@ -49,11 +49,14 @@ export function ProductAssignmentPicker({
     () => new Map(products.map((product) => [product.id, product])),
     [products],
   );
-  const scope =
-    getProductSelectionScope(selectedIds) ??
-    (selectedIds.length
-      ? ({ type: 'product', productIds: selectedIds } as const)
-      : ({ type: 'none' } as const));
+  const scope = useMemo<AgentRoutingScope>(
+    () =>
+      getProductSelectionScope(selectedIds) ??
+      (selectedIds.length
+        ? { type: 'product', productIds: selectedIds }
+        : { type: 'none' }),
+    [selectedIds],
+  );
 
   const sections = useMemo<NamedCount[]>(() => {
     const map = new Map<string, NamedCount>();

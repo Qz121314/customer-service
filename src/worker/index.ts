@@ -338,20 +338,39 @@ export class ConversationRoom extends DurableObject<Bindings> {
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
+    const agentId = url.searchParams.get('agentId')?.trim() || null;
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ connectedAt: Date.now() });
+    server.serializeAttachment({ connectedAt: Date.now(), agentId });
+    if (agentId) await this.touchAgent(agentId);
     server.send(
       JSON.stringify({ type: 'ready', time: new Date().toISOString() }),
     );
     return new Response(null, { status: 101, webSocket: client });
   }
 
-  webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): void {
-    if (message === 'ping') {
-      socket.send(
-        JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
-      );
-    }
+  async webSocketMessage(
+    socket: WebSocket,
+    message: string | ArrayBuffer,
+  ): Promise<void> {
+    if (message !== 'ping') return;
+    const attachment = socket.deserializeAttachment() as {
+      agentId?: string | null;
+    } | null;
+    if (attachment?.agentId) await this.touchAgent(attachment.agentId);
+    socket.send(
+      JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
+    );
+  }
+
+  private async touchAgent(agentId: string): Promise<void> {
+    await this.env.DB.prepare(
+      `UPDATE agents
+       SET status = 'online', last_seen_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?1 AND is_enabled = 1`,
+    )
+      .bind(agentId)
+      .run();
   }
 
   webSocketClose(socket: WebSocket, code: number, reason: string): void {

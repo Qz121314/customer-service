@@ -179,16 +179,30 @@ export async function completeMedia(
         kind: 'image',
         created_at: createdAt,
       },
+      media: {
+        messageId,
+        ...publicMedia({ ...media, message_id: messageId, status: 'ready' }),
+      },
     }),
     broadcastClientConversationEvent(
       env,
       media.conversation_id,
       'message.created',
+      {
+        message: {
+          id: messageId,
+          direction: media.sender_type === 'agent' ? 'agent' : 'customer',
+          body: '',
+          sentAt: createdAt,
+          delivery: 'sent',
+          attachments: [],
+        },
+        media: {
+          messageId,
+          ...publicMedia({ ...media, message_id: messageId, status: 'ready' }),
+        },
+      },
     ),
-    broadcastRoom(env, 'admin-inbox', {
-      type: 'conversation.changed',
-      conversationId: media.conversation_id,
-    }),
   ]);
 
   if (media.sender_type === 'visitor') {
@@ -203,17 +217,11 @@ export async function completeMedia(
         media.conversation_id,
       );
       if (assignment) {
-        await Promise.all([
-          broadcastClientConversationEvent(
-            env,
-            media.conversation_id,
-            'conversation.assigned',
-          ),
-          broadcastRoom(env, 'admin-inbox', {
-            type: 'conversation.changed',
-            conversationId: media.conversation_id,
-          }),
-        ]);
+        await broadcastClientConversationEvent(
+          env,
+          media.conversation_id,
+          'conversation.assigned',
+        );
       }
     }
   }
@@ -224,6 +232,7 @@ export async function completeMedia(
       ok: true,
       conversationId: media.conversation_id,
       messageId,
+      createdAt,
       media: publicMedia({ ...media, message_id: messageId, status: 'ready' }),
     },
   };

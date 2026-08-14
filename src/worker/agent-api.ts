@@ -289,7 +289,10 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
         reader: 'agent',
         lastMessageId: boundary?.id ?? null,
       }),
-      broadcastClientConversationEvent(c.env, id, 'message.read'),
+      broadcastClientConversationEvent(c.env, id, 'message.read', {
+        reader: 'agent',
+        lastMessageId: boundary?.id ?? null,
+      }),
     ]);
   }
   return c.json({ ok: true });
@@ -335,7 +338,9 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     .bind(messageId)
     .first<MessageRow>();
   await broadcastConversationRoom(c.env, id, { type: 'message', message });
-  await broadcastClientConversationEvent(c.env, id, 'message.created');
+  await broadcastClientConversationEvent(c.env, id, 'message.created', {
+    message: message ? clientRealtimeMessage(message) : undefined,
+  });
   return c.json({ message }, 201);
 });
 
@@ -365,13 +370,18 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
     id,
     body.status === 'closed' ? 'conversation.closed' : 'conversation.assigned',
   );
+  if (body.status === 'closed') {
+    await assignWaitingConversations(c.env, agent.id);
+  }
   return c.json({ ok: true });
 });
 
 agentApi.get('/api/agent/realtime/inbox', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  return room(c.env, 'admin-inbox').fetch(c.req.raw);
+  return room(c.env, 'admin-inbox').fetch(
+    authenticatedRealtimeRequest(c.req.raw, agent.id),
+  );
 });
 
 agentApi.get('/api/agent/realtime/:id', async (c) => {
@@ -383,7 +393,9 @@ agentApi.get('/api/agent/realtime/:id', async (c) => {
     agent.id,
   );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  return room(c.env, c.req.param('id')).fetch(c.req.raw);
+  return room(c.env, c.req.param('id')).fetch(
+    authenticatedRealtimeRequest(c.req.raw, agent.id),
+  );
 });
 
 async function authenticateAgent(
@@ -444,19 +456,35 @@ async function assignWaitingConversations(
        AND (
          EXISTS (
            SELECT 1
-           FROM agent_products ap
-           WHERE ap.site_id = c.site_id
-             AND ap.product_id = c.product_id
-             AND ap.agent_id = ?1
-             AND ap.is_enabled = 1
+           FROM agent_routing_scopes ars
+           WHERE ars.site_id = c.site_id
+             AND ars.agent_id = ?1
+             AND ars.is_enabled = 1
+             AND (
+               (ars.scope_type = 'product' AND ars.product_id = c.product_id)
+               OR (ars.scope_type = 'section' AND ars.section_id = c.section_id)
+               OR (
+                 ars.scope_type = 'category'
+                 AND ars.section_id = c.section_id
+                 AND ars.category_id = c.category_id
+               )
+             )
          )
          OR (
            NOT EXISTS (
              SELECT 1
-             FROM agent_products configured
+             FROM agent_routing_scopes configured
              WHERE configured.site_id = c.site_id
-               AND configured.product_id = c.product_id
                AND configured.is_enabled = 1
+               AND (
+                 (configured.scope_type = 'product' AND configured.product_id = c.product_id)
+                 OR (configured.scope_type = 'section' AND configured.section_id = c.section_id)
+                 OR (
+                   configured.scope_type = 'category'
+                   AND configured.section_id = c.section_id
+                   AND configured.category_id = c.category_id
+                 )
+               )
            )
            AND EXISTS (
              SELECT 1
@@ -485,10 +513,6 @@ async function assignWaitingConversations(
       conversation.id,
       'conversation.assigned',
     );
-    await broadcastConversationRoom(env, 'admin-inbox', {
-      type: 'conversation.changed',
-      conversationId: conversation.id,
-    });
   }
 }
 
@@ -519,6 +543,34 @@ function cookieValue(header: string | undefined, name: string): string | null {
 function normalizeMessageId(value?: string | null): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 200 ? trimmed : null;
+}
+
+function clientRealtimeMessage(message: MessageRow) {
+  const sentAt = /^\d{4}-\d{2}-\d{2}T/u.test(message.created_at)
+    ? message.created_at
+    : `${message.created_at.replace(' ', 'T')}Z`;
+  return {
+    id: message.id,
+    direction: message.sender_type === 'agent' ? 'agent' : 'customer',
+    body: message.body,
+    sentAt,
+    delivery:
+      message.sender_type === 'agent' && message.read_by_visitor_at
+        ? 'read'
+        : message.sender_type === 'visitor' && message.read_by_agent_at
+          ? 'read'
+          : 'sent',
+    attachments: [],
+  };
+}
+
+function authenticatedRealtimeRequest(
+  request: Request,
+  agentId: string,
+): Request {
+  const url = new URL(request.url);
+  url.searchParams.set('agentId', agentId);
+  return new Request(url, request);
 }
 
 function room(env: Bindings, id: string): DurableObjectStub {

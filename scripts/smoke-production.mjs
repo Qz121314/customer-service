@@ -133,6 +133,7 @@ async function assertClientWebSocket() {
   await new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
     let settled = false;
+    let ready = false;
     const finish = (callback) => {
       if (settled) return;
       settled = true;
@@ -145,7 +146,7 @@ async function assertClientWebSocket() {
         finish(() =>
           reject(
             new Error(
-              'Client WebSocket did not become ready within 10 seconds.',
+              'Client WebSocket did not complete ready/pong within 10 seconds.',
             ),
           ),
         ),
@@ -155,9 +156,14 @@ async function assertClientWebSocket() {
     socket.addEventListener('message', (event) => {
       try {
         const value = JSON.parse(String(event.data));
-        if (value?.type === 'ready') finish(resolve);
+        if (value?.type === 'ready' && !ready) {
+          ready = true;
+          socket.send('ping');
+          return;
+        }
+        if (ready && value?.type === 'pong') finish(resolve);
       } catch {
-        // Ignore non-JSON frames and keep waiting for the ready event.
+        // Ignore non-JSON frames and keep waiting for the protocol events.
       }
     });
     socket.addEventListener('error', () =>

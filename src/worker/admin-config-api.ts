@@ -44,10 +44,6 @@ type ScopeRow = {
   product_id: string;
 };
 
-type ScopeExpansionRow = ScopeRow & {
-  resolved_product_id: string | null;
-};
-
 type AgentRoutingScope =
   | { type: 'none' }
   | { type: 'section'; sectionId: string }
@@ -267,41 +263,17 @@ async function loadAgents(db: D1Database) {
       .all<AgentRow>(),
     db
       .prepare(
-        `SELECT
-           ars.agent_id,
-           ars.scope_type,
-           ars.section_id,
-           ars.category_id,
-           ars.product_id,
-           p.id AS resolved_product_id
-         FROM agent_routing_scopes ars
-         LEFT JOIN product_catalog p
-           ON p.site_id = ars.site_id
-          AND p.is_enabled = 1
-          AND (
-            (ars.scope_type = 'section' AND p.section_id = ars.section_id)
-            OR (
-              ars.scope_type = 'category'
-              AND p.section_id = ars.section_id
-              AND p.category_id = ars.category_id
-            )
-            OR (ars.scope_type = 'product' AND p.id = ars.product_id)
-          )
-         WHERE ars.site_id = 'default'
-           AND ars.is_enabled = 1
-         ORDER BY
-           ars.agent_id ASC,
-           ars.scope_type ASC,
-           ars.section_id ASC,
-           ars.category_id ASC,
-           ars.product_id ASC,
-           COALESCE(p.title, '') COLLATE NOCASE ASC,
-           COALESCE(p.id, '') ASC`,
+        `SELECT agent_id, scope_type, section_id, category_id, product_id
+         FROM agent_routing_scopes
+         WHERE site_id = 'default'
+           AND is_enabled = 1
+         ORDER BY agent_id ASC, scope_type ASC, section_id ASC,
+           category_id ASC, product_id ASC`,
       )
-      .all<ScopeExpansionRow>(),
+      .all<ScopeRow>(),
   ]);
 
-  const rowsByAgent = new Map<string, ScopeExpansionRow[]>();
+  const rowsByAgent = new Map<string, ScopeRow[]>();
   for (const row of assignmentsResult.results ?? []) {
     const current = rowsByAgent.get(row.agent_id) ?? [];
     current.push(row);
@@ -309,7 +281,7 @@ async function loadAgents(db: D1Database) {
   }
 
   return (agentsResult.results ?? []).map((agent) => {
-    const rows = rowsByAgent.get(agent.id) ?? [];
+    const routingScope = scopeFromRows(rowsByAgent.get(agent.id) ?? []);
     return {
       id: agent.id,
       name: agent.name,
@@ -320,12 +292,9 @@ async function loadAgents(db: D1Database) {
       lastLoginAt: agent.last_login_at,
       lastSeenAt: agent.last_seen_at,
       hasPassword: Boolean(agent.password_hash && agent.password_salt),
-      productIds: distinct(
-        rows
-          .map((row) => row.resolved_product_id)
-          .filter((value): value is string => Boolean(value)),
-      ),
-      routingScope: scopeFromRows(rows),
+      productIds:
+        routingScope.type === 'product' ? routingScope.productIds : [],
+      routingScope,
     };
   });
 }

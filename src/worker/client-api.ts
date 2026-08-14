@@ -32,6 +32,7 @@ type ConversationRow = {
   visitor_id: string;
   status: ConversationStatus;
   assigned_agent: string | null;
+  agent_name: string | null;
   subject: string | null;
   group_id: string | null;
   product_id: string | null;
@@ -44,6 +45,7 @@ type ConversationRow = {
   product_href: string | null;
   expires_at: string | null;
   visitor_unread_count: number;
+  agent_unread_count: number;
   last_message_at: string;
   created_at: string;
   last_message: string | null;
@@ -145,14 +147,17 @@ clientApi.get('/client/v1/conversations', async (c) => {
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
   const result = await c.env.DB.prepare(
-    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent, c.subject,
-       c.group_id, c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.expires_at, c.visitor_unread_count, c.last_message_at, c.created_at,
+    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+       a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+       c.section_name, c.category_id, c.category_name, c.product_title,
+       c.product_cover_url, c.product_href, c.expires_at,
+       c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
+       c.created_at,
        (SELECT body FROM messages m WHERE m.conversation_id = c.id
          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
+     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
      WHERE c.site_id = ?1
        AND v.external_id = ?2
        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
@@ -331,14 +336,14 @@ clientApi.post('/client/v1/conversations', async (c) => {
     type: 'message',
     message: adminMessage(createdMessage),
   });
-  await broadcastVisitorEvent(c.env, site.id, visitorId, {
-    type: 'message.created',
+  await broadcastClientConversationEvent(
+    c.env,
     conversationId,
-  });
-  await broadcastRoom(c.env, 'admin-inbox', {
-    type: 'conversation.changed',
-    conversationId,
-  });
+    'message.created',
+    {
+      message: clientMessage(createdMessage),
+    },
+  );
 
   const conversation = await ownedConversation(
     c.env.DB,
@@ -422,18 +427,19 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     .bind(conversation.visitor_id)
     .run();
 
+  if (!conversation.assigned_agent) {
+    await assignConversationAgent(c.env.DB, conversation.id);
+  }
   await broadcastRoom(c.env, conversation.id, {
     type: 'message',
     message: adminMessage(createdMessage),
   });
-  await broadcastVisitorEvent(c.env, site.id, visitorId, {
-    type: 'message.created',
-    conversationId: conversation.id,
-  });
-  await broadcastRoom(c.env, 'admin-inbox', {
-    type: 'conversation.changed',
-    conversationId: conversation.id,
-  });
+  await broadcastClientConversationEvent(
+    c.env,
+    conversation.id,
+    'message.created',
+    { message: clientMessage(createdMessage) },
+  );
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
@@ -510,7 +516,10 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
         reader: 'visitor',
         lastMessageId: boundary?.id ?? null,
       }),
-      broadcastClientConversationEvent(c.env, conversation.id, 'message.read'),
+      broadcastClientConversationEvent(c.env, conversation.id, 'message.read', {
+        reader: 'visitor',
+        lastMessageId: boundary?.id ?? null,
+      }),
     ]);
   }
   return c.json({ ok: true });
@@ -540,23 +549,105 @@ export async function broadcastClientConversationEvent(
     | 'message.read'
     | 'conversation.assigned'
     | 'conversation.closed',
+  details: {
+    message?: Record<string, unknown>;
+    media?: Record<string, unknown>;
+    reader?: 'agent' | 'visitor';
+    lastMessageId?: string | null;
+  } = {},
 ): Promise<void> {
-  const identity = await env.DB.prepare(
-    `SELECT c.site_id, v.external_id
-     FROM conversations c JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.id = ?1`,
+  const conversation = await env.DB.prepare(
+    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+       a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+       c.section_name, c.category_id, c.category_name, c.product_title,
+       c.product_cover_url, c.product_href, c.expires_at,
+       c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
+       c.created_at, v.external_id, v.display_name AS visitor_name,
+       (SELECT body FROM messages m WHERE m.conversation_id = c.id
+         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+     FROM conversations c
+     JOIN visitors v ON v.id = c.visitor_id
+     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+     WHERE c.id = ?1
+     LIMIT 1`,
   )
     .bind(conversationId)
-    .first<{ site_id: string; external_id: string | null }>();
-  if (!identity?.external_id) return;
-  await broadcastVisitorEvent(env, identity.site_id, identity.external_id, {
-    type,
-    conversationId,
-  });
+    .first<
+      ConversationRow & {
+        external_id: string | null;
+        visitor_name: string | null;
+      }
+    >();
+  if (!conversation) return;
+
+  if (conversation.external_id) {
+    await broadcastVisitorEvent(
+      env,
+      conversation.site_id,
+      conversation.external_id,
+      {
+        type,
+        conversationId,
+        conversation: conversationSummary(conversation),
+        ...details,
+      },
+    );
+  }
+
+  const overview = conversation.assigned_agent
+    ? await loadAgentOverview(env.DB, conversation.assigned_agent)
+    : null;
   await broadcastRoom(env, 'admin-inbox', {
     type: 'conversation.changed',
     conversationId,
+    conversation: agentConversationSummary(conversation),
+    overview,
   });
+}
+
+async function loadAgentOverview(db: D1Database, agentId: string) {
+  const result = await db
+    .prepare(
+      `SELECT status, COUNT(*) AS count
+       FROM conversations
+       WHERE assigned_agent = ?1
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       GROUP BY status`,
+    )
+    .bind(agentId)
+    .all<{ status: ConversationStatus; count: number }>();
+  const counts = { open: 0, pending: 0, closed: 0 };
+  for (const row of result.results ?? []) {
+    counts[row.status] = Number(row.count ?? 0);
+  }
+  return {
+    ...counts,
+    total: counts.open + counts.pending + counts.closed,
+  };
+}
+
+function agentConversationSummary(
+  conversation: ConversationRow & { visitor_name?: string | null },
+) {
+  return {
+    id: conversation.id,
+    site_id: conversation.site_id,
+    visitor_id: conversation.visitor_id,
+    status: conversation.status,
+    subject: conversation.subject,
+    group_id: conversation.group_id,
+    product_id: conversation.product_id,
+    product_title: conversation.product_title,
+    product_cover_url: conversation.product_cover_url,
+    product_href: conversation.product_href,
+    assigned_agent: conversation.assigned_agent,
+    agent_unread_count: Number(conversation.agent_unread_count || 0),
+    last_message_at: toIso(conversation.last_message_at),
+    created_at: toIso(conversation.created_at),
+    expires_at: toIso(conversation.expires_at),
+    visitor_name: conversation.visitor_name ?? null,
+    last_message: conversation.last_message,
+  };
 }
 
 function managementAuthorized(
@@ -799,14 +890,17 @@ async function ownedConversation(
 ): Promise<ConversationRow | null> {
   return db
     .prepare(
-      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent, c.subject,
-       c.group_id, c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.expires_at, c.visitor_unread_count, c.last_message_at, c.created_at,
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+       a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+       c.section_name, c.category_id, c.category_name, c.product_title,
+       c.product_cover_url, c.product_href, c.expires_at,
+       c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
+       c.created_at,
        (SELECT body FROM messages m WHERE m.conversation_id = c.id
          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
+     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
      WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
      LIMIT 1`,
@@ -818,7 +912,7 @@ async function ownedConversation(
 function conversationSummary(conversation: ConversationRow) {
   return {
     id: conversation.id,
-    agentName: null,
+    agentName: conversation.agent_name,
     agentAvatarUrl: null,
     productId: conversation.product_id ?? '',
     sectionId: conversation.section_id ?? '',
@@ -929,6 +1023,7 @@ function clientMessage(message: MessageRow) {
     body: message.body,
     sentAt: toIso(message.created_at)!,
     delivery,
+    attachments: [],
   };
 }
 
