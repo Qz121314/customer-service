@@ -7,6 +7,7 @@ if payload_test.exists():
 Path('test/realtime-contract.test.mjs').write_text(
     """import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 import test from 'node:test';
 
 const clientApi = readFileSync(new URL('../src/worker/client-api.ts', import.meta.url), 'utf8');
