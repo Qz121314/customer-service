@@ -28,7 +28,7 @@
     "typecheck": "pnpm typecheck:ui && pnpm typecheck:worker",
     "typecheck:ui": "tsc -p tsconfig.app.json --noEmit",
     "typecheck:worker": "pnpm cf:types && tsc -p tsconfig.worker.json --noEmit",
-    "test": "node --test"
+    "test": "node --experimental-strip-types --test"
   },
   "dependencies": {
     "hono": "^4.0.0",
