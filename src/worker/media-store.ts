@@ -150,6 +150,7 @@ export async function completeMedia(
         `UPDATE conversations
          SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
              visitor_unread_count = visitor_unread_count + 1,
+             agent_unread_count = 0,
              last_message_at = ?1, updated_at = ?1
          WHERE id = ?2`,
       ).bind(createdAt, media.conversation_id),
@@ -157,7 +158,10 @@ export async function completeMedia(
   } else {
     statements.push(
       env.DB.prepare(
-        `UPDATE conversations SET last_message_at = ?1, updated_at = ?1 WHERE id = ?2`,
+        `UPDATE conversations
+         SET agent_unread_count = agent_unread_count + 1,
+             last_message_at = ?1, updated_at = ?1
+         WHERE id = ?2`,
       ).bind(createdAt, media.conversation_id),
     );
   }
