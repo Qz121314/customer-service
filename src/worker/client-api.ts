@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
 import { resolveConversationGroup } from './context-routing';
+import { assignConversationAgent } from './routing';
 
 type ClientBindings = {
   DB: D1Database;
@@ -269,20 +270,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
 
   await rememberProductRoutingContext(c.env.DB, site.id, product);
-  const groupId = await resolveConversationGroup(
+
+  // Group routing is retained only as a rollout fallback for products that do
+  // not yet have Product -> Agent assignments. New routing never requires it.
+  const legacyResolvedGroupId = await resolveConversationGroup(
     c.env.DB,
     site.id,
     { sectionId: product.sectionId, categoryId: product.categoryId },
     legacyGroupId,
   );
-  if (!groupId) {
-    return error(
-      c,
-      409,
-      'ROUTING_NOT_CONFIGURED',
-      'Support routing is not configured for this product.',
-    );
-  }
 
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
@@ -307,7 +303,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       visitor.id,
       product.title.slice(0, 120),
-      groupId,
+      legacyResolvedGroupId,
       product.id,
       product.sectionId,
       product.sectionName,
@@ -328,6 +324,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
     body: message!,
     clientMessageId,
   });
+
+  await assignConversationAgent(c.env.DB, conversationId);
 
   await broadcastRoom(c.env, conversationId, {
     type: 'message',
@@ -449,7 +447,6 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
   const visitorId = normalizeVisitorId(body?.visitorId);
   if (!visitorId)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
-
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
@@ -666,41 +663,36 @@ async function rememberProductRoutingContext(
   siteId: string,
   product: NormalizedProduct,
 ): Promise<void> {
-  const sectionName = product.sectionName ?? product.sectionId;
-  const statements: D1PreparedStatement[] = [
-    db
-      .prepare(
-        `INSERT INTO routing_catalog_sections (site_id, id, name, updated_at)
-         VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)
-         ON CONFLICT(site_id, id) DO UPDATE SET
-           name = excluded.name,
-           updated_at = CURRENT_TIMESTAMP`,
-      )
-      .bind(siteId, product.sectionId, sectionName),
-  ];
-
-  if (product.categoryId && product.categoryName) {
-    statements.push(
-      db
-        .prepare(
-          `INSERT INTO routing_catalog_categories (
-             site_id, id, section_id, name, updated_at
-           ) VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
-           ON CONFLICT(site_id, id) DO UPDATE SET
-             section_id = excluded.section_id,
-             name = excluded.name,
-             updated_at = CURRENT_TIMESTAMP`,
-        )
-        .bind(
-          siteId,
-          product.categoryId,
-          product.sectionId,
-          product.categoryName,
-        ),
-    );
-  }
-
-  await db.batch(statements);
+  await db
+    .prepare(
+      `INSERT INTO product_catalog (
+         site_id, id, title, href, cover_url,
+         section_id, section_name, category_id, category_name,
+         is_enabled, updated_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT(site_id, id) DO UPDATE SET
+         title = excluded.title,
+         href = excluded.href,
+         cover_url = excluded.cover_url,
+         section_id = excluded.section_id,
+         section_name = excluded.section_name,
+         category_id = excluded.category_id,
+         category_name = excluded.category_name,
+         is_enabled = 1,
+         updated_at = CURRENT_TIMESTAMP`,
+    )
+    .bind(
+      siteId,
+      product.id,
+      product.title,
+      product.href,
+      product.coverUrl,
+      product.sectionId,
+      product.sectionName,
+      product.categoryId,
+      product.categoryName,
+    )
+    .run();
 }
 
 async function ensureVisitor(

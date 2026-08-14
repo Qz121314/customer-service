@@ -438,16 +438,39 @@ async function assignWaitingConversations(
   const waiting = await env.DB.prepare(
     `SELECT DISTINCT c.id
      FROM conversations c
-     JOIN group_agents ga
-       ON ga.site_id = c.site_id AND ga.group_id = c.group_id
-     JOIN support_groups sg
-       ON sg.site_id = c.site_id AND sg.id = c.group_id
      WHERE c.assigned_agent IS NULL
        AND c.status IN ('open', 'pending')
        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
-       AND ga.agent_id = ?1
-       AND ga.is_enabled = 1
-       AND sg.is_enabled = 1
+       AND (
+         EXISTS (
+           SELECT 1
+           FROM agent_products ap
+           WHERE ap.site_id = c.site_id
+             AND ap.product_id = c.product_id
+             AND ap.agent_id = ?1
+             AND ap.is_enabled = 1
+         )
+         OR (
+           NOT EXISTS (
+             SELECT 1
+             FROM agent_products configured
+             WHERE configured.site_id = c.site_id
+               AND configured.product_id = c.product_id
+               AND configured.is_enabled = 1
+           )
+           AND EXISTS (
+             SELECT 1
+             FROM group_agents ga
+             JOIN support_groups sg
+               ON sg.site_id = ga.site_id AND sg.id = ga.group_id
+             WHERE ga.site_id = c.site_id
+               AND ga.group_id = c.group_id
+               AND ga.agent_id = ?1
+               AND ga.is_enabled = 1
+               AND sg.is_enabled = 1
+           )
+         )
+       )
      ORDER BY c.last_message_at ASC
      LIMIT 20`,
   )
