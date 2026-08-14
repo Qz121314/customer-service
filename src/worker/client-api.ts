@@ -264,7 +264,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const expiresAt = conversationExpiresAt(new Date());
+  const expiresAt = conversationExpiresAt(now);
 
   await c.env.DB.prepare(
     `INSERT INTO conversations (
