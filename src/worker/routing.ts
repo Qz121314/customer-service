@@ -36,6 +36,7 @@ export async function assignConversationAgent(
       `SELECT site_id, group_id, assigned_agent
        FROM conversations
        WHERE id = ?1
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(conversationId)
@@ -72,6 +73,7 @@ export async function assignConversationAgent(
          FROM conversations
          WHERE status IN ('open', 'pending')
            AND assigned_agent IS NOT NULL
+           AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
          GROUP BY assigned_agent
        ) load ON load.assigned_agent = a.id
        WHERE ga.site_id = ?1
@@ -108,7 +110,8 @@ export async function assignConversationAgent(
          SET assigned_agent = ?1,
              status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
              updated_at = ?2
-         WHERE id = ?3 AND assigned_agent IS NULL`,
+         WHERE id = ?3 AND assigned_agent IS NULL
+           AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
       )
       .bind(candidate.id, now, conversationId),
     db

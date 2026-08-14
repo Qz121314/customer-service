@@ -6,6 +6,9 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "keep_vars": true,
+  "triggers": {
+    "crons": ["* * * * *"],
+  },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",

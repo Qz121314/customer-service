@@ -8,6 +8,7 @@ import { agentApi } from './agent-api';
 import { mediaApi } from './media-api';
 import { pushApi } from './push-api';
 import { sendVisitorPushForConversation } from './visitor-push';
+import { purgeExpiredConversations } from './conversation-retention';
 
 interface Bindings {
   DB: D1Database;
@@ -166,5 +167,18 @@ async function broadcastAgentInbox(
   });
 }
 
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled(
+    _controller: ScheduledController,
+    env: Bindings,
+    ctx: ExecutionContext,
+  ) {
+    ctx.waitUntil(
+      purgeExpiredConversations(env).catch((error) => {
+        console.error('Expired conversation cleanup failed.', error);
+      }),
+    );
+  },
+};
 export { ConversationRoom };

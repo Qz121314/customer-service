@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
+import { conversationExpiresAt } from './conversation-retention';
 
 type ClientBindings = {
   DB: D1Database;
@@ -135,7 +136,6 @@ clientApi.get('/client/v1/conversations', async (c) => {
      JOIN visitors v ON v.id = c.visitor_id
      WHERE c.site_id = ?1
        AND v.external_id = ?2
-       AND COALESCE(v.expires_at, datetime(v.created_at, '+1 day')) > CURRENT_TIMESTAMP
        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
      ORDER BY c.last_message_at DESC, c.id DESC
      LIMIT 100`,
@@ -264,9 +264,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const expiresAt = new Date(
-    Date.now() + VISITOR_LIFETIME_HOURS * 60 * 60 * 1000,
-  ).toISOString();
+  const expiresAt = conversationExpiresAt(now);
 
   await c.env.DB.prepare(
     `INSERT INTO conversations (
@@ -607,30 +605,24 @@ async function ensureVisitor(
     .bind(siteId, externalId)
     .first<VisitorRow>();
 
-  if (existing && isFuture(existing.expires_at)) {
+  if (existing) {
+    const expiresAt = conversationExpiresAt(new Date());
     await db
       .prepare(
-        'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
+        `UPDATE visitors
+         SET last_seen_at = CURRENT_TIMESTAMP, expires_at = ?2
+         WHERE id = ?1`,
       )
-      .bind(existing.id)
+      .bind(existing.id, expiresAt)
       .run();
-    return existing;
-  }
-
-  if (existing) {
-    await db
-      .prepare('DELETE FROM visitors WHERE id = ?1')
-      .bind(existing.id)
-      .run();
+    return { ...existing, expires_at: expiresAt };
   }
 
   const id = crypto.randomUUID();
   const tokenHash = await sha256(
     `client-v1:${siteId}:${externalId}:${crypto.randomUUID()}`,
   );
-  const expiresAt = new Date(
-    Date.now() + VISITOR_LIFETIME_HOURS * 60 * 60 * 1000,
-  ).toISOString();
+  const expiresAt = conversationExpiresAt(new Date());
   await db
     .prepare(
       `INSERT INTO visitors (
@@ -713,7 +705,6 @@ async function ownedConversation(
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
-       AND COALESCE(v.expires_at, datetime(v.created_at, '+1 day')) > CURRENT_TIMESTAMP
        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
      LIMIT 1`,
     )
@@ -907,11 +898,6 @@ function addHours(value: string, hours: number): string {
   const normalized = toIso(value);
   const date = normalized ? new Date(normalized) : new Date();
   return new Date(date.getTime() + hours * 60 * 60 * 1000).toISOString();
-}
-
-function isFuture(value: string | null): boolean {
-  const iso = toIso(value);
-  return Boolean(iso && Date.parse(iso) > Date.now());
 }
 
 async function sha256(value: string): Promise<string> {

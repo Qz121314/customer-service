@@ -250,6 +250,7 @@ async function authorizedVisitorMedia(
        JOIN conversations c ON c.id = mi.conversation_id
        JOIN visitors v ON v.id = c.visitor_id
        WHERE mi.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
+         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
   )
     .bind(c.req.param('id'), site.id, visitorId)
@@ -275,6 +276,7 @@ async function authorizedAgentMedia(
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
        WHERE mi.id = ?1 AND c.assigned_agent = ?2
+         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
   )
     .bind(c.req.param('id'), agent.id)
@@ -306,7 +308,6 @@ async function ownedVisitorConversation(
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
-         AND COALESCE(v.expires_at, datetime(v.created_at, '+1 day')) > CURRENT_TIMESTAMP
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
@@ -325,7 +326,9 @@ async function assignedConversation(
 ) {
   return db
     .prepare(
-      'SELECT id, status FROM conversations WHERE id = ?1 AND assigned_agent = ?2',
+      `SELECT id, status FROM conversations
+       WHERE id = ?1 AND assigned_agent = ?2
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
     )
     .bind(id, agentId)
     .first<{ id: string; status: 'open' | 'pending' | 'closed' }>();

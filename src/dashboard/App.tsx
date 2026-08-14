@@ -766,6 +766,9 @@ function AgentWorkspace({
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [mediaItems, setMediaItems] = useState<AgentMediaItem[]>([]);
   const [mediaProgress, setMediaProgress] = useState<number | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const [mediaPendingFile, setMediaPendingFile] = useState<File | null>(null);
+  const [mediaFailed, setMediaFailed] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [inboxConnected, setInboxConnected] = useState(false);
@@ -952,6 +955,36 @@ function AgentWorkspace({
   }, [acknowledgeConversation, selectedId]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
+  const selectedExpiresAt = detail?.conversation.expires_at ?? null;
+
+  useEffect(() => {
+    setMediaPendingFile(null);
+    setMediaFailed(false);
+    setMediaProgress(null);
+    setMediaPreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || !selectedExpiresAt) return;
+    const expiresAt = Date.parse(selectedExpiresAt);
+    if (!Number.isFinite(expiresAt)) return;
+    const expire = () => {
+      setSelectedId(null);
+      setDetail(null);
+      setMediaItems([]);
+      void refresh().catch(() => undefined);
+    };
+    const remaining = expiresAt - Date.now();
+    if (remaining <= 0) {
+      expire();
+      return;
+    }
+    const timer = window.setTimeout(expire, remaining + 100);
+    return () => window.clearTimeout(timer);
+  }, [refresh, selectedExpiresAt, selectedId]);
   useLayoutEffect(() => {
     const timeline = messagesRef.current;
     if (!timeline || !selectedId) return;
@@ -987,9 +1020,10 @@ function AgentWorkspace({
     }
   }
 
-  async function submitImage(file: File) {
+  async function uploadImage(file: File, previewUrl: string) {
     if (!selectedId) return;
     setMediaProgress(0);
+    setMediaFailed(false);
     try {
       await sendAgentImage(selectedId, file, setMediaProgress);
       const [nextDetail, nextMedia] = await Promise.all([
@@ -998,11 +1032,29 @@ function AgentWorkspace({
       ]);
       setDetail(nextDetail);
       setMediaItems(nextMedia);
+      setMediaPendingFile(null);
+      setMediaPreviewUrl(null);
+      URL.revokeObjectURL(previewUrl);
     } catch (reason) {
+      setMediaFailed(true);
       setError(message(reason, '图片发送失败'));
     } finally {
       setMediaProgress(null);
     }
+  }
+
+  async function submitImage(file: File) {
+    if (!selectedId) return;
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    const previewUrl = URL.createObjectURL(file);
+    setMediaPreviewUrl(previewUrl);
+    setMediaPendingFile(file);
+    await uploadImage(file, previewUrl);
+  }
+
+  async function retryImage() {
+    if (!mediaPendingFile || !mediaPreviewUrl || mediaProgress !== null) return;
+    await uploadImage(mediaPendingFile, mediaPreviewUrl);
   }
 
   async function changeStatus(status: Conversation['status']) {
@@ -1146,6 +1198,9 @@ function AgentWorkspace({
                       '访客咨询',
                   )}
                 </p>
+                <ConversationExpiryCountdown
+                  expiresAt={detail.conversation.expires_at}
+                />
               </div>
               <select
                 value={String(detail.conversation.status)}
@@ -1172,6 +1227,46 @@ function AgentWorkspace({
                   }
                 />
               ))}
+              {mediaPreviewUrl ? (
+                <div className="message mine is-uploading">
+                  <div>
+                    <div className="message-image-pending">
+                      <img
+                        className="message-image"
+                        src={mediaPreviewUrl}
+                        alt="待发送图片"
+                      />
+                      <button
+                        type="button"
+                        className={`media-inline-status${mediaFailed ? ' is-failed' : ''}`}
+                        disabled={!mediaFailed || !mediaPendingFile}
+                        aria-label={mediaFailed ? '重试发送图片' : '图片发送中'}
+                        onClick={() => void retryImage()}
+                      >
+                        {mediaFailed ? (
+                          '!'
+                        ) : (
+                          <span
+                            className="media-inline-ring"
+                            style={
+                              {
+                                '--media-upload-progress': `${Math.round((mediaProgress ?? 0) * 360)}deg`,
+                              } as React.CSSProperties
+                            }
+                          >
+                            {Math.round((mediaProgress ?? 0) * 100)}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    <span className="message-meta">
+                      <span>
+                        {mediaFailed ? '发送失败 · 点击重试' : '发送中'}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <form className="composer" onSubmit={(event) => void submit(event)}>
               <label className="media-picker" aria-label="发送图片">
@@ -1213,9 +1308,7 @@ function AgentWorkspace({
               />
               <div className="composer-foot">
                 <span className="media-upload-progress">
-                  {mediaProgress === null
-                    ? 'Enter 发送 · Shift + Enter 换行'
-                    : `图片上传 ${Math.round(mediaProgress * 100)}%`}
+                  Enter 发送 · Shift + Enter 换行
                 </span>
                 <button
                   className="primary-button"
@@ -1384,6 +1477,43 @@ function Metric({ label, value }: { label: string; value: number }) {
       <strong>{value}</strong>
       <span>{label}</span>
     </div>
+  );
+}
+
+function ConversationExpiryCountdown({
+  expiresAt,
+}: {
+  expiresAt: string | null;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [expiresAt]);
+
+  const timestamp = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (!Number.isFinite(timestamp)) return null;
+  const remaining = Math.max(0, timestamp - now);
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const clock = [hours, minutes, seconds]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':');
+  const urgency =
+    remaining <= 5 * 60 * 1000
+      ? ' is-urgent'
+      : remaining <= 60 * 60 * 1000
+        ? ' is-warning'
+        : '';
+
+  return (
+    <span className={`conversation-expiry${urgency}`} aria-live="off">
+      <span aria-hidden="true">◷</span>
+      {remaining > 0 ? `会话将在 ${clock} 后自动删除` : '会话已到期，正在删除'}
+    </span>
   );
 }
 
