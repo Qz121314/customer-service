@@ -4,7 +4,6 @@ import { requireAgentSession } from './agent-session';
 import { createUploadTarget } from './media-signing';
 import {
   completeMedia,
-  findMedia,
   readMediaObject,
   reserveMedia,
   storeProxyUpload,
@@ -17,6 +16,8 @@ import {
 } from './media-types';
 
 type Env = { Bindings: MediaBindings };
+
+type ReadyMediaRow = MediaRow & { message_id: string };
 
 export const mediaApi = new Hono<Env>();
 
@@ -80,6 +81,21 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
   );
 });
 
+mediaApi.get('/client/v1/conversations/:id/media', async (c) => {
+  const visitorId = normalizeVisitorId(c.req.query('visitorId'));
+  if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
+  const site = await findSite(c.env.DB, normalizeProjectId(c.req.query('projectId')));
+  if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+  const conversation = await ownedVisitorConversation(
+    c.env.DB,
+    c.req.param('id'),
+    site.id,
+    visitorId,
+  );
+  if (!conversation) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
+  return c.json({ items: await listConversationMedia(c.env.DB, conversation.id) });
+});
+
 mediaApi.put('/client/v1/media/:id/content', async (c) => {
   const media = await authorizedVisitorMedia(c, false);
   if (!media.ok) return clientError(c, media.status, media.code);
@@ -141,6 +157,14 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
   );
 });
 
+mediaApi.get('/api/agent/conversations/:id/media', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  const conversation = await assignedConversation(c.env.DB, c.req.param('id'), agent.id);
+  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+  return c.json({ items: await listConversationMedia(c.env.DB, conversation.id) });
+});
+
 mediaApi.put('/api/agent/media/:id/content', async (c) => {
   const media = await authorizedAgentMedia(c, false);
   if (!media.ok) return c.json({ error: media.code }, media.status);
@@ -162,6 +186,24 @@ mediaApi.get('/api/agent/media/:id/content', async (c) => {
   if (!media.ok) return c.json({ error: media.code }, media.status);
   return readMediaObject(c.env.MEDIA, media.value);
 });
+
+async function listConversationMedia(db: D1Database, conversationId: string) {
+  const result = await db
+    .prepare(
+      `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
+         sender_id, object_key, mime_type, byte_size, width, height, original_name,
+         status, is_initial, reserved_created_at
+       FROM media_items
+       WHERE conversation_id = ?1 AND status = 'ready' AND message_id IS NOT NULL
+       ORDER BY reserved_created_at ASC, id ASC`,
+    )
+    .bind(conversationId)
+    .all<ReadyMediaRow>();
+  return (result.results ?? []).map((row) => ({
+    messageId: row.message_id,
+    ...publicMedia(row),
+  }));
+}
 
 async function authorizedVisitorMedia(
   c: Context<Env>,
