@@ -27,6 +27,7 @@ import {
   getGroups,
   getOverview,
   heartbeat,
+  markConversationRead,
   openAgentInboxSocket,
   openConversationSocket,
   sendMessage,
@@ -771,6 +772,29 @@ function AgentWorkspace({
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const baseTitleRef = useRef(document.title);
+  const totalUnread = useMemo(
+    () => conversations.reduce((sum, item) => sum + item.agent_unread_count, 0),
+    [conversations],
+  );
+
+  const acknowledgeConversation = useCallback(async (id: string) => {
+    await markConversationRead(id);
+    setConversations((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, agent_unread_count: 0 } : item,
+      ),
+    );
+  }, []);
+
+  useEffect(() => {
+    const baseTitle = baseTitleRef.current;
+    document.title =
+      totalUnread > 0 ? `(${totalUnread}) ${baseTitle}` : baseTitle;
+    return () => {
+      document.title = baseTitle;
+    };
+  }, [totalUnread]);
 
   const refresh = useCallback(async () => {
     const [nextOverview, nextConversations] = await Promise.all([
@@ -794,6 +818,8 @@ function AgentWorkspace({
       if (document.visibilityState !== 'visible') return;
       beat();
       void refresh().catch(() => undefined);
+      if (selectedId)
+        void acknowledgeConversation(selectedId).catch(() => undefined);
     };
 
     beat();
@@ -805,7 +831,7 @@ function AgentWorkspace({
       document.removeEventListener('visibilitychange', recover);
       window.removeEventListener('online', recover);
     };
-  }, [refresh]);
+  }, [acknowledgeConversation, refresh, selectedId]);
 
   useEffect(() => {
     let active = true;
@@ -857,6 +883,9 @@ function AgentWorkspace({
           if (active) {
             setDetail(value);
             setMediaItems(media);
+            if (document.visibilityState === 'visible') {
+              void acknowledgeConversation(selectedId).catch(() => undefined);
+            }
           }
         })
         .catch((reason) => {
@@ -889,7 +918,7 @@ function AgentWorkspace({
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [selectedId]);
+  }, [acknowledgeConversation, selectedId]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
   useEffect(() => {
@@ -973,7 +1002,12 @@ function AgentWorkspace({
         <header className="conversation-head">
           <div>
             <span className="eyebrow">MY INBOX</span>
-            <h1>我的会话</h1>
+            <h1>
+              我的会话
+              {totalUnread > 0 && (
+                <span className="unread-total">{totalUnread}</span>
+              )}
+            </h1>
           </div>
           <span className="online-pill" aria-live="polite">
             {inboxConnected && (!selectedId || threadConnected)
@@ -1004,11 +1038,13 @@ function AgentWorkspace({
             conversations.map((conversation) => (
               <button
                 key={conversation.id}
-                className={
-                  conversation.id === selectedId
-                    ? 'conversation-row selected'
-                    : 'conversation-row'
-                }
+                className={[
+                  'conversation-row',
+                  conversation.id === selectedId ? 'selected' : '',
+                  conversation.agent_unread_count > 0 ? 'unread' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
                 onClick={() => setSelectedId(conversation.id)}
               >
                 <span className="avatar small">
@@ -1016,7 +1052,16 @@ function AgentWorkspace({
                 </span>
                 <span className="conversation-copy">
                   <span>
-                    <strong>{conversation.visitor_name || '访客'}</strong>
+                    <strong>
+                      {conversation.visitor_name || '访客'}
+                      {conversation.agent_unread_count > 0 && (
+                        <span className="unread-badge">
+                          {conversation.status === 'open'
+                            ? `新 · ${Math.min(conversation.agent_unread_count, 99)}`
+                            : Math.min(conversation.agent_unread_count, 99)}
+                        </span>
+                      )}
+                    </strong>
                     <time>{relativeTime(conversation.last_message_at)}</time>
                   </span>
                   <small>

@@ -55,6 +55,7 @@ export type Conversation = {
   product_cover_url: string | null;
   product_href: string | null;
   assigned_agent: string | null;
+  agent_unread_count: number;
   last_message_at: string;
   created_at: string;
   visitor_name: string | null;
@@ -210,6 +211,12 @@ export async function getConversations(
 
 export async function getConversation(id: string): Promise<ConversationDetail> {
   return request(`/api/agent/conversations/${encodeURIComponent(id)}/messages`);
+}
+
+export async function markConversationRead(id: string): Promise<void> {
+  await request(`/api/agent/conversations/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+  });
 }
 
 export async function sendMessage(id: string, body: string): Promise<Message> {

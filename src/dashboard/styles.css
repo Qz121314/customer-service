@@ -1547,3 +1547,54 @@ p {
     flex-direction: column;
   }
 }
+
+.conversation-head h1 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.unread-total {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: #1b1d22;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.conversation-row.unread {
+  background: #fbfbfc;
+  box-shadow: inset 3px 0 0 #1b1d22;
+}
+
+.conversation-row.unread:hover,
+.conversation-row.unread.selected {
+  background: #f4f5f7;
+}
+
+.conversation-row.unread .conversation-copy > span > strong {
+  color: #17191e;
+}
+
+.conversation-copy > span > strong {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unread-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 3px 6px;
+  background: #1b1d22;
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1;
+}

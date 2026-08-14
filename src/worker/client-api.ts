@@ -763,7 +763,8 @@ async function persistClientMessage(
     db
       .prepare(
         `UPDATE conversations
-       SET last_message_at = ?1, updated_at = ?1
+       SET agent_unread_count = agent_unread_count + 1,
+           last_message_at = ?1, updated_at = ?1
        WHERE id = ?2`,
       )
       .bind(createdAt, input.conversationId),

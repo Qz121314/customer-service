@@ -184,7 +184,7 @@ agentApi.get('/api/agent/conversations', async (c) => {
   let statement = c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
        c.product_id, c.product_title, c.product_cover_url, c.product_href,
-       c.assigned_agent, c.last_message_at, c.created_at,
+       c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
        v.display_name AS visitor_name,
        (SELECT body FROM messages m WHERE m.conversation_id = c.id
         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
@@ -224,6 +224,26 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   return c.json({ conversation, messages: messages.results ?? [] });
 });
 
+agentApi.post('/api/agent/conversations/:id/read', async (c) => {
+  const agent = await authenticateAgent(c);
+  if (!agent) return unauthorized(c);
+  const id = c.req.param('id');
+  const result = await c.env.DB.prepare(
+    `UPDATE conversations
+     SET agent_unread_count = 0, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?1 AND assigned_agent = ?2 AND agent_unread_count > 0`,
+  )
+    .bind(id, agent.id)
+    .run();
+  if (result.meta.changes) {
+    await broadcastConversationRoom(c.env, 'admin-inbox', {
+      type: 'conversation.changed',
+      conversationId: id,
+    });
+  }
+  return c.json({ ok: true });
+});
+
 agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
@@ -249,6 +269,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
       `UPDATE conversations
        SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
            visitor_unread_count = visitor_unread_count + 1,
+           agent_unread_count = 0,
            last_message_at = ?1,
            updated_at = ?1
        WHERE id = ?2 AND assigned_agent = ?3`,
