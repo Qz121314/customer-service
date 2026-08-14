@@ -28,7 +28,12 @@ jobs:
           block = """replaceOnce(\n  'src/worker/client-api.ts',\n  `  const expiresAt = new Date(\\n    Date.now() + VISITOR_LIFETIME_HOURS * 60 * 60 * 1000,\\n  ).toISOString();\\n\\n  await c.env.DB.prepare(`,\n  `  const expiresAt = conversationExpiresAt(now);\\n\\n  await c.env.DB.prepare(`,\n);\n"""
           if block not in source:
               raise SystemExit('expected duplicate expiry replacement block missing')
-          path.write_text(source.replace(block, ''))
+          source = source.replace(block, '')
+          source = source.replace(
+              "${Math.round((mediaProgress ?? 0) * 360)}deg",
+              "\\${Math.round((mediaProgress ?? 0) * 360)}deg",
+          )
+          path.write_text(source)
           PY
 
       - name: Apply implementation
