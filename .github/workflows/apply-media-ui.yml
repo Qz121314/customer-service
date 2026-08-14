@@ -1,0 +1,26 @@
+name: Apply media UI
+
+on:
+  push:
+    branches: [feat/media-transfer]
+    paths:
+      - scripts/patch-agent-media-ui.mjs
+      - .github/workflows/apply-media-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/media-transfer
+      - run: node scripts/patch-agent-media-ui.mjs
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/dashboard/App.tsx
+          git commit -m "接入坐席图片消息UI"
+          git push origin HEAD:feat/media-transfer
