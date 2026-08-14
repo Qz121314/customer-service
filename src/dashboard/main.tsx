@@ -8,6 +8,7 @@ import './dialogue-flow.css';
 import './agent-mobile-layout.css';
 import './agent-mobile-thread.css';
 import './agent-mobile-composer.css';
+import './media-view.css';
 
 setupAgentMobileNavigation();
 
