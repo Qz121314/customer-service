@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "dev:ui": "vite --host 0.0.0.0 --port 5173",
+    "prepare": "node scripts/setup-git-hooks.mjs",
     "build": "pnpm build:ui && pnpm typecheck:worker",
     "build:ui": "vite build",
     "cf:types": "wrangler types src/worker/worker-configuration.d.ts",
@@ -21,11 +22,13 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
+    "preflight": "pnpm format && pnpm lint && pnpm typecheck",
+    "verify": "pnpm preflight && pnpm db:migrate:local && pnpm test && pnpm build && pnpm cf:check",
     "smoke:production": "node scripts/smoke-production.mjs",
     "typecheck": "pnpm typecheck:ui && pnpm typecheck:worker",
     "typecheck:ui": "tsc -p tsconfig.app.json --noEmit",
     "typecheck:worker": "pnpm cf:types && tsc -p tsconfig.worker.json --noEmit",
-    "test": "node --test"
+    "test": "node --experimental-strip-types --test"
   },
   "dependencies": {
     "hono": "^4.0.0",

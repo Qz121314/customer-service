@@ -51,6 +51,12 @@ type MessageRow = {
   body: string;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
+  read_by_agent_at: string | null;
+  created_at: string;
+};
+
+type ReadBoundary = {
+  id: string;
   created_at: string;
 };
 
@@ -367,7 +373,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
 
   const existing = await c.env.DB.prepare(
     `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
-       read_by_visitor_at, created_at
+       read_by_visitor_at, read_by_agent_at, created_at
      FROM messages WHERE conversation_id = ?1 AND client_message_id = ?2`,
   )
     .bind(conversation.id, clientMessageId)
@@ -430,22 +436,55 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
       'Conversation was not found.',
     );
 
-  await c.env.DB.batch([
+  const requestedLastMessageId = normalizeId(body?.lastMessageId, 200);
+  let boundary: ReadBoundary | null = null;
+  if (requestedLastMessageId) {
+    boundary = await c.env.DB.prepare(
+      `SELECT id, created_at
+       FROM messages
+       WHERE id = ?1 AND conversation_id = ?2 AND sender_type = 'agent'
+       LIMIT 1`,
+    )
+      .bind(requestedLastMessageId, conversation.id)
+      .first<ReadBoundary>();
+  }
+
+  const [readResult] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE messages
+       SET read_by_visitor_at = COALESCE(read_by_visitor_at, CURRENT_TIMESTAMP)
+       WHERE conversation_id = ?1
+         AND sender_type = 'agent'
+         AND (
+           ?2 IS NULL
+           OR created_at < ?3
+           OR (created_at = ?3 AND id <= ?2)
+         )`,
+    ).bind(conversation.id, boundary?.id ?? null, boundary?.created_at ?? null),
     c.env.DB.prepare(
       `UPDATE conversations
-       SET visitor_unread_count = 0, updated_at = CURRENT_TIMESTAMP
+       SET visitor_unread_count = (
+         SELECT COUNT(*)
+         FROM messages
+         WHERE conversation_id = ?1
+           AND sender_type = 'agent'
+           AND read_by_visitor_at IS NULL
+       ),
+       updated_at = CURRENT_TIMESTAMP
        WHERE id = ?1`,
-    ).bind(conversation.id),
-    c.env.DB.prepare(
-      `UPDATE messages SET read_by_visitor_at = COALESCE(read_by_visitor_at, CURRENT_TIMESTAMP)
-       WHERE conversation_id = ?1 AND sender_type = 'agent'`,
     ).bind(conversation.id),
   ]);
 
-  await broadcastVisitorEvent(c.env, site.id, visitorId, {
-    type: 'message.read',
-    conversationId: conversation.id,
-  });
+  if (readResult.meta.changes) {
+    await Promise.all([
+      broadcastRoom(c.env, conversation.id, {
+        type: 'message.read',
+        reader: 'visitor',
+        lastMessageId: boundary?.id ?? null,
+      }),
+      broadcastClientConversationEvent(c.env, conversation.id, 'message.read'),
+    ]);
+  }
   return c.json({ ok: true });
 });
 
@@ -707,7 +746,7 @@ async function conversationDetail(
   const result = await db
     .prepare(
       `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
-       read_by_visitor_at, created_at
+       read_by_visitor_at, read_by_agent_at, created_at
      FROM messages
      WHERE conversation_id = ?1
        AND (?2 IS NULL OR created_at < ?2)
@@ -772,7 +811,7 @@ async function persistClientMessage(
   const message = await db
     .prepare(
       `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
-       read_by_visitor_at, created_at
+       read_by_visitor_at, read_by_agent_at, created_at
      FROM messages WHERE id = ?1`,
     )
     .bind(id)
@@ -782,12 +821,20 @@ async function persistClientMessage(
 }
 
 function clientMessage(message: MessageRow) {
+  const delivery =
+    message.sender_type === 'visitor'
+      ? message.read_by_agent_at
+        ? 'read'
+        : 'sent'
+      : message.read_by_visitor_at
+        ? 'read'
+        : 'sent';
   return {
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
     sentAt: toIso(message.created_at)!,
-    delivery: message.read_by_visitor_at ? 'read' : 'sent',
+    delivery,
   };
 }
 
@@ -798,6 +845,8 @@ function adminMessage(message: MessageRow) {
     sender_type: message.sender_type,
     sender_id: message.sender_id,
     body: message.body,
+    read_by_visitor_at: message.read_by_visitor_at,
+    read_by_agent_at: message.read_by_agent_at,
     created_at: message.created_at,
   };
 }

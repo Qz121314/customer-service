@@ -2,6 +2,7 @@ import {
   FormEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -772,20 +773,32 @@ function AgentWorkspace({
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const lastScrolledConversationRef = useRef<string | null>(null);
   const baseTitleRef = useRef(document.title);
   const totalUnread = useMemo(
     () => conversations.reduce((sum, item) => sum + item.agent_unread_count, 0),
     [conversations],
   );
+  const lastVisibleVisitorMessageId = useMemo(
+    () =>
+      detail?.messages
+        .slice()
+        .reverse()
+        .find((item) => item.sender_type === 'visitor')?.id ?? null,
+    [detail],
+  );
 
-  const acknowledgeConversation = useCallback(async (id: string) => {
-    await markConversationRead(id);
-    setConversations((current) =>
-      current.map((item) =>
-        item.id === id ? { ...item, agent_unread_count: 0 } : item,
-      ),
-    );
-  }, []);
+  const acknowledgeConversation = useCallback(
+    async (id: string, lastMessageId: string | null = null) => {
+      await markConversationRead(id, lastMessageId);
+      setConversations((current) =>
+        current.map((item) =>
+          item.id === id ? { ...item, agent_unread_count: 0 } : item,
+        ),
+      );
+    },
+    [],
+  );
 
   useEffect(() => {
     const baseTitle = baseTitleRef.current;
@@ -818,8 +831,12 @@ function AgentWorkspace({
       if (document.visibilityState !== 'visible') return;
       beat();
       void refresh().catch(() => undefined);
-      if (selectedId)
-        void acknowledgeConversation(selectedId).catch(() => undefined);
+      if (selectedId) {
+        void acknowledgeConversation(
+          selectedId,
+          lastVisibleVisitorMessageId,
+        ).catch(() => undefined);
+      }
     };
 
     beat();
@@ -831,7 +848,12 @@ function AgentWorkspace({
       document.removeEventListener('visibilitychange', recover);
       window.removeEventListener('online', recover);
     };
-  }, [acknowledgeConversation, refresh, selectedId]);
+  }, [
+    acknowledgeConversation,
+    lastVisibleVisitorMessageId,
+    refresh,
+    selectedId,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -871,6 +893,7 @@ function AgentWorkspace({
       setDetail(null);
       setMediaItems([]);
       setThreadConnected(false);
+      lastScrolledConversationRef.current = null;
       return;
     }
     let active = true;
@@ -884,7 +907,15 @@ function AgentWorkspace({
             setDetail(value);
             setMediaItems(media);
             if (document.visibilityState === 'visible') {
-              void acknowledgeConversation(selectedId).catch(() => undefined);
+              const lastVisitorMessageId =
+                value.messages
+                  .slice()
+                  .reverse()
+                  .find((item) => item.sender_type === 'visitor')?.id ?? null;
+              void acknowledgeConversation(
+                selectedId,
+                lastVisitorMessageId,
+              ).catch(() => undefined);
             }
           }
         })
@@ -921,12 +952,21 @@ function AgentWorkspace({
   }, [acknowledgeConversation, selectedId]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const timeline = messagesRef.current;
-    if (!timeline) return;
-    const frame = window.requestAnimationFrame(() => {
+    if (!timeline || !selectedId) return;
+    const isOpeningConversation =
+      lastScrolledConversationRef.current !== selectedId;
+    const scroll = () => {
+      if (isOpeningConversation) {
+        timeline.scrollTop = timeline.scrollHeight;
+        lastScrolledConversationRef.current = selectedId;
+        return;
+      }
       timeline.scrollTo({ top: timeline.scrollHeight, behavior: 'smooth' });
-    });
+    };
+    scroll();
+    const frame = window.requestAnimationFrame(scroll);
     return () => window.cancelAnimationFrame(frame);
   }, [lastMessageId, selectedId]);
 
@@ -1126,7 +1166,6 @@ function AgentWorkspace({
                 <Bubble
                   key={item.id}
                   message={item}
-                  currentAgentId={identity.id}
                   media={
                     mediaItems.find((media) => media.messageId === item.id) ??
                     null
@@ -1353,12 +1392,12 @@ function Bubble({
   media,
 }: {
   message: Message;
-  currentAgentId: string;
   media: AgentMediaItem | null;
 }) {
   if (item.sender_type === 'system')
     return <div className="system-message">{item.body}</div>;
   const isAgent = item.sender_type === 'agent';
+  const isRead = Boolean(item.read_by_visitor_at);
   return (
     <div className={isAgent ? 'message mine' : 'message visitor'}>
       {!isAgent && <span className="avatar tiny">访</span>}
@@ -1375,7 +1414,18 @@ function Bubble({
         ) : (
           <p>{item.body}</p>
         )}
-        <time>{formatTime(item.created_at)}</time>
+        <span className="message-meta">
+          <time>{formatTime(item.created_at)}</time>
+          {isAgent ? (
+            <span
+              className={`delivery-mark${isRead ? ' is-read' : ''}`}
+              aria-label={isRead ? '已读' : '已发送'}
+              title={isRead ? '已读' : '已发送'}
+            >
+              {isRead ? '✓✓' : '✓'}
+            </span>
+          ) : null}
+        </span>
       </div>
     </div>
   );
