@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS media_items (
   original_name TEXT,
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'ready', 'failed')),
+  is_initial INTEGER NOT NULL DEFAULT 0 CHECK (is_initial IN (0, 1)),
   reserved_created_at TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
