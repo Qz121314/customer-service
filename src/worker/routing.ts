@@ -12,17 +12,16 @@ type ConversationRoutingRow = {
 type AgentCandidateRow = {
   id: string;
   name: string;
-  active_count: number;
 };
 
 /**
- * Assigns one conversation to an available agent in its support group.
+ * Assign one conversation to an available agent in its resolved support group.
  *
- * Routing policy:
+ * Group routing policy:
  * 1. enabled agents with a fresh online heartbeat only;
  * 2. respect per-agent active conversation capacity when configured;
- * 3. least active conversations first;
- * 4. group priority, then least recently assigned, then id.
+ * 3. round-robin by least recently assigned agent;
+ * 4. stable id tie-breaker for deterministic first assignment.
  *
  * If the group has no available agent the conversation remains unassigned and
  * will be retried when an eligible agent logs in or sends a heartbeat.
@@ -57,10 +56,7 @@ export async function assignConversationAgent(
 
   const candidate = await db
     .prepare(
-      `SELECT
-         a.id,
-         a.name,
-         COALESCE(load.active_count, 0) AS active_count
+      `SELECT a.id, a.name
        FROM group_agents ga
        JOIN agents a
          ON a.id = ga.agent_id
@@ -91,8 +87,6 @@ export async function assignConversationAgent(
            OR COALESCE(load.active_count, 0) < a.max_active_conversations
          )
        ORDER BY
-         COALESCE(load.active_count, 0) ASC,
-         ga.priority DESC,
          COALESCE(a.last_assigned_at, '') ASC,
          a.id ASC
        LIMIT 1`,
@@ -103,25 +97,27 @@ export async function assignConversationAgent(
   if (!candidate) return null;
 
   const now = new Date().toISOString();
-  await db.batch([
-    db
-      .prepare(
-        `UPDATE conversations
-         SET assigned_agent = ?1,
-             status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-             updated_at = ?2
-         WHERE id = ?3 AND assigned_agent IS NULL
-           AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
-      )
-      .bind(candidate.id, now, conversationId),
-    db
-      .prepare(
-        `UPDATE agents
-         SET last_assigned_at = ?1, updated_at = ?1
-         WHERE id = ?2 AND site_id = ?3`,
-      )
-      .bind(now, candidate.id, conversation.site_id),
-  ]);
+  const assignment = await db
+    .prepare(
+      `UPDATE conversations
+       SET assigned_agent = ?1,
+           status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
+           updated_at = ?2
+       WHERE id = ?3 AND assigned_agent IS NULL
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+    )
+    .bind(candidate.id, now, conversationId)
+    .run();
+  if (!assignment.meta.changes) return null;
+
+  await db
+    .prepare(
+      `UPDATE agents
+       SET last_assigned_at = ?1, updated_at = ?1
+       WHERE id = ?2 AND site_id = ?3`,
+    )
+    .bind(now, candidate.id, conversation.site_id)
+    .run();
 
   return { id: candidate.id, name: candidate.name };
 }

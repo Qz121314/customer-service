@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
+import { resolveConversationGroup } from './context-routing';
 
 type ClientBindings = {
   DB: D1Database;
@@ -34,6 +35,9 @@ type ConversationRow = {
   group_id: string | null;
   product_id: string | null;
   section_id: string | null;
+  section_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
   product_title: string | null;
   product_cover_url: string | null;
   product_href: string | null;
@@ -64,9 +68,23 @@ type ReadBoundary = {
 type ProductInput = {
   id?: string;
   sectionId?: string;
+  sectionName?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
   title?: string;
   href?: string;
   coverUrl?: string | null;
+};
+
+type NormalizedProduct = {
+  id: string;
+  sectionId: string;
+  sectionName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  title: string;
+  href: string;
+  coverUrl: string | null;
 };
 
 const CLIENT_MESSAGE_LIMIT = 4000;
@@ -127,9 +145,9 @@ clientApi.get('/client/v1/conversations', async (c) => {
 
   const result = await c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent, c.subject,
-       c.group_id, c.product_id, c.section_id, c.product_title, c.product_cover_url,
-       c.product_href, c.expires_at, c.visitor_unread_count, c.last_message_at,
-       c.created_at,
+       c.group_id, c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.last_message_at, c.created_at,
        (SELECT body FROM messages m WHERE m.conversation_id = c.id
          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
      FROM conversations c
@@ -179,15 +197,13 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }>(c.req.raw);
 
   const visitorId = normalizeVisitorId(body?.visitorId);
-  const groupId = normalizeId(body?.groupId, 100);
+  const legacyGroupId = normalizeId(body?.groupId, 100);
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
   const message = body?.message?.trim();
   const product = normalizeProduct(body?.product);
 
   if (!visitorId)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
-  if (!groupId)
-    return error(c, 400, 'INVALID_GROUP_ID', 'Support group is invalid.');
   if (!clientMessageId) {
     return error(
       c,
@@ -204,15 +220,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
-
-  const group = await c.env.DB.prepare(
-    `SELECT id FROM support_groups
-     WHERE site_id = ?1 AND id = ?2 AND is_enabled = 1`,
-  )
-    .bind(site.id, groupId)
-    .first<{ id: string }>();
-  if (!group)
-    return error(c, 404, 'GROUP_NOT_FOUND', 'Support group was not found.');
 
   const existing = await c.env.DB.prepare(
     `SELECT m.conversation_id
@@ -261,6 +268,22 @@ clientApi.post('/client/v1/conversations', async (c) => {
     );
   }
 
+  await rememberProductRoutingContext(c.env.DB, site.id, product);
+  const groupId = await resolveConversationGroup(
+    c.env.DB,
+    site.id,
+    { sectionId: product.sectionId, categoryId: product.categoryId },
+    legacyGroupId,
+  );
+  if (!groupId) {
+    return error(
+      c,
+      409,
+      'ROUTING_NOT_CONFIGURED',
+      'Support routing is not configured for this product.',
+    );
+  }
+
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -269,9 +292,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
   await c.env.DB.prepare(
     `INSERT INTO conversations (
        id, site_id, visitor_id, status, subject, group_id,
-       product_id, section_id, product_title, product_cover_url, product_href,
+       product_id, section_id, section_name, category_id, category_name,
+       product_title, product_cover_url, product_href,
        expires_at, last_message_at, created_at, updated_at
-     ) VALUES (?1, ?2, ?3, 'open', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?12, ?12)`,
+     ) VALUES (
+       ?1, ?2, ?3, 'open', ?4, ?5,
+       ?6, ?7, ?8, ?9, ?10,
+       ?11, ?12, ?13,
+       ?14, ?15, ?15, ?15
+     )`,
   )
     .bind(
       conversationId,
@@ -281,6 +310,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
       groupId,
       product.id,
       product.sectionId,
+      product.sectionName,
+      product.categoryId,
+      product.categoryName,
       product.title,
       product.coverUrl,
       product.href,
@@ -369,16 +401,17 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
   }
 
-  const existing = await c.env.DB.prepare(
+  const existingMessage = await c.env.DB.prepare(
     `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
        read_by_visitor_at, read_by_agent_at, created_at
      FROM messages WHERE conversation_id = ?1 AND client_message_id = ?2`,
   )
     .bind(conversation.id, clientMessageId)
     .first<MessageRow>();
-  if (existing) return c.json({ message: clientMessage(existing) });
+  if (existingMessage)
+    return c.json({ message: clientMessage(existingMessage) });
 
-  const message = await persistClientMessage(c.env.DB, {
+  const createdMessage = await persistClientMessage(c.env.DB, {
     conversationId: conversation.id,
     senderType: 'visitor',
     senderId: conversation.visitor_id,
@@ -393,7 +426,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
 
   await broadcastRoom(c.env, conversation.id, {
     type: 'message',
-    message: adminMessage(message),
+    message: adminMessage(createdMessage),
   });
   await broadcastVisitorEvent(c.env, site.id, visitorId, {
     type: 'message.created',
@@ -404,7 +437,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     conversationId: conversation.id,
   });
 
-  return c.json({ message: clientMessage(message) }, 201);
+  return c.json({ message: clientMessage(createdMessage) }, 201);
 });
 
 clientApi.post('/client/v1/conversations/:id/read', async (c) => {
@@ -556,22 +589,58 @@ function normalizeId(value: unknown, maxLength: number): string | null {
   return trimmed && trimmed.length <= maxLength ? trimmed : null;
 }
 
-function normalizeProduct(value?: ProductInput):
-  | (Required<Omit<ProductInput, 'coverUrl'>> & {
-      coverUrl: string | null;
-    })
-  | null {
+function normalizeProduct(value?: ProductInput): NormalizedProduct | null {
   const id = normalizeId(value?.id, 100);
   const sectionId = normalizeId(value?.sectionId, 100);
+  const sectionName =
+    value?.sectionName === null ||
+    value?.sectionName === undefined ||
+    value.sectionName === ''
+      ? null
+      : normalizeId(value.sectionName, 120);
+  const categoryId =
+    value?.categoryId === null ||
+    value?.categoryId === undefined ||
+    value.categoryId === ''
+      ? null
+      : normalizeId(value.categoryId, 100);
+  const categoryName =
+    value?.categoryName === null ||
+    value?.categoryName === undefined ||
+    value.categoryName === ''
+      ? null
+      : normalizeId(value.categoryName, 120);
   const title = normalizeId(value?.title, 300);
   const href = normalizeId(value?.href, 1000);
   const coverUrl =
     value?.coverUrl === null || value?.coverUrl === undefined
       ? null
       : normalizeId(value.coverUrl, 2000);
-  if (!id || !sectionId || !title || !href || (value?.coverUrl && !coverUrl))
+
+  if (
+    !id ||
+    !sectionId ||
+    !title ||
+    !href ||
+    (value?.sectionName && !sectionName) ||
+    (value?.categoryId && !categoryId) ||
+    (value?.categoryName && !categoryName) ||
+    Boolean(categoryId) !== Boolean(categoryName) ||
+    (value?.coverUrl && !coverUrl)
+  ) {
     return null;
-  return { id, sectionId, title, href, coverUrl };
+  }
+
+  return {
+    id,
+    sectionId,
+    sectionName,
+    categoryId,
+    categoryName,
+    title,
+    href,
+    coverUrl,
+  };
 }
 
 function validMessage(value?: string): value is string {
@@ -590,6 +659,48 @@ async function findSite(
     )
     .bind(projectId)
     .first<SiteRow>();
+}
+
+async function rememberProductRoutingContext(
+  db: D1Database,
+  siteId: string,
+  product: NormalizedProduct,
+): Promise<void> {
+  const sectionName = product.sectionName ?? product.sectionId;
+  const statements: D1PreparedStatement[] = [
+    db
+      .prepare(
+        `INSERT INTO routing_catalog_sections (site_id, id, name, updated_at)
+         VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)
+         ON CONFLICT(site_id, id) DO UPDATE SET
+           name = excluded.name,
+           updated_at = CURRENT_TIMESTAMP`,
+      )
+      .bind(siteId, product.sectionId, sectionName),
+  ];
+
+  if (product.categoryId && product.categoryName) {
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO routing_catalog_categories (
+             site_id, id, section_id, name, updated_at
+           ) VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
+           ON CONFLICT(site_id, id) DO UPDATE SET
+             section_id = excluded.section_id,
+             name = excluded.name,
+             updated_at = CURRENT_TIMESTAMP`,
+        )
+        .bind(
+          siteId,
+          product.categoryId,
+          product.sectionId,
+          product.categoryName,
+        ),
+    );
+  }
+
+  await db.batch(statements);
 }
 
 async function ensureVisitor(
@@ -697,9 +808,9 @@ async function ownedConversation(
   return db
     .prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent, c.subject,
-       c.group_id, c.product_id, c.section_id, c.product_title, c.product_cover_url,
-       c.product_href, c.expires_at, c.visitor_unread_count, c.last_message_at,
-       c.created_at,
+       c.group_id, c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.last_message_at, c.created_at,
        (SELECT body FROM messages m WHERE m.conversation_id = c.id
          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
      FROM conversations c

@@ -13,6 +13,7 @@ import {
   Conversation,
   ConversationDetail,
   Message,
+  RoutingCatalogSection,
   SupportGroup,
   adminLogin,
   adminLogout,
@@ -27,6 +28,7 @@ import {
   getConversations,
   getGroups,
   getOverview,
+  getRoutingCatalog,
   heartbeat,
   markConversationRead,
   openAgentInboxSocket,
@@ -35,6 +37,7 @@ import {
   setConversationStatus,
   updateAgent,
   updateGroup,
+  updateGroupRouting,
 } from './api';
 import {
   getAgentMedia,
@@ -44,7 +47,7 @@ import {
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
-type AdminSection = 'agents' | 'groups' | 'workspace';
+type AdminSection = 'agents' | 'groups' | 'routing' | 'workspace';
 
 type AgentDraft = {
   id: string | null;
@@ -54,6 +57,11 @@ type AgentDraft = {
   groupIds: string[];
   maxActiveConversations: number;
   isEnabled: boolean;
+};
+
+type RoutingSelection = {
+  sectionId: string;
+  categoryId: string | null;
 };
 
 const emptyAgentDraft: AgentDraft = {
@@ -133,6 +141,9 @@ function AdminPortal() {
 function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [groups, setGroups] = useState<SupportGroup[]>([]);
+  const [routingCatalog, setRoutingCatalog] = useState<RoutingCatalogSection[]>(
+    [],
+  );
   const [section, setSection] = useState<AdminSection>('agents');
   const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -143,12 +154,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
-    const [nextAgents, nextGroups] = await Promise.all([
+    const [nextAgents, nextGroups, nextRoutingCatalog] = await Promise.all([
       getAgents(),
       getGroups(),
+      getRoutingCatalog(),
     ]);
     setAgents(nextAgents);
     setGroups(nextGroups);
+    setRoutingCatalog(nextRoutingCatalog);
   }, []);
 
   useEffect(() => {
@@ -257,13 +270,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       ? '客服账号'
       : section === 'groups'
         ? '客服分组'
-        : '坐席工作台';
+        : section === 'routing'
+          ? '分流规则'
+          : '坐席工作台';
   const sectionHint =
     section === 'agents'
       ? '管理员在这里创建员工账号、设置所属分组和接待容量。'
       : section === 'groups'
-        ? '按业务场景组织客服，Site 只需要绑定这里的客服分组。'
-        : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
+        ? '每个客服分组包含多个坐席，新会话在组内按在线坐席轮询分配。'
+        : section === 'routing'
+          ? '按产品所属分区和分类识别访客需求，再把会话分配到对应客服分组。'
+          : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
 
   return (
     <div className="admin-console">
@@ -289,6 +306,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           >
             <span>客服分组</span>
             <small>{groups.length}</small>
+          </button>
+          <button
+            className={section === 'routing' ? 'active' : ''}
+            onClick={() => setSection('routing')}
+          >
+            <span>分流规则</span>
+            <small>{routingCatalog.length}</small>
           </button>
           <button
             className={section === 'workspace' ? 'active' : ''}
@@ -439,7 +463,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <div className="admin-table-title groups-title">
               <div>
                 <strong>客服分组</strong>
-                <span>分组负责承接 Site 绑定，并由系统分流给在线客服。</span>
+                <span>访客先匹配业务分组，再在分组内轮询在线坐席。</span>
               </div>
               <form
                 className="group-create"
@@ -470,7 +494,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                     <tr>
                       <th>分组名称</th>
                       <th>客服人数</th>
-                      <th>分流方式</th>
+                      <th>坐席分配</th>
+                      <th>访客匹配</th>
                       <th>状态</th>
                       <th aria-label="操作" />
                     </tr>
@@ -482,7 +507,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                           <strong>{group.name}</strong>
                         </td>
                         <td>{group.agentIds.length}</td>
-                        <td>最少进行中会话优先</td>
+                        <td>轮询</td>
+                        <td>{routingSummary(group)}</td>
                         <td>
                           <span
                             className={`account-status ${group.isEnabled ? 'online' : 'offline'}`}
@@ -514,6 +540,15 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               </div>
             )}
           </section>
+        )}
+
+        {section === 'routing' && (
+          <RoutingRulesPanel
+            groups={groups}
+            catalog={routingCatalog}
+            onSaved={refresh}
+            onError={setError}
+          />
         )}
 
         {section === 'workspace' && (
@@ -691,6 +726,204 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         </div>
       )}
     </div>
+  );
+}
+
+function RoutingRulesPanel({
+  groups,
+  catalog,
+  onSaved,
+  onError,
+}: {
+  groups: SupportGroup[];
+  catalog: RoutingCatalogSection[];
+  onSaved: () => Promise<void>;
+  onError: (value: string) => void;
+}) {
+  if (groups.length === 0) {
+    return (
+      <section className="routing-empty">
+        <strong>先创建客服分组</strong>
+        <span>分流规则需要把访客需求指向一个客服分组。</span>
+      </section>
+    );
+  }
+
+  if (catalog.length === 0) {
+    return (
+      <section className="routing-empty">
+        <strong>还没有产品分区和分类数据</strong>
+        <span>
+          回到 Site 后台重新验证一次客服系统，系统会自动同步当前分区和分类。
+        </span>
+      </section>
+    );
+  }
+
+  return (
+    <div className="routing-page">
+      <section className="routing-priority-note">
+        <strong>匹配顺序</strong>
+        <span>具体分类 → 所属分区 → 默认接待组</span>
+        <small>
+          分类规则优先级最高。某个分类没有单独指定时，才使用所属分区规则；两者都没有时进入默认组。
+        </small>
+      </section>
+      <div className="routing-group-list">
+        {groups.map((group) => (
+          <GroupRoutingEditor
+            key={group.id}
+            group={group}
+            catalog={catalog}
+            onSaved={onSaved}
+            onError={onError}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GroupRoutingEditor({
+  group,
+  catalog,
+  onSaved,
+  onError,
+}: {
+  group: SupportGroup;
+  catalog: RoutingCatalogSection[];
+  onSaved: () => Promise<void>;
+  onError: (value: string) => void;
+}) {
+  const [isDefault, setIsDefault] = useState(false);
+  const [routes, setRoutes] = useState<RoutingSelection[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setIsDefault(group.routingRules.some((rule) => rule.isDefault));
+    setRoutes(
+      group.routingRules
+        .filter((rule) => !rule.isDefault && rule.sectionId)
+        .map((rule) => ({
+          sectionId: rule.sectionId!,
+          categoryId: rule.categoryId,
+        })),
+    );
+  }, [group]);
+
+  function hasRoute(sectionId: string, categoryId: string | null): boolean {
+    return routes.some(
+      (route) =>
+        route.sectionId === sectionId && route.categoryId === categoryId,
+    );
+  }
+
+  function toggleRoute(
+    sectionId: string,
+    categoryId: string | null,
+    checked: boolean,
+  ) {
+    setRoutes((current) => {
+      const without = current.filter(
+        (route) =>
+          !(route.sectionId === sectionId && route.categoryId === categoryId),
+      );
+      return checked ? [...without, { sectionId, categoryId }] : without;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    onError('');
+    try {
+      await updateGroupRouting(group.id, { isDefault, routes });
+      await onSaved();
+    } catch (reason) {
+      onError(message(reason, '保存分流规则失败'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section
+      className={`routing-group-card${group.isEnabled ? '' : ' is-disabled'}`}
+    >
+      <header>
+        <div>
+          <strong>{group.name}</strong>
+          <span>
+            {group.agentIds.length} 个坐席 · 组内轮询
+            {group.isEnabled ? '' : ' · 分组已停用'}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="primary-button"
+          disabled={saving || !group.isEnabled}
+          onClick={() => void save()}
+        >
+          {saving ? '保存中…' : '保存规则'}
+        </button>
+      </header>
+
+      <label className="routing-default-option">
+        <input
+          type="checkbox"
+          checked={isDefault}
+          disabled={!group.isEnabled}
+          onChange={(event) => setIsDefault(event.target.checked)}
+        />
+        <span>
+          <strong>设为默认接待组</strong>
+          <small>没有命中任何分区或分类规则的访客进入这里。</small>
+        </span>
+      </label>
+
+      <div className="routing-section-list">
+        {catalog.map((catalogSection) => (
+          <section key={catalogSection.id} className="routing-section-card">
+            <label className="routing-section-option">
+              <input
+                type="checkbox"
+                checked={hasRoute(catalogSection.id, null)}
+                disabled={!group.isEnabled}
+                onChange={(event) =>
+                  toggleRoute(catalogSection.id, null, event.target.checked)
+                }
+              />
+              <span>
+                <strong>{catalogSection.name}</strong>
+                <small>整个分区</small>
+              </span>
+            </label>
+            {catalogSection.categories.length > 0 ? (
+              <div className="routing-category-grid">
+                {catalogSection.categories.map((category) => (
+                  <label key={category.id}>
+                    <input
+                      type="checkbox"
+                      checked={hasRoute(catalogSection.id, category.id)}
+                      disabled={!group.isEnabled}
+                      onChange={(event) =>
+                        toggleRoute(
+                          catalogSection.id,
+                          category.id,
+                          event.target.checked,
+                        )
+                      }
+                    />
+                    <span>{category.name}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <small className="routing-no-category">当前分区没有分类</small>
+            )}
+          </section>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1124,7 +1357,9 @@ function AgentWorkspace({
           ) : conversations.length === 0 ? (
             <div className="empty-state">
               <strong>当前没有分配给你的会话</strong>
-              <span>保持此页面在线，系统会按客服分组和负载自动分流。</span>
+              <span>
+                保持在线，访客会先按需求进入客服组，再在组内轮询给坐席。
+              </span>
             </div>
           ) : (
             conversations.map((conversation) => (
@@ -1559,6 +1794,15 @@ function Bubble({
       </div>
     </div>
   );
+}
+
+function routingSummary(group: SupportGroup): string {
+  const isDefault = group.routingRules.some((rule) => rule.isDefault);
+  const scoped = group.routingRules.filter((rule) => !rule.isDefault).length;
+  if (!isDefault && scoped === 0) return '未配置';
+  if (isDefault && scoped === 0) return '默认接待组';
+  if (isDefault) return `默认 + ${scoped} 条规则`;
+  return `${scoped} 条规则`;
 }
 
 function presenceClass(agent: AgentAccount): string {
