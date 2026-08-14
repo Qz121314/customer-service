@@ -35,7 +35,7 @@ source = source.replace(
 
 source = source.replace(
   `              <div className="composer-foot">\n                <span>Enter 发送 · Shift + Enter 换行</span>`,
-  `              <div className="composer-foot">\n                <span className="media-upload-progress">\n                  {mediaProgress === null ? 'Enter 发送 · Shift + Enter 换行' : \`图片上传 ${Math.round(mediaProgress * 100)}%\`}\n                </span>`,
+  "              <div className=\"composer-foot\">\n                <span className=\"media-upload-progress\">\n                  {mediaProgress === null ? 'Enter 发送 · Shift + Enter 换行' : `图片上传 ${Math.round(mediaProgress * 100)}%`}\n                </span>",
 );
 
 source = source.replace(
