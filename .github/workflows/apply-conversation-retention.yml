@@ -1,0 +1,97 @@
+name: Apply conversation retention implementation
+
+on:
+  push:
+    branches: [agent/conversation-24h-retention]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: agent/conversation-24h-retention
+          fetch-depth: 0
+
+      - name: Prepare patch script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-conversation-retention.mjs')
+          source = path.read_text()
+          block = """replaceOnce(\n  'src/worker/client-api.ts',\n  `  const expiresAt = new Date(\\n    Date.now() + VISITOR_LIFETIME_HOURS * 60 * 60 * 1000,\\n  ).toISOString();\\n\\n  await c.env.DB.prepare(`,\n  `  const expiresAt = conversationExpiresAt(now);\\n\\n  await c.env.DB.prepare(`,\n);\n"""
+          if block not in source:
+              raise SystemExit('expected duplicate expiry replacement block missing')
+          path.write_text(source.replace(block, ''))
+          PY
+
+      - name: Apply implementation
+        run: node scripts/apply-conversation-retention.mjs
+
+      - name: Finalize source invariants
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          client = Path('src/worker/client-api.ts')
+          source = client.read_text()
+          unused = """\nfunction isFuture(value: string | null): boolean {\n  const iso = toIso(value);\n  return Boolean(iso && Date.parse(iso) > Date.now());\n}\n"""
+          if unused in source:
+              source = source.replace(unused, '\n')
+          client.write_text(source)
+
+          app = Path('src/dashboard/App.tsx')
+          source = app.read_text()
+          anchor = """  const lastMessageId = detail?.messages.at(-1)?.id ?? null;\n  const selectedExpiresAt = detail?.conversation.expires_at ?? null;\n"""
+          insert = """  const lastMessageId = detail?.messages.at(-1)?.id ?? null;\n  const selectedExpiresAt = detail?.conversation.expires_at ?? null;\n\n  useEffect(() => {\n    setMediaPendingFile(null);\n    setMediaFailed(false);\n    setMediaProgress(null);\n    setMediaPreviewUrl((current) => {\n      if (current) URL.revokeObjectURL(current);\n      return null;\n    });\n  }, [selectedId]);\n"""
+          if anchor not in source:
+              raise SystemExit('agent image reset anchor missing')
+          app.write_text(source.replace(anchor, insert, 1))
+          PY
+
+      - name: Set up Node.js and pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          npm install --global pnpm@11.19.0
+          pnpm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format implementation before validation
+        run: pnpm format:write
+
+      - name: Verify implementation
+        run: pnpm verify
+
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            migrations/0012_conversation_retention.sql \
+            src/worker/conversation-retention.ts \
+            src/worker/entry.ts \
+            src/worker/client-api.ts \
+            src/worker/agent-api.ts \
+            src/worker/routing.ts \
+            src/worker/media-api.ts \
+            src/dashboard/api.ts \
+            src/dashboard/App.tsx \
+            src/dashboard/styles.css \
+            test/conversation-retention.test.mjs \
+            wrangler.jsonc
+          git diff --cached --check
+          git commit --no-verify -m "实现24小时会话到期删除与双端倒计时"
+          git push
