@@ -34,54 +34,42 @@ type ProductRow = {
   is_enabled: number;
 };
 
+type ScopeType = 'section' | 'category' | 'product';
+
+type ScopeRow = {
+  agent_id: string;
+  scope_type: ScopeType;
+  section_id: string;
+  category_id: string;
+  product_id: string;
+};
+
+type ScopeExpansionRow = ScopeRow & {
+  resolved_product_id: string | null;
+};
+
+type AgentRoutingScope =
+  | { type: 'none' }
+  | { type: 'section'; sectionId: string }
+  | { type: 'category'; sectionId: string; categoryIds: string[] }
+  | { type: 'product'; productIds: string[] };
+
 const SESSION_COOKIE = 'cs_session';
 
 export const adminConfigApi = new Hono<Env>();
 
+adminConfigApi.get('/api/admin/bootstrap', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const [agents, products] = await Promise.all([
+    loadAgents(c.env.DB),
+    loadProducts(c.env.DB),
+  ]);
+  return c.json({ agents, products });
+});
+
 adminConfigApi.get('/api/admin/agents', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-
-  const [agentsResult, assignmentsResult] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT id, name, username, status, is_enabled, max_active_conversations,
-         last_login_at, last_seen_at, password_hash, password_salt, password_iterations
-       FROM agents
-       WHERE id <> 'admin'
-       ORDER BY is_enabled DESC, name ASC, id ASC`,
-    ).all<AgentRow>(),
-    c.env.DB.prepare(
-      `SELECT ap.agent_id, ap.product_id
-       FROM agent_products ap
-       JOIN product_catalog p
-         ON p.site_id = ap.site_id AND p.id = ap.product_id
-       WHERE ap.site_id = 'default'
-         AND ap.is_enabled = 1
-         AND p.is_enabled = 1
-       ORDER BY p.title COLLATE NOCASE ASC, ap.product_id ASC`,
-    ).all<{ agent_id: string; product_id: string }>(),
-  ]);
-
-  const productIdsByAgent = new Map<string, string[]>();
-  for (const assignment of assignmentsResult.results ?? []) {
-    const current = productIdsByAgent.get(assignment.agent_id) ?? [];
-    current.push(assignment.product_id);
-    productIdsByAgent.set(assignment.agent_id, current);
-  }
-
-  return c.json({
-    agents: (agentsResult.results ?? []).map((agent) => ({
-      id: agent.id,
-      name: agent.name,
-      username: agent.username,
-      status: agent.status,
-      isEnabled: agent.is_enabled === 1,
-      maxActiveConversations: agent.max_active_conversations,
-      lastLoginAt: agent.last_login_at,
-      lastSeenAt: agent.last_seen_at,
-      hasPassword: Boolean(agent.password_hash && agent.password_salt),
-      productIds: productIdsByAgent.get(agent.id) ?? [],
-    })),
-  });
+  return c.json({ agents: await loadAgents(c.env.DB) });
 });
 
 adminConfigApi.post('/api/admin/agents', async (c) => {
@@ -91,6 +79,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     username?: string;
     password?: string;
     productIds?: string[];
+    routingScope?: unknown;
     maxActiveConversations?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
@@ -105,7 +94,15 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     return c.json({ error: 'USERNAME_EXISTS' }, 409);
   }
 
-  const productIds = await validProductIds(c.env.DB, body?.productIds ?? []);
+  const routingScope = await normalizeRoutingScope(
+    c.env.DB,
+    body?.routingScope,
+    body?.productIds ?? [],
+  );
+  if (!routingScope) {
+    return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
+  }
+
   const maxActive = normalizeCapacity(body?.maxActiveConversations);
   const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
@@ -126,15 +123,9 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       enabled,
       maxActive,
     ),
+    ...routingScopeStatements(c.env.DB, id, routingScope),
   ];
-  for (const productId of productIds) {
-    statements.push(
-      c.env.DB.prepare(
-        `INSERT INTO agent_products (site_id, agent_id, product_id, is_enabled)
-         VALUES ('default', ?1, ?2, 1)`,
-      ).bind(id, productId),
-    );
-  }
+
   try {
     await c.env.DB.batch(statements);
   } catch (error) {
@@ -166,6 +157,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     username?: string;
     password?: string;
     productIds?: string[];
+    routingScope?: unknown;
     maxActiveConversations?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
@@ -203,10 +195,18 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     body.maxActiveConversations === undefined
       ? current.max_active_conversations
       : normalizeCapacity(body.maxActiveConversations);
-  const productIds =
-    body.productIds === undefined
-      ? await currentProductIds(c.env.DB, id)
-      : await validProductIds(c.env.DB, body.productIds);
+
+  const routingScope =
+    body.routingScope === undefined && body.productIds === undefined
+      ? await currentRoutingScope(c.env.DB, id)
+      : await normalizeRoutingScope(
+          c.env.DB,
+          body.routingScope,
+          body.productIds ?? [],
+        );
+  if (!routingScope) {
+    return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
+  }
 
   const statements: D1PreparedStatement[] = [
     c.env.DB.prepare(
@@ -233,18 +233,11 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       id,
     ),
     c.env.DB.prepare(
-      `DELETE FROM agent_products
+      `DELETE FROM agent_routing_scopes
        WHERE site_id = 'default' AND agent_id = ?1`,
     ).bind(id),
+    ...routingScopeStatements(c.env.DB, id, routingScope),
   ];
-  for (const productId of productIds) {
-    statements.push(
-      c.env.DB.prepare(
-        `INSERT INTO agent_products (site_id, agent_id, product_id, is_enabled)
-         VALUES ('default', ?1, ?2, 1)`,
-      ).bind(id, productId),
-    );
-  }
   if (enabled === 0) {
     statements.push(
       c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
@@ -258,32 +251,310 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
 adminConfigApi.get('/api/admin/products', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const result = await c.env.DB.prepare(
-    `SELECT id, title, href, cover_url, section_id, section_name,
-       category_id, category_name, is_enabled
-     FROM product_catalog
-     WHERE site_id = 'default'
-     ORDER BY is_enabled DESC,
-       COALESCE(section_name, '') COLLATE NOCASE ASC,
-       COALESCE(category_name, '') COLLATE NOCASE ASC,
-       title COLLATE NOCASE ASC,
-       id ASC`,
-  ).all<ProductRow>();
-
-  return c.json({
-    products: (result.results ?? []).map((product) => ({
-      id: product.id,
-      title: product.title,
-      href: product.href,
-      coverUrl: product.cover_url,
-      sectionId: product.section_id,
-      sectionName: product.section_name,
-      categoryId: product.category_id,
-      categoryName: product.category_name,
-      isEnabled: product.is_enabled === 1,
-    })),
-  });
+  return c.json({ products: await loadProducts(c.env.DB) });
 });
+
+async function loadAgents(db: D1Database) {
+  const [agentsResult, assignmentsResult] = await Promise.all([
+    db
+      .prepare(
+        `SELECT id, name, username, status, is_enabled, max_active_conversations,
+           last_login_at, last_seen_at, password_hash, password_salt, password_iterations
+         FROM agents
+         WHERE id <> 'admin'
+         ORDER BY is_enabled DESC, name ASC, id ASC`,
+      )
+      .all<AgentRow>(),
+    db
+      .prepare(
+        `SELECT
+           ars.agent_id,
+           ars.scope_type,
+           ars.section_id,
+           ars.category_id,
+           ars.product_id,
+           p.id AS resolved_product_id
+         FROM agent_routing_scopes ars
+         LEFT JOIN product_catalog p
+           ON p.site_id = ars.site_id
+          AND p.is_enabled = 1
+          AND (
+            (ars.scope_type = 'section' AND p.section_id = ars.section_id)
+            OR (
+              ars.scope_type = 'category'
+              AND p.section_id = ars.section_id
+              AND p.category_id = ars.category_id
+            )
+            OR (ars.scope_type = 'product' AND p.id = ars.product_id)
+          )
+         WHERE ars.site_id = 'default'
+           AND ars.is_enabled = 1
+         ORDER BY
+           ars.agent_id ASC,
+           ars.scope_type ASC,
+           ars.section_id ASC,
+           ars.category_id ASC,
+           ars.product_id ASC,
+           COALESCE(p.title, '') COLLATE NOCASE ASC,
+           COALESCE(p.id, '') ASC`,
+      )
+      .all<ScopeExpansionRow>(),
+  ]);
+
+  const rowsByAgent = new Map<string, ScopeExpansionRow[]>();
+  for (const row of assignmentsResult.results ?? []) {
+    const current = rowsByAgent.get(row.agent_id) ?? [];
+    current.push(row);
+    rowsByAgent.set(row.agent_id, current);
+  }
+
+  return (agentsResult.results ?? []).map((agent) => {
+    const rows = rowsByAgent.get(agent.id) ?? [];
+    return {
+      id: agent.id,
+      name: agent.name,
+      username: agent.username,
+      status: agent.status,
+      isEnabled: agent.is_enabled === 1,
+      maxActiveConversations: agent.max_active_conversations,
+      lastLoginAt: agent.last_login_at,
+      lastSeenAt: agent.last_seen_at,
+      hasPassword: Boolean(agent.password_hash && agent.password_salt),
+      productIds: distinct(
+        rows
+          .map((row) => row.resolved_product_id)
+          .filter((value): value is string => Boolean(value)),
+      ),
+      routingScope: scopeFromRows(rows),
+    };
+  });
+}
+
+async function loadProducts(db: D1Database) {
+  const result = await db
+    .prepare(
+      `SELECT id, title, href, cover_url, section_id, section_name,
+         category_id, category_name, is_enabled
+       FROM product_catalog
+       WHERE site_id = 'default'
+       ORDER BY is_enabled DESC,
+         COALESCE(section_name, '') COLLATE NOCASE ASC,
+         COALESCE(category_name, '') COLLATE NOCASE ASC,
+         title COLLATE NOCASE ASC,
+         id ASC`,
+    )
+    .all<ProductRow>();
+
+  return (result.results ?? []).map((product) => ({
+    id: product.id,
+    title: product.title,
+    href: product.href,
+    coverUrl: product.cover_url,
+    sectionId: product.section_id,
+    sectionName: product.section_name,
+    categoryId: product.category_id,
+    categoryName: product.category_name,
+    isEnabled: product.is_enabled === 1,
+  }));
+}
+
+async function currentRoutingScope(
+  db: D1Database,
+  agentId: string,
+): Promise<AgentRoutingScope> {
+  const result = await db
+    .prepare(
+      `SELECT agent_id, scope_type, section_id, category_id, product_id
+       FROM agent_routing_scopes
+       WHERE site_id = 'default'
+         AND agent_id = ?1
+         AND is_enabled = 1
+       ORDER BY scope_type ASC, section_id ASC, category_id ASC, product_id ASC`,
+    )
+    .bind(agentId)
+    .all<ScopeRow>();
+  return scopeFromRows(result.results ?? []);
+}
+
+function scopeFromRows(rows: ScopeRow[]): AgentRoutingScope {
+  if (!rows.length) return { type: 'none' };
+
+  const sectionRows = rows.filter((row) => row.scope_type === 'section');
+  if (sectionRows.length) {
+    return { type: 'section', sectionId: sectionRows[0]?.section_id ?? '' };
+  }
+
+  const categoryRows = rows.filter((row) => row.scope_type === 'category');
+  if (categoryRows.length) {
+    return {
+      type: 'category',
+      sectionId: categoryRows[0]?.section_id ?? '',
+      categoryIds: distinct(categoryRows.map((row) => row.category_id)),
+    };
+  }
+
+  return {
+    type: 'product',
+    productIds: distinct(
+      rows
+        .filter((row) => row.scope_type === 'product')
+        .map((row) => row.product_id),
+    ),
+  };
+}
+
+async function normalizeRoutingScope(
+  db: D1Database,
+  raw: unknown,
+  legacyProductIds: string[],
+): Promise<AgentRoutingScope | null> {
+  if (raw === undefined) {
+    const productIds = normalizedIdentifiers(legacyProductIds);
+    if (!productIds.length) return { type: 'none' };
+    return (await allEnabledProductsExist(db, productIds))
+      ? { type: 'product', productIds }
+      : null;
+  }
+  if (!isRecord(raw) || typeof raw.type !== 'string') return null;
+
+  if (raw.type === 'none') return { type: 'none' };
+
+  if (raw.type === 'section') {
+    const sectionId = normalizeIdentifier(raw.sectionId);
+    if (!sectionId) return null;
+    const exists = await db
+      .prepare(
+        `SELECT 1 AS found
+         FROM product_catalog
+         WHERE site_id = 'default'
+           AND is_enabled = 1
+           AND section_id = ?1
+         LIMIT 1`,
+      )
+      .bind(sectionId)
+      .first<{ found: number }>();
+    return exists ? { type: 'section', sectionId } : null;
+  }
+
+  if (raw.type === 'category') {
+    const sectionId = normalizeIdentifier(raw.sectionId);
+    if (!sectionId || !Array.isArray(raw.categoryIds)) return null;
+    const categoryIds = normalizedIdentifiers(raw.categoryIds);
+    if (!categoryIds.length) return null;
+    const result = await db
+      .prepare(
+        `SELECT DISTINCT category_id
+         FROM product_catalog
+         WHERE site_id = 'default'
+           AND is_enabled = 1
+           AND section_id = ?1
+           AND category_id IS NOT NULL
+           AND category_id <> ''`,
+      )
+      .bind(sectionId)
+      .all<{ category_id: string }>();
+    const allowed = new Set(
+      (result.results ?? []).map((row) => row.category_id),
+    );
+    return categoryIds.every((id) => allowed.has(id))
+      ? { type: 'category', sectionId, categoryIds }
+      : null;
+  }
+
+  if (raw.type === 'product') {
+    if (!Array.isArray(raw.productIds)) return null;
+    const productIds = normalizedIdentifiers(raw.productIds);
+    if (!productIds.length) return { type: 'none' };
+    return (await allEnabledProductsExist(db, productIds))
+      ? { type: 'product', productIds }
+      : null;
+  }
+
+  return null;
+}
+
+function routingScopeStatements(
+  db: D1Database,
+  agentId: string,
+  scope: AgentRoutingScope,
+): D1PreparedStatement[] {
+  if (scope.type === 'none') return [];
+
+  if (scope.type === 'section') {
+    return [
+      db
+        .prepare(
+          `INSERT INTO agent_routing_scopes (
+             site_id, agent_id, scope_type, section_id,
+             category_id, product_id, is_enabled
+           ) VALUES ('default', ?1, 'section', ?2, '', '', 1)`,
+        )
+        .bind(agentId, scope.sectionId),
+    ];
+  }
+
+  if (scope.type === 'category') {
+    return scope.categoryIds.map((categoryId) =>
+      db
+        .prepare(
+          `INSERT INTO agent_routing_scopes (
+             site_id, agent_id, scope_type, section_id,
+             category_id, product_id, is_enabled
+           ) VALUES ('default', ?1, 'category', ?2, ?3, '', 1)`,
+        )
+        .bind(agentId, scope.sectionId, categoryId),
+    );
+  }
+
+  return scope.productIds.map((productId) =>
+    db
+      .prepare(
+        `INSERT INTO agent_routing_scopes (
+           site_id, agent_id, scope_type, section_id,
+           category_id, product_id, is_enabled
+         ) VALUES ('default', ?1, 'product', '', '', ?2, 1)`,
+      )
+      .bind(agentId, productId),
+  );
+}
+
+async function allEnabledProductsExist(
+  db: D1Database,
+  productIds: string[],
+): Promise<boolean> {
+  if (!productIds.length) return true;
+  const result = await db
+    .prepare(
+      `SELECT id
+       FROM product_catalog
+       WHERE site_id = 'default' AND is_enabled = 1`,
+    )
+    .all<{ id: string }>();
+  const allowed = new Set((result.results ?? []).map((item) => item.id));
+  return productIds.every((id) => allowed.has(id));
+}
+
+function normalizedIdentifiers(values: unknown[]): string[] {
+  return distinct(
+    values
+      .map((value) => normalizeIdentifier(value))
+      .filter((value): value is string => Boolean(value)),
+  );
+}
+
+function normalizeIdentifier(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed && trimmed.length <= 500 ? trimmed : null;
+}
+
+function distinct(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
 
 async function adminAuthorized(c: Context<Env>): Promise<boolean> {
   const password = c.env.ADMIN_PASSWORD;
@@ -327,45 +598,6 @@ async function usernameExists(
   return Boolean(row);
 }
 
-async function currentProductIds(
-  db: D1Database,
-  agentId: string,
-): Promise<string[]> {
-  const result = await db
-    .prepare(
-      `SELECT ap.product_id
-       FROM agent_products ap
-       JOIN product_catalog p
-         ON p.site_id = ap.site_id AND p.id = ap.product_id
-       WHERE ap.site_id = 'default'
-         AND ap.agent_id = ?1
-         AND ap.is_enabled = 1
-         AND p.is_enabled = 1
-       ORDER BY p.title COLLATE NOCASE ASC, ap.product_id ASC`,
-    )
-    .bind(agentId)
-    .all<{ product_id: string }>();
-  return (result.results ?? []).map((item) => item.product_id);
-}
-
-async function validProductIds(
-  db: D1Database,
-  values: string[],
-): Promise<string[]> {
-  const requested = [
-    ...new Set(values.map((value) => value.trim()).filter(Boolean)),
-  ];
-  if (!requested.length) return [];
-  const result = await db
-    .prepare(
-      `SELECT id FROM product_catalog
-       WHERE site_id = 'default' AND is_enabled = 1`,
-    )
-    .all<{ id: string }>();
-  const allowed = new Set((result.results ?? []).map((item) => item.id));
-  return requested.filter((id) => allowed.has(id));
-}
-
 function normalizeName(value?: string): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 80 ? trimmed : null;
@@ -373,8 +605,9 @@ function normalizeName(value?: string): string | null {
 
 function normalizeUsername(value?: string | null): string | null {
   const trimmed = value?.trim() ?? '';
-  if (trimmed.length < 2 || trimmed.length > 40 || /\s/u.test(trimmed))
+  if (trimmed.length < 2 || trimmed.length > 40 || /\s/u.test(trimmed)) {
     return null;
+  }
   return trimmed;
 }
 
@@ -401,7 +634,9 @@ function timingSafeEqual(left: string, right: string): boolean {
   const b = new TextEncoder().encode(right);
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let index = 0; index < a.length; index += 1) diff |= a[index] ^ b[index];
+  for (let index = 0; index < a.length; index += 1) {
+    diff |= a[index] ^ b[index];
+  }
   return diff === 0;
 }
 
