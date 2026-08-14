@@ -15,6 +15,12 @@ export type ProductCatalogItem = {
   isEnabled: boolean;
 };
 
+export type AgentRoutingScope =
+  | { type: 'none' }
+  | { type: 'section'; sectionId: string }
+  | { type: 'category'; sectionId: string; categoryIds: string[] }
+  | { type: 'product'; productIds: string[] };
+
 export type AgentAccount = {
   id: string;
   name: string;
@@ -26,6 +32,7 @@ export type AgentAccount = {
   lastSeenAt: string | null;
   hasPassword: boolean;
   productIds: string[];
+  routingScope?: AgentRoutingScope;
 };
 
 export type AgentIdentity = {
@@ -83,6 +90,19 @@ export type ConversationDetail = {
   messages: Message[];
 };
 
+const productSelectionScopeKey = Symbol('product-selection-routing-scope');
+
+type ScopedProductIds = string[] & {
+  [productSelectionScopeKey]?: AgentRoutingScope;
+};
+
+type AdminBootstrapPayload = {
+  agents: AgentAccount[];
+  products: ProductCatalogItem[];
+};
+
+let adminBootstrapRequest: Promise<AdminBootstrapPayload> | null = null;
+
 const errorMessages: Record<string, string> = {
   INVALID_CREDENTIALS: '账号或密码错误',
   UNAUTHORIZED: '登录已失效，请重新登录',
@@ -96,9 +116,30 @@ const errorMessages: Record<string, string> = {
   USERNAME_EXISTS: '登录账号已存在',
   INVALID_GROUP: '客服分组名称无效',
   INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
+  INVALID_ROUTING_SCOPE: '负责范围无效，请重新选择分区、分类或产品',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
 };
+
+export function attachProductSelectionScope(
+  ids: string[],
+  scope: AgentRoutingScope,
+): string[] {
+  const selection = [...ids] as ScopedProductIds;
+  Object.defineProperty(selection, productSelectionScopeKey, {
+    configurable: true,
+    enumerable: false,
+    value: scope,
+    writable: true,
+  });
+  return selection;
+}
+
+export function getProductSelectionScope(
+  ids: string[],
+): AgentRoutingScope | null {
+  return (ids as ScopedProductIds)[productSelectionScopeKey] ?? null;
+}
 
 export async function getAdminSession(): Promise<AdminSessionState> {
   return request('/api/auth/session');
@@ -116,10 +157,14 @@ export async function adminLogout(): Promise<void> {
 }
 
 export async function getAgents(): Promise<AgentAccount[]> {
-  const response = await request<{ agents: AgentAccount[] }>(
-    '/api/admin/agents',
-  );
-  return response.agents;
+  const response = await getAdminBootstrap();
+  return response.agents.map((agent) => ({
+    ...agent,
+    productIds: attachProductSelectionScope(
+      agent.productIds,
+      normalizeRoutingScope(agent.routingScope, agent.productIds),
+    ),
+  }));
 }
 
 export async function createAgent(input: {
@@ -132,7 +177,10 @@ export async function createAgent(input: {
 }): Promise<void> {
   await request('/api/admin/agents', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      routingScope: scopeForRequest(input.productIds),
+    }),
   });
 }
 
@@ -149,14 +197,15 @@ export async function updateAgent(
 ): Promise<void> {
   await request(`/api/admin/agents/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      routingScope: scopeForRequest(input.productIds),
+    }),
   });
 }
 
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
-  const response = await request<{ products: ProductCatalogItem[] }>(
-    '/api/admin/products',
-  );
+  const response = await getAdminBootstrap();
   return response.products;
 }
 
@@ -241,6 +290,53 @@ export function openAgentInboxSocket(): WebSocket {
 
 export function openConversationSocket(id: string): WebSocket {
   return openSocket(`/api/agent/realtime/${encodeURIComponent(id)}`);
+}
+
+function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
+  if (!adminBootstrapRequest) {
+    const pending = request<AdminBootstrapPayload>('/api/admin/bootstrap');
+    adminBootstrapRequest = pending;
+    void pending.then(
+      () => {
+        if (adminBootstrapRequest === pending) adminBootstrapRequest = null;
+      },
+      () => {
+        if (adminBootstrapRequest === pending) adminBootstrapRequest = null;
+      },
+    );
+  }
+  return adminBootstrapRequest;
+}
+
+function normalizeRoutingScope(
+  scope: AgentRoutingScope | undefined,
+  productIds: string[],
+): AgentRoutingScope {
+  if (!scope) {
+    return productIds.length
+      ? { type: 'product', productIds: [...productIds] }
+      : { type: 'none' };
+  }
+  if (scope.type === 'category') {
+    return {
+      type: 'category',
+      sectionId: scope.sectionId,
+      categoryIds: [...scope.categoryIds],
+    };
+  }
+  if (scope.type === 'product') {
+    return { type: 'product', productIds: [...scope.productIds] };
+  }
+  return scope;
+}
+
+function scopeForRequest(productIds: string[]): AgentRoutingScope {
+  return (
+    getProductSelectionScope(productIds) ??
+    (productIds.length
+      ? { type: 'product', productIds: [...productIds] }
+      : { type: 'none' })
+  );
 }
 
 function openSocket(path: string): WebSocket {
