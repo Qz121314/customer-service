@@ -1,15 +1,44 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+} from 'node:fs';
+import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
-import { agentApi } from '../src/worker/agent-api.ts';
-import { clientApi } from '../src/worker/client-api.ts';
+const workerDirectory = fileURLToPath(
+  new URL('../src/worker/', import.meta.url),
+);
+const moduleShims = [];
+for (const name of readdirSync(workerDirectory)) {
+  if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
+  const shimPath = join(workerDirectory, name.slice(0, -3));
+  if (existsSync(shimPath)) continue;
+  symlinkSync(name, shimPath);
+  moduleShims.push(shimPath);
+}
+
+let agentApi;
+let clientApi;
+try {
+  [{ agentApi }, { clientApi }] = await Promise.all([
+    import('../src/worker/agent-api.ts'),
+    import('../src/worker/client-api.ts'),
+  ]);
+} finally {
+  for (const shimPath of moduleShims) unlinkSync(shimPath);
+}
 
 function applyMigrations(database) {
   const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
-  for (const name of readdirSync(directory).filter((value) => /^\d+.*\.sql$/u.test(value)).sort()) {
+  for (const name of readdirSync(directory)
+    .filter((value) => /^\d+.*\.sql$/u.test(value))
+    .sort()) {
     database.exec(readFileSync(`${directory}/${name}`, 'utf8'));
   }
 }
@@ -118,7 +147,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     )
     .run();
 
-  const visitorId = 'VISITOR_E2E';
+  const visitorId = 'TST123';
   const createResponse = await clientApi.request(
     '/client/v1/conversations',
     {
@@ -142,8 +171,8 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     },
     env,
   );
-  assert.equal(createResponse.status, 201);
   const created = await json(createResponse);
+  assert.equal(createResponse.status, 201);
   const conversationId = created.conversation.id;
   assert.ok(conversationId);
   assert.equal(created.conversation.agentName, 'Agent E2E');
@@ -194,7 +223,10 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   );
   const clientDetail = await json(clientDetailResponse);
   assert.equal(clientDetail.conversation.messages.length, 2);
-  assert.equal(clientDetail.conversation.messages[0].body, 'Hello from visitor');
+  assert.equal(
+    clientDetail.conversation.messages[0].body,
+    'Hello from visitor',
+  );
   assert.equal(clientDetail.conversation.messages[1].body, 'Hello from agent');
   assert.equal(clientDetail.conversation.messages[1].direction, 'agent');
 
