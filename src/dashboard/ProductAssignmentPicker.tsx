@@ -1,16 +1,11 @@
-import { useMemo, useState } from 'react';
-import {
-  attachProductSelectionScope,
-  getProductSelectionScope,
-  type AgentRoutingScope,
-  type ProductCatalogItem,
-} from './api';
+import { useEffect, useMemo, useState } from 'react';
+import type { AgentRoutingScope, ProductCatalogItem } from './api';
 
 type Props = {
   products: ProductCatalogItem[];
-  selectedIds: string[];
+  scope: AgentRoutingScope;
   disabled?: boolean;
-  onChange: (ids: string[]) => void;
+  onChange: (scope: AgentRoutingScope) => void;
 };
 
 type ScopeMode = Exclude<AgentRoutingScope['type'], 'none'>;
@@ -25,21 +20,25 @@ const searchResultLimit = 60;
 
 export function ProductAssignmentPicker({
   products,
-  selectedIds,
+  scope,
   disabled = false,
   onChange,
 }: Props) {
-  const initialScope = getProductSelectionScope(selectedIds);
-  const [mode, setMode] = useState<ScopeMode>(() => {
-    if (initialScope && initialScope.type !== 'none') return initialScope.type;
-    return selectedIds.length ? 'product' : 'section';
-  });
+  const [mode, setMode] = useState<ScopeMode>(() =>
+    scope.type === 'none' ? 'section' : scope.type,
+  );
   const [categorySectionId, setCategorySectionId] = useState(() =>
-    initialScope?.type === 'category' ? initialScope.sectionId : '',
+    scope.type === 'category' ? scope.sectionId : '',
   );
   const [query, setQuery] = useState('');
   const [filterSectionId, setFilterSectionId] = useState('');
   const [filterCategoryId, setFilterCategoryId] = useState('');
+
+  useEffect(() => {
+    if (scope.type === 'none') return;
+    setMode(scope.type);
+    if (scope.type === 'category') setCategorySectionId(scope.sectionId);
+  }, [scope]);
 
   const enabledProducts = useMemo(
     () => products.filter((product) => product.isEnabled),
@@ -49,23 +48,14 @@ export function ProductAssignmentPicker({
     () => new Map(products.map((product) => [product.id, product])),
     [products],
   );
-  const scope = useMemo<AgentRoutingScope>(
-    () =>
-      getProductSelectionScope(selectedIds) ??
-      (selectedIds.length
-        ? { type: 'product', productIds: selectedIds }
-        : { type: 'none' }),
-    [selectedIds],
-  );
 
   const sections = useMemo<NamedCount[]>(() => {
     const map = new Map<string, NamedCount>();
     for (const product of enabledProducts) {
       if (!product.sectionId) continue;
       const current = map.get(product.sectionId);
-      if (current) {
-        current.count += 1;
-      } else {
+      if (current) current.count += 1;
+      else {
         map.set(product.sectionId, {
           id: product.sectionId,
           name: product.sectionName || product.sectionId,
@@ -82,13 +72,11 @@ export function ProductAssignmentPicker({
     if (!categorySectionId) return [];
     const map = new Map<string, NamedCount>();
     for (const product of enabledProducts) {
-      if (product.sectionId !== categorySectionId || !product.categoryId) {
+      if (product.sectionId !== categorySectionId || !product.categoryId)
         continue;
-      }
       const current = map.get(product.categoryId);
-      if (current) {
-        current.count += 1;
-      } else {
+      if (current) current.count += 1;
+      else {
         map.set(product.categoryId, {
           id: product.categoryId,
           name: product.categoryName || product.categoryId,
@@ -136,7 +124,6 @@ export function ProductAssignmentPicker({
     () => new Set(scope.type === 'product' ? scope.productIds : []),
     [scope],
   );
-
   const selectedProducts = useMemo(
     () =>
       [...selectedProductIds]
@@ -178,45 +165,46 @@ export function ProductAssignmentPicker({
     normalizedQuery,
   ]);
 
-  function emit(scopeValue: AgentRoutingScope, ids: string[]) {
-    onChange(attachProductSelectionScope(ids, scopeValue));
-  }
+  const sectionProductCount = selectedSectionId
+    ? enabledProducts.filter(
+        (product) => product.sectionId === selectedSectionId,
+      ).length
+    : 0;
+  const categoryProductCount = useMemo(() => {
+    if (scope.type !== 'category') return 0;
+    const ids = new Set(scope.categoryIds);
+    return enabledProducts.filter(
+      (product) =>
+        product.sectionId === scope.sectionId &&
+        Boolean(product.categoryId) &&
+        ids.has(product.categoryId as string),
+    ).length;
+  }, [enabledProducts, scope]);
 
   function selectMode(nextMode: ScopeMode) {
     if (nextMode === mode) return;
     if (nextMode === 'category') {
       setCategorySectionId(
-        scope.type === 'section'
+        scope.type === 'section' || scope.type === 'category'
           ? scope.sectionId
-          : scope.type === 'category'
-            ? scope.sectionId
-            : '',
+          : '',
       );
     }
     if (nextMode === 'product') {
-      const sectionId =
+      setFilterSectionId(
         scope.type === 'section' || scope.type === 'category'
           ? scope.sectionId
-          : '';
-      setFilterSectionId(sectionId);
+          : '',
+      );
       setFilterCategoryId('');
       setQuery('');
     }
     setMode(nextMode);
-    emit({ type: 'none' }, []);
+    onChange({ type: 'none' });
   }
 
-  function selectSection(nextSectionId: string) {
-    if (!nextSectionId) {
-      emit({ type: 'none' }, []);
-      return;
-    }
-    emit(
-      { type: 'section', sectionId: nextSectionId },
-      enabledProducts
-        .filter((product) => product.sectionId === nextSectionId)
-        .map((product) => product.id),
-    );
+  function selectSection(sectionId: string) {
+    onChange(sectionId ? { type: 'section', sectionId } : { type: 'none' });
   }
 
   function toggleCategory(categoryId: string, checked: boolean) {
@@ -225,21 +213,10 @@ export function ProductAssignmentPicker({
     if (checked) next.add(categoryId);
     else next.delete(categoryId);
     const categoryIds = [...next];
-    if (!categoryIds.length) {
-      emit({ type: 'none' }, []);
-      return;
-    }
-    const selectedCategories = new Set(categoryIds);
-    emit(
-      { type: 'category', sectionId: categorySectionId, categoryIds },
-      enabledProducts
-        .filter(
-          (product) =>
-            product.sectionId === categorySectionId &&
-            Boolean(product.categoryId) &&
-            selectedCategories.has(product.categoryId as string),
-        )
-        .map((product) => product.id),
+    onChange(
+      categoryIds.length
+        ? { type: 'category', sectionId: categorySectionId, categoryIds }
+        : { type: 'none' },
     );
   }
 
@@ -248,19 +225,10 @@ export function ProductAssignmentPicker({
     if (checked) next.add(productId);
     else next.delete(productId);
     const productIds = [...next];
-    emit(
+    onChange(
       productIds.length ? { type: 'product', productIds } : { type: 'none' },
-      productIds,
     );
   }
-
-  const sectionProductCount = selectedSectionId
-    ? enabledProducts.filter(
-        (product) => product.sectionId === selectedSectionId,
-      ).length
-    : 0;
-  const categoryProductCount =
-    scope.type === 'category' ? selectedIds.length : 0;
 
   if (products.length === 0) {
     return (
@@ -347,7 +315,7 @@ export function ProductAssignmentPicker({
               disabled={disabled}
               onChange={(event) => {
                 setCategorySectionId(event.target.value);
-                emit({ type: 'none' }, []);
+                onChange({ type: 'none' });
               }}
             >
               <option value="">选择分区</option>

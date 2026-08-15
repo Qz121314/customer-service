@@ -9,6 +9,7 @@ import {
 } from 'react';
 import {
   AgentAccount,
+  AgentRoutingScope,
   ProductCatalogItem,
   AgentIdentity,
   Conversation,
@@ -51,7 +52,7 @@ type AgentDraft = {
   name: string;
   username: string;
   password: string;
-  productIds: string[];
+  routingScope: AgentRoutingScope;
   maxActiveConversations: number;
   isEnabled: boolean;
 };
@@ -61,7 +62,7 @@ const emptyAgentDraft: AgentDraft = {
   name: '',
   username: '',
   password: '',
-  productIds: [],
+  routingScope: { type: 'none' },
   maxActiveConversations: 0,
   isEnabled: true,
 };
@@ -112,6 +113,39 @@ type AgentScopeSummary = {
   detail: string;
 };
 
+function productsForScope(
+  scope: AgentRoutingScope,
+  products: ProductCatalogItem[],
+): ProductCatalogItem[] {
+  if (scope.type === 'none') return [];
+  if (scope.type === 'product') {
+    const ids = new Set(scope.productIds);
+    return products.filter(
+      (product) => product.isEnabled && ids.has(product.id),
+    );
+  }
+  if (scope.type === 'section') {
+    return products.filter(
+      (product) => product.isEnabled && product.sectionId === scope.sectionId,
+    );
+  }
+  const categoryIds = new Set(scope.categoryIds);
+  return products.filter(
+    (product) =>
+      product.isEnabled &&
+      product.sectionId === scope.sectionId &&
+      Boolean(product.categoryId) &&
+      categoryIds.has(product.categoryId as string),
+  );
+}
+
+function scopeProductCount(
+  scope: AgentRoutingScope,
+  products: ProductCatalogItem[],
+): number {
+  return productsForScope(scope, products).length;
+}
+
 function agentScopeSummary(
   agent: AgentAccount,
   products: ProductCatalogItem[],
@@ -131,7 +165,7 @@ function agentScopeSummary(
     return {
       tone: 'section',
       title: `${sectionName} · 整个分区`,
-      detail: `动态覆盖 ${agent.productIds.length} 个产品`,
+      detail: `动态覆盖 ${scopeProductCount(scope, products)} 个产品`,
     };
   }
 
@@ -152,7 +186,7 @@ function agentScopeSummary(
     return {
       tone: 'category',
       title: `${sectionName} · ${scope.categoryIds.length} 个分类`,
-      detail: `${visible}${remainder ? ` 等 ${names.length} 个分类` : ''} · 动态覆盖 ${agent.productIds.length} 个产品`,
+      detail: `${visible}${remainder ? ` 等 ${names.length} 个分类` : ''} · 动态覆盖 ${scopeProductCount(scope, products)} 个产品`,
     };
   }
 
@@ -267,7 +301,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   ).length;
   const enabledCount = agents.filter((agent) => agent.isEnabled).length;
   const assignedProductCount = new Set(
-    agents.flatMap((agent) => agent.productIds),
+    agents.flatMap((agent) =>
+      productsForScope(agent.routingScope, products).map(
+        (product) => product.id,
+      ),
+    ),
   ).size;
 
   function createNewAgent() {
@@ -282,7 +320,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       name: agent.name,
       username: agent.username ?? '',
       password: '',
-      productIds: agent.productIds,
+      routingScope: agent.routingScope,
       maxActiveConversations: agent.maxActiveConversations,
       isEnabled: agent.isEnabled,
     });
@@ -305,7 +343,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           name: draft.name,
           username: draft.username,
           password: draft.password || undefined,
-          productIds: draft.productIds,
+          routingScope: draft.routingScope,
           maxActiveConversations: draft.maxActiveConversations,
           isEnabled: draft.isEnabled,
         });
@@ -314,7 +352,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           name: draft.name,
           username: draft.username,
           password: draft.password,
-          productIds: draft.productIds,
+          routingScope: draft.routingScope,
           maxActiveConversations: draft.maxActiveConversations,
           isEnabled: draft.isEnabled,
         });
@@ -657,9 +695,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               </div>
               <ProductAssignmentPicker
                 products={products}
-                selectedIds={draft.productIds}
+                scope={draft.routingScope}
                 disabled={saving}
-                onChange={(productIds) => setDraft({ ...draft, productIds })}
+                onChange={(routingScope) =>
+                  setDraft({ ...draft, routingScope })
+                }
               />
               <label className="account-enable-line">
                 <input

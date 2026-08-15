@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
+import test from 'node:test';
+
+function source(path) {
+  return readFileSync(new URL(path, import.meta.url), 'utf8');
+}
+
+test('admin dashboard stores and submits routing scopes without expanded product arrays', () => {
+  const api = source('../src/dashboard/api.ts');
+  const picker = source('../src/dashboard/ProductAssignmentPicker.tsx');
+  const app = source('../src/dashboard/App.tsx');
+
+  assert.ok(!api.includes('attachProductSelectionScope'));
+  assert.ok(!api.includes('getProductSelectionScope'));
+  assert.ok(!api.includes('expandRoutingScopeProductIds'));
+  assert.ok(!api.includes('scopeForRequest'));
+  assert.ok(api.includes('routingScope: AgentRoutingScope'));
+  assert.ok(api.includes('body: JSON.stringify(input)'));
+
+  assert.ok(picker.includes('scope: AgentRoutingScope'));
+  assert.ok(picker.includes('onChange: (scope: AgentRoutingScope) => void'));
+  assert.ok(picker.includes("{ type: 'section', sectionId }"));
+  assert.ok(!picker.includes('attachProductSelectionScope'));
+  assert.ok(!picker.includes('.map((product) => product.id)'));
+
+  assert.ok(app.includes('routingScope: AgentRoutingScope'));
+  assert.ok(app.includes('routingScope: agent.routingScope'));
+  assert.ok(app.includes('scope={draft.routingScope}'));
+  assert.ok(!app.includes('productIds: draft.productIds'));
+});

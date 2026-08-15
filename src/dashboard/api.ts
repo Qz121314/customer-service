@@ -31,8 +31,7 @@ export type AgentAccount = {
   lastLoginAt: string | null;
   lastSeenAt: string | null;
   hasPassword: boolean;
-  productIds: string[];
-  routingScope?: AgentRoutingScope;
+  routingScope: AgentRoutingScope;
 };
 
 export type AgentIdentity = {
@@ -90,14 +89,13 @@ export type ConversationDetail = {
   messages: Message[];
 };
 
-const productSelectionScopeKey = Symbol('product-selection-routing-scope');
-
-type ScopedProductIds = string[] & {
-  [productSelectionScopeKey]?: AgentRoutingScope;
+type AdminBootstrapAgent = Omit<AgentAccount, 'routingScope'> & {
+  productIds?: string[];
+  routingScope?: AgentRoutingScope;
 };
 
 type AdminBootstrapPayload = {
-  agents: AgentAccount[];
+  agents: AdminBootstrapAgent[];
   products: ProductCatalogItem[];
 };
 
@@ -121,26 +119,6 @@ const errorMessages: Record<string, string> = {
   CONVERSATION_CLOSED: '会话已关闭',
 };
 
-export function attachProductSelectionScope(
-  ids: string[],
-  scope: AgentRoutingScope,
-): string[] {
-  const selection = [...ids] as ScopedProductIds;
-  Object.defineProperty(selection, productSelectionScopeKey, {
-    configurable: true,
-    enumerable: false,
-    value: scope,
-    writable: true,
-  });
-  return selection;
-}
-
-export function getProductSelectionScope(
-  ids: string[],
-): AgentRoutingScope | null {
-  return (ids as ScopedProductIds)[productSelectionScopeKey] ?? null;
-}
-
 export async function getAdminSession(): Promise<AdminSessionState> {
   return request('/api/auth/session');
 }
@@ -158,33 +136,26 @@ export async function adminLogout(): Promise<void> {
 
 export async function getAgents(): Promise<AgentAccount[]> {
   const response = await getAdminBootstrap();
-  return response.agents.map((agent) => {
-    const scope = normalizeRoutingScope(agent.routingScope, agent.productIds);
-    return {
-      ...agent,
-      routingScope: scope,
-      productIds: attachProductSelectionScope(
-        expandRoutingScopeProductIds(scope, response.products),
-        scope,
-      ),
-    };
-  });
+  return response.agents.map((agent) => ({
+    ...agent,
+    routingScope: normalizeRoutingScope(
+      agent.routingScope,
+      agent.productIds ?? [],
+    ),
+  }));
 }
 
 export async function createAgent(input: {
   name: string;
   username: string;
   password: string;
-  productIds: string[];
+  routingScope: AgentRoutingScope;
   maxActiveConversations: number;
   isEnabled: boolean;
 }): Promise<void> {
   await request('/api/admin/agents', {
     method: 'POST',
-    body: JSON.stringify({
-      ...input,
-      routingScope: scopeForRequest(input.productIds),
-    }),
+    body: JSON.stringify(input),
   });
 }
 
@@ -194,17 +165,14 @@ export async function updateAgent(
     name: string;
     username: string;
     password?: string;
-    productIds: string[];
+    routingScope: AgentRoutingScope;
     maxActiveConversations: number;
     isEnabled: boolean;
   },
 ): Promise<void> {
   await request(`/api/admin/agents/${encodeURIComponent(id)}`, {
     method: 'PATCH',
-    body: JSON.stringify({
-      ...input,
-      routingScope: scopeForRequest(input.productIds),
-    }),
+    body: JSON.stringify(input),
   });
 }
 
@@ -332,40 +300,6 @@ function normalizeRoutingScope(
     return { type: 'product', productIds: [...scope.productIds] };
   }
   return scope;
-}
-
-function expandRoutingScopeProductIds(
-  scope: AgentRoutingScope,
-  products: ProductCatalogItem[],
-): string[] {
-  if (scope.type === 'none') return [];
-  if (scope.type === 'product') return [...scope.productIds];
-  if (scope.type === 'section') {
-    return products
-      .filter(
-        (product) => product.isEnabled && product.sectionId === scope.sectionId,
-      )
-      .map((product) => product.id);
-  }
-  const categoryIds = new Set(scope.categoryIds);
-  return products
-    .filter(
-      (product) =>
-        product.isEnabled &&
-        product.sectionId === scope.sectionId &&
-        Boolean(product.categoryId) &&
-        categoryIds.has(product.categoryId as string),
-    )
-    .map((product) => product.id);
-}
-
-function scopeForRequest(productIds: string[]): AgentRoutingScope {
-  return (
-    getProductSelectionScope(productIds) ??
-    (productIds.length
-      ? { type: 'product', productIds: [...productIds] }
-      : { type: 'none' })
-  );
 }
 
 function openSocket(path: string, keepAlive = false): WebSocket {
