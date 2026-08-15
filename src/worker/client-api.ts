@@ -3,10 +3,16 @@ import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
 import { resolveConversationGroup } from './context-routing';
 import { assignConversationAgent } from './routing';
+import {
+  consumeConversationCreationQuota,
+  passesBurstLimit,
+  requestSourceHash,
+} from './abuse-control';
 
 type ClientBindings = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
+  CONVERSATION_BURST_LIMITER?: RateLimit;
   MANAGEMENT_TOKEN?: string;
 };
 
@@ -92,7 +98,6 @@ type NormalizedProduct = {
 
 const CLIENT_MESSAGE_LIMIT = 4000;
 const VISITOR_LIFETIME_HOURS = 24;
-const CONVERSATION_LIMIT = 10;
 
 export const clientApi = new Hono<ClientEnv>();
 
@@ -324,22 +329,29 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
-  const activeCount = await c.env.DB.prepare(
-    `SELECT COUNT(*) AS count
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.site_id = ?1 AND v.external_id = ?2
-       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP`,
-  )
-    .bind(site.id, visitorId)
-    .first<{ count: number }>();
-  if (Number(activeCount?.count ?? 0) >= CONVERSATION_LIMIT) {
+  const sourceHash = await requestSourceHash(c.req.raw, visitorId);
+  if (
+    !(await passesBurstLimit(
+      c.env.CONVERSATION_BURST_LIMITER,
+      `conversation:${site.id}:${sourceHash}`,
+    ))
+  ) {
+    c.header('Retry-After', '60');
     return error(
       c,
-      409,
-      'CONVERSATION_LIMIT_REACHED',
-      'Conversation limit reached.',
+      429,
+      'CONVERSATION_RATE_LIMITED',
+      'Please wait before starting another conversation.',
     );
+  }
+  const creationQuota = await consumeConversationCreationQuota(c.env.DB, {
+    siteId: site.id,
+    visitorId,
+    sourceHash,
+  });
+  if (!creationQuota.allowed) {
+    c.header('Retry-After', String(creationQuota.retryAfterSeconds));
+    return error(c, 429, creationQuota.code, 'Conversation limit reached.');
   }
 
   await rememberProductRoutingContext(c.env.DB, site.id, product);
@@ -1205,7 +1217,7 @@ async function readJson<T>(request: Request): Promise<T | null> {
 
 function error(
   c: Context<ClientEnv>,
-  status: 400 | 401 | 404 | 409 | 426,
+  status: 400 | 401 | 404 | 409 | 426 | 429,
   code: string,
   message: string,
 ) {
