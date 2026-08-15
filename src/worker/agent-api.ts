@@ -448,7 +448,7 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
 agentApi.get('/api/agent/realtime/inbox', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  return room(c.env, 'admin-inbox').fetch(
+  return room(c.env, agentInboxRoom(agent.id)).fetch(
     authenticatedRealtimeRequest(c.req.raw, agent.id),
   );
 });
@@ -656,6 +656,10 @@ function authenticatedRealtimeRequest(
 
 function room(env: Bindings, id: string): DurableObjectStub {
   return env.CONVERSATION_ROOMS.get(env.CONVERSATION_ROOMS.idFromName(id));
+}
+
+function agentInboxRoom(agentId: string): string {
+  return `agent-inbox:${agentId}`;
 }
 
 async function broadcastConversationRoom(

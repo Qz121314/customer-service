@@ -320,6 +320,24 @@ export default app;
 export class ConversationRoom extends DurableObject<Bindings> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (
+      request.method === 'POST' &&
+      url.pathname.endsWith('/disconnect-agent')
+    ) {
+      const body = await readJson<{ agentId?: string }>(request);
+      const agentId = body?.agentId?.trim();
+      if (!agentId) return new Response('Agent ID required', { status: 400 });
+      for (const socket of this.ctx.getWebSockets()) {
+        const attachment = socket.deserializeAttachment() as {
+          agentId?: string | null;
+        } | null;
+        if (attachment?.agentId === agentId) {
+          socket.close(1008, 'Agent access revoked');
+        }
+      }
+      return new Response(null, { status: 204 });
+    }
+
     if (request.method === 'POST' && url.pathname.endsWith('/broadcast')) {
       const payload = await request.text();
       for (const socket of this.ctx.getWebSockets()) {

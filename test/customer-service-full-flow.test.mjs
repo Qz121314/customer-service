@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import { createHash, createHmac } from 'node:crypto';
 import {
   existsSync,
   readdirSync,
@@ -23,10 +24,12 @@ for (const name of readdirSync(workerDirectory)) {
   moduleShims.push(shimPath);
 }
 
+let adminConfigApi;
 let agentApi;
 let clientApi;
 try {
-  [{ agentApi }, { clientApi }] = await Promise.all([
+  [{ adminConfigApi }, { agentApi }, { clientApi }] = await Promise.all([
+    import('../src/worker/admin-config-api.ts'),
     import('../src/worker/agent-api.ts'),
     import('../src/worker/client-api.ts'),
   ]);
@@ -108,6 +111,16 @@ function fakeRooms() {
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function adminCookie(password) {
+  const payload = Buffer.from(
+    JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }),
+  ).toString('base64url');
+  const signature = createHmac('sha256', password)
+    .update(payload)
+    .digest('base64url');
+  return `cs_session=${payload}.${signature}`;
 }
 
 async function json(response) {
@@ -239,9 +252,68 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
         event.message?.body === 'Hello from agent',
     ),
   );
-  const inboxEvents = rooms.events.get('admin-inbox') ?? [];
+  const inboxEvents = rooms.events.get('agent-inbox:agent-e2e') ?? [];
   assert.ok(
     inboxEvents.some(
+      (event) =>
+        event.type === 'conversation.changed' &&
+        event.conversation?.id === conversationId,
+    ),
+  );
+  assert.equal(rooms.events.has('admin-inbox'), false);
+
+  database
+    .prepare(
+      `INSERT INTO agents (
+         id, site_id, name, username, password_hash, password_salt,
+         status, is_enabled, max_active_conversations, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
+    )
+    .run('agent-standby', 'Agent Standby', 'agent-standby', 'hash', 'salt');
+  database
+    .prepare(
+      `INSERT INTO agent_routing_scopes (
+         site_id, agent_id, scope_type, section_id, category_id, product_id, is_enabled
+       ) VALUES ('default', 'agent-standby', 'section', 'west', '', '', 1)`,
+    )
+    .run();
+
+  const adminPassword = 'admin-password';
+  const disableResponse = await adminConfigApi.request(
+    '/api/admin/agents/agent-e2e',
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ isEnabled: false }),
+    },
+    { ...env, ADMIN_PASSWORD: adminPassword },
+  );
+  await json(disableResponse);
+
+  const disabledAgent = database
+    .prepare('SELECT status, is_enabled FROM agents WHERE id = ?')
+    .get('agent-e2e');
+  assert.equal(disabledAgent.status, 'offline');
+  assert.equal(disabledAgent.is_enabled, 0);
+  assert.equal(
+    database
+      .prepare(
+        'SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?',
+      )
+      .get('agent-e2e').count,
+    0,
+  );
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(conversationId).assigned_agent,
+    'agent-standby',
+  );
+  assert.ok(
+    (rooms.events.get('agent-inbox:agent-standby') ?? []).some(
       (event) =>
         event.type === 'conversation.changed' &&
         event.conversation?.id === conversationId,

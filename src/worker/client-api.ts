@@ -594,10 +594,10 @@ export async function broadcastClientConversationEvent(
     );
   }
 
-  const overview = conversation.assigned_agent
-    ? await loadAgentOverview(env.DB, conversation.assigned_agent)
-    : null;
-  await broadcastRoom(env, 'admin-inbox', {
+  if (!conversation.assigned_agent) return;
+
+  const overview = await loadAgentOverview(env.DB, conversation.assigned_agent);
+  await broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {
     type: 'conversation.changed',
     conversationId,
     conversation: agentConversationSummary(conversation),
@@ -1063,6 +1063,10 @@ function visitorRoom(
 
 function room(env: ClientBindings, name: string): DurableObjectStub {
   return env.CONVERSATION_ROOMS.get(env.CONVERSATION_ROOMS.idFromName(name));
+}
+
+function agentInboxRoom(agentId: string): string {
+  return `agent-inbox:${agentId}`;
 }
 
 async function broadcastVisitorEvent(

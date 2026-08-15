@@ -1,8 +1,11 @@
 import { Hono, type Context } from 'hono';
 import { hashAgentPassword } from './agent-password';
+import { broadcastClientConversationEvent } from './client-api';
+import { assignConversationAgent } from './routing';
 
 type Bindings = {
   DB: D1Database;
+  CONVERSATION_ROOMS: DurableObjectNamespace;
   ADMIN_PASSWORD?: string;
 };
 
@@ -226,6 +229,10 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   const enabled =
     body.isEnabled === undefined ? current.is_enabled : body.isEnabled ? 1 : 0;
+  const conversationsToReassign =
+    current.is_enabled === 1 && enabled === 0
+      ? await assignedActiveConversationIds(c.env.DB, id)
+      : [];
   const maxActive =
     body.maxActiveConversations === undefined
       ? current.max_active_conversations
@@ -284,9 +291,31 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
         id,
       ),
+      c.env.DB.prepare(
+        `UPDATE conversations
+           SET assigned_agent = NULL,
+               assigned_at = NULL,
+               assigned_business_date = NULL,
+               status = 'open',
+               updated_at = CURRENT_TIMESTAMP
+           WHERE assigned_agent = ?1
+             AND status IN ('open', 'pending')
+             AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+      ).bind(id),
     );
   }
   await c.env.DB.batch(statements);
+  if (conversationsToReassign.length) {
+    await disconnectAgentRealtime(c.env, id, conversationsToReassign);
+    for (const conversationId of conversationsToReassign) {
+      await assignConversationAgent(c.env.DB, conversationId);
+      await broadcastClientConversationEvent(
+        c.env,
+        conversationId,
+        'conversation.assigned',
+      );
+    }
+  }
   return c.json({ ok: true });
 });
 
@@ -386,6 +415,43 @@ async function loadProducts(db: D1Database) {
     categoryName: product.category_name,
     isEnabled: product.is_enabled === 1,
   }));
+}
+
+async function assignedActiveConversationIds(
+  db: D1Database,
+  agentId: string,
+): Promise<string[]> {
+  const result = await db
+    .prepare(
+      `SELECT id
+       FROM conversations
+       WHERE assigned_agent = ?1
+         AND status IN ('open', 'pending')
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       ORDER BY last_message_at ASC, id ASC`,
+    )
+    .bind(agentId)
+    .all<{ id: string }>();
+  return (result.results ?? []).map((conversation) => conversation.id);
+}
+
+async function disconnectAgentRealtime(
+  env: Bindings,
+  agentId: string,
+  conversationIds: string[],
+): Promise<void> {
+  const roomIds = [`agent-inbox:${agentId}`, ...conversationIds];
+  await Promise.all(
+    roomIds.map((roomId) =>
+      env.CONVERSATION_ROOMS.get(
+        env.CONVERSATION_ROOMS.idFromName(roomId),
+      ).fetch('https://conversation-room/disconnect-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId }),
+      }),
+    ),
+  );
 }
 
 async function currentRoutingScope(
