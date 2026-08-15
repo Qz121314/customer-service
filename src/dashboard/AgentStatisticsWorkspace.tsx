@@ -7,12 +7,12 @@ import {
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
 
-export function AgentStatisticsWorkspace({
+export function AgentStatisticsModal({
   identity,
-  onLogout,
+  onClose,
 }: {
   identity: AgentIdentity;
-  onLogout: () => Promise<void>;
+  onClose: () => void;
 }) {
   const [month, setMonth] = useState(() => currentBusinessMonth());
   const [stats, setStats] = useState<AgentSelfMonthlyStats | null>(null);
@@ -41,6 +41,14 @@ export function AgentStatisticsWorkspace({
     };
   }, [month]);
 
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
   const countMap = useMemo(
     () => new Map((stats?.counts ?? []).map((item) => [item.day, item.count])),
     [stats],
@@ -49,97 +57,85 @@ export function AgentStatisticsWorkspace({
     stats?.days ?? Array.from({ length: 30 }, (_, index) => index + 1);
 
   return (
-    <div className="workspace-shell agent-statistics-shell">
-      <aside className="workspace-sidebar">
-        <div className="workspace-brand">CS</div>
-        <div className="agent-profile">
-          <span className="avatar">{initials(identity.name)}</span>
+    <div className="agent-statistics-backdrop" onMouseDown={onClose}>
+      <section
+        className="agent-statistics-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-statistics-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="agent-statistics-dialog-head">
           <div>
-            <strong>{identity.name}</strong>
-            <small>@{identity.username}</small>
+            <span className="eyebrow">接待数据</span>
+            <h2 id="agent-statistics-title">{identity.name} 的会话统计</h2>
+            <p>按美国西海岸时间记录首次分配的新会话，数据保留 45 天。</p>
           </div>
-          <i className="presence online" />
-        </div>
-        <nav className="agent-statistics-nav" aria-label="客服工作台导航">
-          <a className="ghost-button full" href="/agent">
-            我的会话
-          </a>
-          <a className="ghost-button full active" href="/agent/stats">
-            会话统计
-          </a>
-        </nav>
-        <button
-          type="button"
-          className="ghost-button full"
-          onClick={() => void onLogout()}
-        >
-          退出客服账号
-        </button>
-      </aside>
-
-      <main className="agent-statistics-main">
-        <header className="agent-statistics-head">
-          <div>
-            <span className="eyebrow">MY STATISTICS</span>
-            <h1>我的会话统计</h1>
-            <p>
-              按美国西海岸时间统计首次分配给你的新会话，统计数据保留 45 天。
-            </p>
+          <div className="agent-statistics-head-actions">
+            <label>
+              <span>月份</span>
+              <input
+                type="month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="modal-close"
+              aria-label="关闭会话统计"
+              onClick={onClose}
+            >
+              ×
+            </button>
           </div>
-          <label>
-            <span>月份</span>
-            <input
-              type="month"
-              value={month}
-              onChange={(event) => setMonth(event.target.value)}
-            />
-          </label>
         </header>
 
-        {error && <div className="notice error">{error}</div>}
+        <div className="agent-statistics-dialog-body">
+          {error && <div className="notice error">{error}</div>}
 
-        <section className="agent-statistics-summary">
-          <div>
-            <span>本月 1–30 日</span>
-            <strong>{busy ? '—' : (stats?.total ?? 0)}</strong>
-          </div>
-          <div>
-            <span>今日接待</span>
-            <strong>{busy ? '—' : (stats?.todayCount ?? 0)}</strong>
-          </div>
-          <div>
-            <span>每日上限</span>
-            <strong>
-              {busy ? '—' : stats?.dailyLimit ? stats.dailyLimit : '不限'}
-            </strong>
-          </div>
-          <div>
-            <span>数据保留</span>
-            <strong>45 天</strong>
-          </div>
-        </section>
-
-        <section className="agent-statistics-card">
-          <div className="agent-statistics-card-head">
+          <section className="agent-statistics-summary">
             <div>
-              <strong>{month} 每日接待</strong>
-              <span>1–30 日；31 日仍参与每日限额，但不计入月表。</span>
+              <span>本月接待</span>
+              <strong>{busy ? '—' : (stats?.total ?? 0)}</strong>
+              <small>1–30 日累计</small>
             </div>
-            <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
-          </div>
-          <div className="agent-statistics-days">
-            {days.map((day) => {
-              const value = countMap.get(day) ?? 0;
-              return (
-                <div key={day} className={value ? 'has-value' : ''}>
-                  <span>{day} 日</span>
-                  <strong>{busy ? '·' : value}</strong>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      </main>
+            <div>
+              <span>今日接待</span>
+              <strong>{busy ? '—' : (stats?.todayCount ?? 0)}</strong>
+              <small>西海岸自然日</small>
+            </div>
+            <div>
+              <span>每日上限</span>
+              <strong>
+                {busy ? '—' : stats?.dailyLimit ? stats.dailyLimit : '不限'}
+              </strong>
+              <small>达到后停止新分流</small>
+            </div>
+          </section>
+
+          <section className="agent-statistics-card">
+            <div className="agent-statistics-card-head">
+              <div>
+                <strong>{month} 每日接待</strong>
+                <span>颜色越深代表当天接待量越高</span>
+              </div>
+              <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
+            </div>
+            <div className="agent-statistics-days">
+              {days.map((day) => {
+                const value = countMap.get(day) ?? 0;
+                return (
+                  <div key={day} className={value ? 'has-value' : ''}>
+                    <span>{day}</span>
+                    <strong>{busy ? '·' : value}</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      </section>
     </div>
   );
 }
@@ -154,9 +150,4 @@ function currentBusinessMonth(): string {
     parts.map((part) => [part.type, part.value]),
   );
   return `${values.year}-${values.month}`;
-}
-
-function initials(value: string): string {
-  const trimmed = value.trim();
-  return trimmed ? [...trimmed].slice(0, 2).join('').toUpperCase() : '客';
 }

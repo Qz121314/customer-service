@@ -1335,3 +1335,224 @@ select:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Focused agent workspace: compact navigation and a centered app shell. */
+@media (min-width: 761px) {
+  body:has(.workspace-shell) {
+    overflow: hidden;
+    background: #e9eaed;
+  }
+
+  .workspace-shell {
+    width: min(1480px, calc(100% - 24px));
+    height: calc(100dvh - 24px);
+    min-height: 620px;
+    margin: 12px auto;
+    grid-template-columns: 82px 360px minmax(0, 1fr);
+    border: 1px solid #d9dbe0;
+    border-radius: 14px;
+    box-shadow: 0 16px 44px rgba(23, 25, 31, 0.09);
+  }
+
+  .workspace-sidebar {
+    padding: 12px 10px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .workspace-brand-lockup {
+    width: 100%;
+    min-height: 50px;
+    padding: 0 0 12px;
+    justify-content: center;
+  }
+
+  .workspace-brand-lockup > span,
+  .agent-profile > div,
+  .workspace-sidebar .ghost-button > span {
+    display: none;
+  }
+
+  .agent-profile {
+    position: relative;
+    width: 100%;
+    margin: 0;
+    padding: 10px 0 16px;
+    display: grid;
+    grid-template-columns: 1fr;
+    place-items: center;
+  }
+
+  .agent-profile .avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .agent-profile .presence {
+    position: absolute;
+    right: 10px;
+    bottom: 16px;
+    border: 2px solid var(--cs-sidebar);
+  }
+
+  .workspace-sidebar .ghost-button,
+  .workspace-sidebar .ghost-button.full {
+    width: 42px;
+    min-height: 42px;
+    margin-top: 0;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    display: inline-flex;
+    justify-content: center;
+  }
+
+  .workspace-sidebar .workspace-statistics-button {
+    margin-top: auto;
+  }
+
+  .workspace-sidebar .ghost-button:hover {
+    border-color: var(--cs-sidebar-line);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .conversation-pane {
+    background: #fff;
+  }
+
+  .conversation-head {
+    min-height: 76px;
+    padding: 14px 16px;
+  }
+
+  .conversation-head .eyebrow {
+    margin-bottom: 3px;
+  }
+
+  .inbox-overview {
+    min-height: 58px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--cs-line);
+    background: #fafafb;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .inbox-overview .metric {
+    min-height: 40px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .inbox-overview .metric:hover {
+    background: #fff;
+  }
+
+  .inbox-overview .metric strong {
+    order: 2;
+    color: #292c33;
+    font-size: 16px;
+  }
+
+  .inbox-overview .metric span {
+    color: #818690;
+    font-size: 10px;
+  }
+
+  .filters {
+    justify-content: flex-start;
+  }
+
+  .thread-pane {
+    background: #f7f7f8;
+  }
+
+  .thread-empty::before {
+    content: '';
+    width: 42px;
+    height: 42px;
+    margin: 0 auto 7px;
+    border: 1px solid #dcdee3;
+    border-radius: 12px;
+    background:
+      linear-gradient(#c5c8d0, #c5c8d0) 50% 44% / 18px 1px no-repeat,
+      linear-gradient(#c5c8d0, #c5c8d0) 50% 58% / 12px 1px no-repeat,
+      #fff;
+    box-shadow: 0 4px 14px rgba(26, 28, 34, 0.05);
+  }
+
+  .thread-empty strong {
+    font-size: 15px;
+  }
+
+  .thread-empty span {
+    max-width: 360px;
+    color: #9196a0;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1050px) {
+  .workspace-shell {
+    width: 100%;
+    height: 100dvh;
+    margin: 0;
+    grid-template-columns: 72px 330px minmax(0, 1fr);
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .inbox-overview {
+    min-height: 52px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--cs-line);
+    background: #fff;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .inbox-overview .metric {
+    min-height: 38px;
+    padding: 5px 8px;
+    border: 0;
+    background: #f7f7f8;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .inbox-overview .metric strong {
+    font-size: 15px;
+  }
+
+  .inbox-overview .metric span {
+    font-size: 10px;
+  }
+
+  .workspace-sidebar .ghost-button,
+  .workspace-sidebar .ghost-button.full {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+    display: inline-flex;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .workspace-sidebar .ghost-button .ui-icon {
+    display: block;
+    width: 16px;
+    height: 16px;
+  }
+}

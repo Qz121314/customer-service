@@ -39,7 +39,7 @@ import {
   updateAgent,
 } from './api';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
-import { AgentStatisticsWorkspace } from './AgentStatisticsWorkspace';
+import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import {
   getAgentMedia,
   sendAgentImage,
@@ -1120,11 +1120,7 @@ function AgentPortal() {
     setState('signed-out');
   };
 
-  return window.location.pathname.startsWith('/agent/stats') ? (
-    <AgentStatisticsWorkspace identity={identity} onLogout={onLogout} />
-  ) : (
-    <AgentWorkspace identity={identity} onLogout={onLogout} />
-  );
+  return <AgentWorkspace identity={identity} onLogout={onLogout} />;
 }
 
 function AgentWorkspace({
@@ -1135,6 +1131,9 @@ function AgentWorkspace({
   onLogout: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [statisticsOpen, setStatisticsOpen] = useState(() =>
+    window.location.pathname.startsWith('/agent/stats'),
+  );
   const [overview, setOverview] = useState({
     open: 0,
     pending: 0,
@@ -1172,6 +1171,11 @@ function AgentWorkspace({
         .find((item) => item.sender_type === 'visitor')?.id ?? null,
     [detail],
   );
+
+  useEffect(() => {
+    if (!window.location.pathname.startsWith('/agent/stats')) return;
+    window.history.replaceState(null, '', '/agent');
+  }, []);
 
   const acknowledgeConversation = useCallback(
     async (id: string, lastMessageId: string | null = null) => {
@@ -1646,22 +1650,25 @@ function AgentWorkspace({
           </div>
           <i className="presence online" />
         </div>
-        <div className="workspace-metrics">
-          <Metric label="处理中" value={overview.pending} />
-          <Metric label="新会话" value={overview.open} />
-          <Metric label="已关闭" value={overview.closed} />
-        </div>
-        <a className="ghost-button full" href="/agent/stats">
+        <button
+          type="button"
+          className="ghost-button full workspace-statistics-button"
+          aria-label="打开会话统计"
+          title="会话统计"
+          onClick={() => setStatisticsOpen(true)}
+        >
           <UiIcon name="statistics" />
-          会话统计
-        </a>
+          <span>会话统计</span>
+        </button>
         <button
           type="button"
           className="ghost-button full"
+          aria-label="退出客服账号"
+          title="退出客服账号"
           onClick={() => void onLogout()}
         >
           <UiIcon name="logout" />
-          退出客服账号
+          <span>退出客服账号</span>
         </button>
       </aside>
 
@@ -1682,6 +1689,11 @@ function AgentWorkspace({
               : '正在重连'}
           </span>
         </header>
+        <div className="inbox-overview" aria-label="会话概览">
+          <Metric label="新会话" value={overview.open} />
+          <Metric label="处理中" value={overview.pending} />
+          <Metric label="已关闭" value={overview.closed} />
+        </div>
         <div className="filters">
           {(Object.keys(filterLabels) as Filter[]).map((item) => (
             <button
@@ -1913,6 +1925,12 @@ function AgentWorkspace({
           </>
         )}
       </main>
+      {statisticsOpen && (
+        <AgentStatisticsModal
+          identity={identity}
+          onClose={() => setStatisticsOpen(false)}
+        />
+      )}
     </div>
   );
 }
