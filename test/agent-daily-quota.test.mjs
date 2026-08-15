@@ -126,6 +126,14 @@ test('daily quota uses Los Angeles natural-day boundaries', () => {
     routingBusinessDate(new Date('2026-08-15T07:00:00.000Z')),
     '2026-08-15',
   );
+  assert.equal(
+    routingBusinessDate(new Date('2026-12-01T07:59:59.000Z')),
+    '2026-11-30',
+  );
+  assert.equal(
+    routingBusinessDate(new Date('2026-12-01T08:00:00.000Z')),
+    '2026-12-01',
+  );
 });
 
 test('concurrent routing cannot exceed the daily conversation quota', async () => {
