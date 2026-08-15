@@ -441,7 +441,7 @@ export function ProductAssignmentPicker({
 
           <div className="product-assignment-summary">
             <span>已选择 {selectedProductIds.size} 个产品</span>
-            <span>搜索和筛选只在浏览器本地执行</span>
+            <span>可按分区和分类缩小查找范围</span>
           </div>
 
           {selectedProducts.length ? (

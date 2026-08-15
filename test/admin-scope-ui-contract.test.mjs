@@ -23,4 +23,6 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
     styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'),
   );
   assert.ok(app.includes('aria-modal="true"'));
+  assert.ok(app.includes('再配置它的分流负责范围'));
+  assert.ok(!app.includes('分配负责产品'));
 });

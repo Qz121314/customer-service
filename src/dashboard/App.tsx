@@ -357,6 +357,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         </div>
         <nav className="admin-nav" aria-label="客服管理导航">
           <button
+            type="button"
             className={section === 'agents' ? 'active' : ''}
             onClick={() => setSection('agents')}
           >
@@ -364,6 +365,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <small>{agents.length}</small>
           </button>
           <button
+            type="button"
             className={section === 'workspace' ? 'active' : ''}
             onClick={() => setSection('workspace')}
           >
@@ -375,7 +377,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           <a href="/agent" target="_blank" rel="noreferrer">
             打开坐席工作台<span>↗</span>
           </a>
-          <button onClick={() => void onLogout()}>退出管理</button>
+          <button type="button" onClick={() => void onLogout()}>
+            退出管理
+          </button>
         </div>
       </aside>
 
@@ -386,14 +390,22 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <p>{sectionHint}</p>
           </div>
           {section === 'agents' && (
-            <button className="primary-button" onClick={createNewAgent}>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={createNewAgent}
+            >
               新增客服
             </button>
           )}
         </header>
 
         {error && (
-          <button className="notice error" onClick={() => setError('')}>
+          <button
+            type="button"
+            className="notice error"
+            onClick={() => setError('')}
+          >
             {error}
           </button>
         )}
@@ -432,8 +444,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               ) : agents.length === 0 ? (
                 <div className="empty-state admin-empty">
                   <strong>还没有客服账号</strong>
-                  <span>创建第一个客服账号后，由管理员给它分配负责产品。</span>
-                  <button className="primary-button" onClick={createNewAgent}>
+                  <span>创建第一个客服账号后，再配置它的分流负责范围。</span>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={createNewAgent}
+                  >
                     新增客服
                   </button>
                 </div>
@@ -496,6 +512,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                           </td>
                           <td>
                             <button
+                              type="button"
                               className="table-action"
                               onClick={() => editAgent(agent)}
                             >
@@ -524,6 +541,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <div className="workspace-url-row">
                 <code>{workspaceUrl}</code>
                 <button
+                  type="button"
                   className="secondary-button"
                   onClick={() => void copyWorkspaceUrl()}
                 >
