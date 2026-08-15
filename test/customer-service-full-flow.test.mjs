@@ -269,6 +269,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     .run();
 
   const visitorId = 'TST123';
+  const sourceHandoffId = '018f47c2-6c72-4d8a-9f11-4b0db21c7358';
   const createResponse = await clientApi.request(
     '/client/v1/conversations',
     {
@@ -276,6 +277,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
+        sourceHandoffId,
         clientMessageId: 'client-message-e2e-1',
         message: 'Hello from visitor',
         product: {
@@ -301,9 +303,45 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(created.conversation.messages.length, 1);
   assert.equal(created.conversation.messages[0].direction, 'customer');
 
+  const duplicateHandoffResponse = await clientApi.request(
+    '/client/v1/conversations',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId,
+        sourceHandoffId,
+        clientMessageId: 'client-message-e2e-duplicate',
+        message: 'This duplicate handoff must not create traffic',
+        product: {
+          id: 'product-e2e',
+          sectionId: 'west',
+          sectionName: 'West',
+          categoryId: 'massage',
+          categoryName: 'Massage',
+          title: 'Product E2E',
+          href: '/sections/west/products/product-e2e/',
+          coverUrl: null,
+        },
+      }),
+    },
+    env,
+  );
+  assert.equal(duplicateHandoffResponse.status, 200);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM conversations
+         WHERE source_handoff_id = ?`,
+      )
+      .get(sourceHandoffId).count,
+    1,
+  );
+
   const assigned = database
     .prepare(
-      `SELECT assigned_agent, status, section_id, category_id
+      `SELECT assigned_agent, status, section_id, category_id, source_handoff_id
        FROM conversations WHERE id = ?`,
     )
     .get(conversationId);
@@ -311,6 +349,17 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(assigned.status, 'pending');
   assert.equal(assigned.section_id, 'west');
   assert.equal(assigned.category_id, 'massage');
+  assert.equal(assigned.source_handoff_id, sourceHandoffId);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT source_handoff_id
+         FROM agent_traffic_receipts
+         WHERE conversation_id = ?`,
+      )
+      .get(conversationId).source_handoff_id,
+    sourceHandoffId,
+  );
 
   const cookie = `cs_agent_session=${token}`;
   const inboxResponse = await agentApi.request(

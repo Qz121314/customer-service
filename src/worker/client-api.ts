@@ -217,6 +217,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     visitorId?: string;
     projectId?: string | null;
     groupId?: string;
+    sourceHandoffId?: string;
     clientMessageId?: string;
     message?: string;
     product?: ProductInput;
@@ -224,12 +225,21 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   const visitorId = normalizeVisitorId(body?.visitorId);
   const legacyGroupId = normalizeId(body?.groupId, 100);
+  const sourceHandoffId = normalizeHandoffId(body?.sourceHandoffId);
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
   const message = body?.message?.trim();
   const product = normalizeProduct(body?.product);
 
   if (!visitorId)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
+  if (body?.sourceHandoffId !== undefined && !sourceHandoffId) {
+    return error(
+      c,
+      400,
+      'INVALID_SOURCE_HANDOFF_ID',
+      'Source handoff ID is invalid.',
+    );
+  }
   if (!clientMessageId) {
     return error(
       c,
@@ -276,6 +286,44 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
+  if (sourceHandoffId) {
+    const existingHandoff = await c.env.DB.prepare(
+      `SELECT c.id, v.external_id
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.site_id = ?1 AND c.source_handoff_id = ?2
+       LIMIT 1`,
+    )
+      .bind(site.id, sourceHandoffId)
+      .first<{ id: string; external_id: string }>();
+    if (existingHandoff?.external_id !== undefined) {
+      if (existingHandoff.external_id !== visitorId) {
+        return error(
+          c,
+          409,
+          'SOURCE_HANDOFF_ALREADY_USED',
+          'Source handoff ID was already used.',
+        );
+      }
+      const conversation = await ownedConversation(
+        c.env.DB,
+        existingHandoff.id,
+        site.id,
+        visitorId,
+      );
+      if (conversation) {
+        return c.json({
+          conversation: await conversationDetail(
+            c.env.DB,
+            conversation,
+            30,
+            null,
+          ),
+        });
+      }
+    }
+  }
+
   const activeCount = await c.env.DB.prepare(
     `SELECT COUNT(*) AS count
      FROM conversations c
@@ -315,12 +363,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
        id, site_id, visitor_id, status, subject, group_id,
        product_id, section_id, section_name, category_id, category_name,
        product_title, product_cover_url, product_href,
-       expires_at, last_message_at, created_at, updated_at
+       source_handoff_id, expires_at, last_message_at, created_at, updated_at
      ) VALUES (
        ?1, ?2, ?3, 'open', ?4, ?5,
        ?6, ?7, ?8, ?9, ?10,
        ?11, ?12, ?13,
-       ?14, ?15, ?15, ?15
+       ?14, ?15, ?16, ?16, ?16
      )`,
   )
     .bind(
@@ -337,6 +385,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       product.title,
       product.coverUrl,
       product.href,
+      sourceHandoffId,
       expiresAt,
       now,
     )
@@ -699,6 +748,16 @@ function normalizeId(value: unknown, maxLength: number): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed && trimmed.length <= maxLength ? trimmed : null;
+}
+
+function normalizeHandoffId(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+    normalized,
+  )
+    ? normalized
+    : null;
 }
 
 function normalizeProduct(value?: ProductInput): NormalizedProduct | null {

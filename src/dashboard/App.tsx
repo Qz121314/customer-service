@@ -1181,14 +1181,14 @@ function MonthlyAgentStatistics({
   const selectedTotal = selectedAgent
     ? (agentTotals.get(selectedAgent.id) ?? 0)
     : 0;
-  const selectedActiveDays = selectedAgent
-    ? days.filter(
-        (day) => (countMap.get(`${selectedAgent.id}:${day}`) ?? 0) > 0,
-      ).length
+  const selectedHandoffCount = selectedAgent
+    ? ((stats?.handoffCounts ?? []).find(
+        (item) => item.agentId === selectedAgent.id,
+      )?.count ?? 0)
     : 0;
-  const selectedDailyAverage = days.length
-    ? (selectedTotal / days.length).toFixed(1)
-    : '0.0';
+  const selectedCoverage = selectedTotal
+    ? `${Math.min(100, (selectedHandoffCount / selectedTotal) * 100).toFixed(1)}%`
+    : '0%';
 
   useEffect(() => {
     if (agents.length === 0) {
@@ -1275,12 +1275,12 @@ function MonthlyAgentStatistics({
                 <strong>{busy ? '—' : selectedTotal}</strong>
               </div>
               <div>
-                <span>有接待天数</span>
-                <strong>{busy ? '—' : selectedActiveDays}</strong>
+                <span>可逐笔对账</span>
+                <strong>{busy ? '—' : selectedHandoffCount}</strong>
               </div>
               <div>
-                <span>日均接待</span>
-                <strong>{busy ? '—' : selectedDailyAverage}</strong>
+                <span>对账覆盖率</span>
+                <strong>{busy ? '—' : selectedCoverage}</strong>
               </div>
             </div>
 
@@ -1315,8 +1315,9 @@ function MonthlyAgentStatistics({
       <p className="statistics-note">
         每日上限按 America/Los_Angeles 自然日计算；流量账本独立于 24
         小时聊天记录保存并保留 400 天。每个统计周期对应一个完整自然月，自动展示
-        28、29、30 或 31
-        天。达到上限后仅停止接收新会话，已分配会话仍可继续处理。
+        28、29、30 或 31 天。“可逐笔对账”表示同时带有 Site
+        分发编号的流量；旧数据和直接调用客服 API
+        的会话仍计入接待总数，但不计入对账覆盖率。
       </p>
     </section>
   );

@@ -80,25 +80,44 @@ adminConfigApi.get('/api/admin/agent-stats', async (c) => {
   if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
   const period = calendarMonthPeriod(month);
   const retainedFrom = reportingRetentionCutoff();
-  const result = await c.env.DB.prepare(
-    `SELECT agent_id,
-       CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
-       conversation_count AS count
-     FROM agent_daily_stats
-     WHERE site_id = 'default'
-       AND business_date >= ?1
-       AND business_date <= ?2
-       AND business_date >= ?3
-     ORDER BY agent_id ASC, business_date ASC`,
-  )
-    .bind(period.start, period.end, retainedFrom)
-    .all<{ agent_id: string; day: number; count: number }>();
+  const [result, handoffResult] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT agent_id,
+         CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
+         conversation_count AS count
+       FROM agent_daily_stats
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+         AND business_date >= ?3
+       ORDER BY agent_id ASC, business_date ASC`,
+    )
+      .bind(period.start, period.end, retainedFrom)
+      .all<{ agent_id: string; day: number; count: number }>(),
+    c.env.DB.prepare(
+      `SELECT agent_id, COUNT(*) AS count
+       FROM agent_traffic_receipts
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+         AND business_date >= ?3
+         AND source_handoff_id IS NOT NULL
+       GROUP BY agent_id
+       ORDER BY agent_id ASC`,
+    )
+      .bind(period.start, period.end, retainedFrom)
+      .all<{ agent_id: string; count: number }>(),
+  ]);
   return c.json({
     month,
     days: period.days,
     counts: (result.results ?? []).map((row) => ({
       agentId: row.agent_id,
       day: Number(row.day),
+      count: Number(row.count),
+    })),
+    handoffCounts: (handoffResult.results ?? []).map((row) => ({
+      agentId: row.agent_id,
       count: Number(row.count),
     })),
     retainedFrom,

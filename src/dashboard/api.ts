@@ -63,6 +63,7 @@ export type AgentMonthlyStats = {
   month: string;
   days: number[];
   counts: Array<{ agentId: string; day: number; count: number }>;
+  handoffCounts: Array<{ agentId: string; count: number }>;
   retainedFrom: string;
 };
 
