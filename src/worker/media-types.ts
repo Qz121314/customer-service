@@ -2,6 +2,7 @@ export type MediaBindings = {
   DB: D1Database;
   MEDIA: R2Bucket;
   CONVERSATION_ROOMS: DurableObjectNamespace;
+  MEDIA_BURST_LIMITER?: RateLimit;
   R2_ACCOUNT_ID?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
