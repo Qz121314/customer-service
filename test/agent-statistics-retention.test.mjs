@@ -28,7 +28,10 @@ test('daily agent stats survive conversation retention and prune beyond 45 busin
     .run();
 
   const migration = readFileSync(
-    new URL('../migrations/0017_agent_daily_stats_retention.sql', import.meta.url),
+    new URL(
+      '../migrations/0017_agent_daily_stats_retention.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
   database.exec(migration);
@@ -92,7 +95,9 @@ test('daily agent stats survive conversation retention and prune beyond 45 busin
     0,
   );
 
-  database.exec("DELETE FROM conversations WHERE id IN ('existing', 'new-1')");
+  database.exec(
+    "DELETE FROM conversations WHERE id IN ('existing', 'new-1')",
+  );
 
   assert.equal(
     database
