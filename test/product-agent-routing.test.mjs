@@ -85,6 +85,28 @@ function createDatabase() {
       created_at TEXT NOT NULL,
       updated_at TEXT
     );
+    CREATE TABLE agent_daily_stats (
+      site_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      business_date TEXT NOT NULL,
+      conversation_count INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (site_id, agent_id, business_date)
+    );
+    CREATE TRIGGER test_assignment_daily_stats
+    AFTER UPDATE OF assigned_agent ON conversations
+    WHEN OLD.assigned_agent IS NULL
+      AND NEW.assigned_agent IS NOT NULL
+      AND NEW.assigned_business_date IS NOT NULL
+    BEGIN
+      INSERT INTO agent_daily_stats (
+        site_id, agent_id, business_date, conversation_count
+      ) VALUES (
+        NEW.site_id, NEW.assigned_agent, NEW.assigned_business_date, 1
+      )
+      ON CONFLICT(site_id, agent_id, business_date) DO UPDATE SET
+        conversation_count = conversation_count + 1;
+    END;
 
     INSERT INTO support_groups VALUES ('default', 'legacy', 1);
   `);
@@ -370,9 +392,9 @@ test('daily conversation limit closes routing after quota and reopens next busin
     .get().day;
   database
     .prepare(
-      `UPDATE conversations
-       SET assigned_business_date = '2000-01-01'
-       WHERE assigned_agent = 'quota-agent'`,
+      `UPDATE agent_daily_stats
+       SET business_date = '2000-01-01'
+       WHERE agent_id = 'quota-agent'`,
     )
     .run();
 

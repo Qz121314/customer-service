@@ -102,14 +102,10 @@ export async function assignConversationAgent(
              AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
            GROUP BY assigned_agent
          ) load ON load.assigned_agent = a.id
-         LEFT JOIN (
-           SELECT assigned_agent, COUNT(*) AS daily_count
-           FROM conversations
-           WHERE site_id = ?1
-             AND assigned_agent IS NOT NULL
-             AND assigned_business_date = ?8
-           GROUP BY assigned_agent
-         ) daily ON daily.assigned_agent = a.id
+         LEFT JOIN agent_daily_stats daily
+           ON daily.site_id = a.site_id
+          AND daily.agent_id = a.id
+          AND daily.business_date = ?8
          WHERE a.is_enabled = 1
            AND (?9 = '' OR a.id <> ?9)
            AND a.status = 'online'
@@ -123,10 +119,10 @@ export async function assignConversationAgent(
            )
            AND (
              a.daily_conversation_limit = 0
-             OR COALESCE(daily.daily_count, 0) < a.daily_conversation_limit
+             OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
            )
          ORDER BY
-           COALESCE(daily.daily_count, 0) ASC,
+           COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC
@@ -150,14 +146,10 @@ export async function assignConversationAgent(
              AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
            GROUP BY assigned_agent
          ) load ON load.assigned_agent = a.id
-         LEFT JOIN (
-           SELECT assigned_agent, COUNT(*) AS daily_count
-           FROM conversations
-           WHERE site_id = ?1
-             AND assigned_agent IS NOT NULL
-             AND assigned_business_date = ?8
-           GROUP BY assigned_agent
-         ) daily ON daily.assigned_agent = a.id
+         LEFT JOIN agent_daily_stats daily
+           ON daily.site_id = a.site_id
+          AND daily.agent_id = a.id
+          AND daily.business_date = ?8
          WHERE ?5 <> ''
            AND NOT EXISTS (SELECT 1 FROM matching)
            AND ga.site_id = ?1
@@ -177,10 +169,10 @@ export async function assignConversationAgent(
            )
            AND (
              a.daily_conversation_limit = 0
-             OR COALESCE(daily.daily_count, 0) < a.daily_conversation_limit
+             OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
            )
          ORDER BY
-           COALESCE(daily.daily_count, 0) ASC,
+           COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC

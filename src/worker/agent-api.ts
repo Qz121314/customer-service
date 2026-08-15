@@ -1068,7 +1068,7 @@ function normalizeMonth(value?: string): string | null {
 function retentionCutoffBusinessDate(now = new Date()): string {
   const today = routingBusinessDate(now);
   const date = new Date(`${today}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() - 44);
+  date.setUTCDate(date.getUTCDate() - 399);
   return date.toISOString().slice(0, 10);
 }
 

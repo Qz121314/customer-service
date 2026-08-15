@@ -755,7 +755,7 @@ function reportingBusinessDate(now = new Date()): string {
 function reportingRetentionCutoff(now = new Date()): string {
   const today = reportingBusinessDate(now);
   const date = new Date(`${today}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() - 44);
+  date.setUTCDate(date.getUTCDate() - 399);
   return date.toISOString().slice(0, 10);
 }
 

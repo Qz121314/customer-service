@@ -6,7 +6,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('a transferred conversation counts once for every receiving seat', async () => {
+test('a conversation counts only for its first receiving seat', async () => {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     CREATE TABLE agents (
@@ -17,15 +17,22 @@ test('a transferred conversation counts once for every receiving seat', async ()
       id TEXT PRIMARY KEY,
       site_id TEXT NOT NULL,
       assigned_agent TEXT,
-      assigned_business_date TEXT
+      assigned_business_date TEXT,
+      assigned_at TEXT,
+      updated_at TEXT,
+      created_at TEXT
     );
     INSERT INTO agents VALUES ('agent-a', 'default'), ('agent-b', 'default');
-    INSERT INTO conversations VALUES ('conversation-1', 'default', NULL, NULL);
+    INSERT INTO conversations VALUES (
+      'conversation-1', 'default', NULL, NULL, NULL,
+      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    );
   `);
   database.exec(
     await read('../migrations/0017_agent_daily_stats_retention.sql'),
   );
   database.exec(await read('../migrations/0018_agent_quick_replies.sql'));
+  database.exec(await read('../migrations/0020_agent_traffic_receipts.sql'));
 
   const assign = database.prepare(`
     UPDATE conversations
@@ -34,6 +41,7 @@ test('a transferred conversation counts once for every receiving seat', async ()
   `);
   assign.run('agent-a');
   assign.run('agent-b');
+  assign.run(null);
   assign.run('agent-b');
 
   const counts = database
@@ -47,10 +55,20 @@ test('a transferred conversation counts once for every receiving seat', async ()
       agent_id: row.agent_id,
       conversation_count: row.conversation_count,
     }));
-  assert.deepEqual(counts, [
-    { agent_id: 'agent-a', conversation_count: 1 },
-    { agent_id: 'agent-b', conversation_count: 1 },
-  ]);
+  assert.deepEqual(counts, [{ agent_id: 'agent-a', conversation_count: 1 }]);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT conversation_id, agent_id
+         FROM agent_traffic_receipts`,
+      )
+      .all()
+      .map((row) => ({
+        conversation_id: row.conversation_id,
+        agent_id: row.agent_id,
+      })),
+    [{ conversation_id: 'conversation-1', agent_id: 'agent-a' }],
+  );
 
   database
     .prepare(

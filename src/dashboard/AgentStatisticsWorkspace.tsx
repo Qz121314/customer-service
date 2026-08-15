@@ -31,7 +31,7 @@ export function AgentStatisticsModal({
       .catch((reason) => {
         if (active)
           setError(
-            reason instanceof Error ? reason.message : '无法加载会话统计',
+            reason instanceof Error ? reason.message : '无法加载接待流量',
           );
       })
       .finally(() => {
@@ -69,8 +69,8 @@ export function AgentStatisticsModal({
         <header className="agent-statistics-dialog-head">
           <div>
             <span className="eyebrow">接待数据</span>
-            <h2 id="agent-statistics-title">{identity.name} 的会话统计</h2>
-            <p>按美国西海岸时间记录首次分配的新会话，数据保留 45 天。</p>
+            <h2 id="agent-statistics-title">{identity.name} 的接待流量</h2>
+            <p>访客首次进入坐席时计 1 次，转接和重新排队不重复计数。</p>
           </div>
           <div className="agent-statistics-head-actions">
             <label>
@@ -84,7 +84,7 @@ export function AgentStatisticsModal({
             <button
               type="button"
               className="modal-close"
-              aria-label="关闭会话统计"
+              aria-label="关闭接待流量"
               onClick={onClose}
             >
               ×

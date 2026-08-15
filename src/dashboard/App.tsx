@@ -518,7 +518,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         if (active) setMonthlyStats(result);
       })
       .catch((reason) => {
-        if (active) setStatsError(message(reason, '无法加载会话统计'));
+        if (active) setStatsError(message(reason, '无法加载坐席流量'));
       })
       .finally(() => {
         if (active) setStatsBusy(false);
@@ -669,7 +669,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           >
             <span className="admin-nav-label">
               <UiIcon name="statistics" />
-              <span>会话统计</span>
+              <span>坐席流量</span>
             </span>
             <small>自然月</small>
           </button>
@@ -926,14 +926,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           >
             <header className="admin-statistics-modal-head">
               <div>
-                <span className="eyebrow">运营数据</span>
-                <h2 id="admin-statistics-title">会话统计</h2>
-                <p>按客服查看每天实际接收的新会话，日期数据无需横向拖动。</p>
+                <span className="eyebrow">流量账本</span>
+                <h2 id="admin-statistics-title">坐席接待流量</h2>
+                <p>
+                  按客服查看首次实际接收的访客流量，转接和重新排队不重复计数。
+                </p>
               </div>
               <button
                 type="button"
                 className="modal-close"
-                aria-label="关闭会话统计"
+                aria-label="关闭坐席流量"
                 onClick={() => setStatisticsOpen(false)}
               >
                 ×
@@ -1201,8 +1203,8 @@ function MonthlyAgentStatistics({
     <section className="statistics-panel">
       <div className="statistics-toolbar">
         <div>
-          <strong>按坐席统计</strong>
-          <span>选择客服坐席，查看该坐席每天实际接收的新会话</span>
+          <strong>按坐席核对流量</strong>
+          <span>选择客服坐席，查看每天首次实际接收的访客流量</span>
         </div>
         <label>
           <span>月份</span>
@@ -1285,8 +1287,8 @@ function MonthlyAgentStatistics({
             <div className="statistics-day-section">
               <header>
                 <div>
-                  <strong>每日新会话</strong>
-                  <span>会话首次分配给该坐席时计 1 次</span>
+                  <strong>每日接待流量</strong>
+                  <span>每个访客会话只在首次进入坐席时计 1 次</span>
                 </div>
                 <small>完整月份 · {days.length} 天</small>
               </header>
@@ -1311,8 +1313,8 @@ function MonthlyAgentStatistics({
         </div>
       )}
       <p className="statistics-note">
-        每日上限按 America/Los_Angeles 自然日计算；统计数据独立于 24
-        小时聊天记录保存并保留 45 天。每个统计周期对应一个完整自然月，自动展示
+        每日上限按 America/Los_Angeles 自然日计算；流量账本独立于 24
+        小时聊天记录保存并保留 400 天。每个统计周期对应一个完整自然月，自动展示
         28、29、30 或 31
         天。达到上限后仅停止接收新会话，已分配会话仍可继续处理。
       </p>
@@ -2625,12 +2627,12 @@ function AgentWorkspace({
           <button
             type="button"
             className="ghost-button full workspace-statistics-button"
-            aria-label="打开会话统计"
-            title="会话统计"
+            aria-label="打开接待流量"
+            title="接待流量"
             onClick={() => setStatisticsOpen(true)}
           >
             <UiIcon name="statistics" />
-            <span>会话统计</span>
+            <span>接待流量</span>
           </button>
           <button
             type="button"
