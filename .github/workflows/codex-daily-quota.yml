@@ -1,0 +1,48 @@
+name: Codex daily quota patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-customer-service-daily-quota
+  cancel-in-progress: true
+
+jobs:
+  apply-and-verify:
+    if: github.event.head_commit.message == 'chore: run daily quota patch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Apply daily quota implementation
+        run: python .github/scripts/apply_daily_quota.py
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Format changed sources
+        run: pnpm format:write
+      - name: Verify project
+        run: pnpm verify
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f .github/workflows/codex-daily-quota.yml .github/scripts/apply_daily_quota.py
+          git add -A
+          git config user.name 'OpenAI Codex'
+          git config user.email 'codex@openai.com'
+          git commit -m 'feat: enforce daily agent quotas and add monthly statistics'
+          git push origin HEAD:main
