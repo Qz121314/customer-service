@@ -49,6 +49,65 @@ import {
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
 type AdminSection = 'agents' | 'statistics' | 'workspace';
+type UiIconName = 'agents' | 'statistics' | 'workspace' | 'external' | 'logout';
+
+function UiIcon({ name }: { name: UiIconName }) {
+  const paths: Record<UiIconName, React.ReactNode> = {
+    agents: (
+      <>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </>
+    ),
+    statistics: (
+      <>
+        <path d="M4 19V9" />
+        <path d="M10 19V5" />
+        <path d="M16 19v-7" />
+        <path d="M22 19V3" />
+      </>
+    ),
+    workspace: (
+      <>
+        <path d="M4 13a8 8 0 0 1 16 0" />
+        <path d="M18 19c0 1.1-.9 2-2 2h-3" />
+        <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
+        <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
+      </>
+    ),
+    external: (
+      <>
+        <path d="M15 3h6v6" />
+        <path d="m10 14 11-11" />
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M10 17l5-5-5-5" />
+        <path d="M15 12H3" />
+        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      </>
+    ),
+  };
+
+  return (
+    <svg
+      className="ui-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[name]}
+    </svg>
+  );
+}
 
 type AgentDraft = {
   id: string | null;
@@ -438,7 +497,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             className={section === 'agents' ? 'active' : ''}
             onClick={() => setSection('agents')}
           >
-            <span>客服账号</span>
+            <span className="admin-nav-label">
+              <UiIcon name="agents" />
+              <span>客服账号</span>
+            </span>
             <small>{agents.length}</small>
           </button>
           <button
@@ -446,7 +508,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             className={section === 'statistics' ? 'active' : ''}
             onClick={() => setSection('statistics')}
           >
-            <span>会话统计</span>
+            <span className="admin-nav-label">
+              <UiIcon name="statistics" />
+              <span>会话统计</span>
+            </span>
             <small>1–30 日</small>
           </button>
           <button
@@ -454,16 +519,25 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             className={section === 'workspace' ? 'active' : ''}
             onClick={() => setSection('workspace')}
           >
-            <span>坐席工作台</span>
+            <span className="admin-nav-label">
+              <UiIcon name="workspace" />
+              <span>坐席工作台</span>
+            </span>
             <small>员工入口</small>
           </button>
         </nav>
         <div className="admin-sidebar-foot">
           <a href="/agent" target="_blank" rel="noreferrer">
-            打开坐席工作台<span>↗</span>
+            <span>
+              <UiIcon name="external" />
+              打开坐席工作台
+            </span>
           </a>
           <button type="button" onClick={() => void onLogout()}>
-            退出管理
+            <span>
+              <UiIcon name="logout" />
+              退出管理
+            </span>
           </button>
         </div>
       </aside>
@@ -1534,7 +1608,10 @@ function AgentWorkspace({
   return (
     <div className={`workspace-shell${selectedId ? ' is-thread-open' : ''}`}>
       <aside className="workspace-sidebar">
-        <div className="workspace-brand">CS</div>
+        <div className="workspace-brand-lockup">
+          <div className="workspace-brand">CS</div>
+          <span>坐席中心</span>
+        </div>
         <div className="agent-profile">
           <span className="avatar">{initials(identity.name)}</span>
           <div>
@@ -1549,6 +1626,7 @@ function AgentWorkspace({
           <Metric label="已关闭" value={overview.closed} />
         </div>
         <a className="ghost-button full" href="/agent/stats">
+          <UiIcon name="statistics" />
           会话统计
         </a>
         <button
@@ -1556,6 +1634,7 @@ function AgentWorkspace({
           className="ghost-button full"
           onClick={() => void onLogout()}
         >
+          <UiIcon name="logout" />
           退出客服账号
         </button>
       </aside>
@@ -1563,7 +1642,7 @@ function AgentWorkspace({
       <section className="conversation-pane">
         <header className="conversation-head">
           <div>
-            <span className="eyebrow">MY INBOX</span>
+            <span className="eyebrow">坐席收件箱</span>
             <h1>
               我的会话
               {totalUnread > 0 && (
@@ -1672,7 +1751,7 @@ function AgentWorkspace({
                 ‹
               </button>
               <div className="thread-head-copy">
-                <span className="eyebrow">VISITOR</span>
+                <span className="eyebrow">当前访客</span>
                 <h2>{String(detail.conversation.visitor_name || '访客')}</h2>
                 <p>
                   {String(
