@@ -1256,7 +1256,7 @@ function AgentWorkspace({
   }
 
   return (
-    <div className="workspace-shell">
+    <div className={`workspace-shell${selectedId ? ' is-thread-open' : ''}`}>
       <aside className="workspace-sidebar">
         <div className="workspace-brand">CS</div>
         <div className="agent-profile">
@@ -1272,7 +1272,11 @@ function AgentWorkspace({
           <Metric label="新会话" value={overview.open} />
           <Metric label="已关闭" value={overview.closed} />
         </div>
-        <button className="ghost-button full" onClick={() => void onLogout()}>
+        <button
+          type="button"
+          className="ghost-button full"
+          onClick={() => void onLogout()}
+        >
           退出客服账号
         </button>
       </aside>
@@ -1297,6 +1301,7 @@ function AgentWorkspace({
         <div className="filters">
           {(Object.keys(filterLabels) as Filter[]).map((item) => (
             <button
+              type="button"
               key={item}
               className={filter === item ? 'filter active' : 'filter'}
               onClick={() => setFilter(item)}
@@ -1318,6 +1323,7 @@ function AgentWorkspace({
           ) : (
             conversations.map((conversation) => (
               <button
+                type="button"
                 key={conversation.id}
                 className={[
                   'conversation-row',
@@ -1361,6 +1367,7 @@ function AgentWorkspace({
       <main className="thread-pane">
         {error && (
           <button
+            type="button"
             className="notice error floating"
             onClick={() => setError('')}
           >
@@ -1377,7 +1384,15 @@ function AgentWorkspace({
         ) : (
           <>
             <header className="thread-head">
-              <div>
+              <button
+                type="button"
+                className="thread-back-button"
+                aria-label="返回会话列表"
+                onClick={() => setSelectedId(null)}
+              >
+                ‹
+              </button>
+              <div className="thread-head-copy">
                 <span className="eyebrow">VISITOR</span>
                 <h2>{String(detail.conversation.visitor_name || '访客')}</h2>
                 <p>

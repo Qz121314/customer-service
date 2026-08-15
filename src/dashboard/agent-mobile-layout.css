@@ -1,3 +1,7 @@
+.thread-back-button {
+  display: none;
+}
+
 @media (max-width: 760px) {
   html,
   body,
@@ -14,25 +18,25 @@
 
   .workspace-shell {
     position: relative;
+    display: block;
     width: 100%;
     height: 100dvh;
     min-height: 0;
-    display: block;
+    padding-top: env(safe-area-inset-top);
     overflow: hidden;
     background: #f5f6f8;
-    padding-top: env(safe-area-inset-top);
   }
 
   .workspace-sidebar {
+    display: flex;
     height: 58px;
     min-height: 58px;
-    padding: 8px 12px;
-    border-right: 0;
-    border-bottom: 1px solid #e4e7eb;
-    display: flex;
     flex-direction: row;
     align-items: center;
     gap: 10px;
+    padding: 8px 12px;
+    border-right: 0;
+    border-bottom: 1px solid #e4e7eb;
     background: rgba(255, 255, 255, 0.98);
   }
 
@@ -42,13 +46,13 @@
   }
 
   .agent-profile {
+    display: grid;
     min-width: 0;
+    flex: 1;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     margin: 0;
     padding: 0;
     border: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    flex: 1;
   }
 
   .agent-profile > div {
@@ -58,9 +62,9 @@
 
   .agent-profile strong {
     overflow: hidden;
+    font-size: 14px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
   }
 
   .agent-profile small {
@@ -69,20 +73,20 @@
 
   .workspace-sidebar .ghost-button,
   .workspace-sidebar .ghost-button.full {
+    display: inline-flex;
     width: auto;
     min-height: 36px;
+    flex: 0 0 auto;
     margin: 0;
     padding: 0 10px;
-    display: inline-flex;
-    flex: 0 0 auto;
     font-size: 12px;
   }
 
   .conversation-pane {
+    display: flex;
     height: calc(100dvh - 58px - env(safe-area-inset-top));
     min-height: 0;
     border: 0;
-    display: flex;
   }
 
   .conversation-head {
@@ -106,8 +110,8 @@
 
   .filters {
     min-height: 48px;
-    padding: 7px 10px;
     gap: 4px;
+    padding: 7px 10px;
     scrollbar-width: none;
   }
 
@@ -122,8 +126,8 @@
   }
 
   .conversation-list {
-    flex: 1;
     min-height: 0;
+    flex: 1;
     overscroll-behavior: contain;
   }
 
@@ -140,5 +144,134 @@
   .conversation-copy small,
   .conversation-copy p {
     font-size: 12px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .thread-pane {
+    display: none;
+  }
+
+  .workspace-shell.is-thread-open {
+    padding-top: env(safe-area-inset-top);
+    background: #fafafa;
+  }
+
+  .workspace-shell.is-thread-open .workspace-sidebar,
+  .workspace-shell.is-thread-open .conversation-pane {
+    display: none;
+  }
+
+  .workspace-shell.is-thread-open .thread-pane {
+    display: flex;
+    width: 100%;
+    height: calc(100dvh - env(safe-area-inset-top));
+    min-height: 0;
+  }
+
+  .thread-head {
+    position: relative;
+    top: auto;
+    z-index: 4;
+    display: grid;
+    min-height: 66px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .thread-back-button {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 9px;
+    color: #272b31;
+    background: transparent;
+    font-size: 30px;
+    font-weight: 400;
+    line-height: 1;
+  }
+
+  .thread-back-button:active {
+    background: #f0f1f3;
+    transform: scale(0.96);
+  }
+
+  .thread-head-copy {
+    min-width: 0;
+  }
+
+  .thread-head .eyebrow {
+    display: none;
+  }
+
+  .thread-head h2 {
+    overflow: hidden;
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .thread-head p {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .thread-head select {
+    min-width: 88px;
+    min-height: 38px;
+    padding-inline: 8px;
+    font-size: 12px;
+  }
+
+  .conversation-expiry {
+    margin-top: 4px;
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .messages {
+    min-height: 0;
+    gap: 10px;
+    padding: 14px 10px 18px;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .message > div {
+    max-width: 86%;
+  }
+
+  .message p {
+    padding: 9px 11px;
+    font-size: 14px;
+    line-height: 1.48;
+  }
+
+  .composer {
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .composer textarea {
+    min-height: 52px;
+    max-height: 104px;
+    padding: 10px 11px;
+    font-size: 16px;
+  }
+
+  .composer-foot {
+    margin-top: 6px;
+  }
+
+  .composer-foot > span {
+    display: none;
+  }
+
+  .composer-foot .primary-button {
+    min-width: 76px;
+    margin-left: auto;
   }
 }
