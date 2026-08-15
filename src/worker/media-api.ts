@@ -4,6 +4,7 @@ import { requireAgentSession } from './agent-session';
 import { createUploadTarget } from './media-signing';
 import {
   completeMedia,
+  MediaReservationLimitError,
   MediaUploadIdConflictError,
   readMediaObject,
   reserveMedia,
@@ -16,6 +17,7 @@ import {
   type MediaBindings,
   type MediaRow,
 } from './media-types';
+import { passesBurstLimit, requestSourceHash } from './abuse-control';
 
 type Env = { Bindings: MediaBindings };
 
@@ -46,6 +48,22 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
   if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
+  const media = normalizeMediaInput(body);
+  if (!media) return clientError(c, 400, 'INVALID_MEDIA');
+  const clientUploadId = normalizeText(body?.clientUploadId, 160);
+  if (body?.clientUploadId !== undefined && !clientUploadId) {
+    return clientError(c, 400, 'INVALID_MEDIA_UPLOAD_ID');
+  }
+  const sourceHash = await requestSourceHash(c.req.raw, visitorId);
+  if (
+    !(await passesBurstLimit(
+      c.env.MEDIA_BURST_LIMITER,
+      `visitor-media:${sourceHash}:${c.req.param('id')}`,
+    ))
+  ) {
+    c.header('Retry-After', '60');
+    return clientError(c, 429, 'MEDIA_RATE_LIMITED');
+  }
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
   const conversation = await ownedVisitorConversation(
@@ -57,13 +75,6 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
   if (!conversation) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
   if (conversation.status === 'closed')
     return clientError(c, 409, 'CONVERSATION_CLOSED');
-  const media = normalizeMediaInput(body);
-  if (!media) return clientError(c, 400, 'INVALID_MEDIA');
-  const clientUploadId = normalizeText(body?.clientUploadId, 160);
-  if (body?.clientUploadId !== undefined && !clientUploadId) {
-    return clientError(c, 400, 'INVALID_MEDIA_UPLOAD_ID');
-  }
-
   const reservation = await reserve(c, {
     conversationId: conversation.id,
     senderType: 'visitor',
@@ -71,9 +82,11 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     clientUploadId,
     media,
   });
-  if (!reservation.ok) {
+  if (!reservation.ok && reservation.code === 'MEDIA_UPLOAD_ID_CONFLICT') {
     return clientError(c, 409, 'MEDIA_UPLOAD_ID_CONFLICT');
   }
+  if (!reservation.ok)
+    return clientError(c, 429, 'MEDIA_RESERVATION_LIMIT_REACHED');
   const { row, reused } = reservation.value;
   const proxy = new URL(`/client/v1/media/${row.id}/content`, c.req.url);
   proxy.searchParams.set('visitorId', visitorId);
@@ -132,14 +145,6 @@ mediaApi.get('/client/v1/media/:id/content', async (c) => {
 mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
   const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const conversation = await assignedConversation(
-    c.env.DB,
-    c.req.param('id'),
-    agent.id,
-  );
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  if (conversation.status === 'closed')
-    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
   const body = await readJson<{
     mimeType?: string;
     byteSize?: number;
@@ -154,6 +159,23 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
   if (body?.clientUploadId !== undefined && !clientUploadId) {
     return c.json({ error: 'INVALID_MEDIA_UPLOAD_ID' }, 400);
   }
+  if (
+    !(await passesBurstLimit(
+      c.env.MEDIA_BURST_LIMITER,
+      `agent-media:${agent.id}:${c.req.param('id')}`,
+    ))
+  ) {
+    c.header('Retry-After', '60');
+    return c.json({ error: 'MEDIA_RATE_LIMITED' }, 429);
+  }
+  const conversation = await assignedConversation(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
+  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+  if (conversation.status === 'closed')
+    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
   const reservation = await reserve(c, {
     conversationId: conversation.id,
     senderType: 'agent',
@@ -161,9 +183,11 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
     clientUploadId,
     media,
   });
-  if (!reservation.ok) {
+  if (!reservation.ok && reservation.code === 'MEDIA_UPLOAD_ID_CONFLICT') {
     return c.json({ error: 'MEDIA_UPLOAD_ID_CONFLICT' }, 409);
   }
+  if (!reservation.ok)
+    return c.json({ error: 'MEDIA_RESERVATION_LIMIT_REACHED' }, 429);
   const { row, reused } = reservation.value;
   const proxy = new URL(
     `/api/agent/media/${row.id}/content`,
@@ -365,7 +389,11 @@ function normalizeProjectId(value?: string | null): string {
   return trimmed && trimmed.length <= 200 ? trimmed : 'default';
 }
 
-function clientError(c: Context<Env>, status: 400 | 404 | 409, code: string) {
+function clientError(
+  c: Context<Env>,
+  status: 400 | 404 | 409 | 429,
+  code: string,
+) {
   return c.json({ error: { code, message: code } }, status);
 }
 
@@ -383,12 +411,21 @@ async function reserve(
   c: Context<Env>,
   input: ReservationInput,
 ): Promise<
-  { ok: true; value: Awaited<ReturnType<typeof reserveMedia>> } | { ok: false }
+  | { ok: true; value: Awaited<ReturnType<typeof reserveMedia>> }
+  | {
+      ok: false;
+      code: 'MEDIA_UPLOAD_ID_CONFLICT' | 'MEDIA_RESERVATION_LIMIT_REACHED';
+    }
 > {
   try {
     return { ok: true, value: await reserveMedia(c.env.DB, input) };
   } catch (error) {
-    if (error instanceof MediaUploadIdConflictError) return { ok: false };
+    if (error instanceof MediaUploadIdConflictError) {
+      return { ok: false, code: 'MEDIA_UPLOAD_ID_CONFLICT' };
+    }
+    if (error instanceof MediaReservationLimitError) {
+      return { ok: false, code: 'MEDIA_RESERVATION_LIMIT_REACHED' };
+    }
     throw error;
   }
 }
