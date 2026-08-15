@@ -39,4 +39,11 @@ try {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }""",
 )
+source = source.replace("const visitorId = 'VISITOR_E2E';", "const visitorId = 'TST123';")
+source = source.replace(
+    """  assert.equal(createResponse.status, 201);
+  const created = await json(createResponse);""",
+    """  const created = await json(createResponse);
+  assert.equal(createResponse.status, 201);""",
+)
 path.write_text(source, encoding='utf-8')
