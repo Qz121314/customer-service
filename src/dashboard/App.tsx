@@ -10,6 +10,7 @@ import {
 import {
   AgentAccount,
   AgentRoutingScope,
+  AgentMonthlyStats,
   ProductCatalogItem,
   AgentIdentity,
   Conversation,
@@ -22,6 +23,7 @@ import {
   agentLogout,
   createAgent,
   getAdminSession,
+  getAgentMonthlyStats,
   getAgentSession,
   getAgents,
   getConversation,
@@ -45,7 +47,7 @@ import {
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
-type AdminSection = 'agents' | 'workspace';
+type AdminSection = 'agents' | 'statistics' | 'workspace';
 
 type AgentDraft = {
   id: string | null;
@@ -54,6 +56,7 @@ type AgentDraft = {
   password: string;
   routingScope: AgentRoutingScope;
   maxActiveConversations: number;
+  dailyConversationLimit: number;
   isEnabled: boolean;
 };
 
@@ -64,6 +67,7 @@ const emptyAgentDraft: AgentDraft = {
   password: '',
   routingScope: { type: 'none' },
   maxActiveConversations: 0,
+  dailyConversationLimit: 40,
   isEnabled: true,
 };
 
@@ -270,6 +274,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [statsMonth, setStatsMonth] = useState(() => currentBusinessMonth());
+  const [monthlyStats, setMonthlyStats] = useState<AgentMonthlyStats | null>(
+    null,
+  );
+  const [statsBusy, setStatsBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     const [nextAgents, nextProducts] = await Promise.all([
@@ -285,6 +294,25 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       .catch((reason) => setError(message(reason, '无法加载配置')))
       .finally(() => setBusy(false));
   }, [refresh]);
+
+  useEffect(() => {
+    if (section !== 'statistics') return;
+    let active = true;
+    setStatsBusy(true);
+    getAgentMonthlyStats(statsMonth)
+      .then((result) => {
+        if (active) setMonthlyStats(result);
+      })
+      .catch((reason) => {
+        if (active) setError(message(reason, '无法加载会话统计'));
+      })
+      .finally(() => {
+        if (active) setStatsBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [section, statsMonth]);
 
   useEffect(() => {
     if (!editorOpen || saving) return;
@@ -322,6 +350,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       password: '',
       routingScope: agent.routingScope,
       maxActiveConversations: agent.maxActiveConversations,
+      dailyConversationLimit: agent.dailyConversationLimit,
       isEnabled: agent.isEnabled,
     });
     setEditorOpen(true);
@@ -345,6 +374,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           password: draft.password || undefined,
           routingScope: draft.routingScope,
           maxActiveConversations: draft.maxActiveConversations,
+          dailyConversationLimit: draft.dailyConversationLimit,
           isEnabled: draft.isEnabled,
         });
       } else {
@@ -354,6 +384,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           password: draft.password,
           routingScope: draft.routingScope,
           maxActiveConversations: draft.maxActiveConversations,
+          dailyConversationLimit: draft.dailyConversationLimit,
           isEnabled: draft.isEnabled,
         });
       }
@@ -377,11 +408,18 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
-  const sectionTitle = section === 'agents' ? '客服坐席' : '坐席工作台';
+  const sectionTitle =
+    section === 'agents'
+      ? '客服坐席'
+      : section === 'statistics'
+        ? '会话统计'
+        : '坐席工作台';
   const sectionHint =
     section === 'agents'
-      ? '管理员创建客服账号，并按分区、分类或单个产品配置负责范围。'
-      : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
+      ? '管理员创建客服账号，并配置负责范围、同时会话上限和每日接待配额。'
+      : section === 'statistics'
+        ? '按客服查看所选月份 1 号到 30 号每天实际接收的新会话数量。'
+        : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
 
   return (
     <div className="admin-console">
@@ -401,6 +439,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           >
             <span>客服账号</span>
             <small>{agents.length}</small>
+          </button>
+          <button
+            type="button"
+            className={section === 'statistics' ? 'active' : ''}
+            onClick={() => setSection('statistics')}
+          >
+            <span>会话统计</span>
+            <small>1–30 日</small>
           </button>
           <button
             type="button"
@@ -500,7 +546,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                         <th>登录账号</th>
                         <th>负责范围</th>
                         <th>状态</th>
-                        <th>最大会话</th>
+                        <th>同时会话</th>
+                        <th>今日接待</th>
                         <th>最后在线</th>
                         <th aria-label="操作" />
                       </tr>
@@ -544,6 +591,36 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                           </td>
                           <td>{agent.maxActiveConversations || '不限'}</td>
                           <td>
+                            <div className="daily-quota-cell">
+                              <strong>
+                                {agent.todayConversationCount}
+                                <span>/</span>
+                                {agent.dailyConversationLimit || '∞'}
+                              </strong>
+                              {agent.dailyConversationLimit > 0 ? (
+                                <span
+                                  className={`quota-state ${
+                                    agent.todayConversationCount >=
+                                    agent.dailyConversationLimit
+                                      ? 'full'
+                                      : ''
+                                  }`}
+                                >
+                                  {agent.todayConversationCount >=
+                                  agent.dailyConversationLimit
+                                    ? '今日已满'
+                                    : `剩余 ${Math.max(
+                                        0,
+                                        agent.dailyConversationLimit -
+                                          agent.todayConversationCount,
+                                      )}`}
+                                </span>
+                              ) : (
+                                <span className="quota-state">不限</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
                             {agent.lastSeenAt
                               ? relativeTime(agent.lastSeenAt)
                               : '从未登录'}
@@ -565,6 +642,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               )}
             </section>
           </>
+        )}
+
+        {section === 'statistics' && (
+          <MonthlyAgentStatistics
+            agents={agents}
+            month={statsMonth}
+            stats={monthlyStats}
+            busy={statsBusy}
+            onMonthChange={setStatsMonth}
+          />
         )}
 
         {section === 'workspace' && (
@@ -673,22 +760,43 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                   autoComplete="new-password"
                 />
               </label>
-              <label>
-                <span>最大同时会话数</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="999"
-                  value={draft.maxActiveConversations}
-                  onChange={(event) =>
-                    setDraft({
-                      ...draft,
-                      maxActiveConversations: Number(event.target.value) || 0,
-                    })
-                  }
-                />
-                <small>填写 0 表示不限制。</small>
-              </label>
+              <div className="form-two-columns quota-fields">
+                <label>
+                  <span>最大同时会话数</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="999"
+                    value={draft.maxActiveConversations}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        maxActiveConversations: Number(event.target.value) || 0,
+                      })
+                    }
+                  />
+                  <small>控制正在处理中的并发会话，0 表示不限制。</small>
+                </label>
+                <label>
+                  <span>每日会话上限</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="9999"
+                    value={draft.dailyConversationLimit}
+                    onChange={(event) =>
+                      setDraft({
+                        ...draft,
+                        dailyConversationLimit: Number(event.target.value) || 0,
+                      })
+                    }
+                  />
+                  <small>
+                    例如 40：当天接满 40 个后停止分流，第二天自动恢复。0
+                    表示不限。
+                  </small>
+                </label>
+              </div>
               <div className="agent-editor-section-title scope-title">
                 <strong>分流负责范围</strong>
                 <span>分区 = 全选，分类 = 批量选择，指定产品 = 精确选择</span>
@@ -738,6 +846,129 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       )}
     </div>
   );
+}
+
+function MonthlyAgentStatistics({
+  agents,
+  month,
+  stats,
+  busy,
+  onMonthChange,
+}: {
+  agents: AgentAccount[];
+  month: string;
+  stats: AgentMonthlyStats | null;
+  busy: boolean;
+  onMonthChange: (month: string) => void;
+}) {
+  const countMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of stats?.counts ?? []) {
+      map.set(`${item.agentId}:${item.day}`, item.count);
+    }
+    return map;
+  }, [stats]);
+  const total = (stats?.counts ?? []).reduce(
+    (sum, item) => sum + item.count,
+    0,
+  );
+  const days =
+    stats?.days ?? Array.from({ length: 30 }, (_, index) => index + 1);
+  const agentTotals = new Map(
+    agents.map((agent) => [
+      agent.id,
+      days.reduce(
+        (sum, day) => sum + (countMap.get(`${agent.id}:${day}`) ?? 0),
+        0,
+      ),
+    ]),
+  );
+
+  return (
+    <section className="statistics-panel">
+      <div className="statistics-toolbar">
+        <div>
+          <strong>每日新会话</strong>
+          <span>统计口径：会话首次分配给客服时计 1 次</span>
+        </div>
+        <label>
+          <span>月份</span>
+          <input
+            type="month"
+            value={month}
+            onChange={(event) => onMonthChange(event.target.value)}
+          />
+        </label>
+      </div>
+      <div className="statistics-summary">
+        <div>
+          <span>本月 1–30 日</span>
+          <strong>{busy ? '—' : total}</strong>
+        </div>
+        <div>
+          <span>客服人数</span>
+          <strong>{agents.length}</strong>
+        </div>
+        <div>
+          <span>平均每客服</span>
+          <strong>
+            {agents.length && !busy ? Math.round(total / agents.length) : 0}
+          </strong>
+        </div>
+      </div>
+      <div className="statistics-table-wrap">
+        <table className="statistics-table">
+          <thead>
+            <tr>
+              <th className="sticky-agent">客服</th>
+              {days.map((day) => (
+                <th key={day}>{day}</th>
+              ))}
+              <th>合计</th>
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((agent) => (
+              <tr key={agent.id}>
+                <th className="sticky-agent">
+                  <strong>{agent.name}</strong>
+                  <small>{agent.username || '—'}</small>
+                </th>
+                {days.map((day) => {
+                  const value = countMap.get(`${agent.id}:${day}`) ?? 0;
+                  return (
+                    <td key={day} className={value ? 'has-value' : ''}>
+                      {busy ? '·' : value || '—'}
+                    </td>
+                  );
+                })}
+                <td className="statistics-total">
+                  {busy ? '—' : (agentTotals.get(agent.id) ?? 0)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="statistics-note">
+        每日上限按 America/Los_Angeles
+        自然日计算；达到上限后仅停止接收新会话，已分配会话仍可继续处理。31
+        日会正常参与每日限额，但月度表按要求只展示 1–30 日。
+      </p>
+    </section>
+  );
+}
+
+function currentBusinessMonth(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CHAT_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}`;
 }
 
 function AgentPortal() {
@@ -806,6 +1037,8 @@ function AgentWorkspace({
     pending: 0,
     closed: 0,
     total: 0,
+    todayAccepted: 0,
+    dailyLimit: 0,
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);

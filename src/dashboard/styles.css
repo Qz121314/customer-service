@@ -1809,3 +1809,241 @@ p {
     min-width: 145px;
   }
 }
+
+/* Daily routing quota + monthly operations statistics */
+.daily-quota-cell {
+  display: grid;
+  min-width: 86px;
+  gap: 3px;
+}
+
+.daily-quota-cell strong {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.daily-quota-cell strong span {
+  margin: 0 2px;
+  color: #a3a8b2;
+  font-weight: 500;
+}
+
+.quota-state {
+  color: #777c86;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.quota-state.full {
+  color: #b34747;
+}
+
+.quota-fields small {
+  display: block;
+  margin-top: 2px;
+  color: #888e98;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.statistics-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.statistics-toolbar,
+.statistics-summary,
+.statistics-table-wrap,
+.statistics-note {
+  border: 1px solid #e4e6ea;
+  background: #fff;
+}
+
+.statistics-toolbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-radius: 16px;
+}
+
+.statistics-toolbar > div {
+  display: grid;
+  gap: 5px;
+}
+
+.statistics-toolbar > div > strong {
+  font-size: 16px;
+}
+
+.statistics-toolbar > div > span,
+.statistics-note {
+  color: #777d87;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.statistics-toolbar label {
+  display: grid;
+  gap: 6px;
+  color: #666c76;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.statistics-toolbar input[type='month'] {
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid #dfe2e7;
+  border-radius: 10px;
+  color: #1a1d22;
+  background: #fff;
+}
+
+.statistics-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border-radius: 16px;
+}
+
+.statistics-summary > div {
+  display: grid;
+  gap: 8px;
+  padding: 17px 20px;
+}
+
+.statistics-summary > div + div {
+  border-left: 1px solid #eceef1;
+}
+
+.statistics-summary span {
+  color: #7d838e;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.statistics-summary strong {
+  font-size: 24px;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.statistics-table-wrap {
+  overflow: auto;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(24, 28, 36, 0.035);
+}
+
+.statistics-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.statistics-table th,
+.statistics-table td {
+  min-width: 42px;
+  height: 44px;
+  padding: 0 8px;
+  border-right: 1px solid #f0f1f3;
+  border-bottom: 1px solid #eef0f2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.statistics-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  color: #777d86;
+  background: #fafbfc;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.statistics-table .sticky-agent {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 154px;
+  padding-inline: 14px;
+  text-align: left;
+  background: #fff;
+  box-shadow: 1px 0 0 #e9ebef;
+}
+
+.statistics-table thead .sticky-agent {
+  z-index: 4;
+  background: #fafbfc;
+}
+
+.statistics-table tbody .sticky-agent {
+  display: table-cell;
+  vertical-align: middle;
+}
+
+.statistics-table tbody .sticky-agent strong,
+.statistics-table tbody .sticky-agent small {
+  display: block;
+}
+
+.statistics-table tbody .sticky-agent strong {
+  color: #262a30;
+  font-size: 12px;
+}
+
+.statistics-table tbody .sticky-agent small {
+  margin-top: 2px;
+  color: #8b9099;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.statistics-table td {
+  color: #a0a5ae;
+}
+
+.statistics-table td.has-value {
+  color: #21252b;
+  background: #f7f8fa;
+  font-weight: 750;
+}
+
+.statistics-table .statistics-total {
+  min-width: 58px;
+  color: #171a1f;
+  background: #fafbfc;
+  font-weight: 850;
+}
+
+.statistics-note {
+  margin: 0;
+  padding: 13px 16px;
+  border-radius: 12px;
+}
+
+@media (max-width: 760px) {
+  .statistics-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .statistics-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .statistics-summary > div + div {
+    border-top: 1px solid #eceef1;
+    border-left: 0;
+  }
+
+  .statistics-table .sticky-agent {
+    min-width: 126px;
+  }
+}

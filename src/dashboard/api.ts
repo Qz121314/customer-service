@@ -28,6 +28,8 @@ export type AgentAccount = {
   status: 'online' | 'busy' | 'offline';
   isEnabled: boolean;
   maxActiveConversations: number;
+  dailyConversationLimit: number;
+  todayConversationCount: number;
   lastLoginAt: string | null;
   lastSeenAt: string | null;
   hasPassword: boolean;
@@ -51,6 +53,14 @@ export type Overview = {
   pending: number;
   closed: number;
   total: number;
+  todayAccepted: number;
+  dailyLimit: number;
+};
+
+export type AgentMonthlyStats = {
+  month: string;
+  days: number[];
+  counts: Array<{ agentId: string; day: number; count: number }>;
 };
 
 export type Conversation = {
@@ -151,6 +161,7 @@ export async function createAgent(input: {
   password: string;
   routingScope: AgentRoutingScope;
   maxActiveConversations: number;
+  dailyConversationLimit: number;
   isEnabled: boolean;
 }): Promise<void> {
   await request('/api/admin/agents', {
@@ -167,6 +178,7 @@ export async function updateAgent(
     password?: string;
     routingScope: AgentRoutingScope;
     maxActiveConversations: number;
+    dailyConversationLimit: number;
     isEnabled: boolean;
   },
 ): Promise<void> {
@@ -179,6 +191,12 @@ export async function updateAgent(
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
   const response = await getAdminBootstrap();
   return response.products;
+}
+
+export async function getAgentMonthlyStats(
+  month: string,
+): Promise<AgentMonthlyStats> {
+  return request(`/api/admin/agent-stats?month=${encodeURIComponent(month)}`);
 }
 
 export async function getAgentSession(): Promise<AgentSessionState> {

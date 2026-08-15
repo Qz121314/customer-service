@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
-import { assignConversationAgent } from './routing';
+import { assignConversationAgent, routingBusinessDate } from './routing';
 import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 
@@ -165,21 +165,38 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
 agentApi.get('/api/agent/overview', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const result = await c.env.DB.prepare(
-    `SELECT status, COUNT(*) AS count
-     FROM conversations
-     WHERE assigned_agent = ?1
-       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-     GROUP BY status`,
-  )
-    .bind(agent.id)
-    .all<{ status: ConversationStatus; count: number }>();
+  const businessDate = routingBusinessDate();
+  const [statusResult, quotaRow] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT status, COUNT(*) AS count
+       FROM conversations
+       WHERE assigned_agent = ?1
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       GROUP BY status`,
+    )
+      .bind(agent.id)
+      .all<{ status: ConversationStatus; count: number }>(),
+    c.env.DB.prepare(
+      `SELECT a.daily_conversation_limit,
+         (SELECT COUNT(*) FROM conversations c
+          WHERE c.assigned_agent = a.id
+            AND c.site_id = a.site_id
+            AND c.assigned_business_date = ?2) AS today_count
+       FROM agents a
+       WHERE a.id = ?1
+       LIMIT 1`,
+    )
+      .bind(agent.id, businessDate)
+      .first<{ daily_conversation_limit: number; today_count: number }>(),
+  ]);
   const counts = { open: 0, pending: 0, closed: 0 };
-  for (const row of result.results ?? [])
+  for (const row of statusResult.results ?? [])
     counts[row.status] = Number(row.count ?? 0);
   return c.json({
     ...counts,
     total: counts.open + counts.pending + counts.closed,
+    todayAccepted: Number(quotaRow?.today_count ?? 0),
+    dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
   });
 });
 

@@ -3,6 +3,21 @@ export type AgentAssignment = {
   name: string;
 };
 
+const ROUTING_TIME_ZONE = 'America/Los_Angeles';
+
+export function routingBusinessDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ROUTING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 type ConversationRoutingRow = {
   site_id: string;
   product_id: string | null;
@@ -51,6 +66,7 @@ export async function assignConversationAgent(
   }
 
   const now = new Date().toISOString();
+  const businessDate = routingBusinessDate(new Date(now));
   const result = await db
     .prepare(
       `WITH matching AS (
@@ -85,6 +101,14 @@ export async function assignConversationAgent(
              AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
            GROUP BY assigned_agent
          ) load ON load.assigned_agent = a.id
+         LEFT JOIN (
+           SELECT assigned_agent, COUNT(*) AS daily_count
+           FROM conversations
+           WHERE site_id = ?1
+             AND assigned_agent IS NOT NULL
+             AND assigned_business_date = ?8
+           GROUP BY assigned_agent
+         ) daily ON daily.assigned_agent = a.id
          WHERE a.is_enabled = 1
            AND a.status = 'online'
            AND a.username IS NOT NULL
@@ -95,7 +119,12 @@ export async function assignConversationAgent(
              a.max_active_conversations = 0
              OR COALESCE(load.active_count, 0) < a.max_active_conversations
            )
+           AND (
+             a.daily_conversation_limit = 0
+             OR COALESCE(daily.daily_count, 0) < a.daily_conversation_limit
+           )
          ORDER BY
+           COALESCE(daily.daily_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC
@@ -119,6 +148,14 @@ export async function assignConversationAgent(
              AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
            GROUP BY assigned_agent
          ) load ON load.assigned_agent = a.id
+         LEFT JOIN (
+           SELECT assigned_agent, COUNT(*) AS daily_count
+           FROM conversations
+           WHERE site_id = ?1
+             AND assigned_agent IS NOT NULL
+             AND assigned_business_date = ?8
+           GROUP BY assigned_agent
+         ) daily ON daily.assigned_agent = a.id
          WHERE ?5 <> ''
            AND NOT EXISTS (SELECT 1 FROM matching)
            AND ga.site_id = ?1
@@ -135,7 +172,12 @@ export async function assignConversationAgent(
              a.max_active_conversations = 0
              OR COALESCE(load.active_count, 0) < a.max_active_conversations
            )
+           AND (
+             a.daily_conversation_limit = 0
+             OR COALESCE(daily.daily_count, 0) < a.daily_conversation_limit
+           )
          ORDER BY
+           COALESCE(daily.daily_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC
@@ -149,6 +191,8 @@ export async function assignConversationAgent(
        )
        UPDATE conversations
        SET assigned_agent = (SELECT id FROM candidate),
+           assigned_at = ?7,
+           assigned_business_date = ?8,
            status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
            updated_at = ?7
        WHERE id = ?6
@@ -164,6 +208,7 @@ export async function assignConversationAgent(
       conversation.group_id ?? '',
       conversationId,
       now,
+      businessDate,
     )
     .run();
 

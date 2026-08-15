@@ -36,6 +36,7 @@ function createDatabase() {
       status TEXT NOT NULL,
       is_enabled INTEGER NOT NULL,
       max_active_conversations INTEGER NOT NULL DEFAULT 0,
+      daily_conversation_limit INTEGER NOT NULL DEFAULT 0,
       last_seen_at TEXT,
       last_assigned_at TEXT,
       updated_at TEXT
@@ -77,6 +78,8 @@ function createDatabase() {
       category_id TEXT,
       group_id TEXT,
       assigned_agent TEXT,
+      assigned_at TEXT,
+      assigned_business_date TEXT,
       status TEXT NOT NULL,
       expires_at TEXT,
       created_at TEXT NOT NULL,
@@ -90,14 +93,21 @@ function createDatabase() {
 
 function addAgent(
   database,
-  { id, status = 'online', lastAssignedAt = null, maxActiveConversations = 0 },
+  {
+    id,
+    status = 'online',
+    lastAssignedAt = null,
+    maxActiveConversations = 0,
+    dailyConversationLimit = 0,
+  },
 ) {
   database
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, status, is_enabled,
-         max_active_conversations, last_seen_at, last_assigned_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 1, ?, CURRENT_TIMESTAMP, ?)`,
+         max_active_conversations, daily_conversation_limit,
+         last_seen_at, last_assigned_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP, ?)`,
     )
     .run(
       id,
@@ -106,6 +116,7 @@ function addAgent(
       `hash-${id}`,
       status,
       maxActiveConversations,
+      dailyConversationLimit,
       lastAssignedAt,
     );
 }
@@ -306,5 +317,42 @@ test('concurrent assignments respect capacity and spread work across eligible ag
       .get().count,
     1,
   );
+  database.close();
+});
+
+test('daily conversation limit closes routing after quota and reopens next business day', async () => {
+  const database = createDatabase();
+  addAgent(database, { id: 'quota-agent', dailyConversationLimit: 2 });
+  addScope(database, 'quota-agent', { type: 'section', sectionId: 'west' });
+  addConversation(database, 'conversation-1', 'product-a');
+  addConversation(database, 'conversation-2', 'product-b');
+  addConversation(database, 'conversation-3', 'product-c');
+
+  const db = d1(database);
+  const first = await assignConversationAgent(db, 'conversation-1');
+  const second = await assignConversationAgent(db, 'conversation-2');
+  const third = await assignConversationAgent(db, 'conversation-3');
+
+  assert.equal(first?.id, 'quota-agent');
+  assert.equal(second?.id, 'quota-agent');
+  assert.equal(third, null);
+
+  const today = database
+    .prepare(
+      `SELECT assigned_business_date AS day
+       FROM conversations WHERE id = 'conversation-1'`,
+    )
+    .get().day;
+  database
+    .prepare(
+      `UPDATE conversations
+       SET assigned_business_date = '2000-01-01'
+       WHERE assigned_agent = 'quota-agent'`,
+    )
+    .run();
+
+  const reopened = await assignConversationAgent(db, 'conversation-3');
+  assert.equal(reopened?.id, 'quota-agent');
+  assert.ok(today && today !== '2000-01-01');
   database.close();
 });

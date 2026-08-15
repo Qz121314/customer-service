@@ -15,6 +15,7 @@ type AgentRow = {
   status: 'online' | 'busy' | 'offline';
   is_enabled: number;
   max_active_conversations: number;
+  daily_conversation_limit: number;
   last_login_at: string | null;
   last_seen_at: string | null;
   password_hash: string | null;
@@ -51,6 +52,7 @@ type AgentRoutingScope =
   | { type: 'product'; productIds: string[] };
 
 const SESSION_COOKIE = 'cs_session';
+const REPORTING_TIME_ZONE = 'America/Los_Angeles';
 
 export const adminConfigApi = new Hono<Env>();
 
@@ -68,6 +70,36 @@ adminConfigApi.get('/api/admin/agents', async (c) => {
   return c.json({ agents: await loadAgents(c.env.DB) });
 });
 
+adminConfigApi.get('/api/admin/agent-stats', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const month = normalizeMonth(c.req.query('month'));
+  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  const result = await c.env.DB.prepare(
+    `SELECT assigned_agent AS agent_id,
+       CAST(substr(assigned_business_date, 9, 2) AS INTEGER) AS day,
+       COUNT(*) AS count
+     FROM conversations
+     WHERE site_id = 'default'
+       AND assigned_agent IS NOT NULL
+       AND assigned_business_date >= ?1
+       AND assigned_business_date <= ?2
+       AND CAST(substr(assigned_business_date, 9, 2) AS INTEGER) BETWEEN 1 AND 30
+     GROUP BY assigned_agent, assigned_business_date
+     ORDER BY assigned_agent ASC, assigned_business_date ASC`,
+  )
+    .bind(`${month}-01`, `${month}-30`)
+    .all<{ agent_id: string; day: number; count: number }>();
+  return c.json({
+    month,
+    days: Array.from({ length: 30 }, (_, index) => index + 1),
+    counts: (result.results ?? []).map((row) => ({
+      agentId: row.agent_id,
+      day: Number(row.day),
+      count: Number(row.count),
+    })),
+  });
+});
+
 adminConfigApi.post('/api/admin/agents', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const body = await readJson<{
@@ -77,6 +109,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     productIds?: string[];
     routingScope?: unknown;
     maxActiveConversations?: number;
+    dailyConversationLimit?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
 
@@ -100,6 +133,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   }
 
   const maxActive = normalizeCapacity(body?.maxActiveConversations);
+  const dailyLimit = normalizeDailyLimit(body?.dailyConversationLimit);
   const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
   const enabled = body?.isEnabled === false ? 0 : 1;
@@ -107,8 +141,9 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     c.env.DB.prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         password_iterations, status, is_enabled, max_active_conversations
-       ) VALUES (?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8)`,
+         password_iterations, status, is_enabled, max_active_conversations,
+         daily_conversation_limit
+       ) VALUES (?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8, ?9)`,
     ).bind(
       id,
       name,
@@ -118,6 +153,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       credentials.iterations,
       enabled,
       maxActive,
+      dailyLimit,
     ),
     ...routingScopeStatements(c.env.DB, id, routingScope),
   ];
@@ -141,7 +177,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   const current = await c.env.DB.prepare(
     `SELECT id, name, username, status, is_enabled, max_active_conversations,
-       last_login_at, last_seen_at, password_hash, password_salt, password_iterations
+       daily_conversation_limit, last_login_at, last_seen_at, password_hash,
+       password_salt, password_iterations
      FROM agents WHERE id = ?1 AND site_id = 'default'`,
   )
     .bind(id)
@@ -155,6 +192,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     productIds?: string[];
     routingScope?: unknown;
     maxActiveConversations?: number;
+    dailyConversationLimit?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
   if (!body) return c.json({ error: 'INVALID_AGENT' }, 400);
@@ -191,6 +229,10 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     body.maxActiveConversations === undefined
       ? current.max_active_conversations
       : normalizeCapacity(body.maxActiveConversations);
+  const dailyLimit =
+    body.dailyConversationLimit === undefined
+      ? current.daily_conversation_limit
+      : normalizeDailyLimit(body.dailyConversationLimit);
 
   const routingScope =
     body.routingScope === undefined && body.productIds === undefined
@@ -214,10 +256,11 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            password_iterations = ?5,
            is_enabled = ?6,
            max_active_conversations = ?7,
+           daily_conversation_limit = ?8,
            status = CASE WHEN ?6 = 0 THEN 'offline' ELSE status END,
            last_seen_at = CASE WHEN ?6 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?8 AND site_id = 'default'`,
+       WHERE id = ?9 AND site_id = 'default'`,
     ).bind(
       name,
       username,
@@ -226,6 +269,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       passwordIterations,
       enabled,
       maxActive,
+      dailyLimit,
       id,
     ),
     c.env.DB.prepare(
@@ -251,11 +295,13 @@ adminConfigApi.get('/api/admin/products', async (c) => {
 });
 
 async function loadAgents(db: D1Database) {
-  const [agentsResult, assignmentsResult] = await Promise.all([
+  const businessDate = reportingBusinessDate();
+  const [agentsResult, assignmentsResult, todayResult] = await Promise.all([
     db
       .prepare(
         `SELECT id, name, username, status, is_enabled, max_active_conversations,
-           last_login_at, last_seen_at, password_hash, password_salt, password_iterations
+           daily_conversation_limit, last_login_at, last_seen_at, password_hash,
+           password_salt, password_iterations
          FROM agents
          WHERE id <> 'admin'
          ORDER BY is_enabled DESC, name ASC, id ASC`,
@@ -271,8 +317,22 @@ async function loadAgents(db: D1Database) {
            category_id ASC, product_id ASC`,
       )
       .all<ScopeRow>(),
+    db
+      .prepare(
+        `SELECT assigned_agent AS agent_id, COUNT(*) AS count
+         FROM conversations
+         WHERE site_id = 'default'
+           AND assigned_agent IS NOT NULL
+           AND assigned_business_date = ?1
+         GROUP BY assigned_agent`,
+      )
+      .bind(businessDate)
+      .all<{ agent_id: string; count: number }>(),
   ]);
 
+  const todayByAgent = new Map(
+    (todayResult.results ?? []).map((row) => [row.agent_id, Number(row.count)]),
+  );
   const rowsByAgent = new Map<string, ScopeRow[]>();
   for (const row of assignmentsResult.results ?? []) {
     const current = rowsByAgent.get(row.agent_id) ?? [];
@@ -289,6 +349,8 @@ async function loadAgents(db: D1Database) {
       status: agent.status,
       isEnabled: agent.is_enabled === 1,
       maxActiveConversations: agent.max_active_conversations,
+      dailyConversationLimit: agent.daily_conversation_limit,
+      todayConversationCount: todayByAgent.get(agent.id) ?? 0,
       lastLoginAt: agent.last_login_at,
       lastSeenAt: agent.last_seen_at,
       hasPassword: Boolean(agent.password_hash && agent.password_salt),
@@ -588,6 +650,29 @@ function normalizePassword(value?: string | null): string | null {
 function normalizeCapacity(value?: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(999, Math.trunc(value ?? 0)));
+}
+
+function normalizeDailyLimit(value?: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(9999, Math.trunc(value ?? 0)));
+}
+
+function normalizeMonth(value?: string): string | null {
+  const month = value?.trim() ?? '';
+  return /^\d{4}-(0[1-9]|1[0-2])$/u.test(month) ? month : null;
+}
+
+function reportingBusinessDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: REPORTING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
