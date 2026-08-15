@@ -1096,8 +1096,11 @@ function authenticatedRealtimeRequest(
   agentId: string,
 ): Request {
   const url = new URL(request.url);
-  url.searchParams.set('agentId', agentId);
-  return new Request(url, request);
+  const headers = new Headers(request.headers);
+  headers.set('X-CS-Agent-ID', agentId);
+  headers.set('X-CS-Participant-Role', 'agent');
+  headers.set('X-CS-Participant-ID', agentId);
+  return new Request(url, { ...request, headers });
 }
 
 function room(env: Bindings, id: string): DurableObjectStub {

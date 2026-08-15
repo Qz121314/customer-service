@@ -16,6 +16,14 @@ interface Bindings {
 type AppEnv = { Bindings: Bindings };
 type Status = 'open' | 'pending' | 'closed';
 type SenderType = 'visitor' | 'agent' | 'system';
+type RealtimeParticipantRole = 'visitor' | 'agent';
+
+type RealtimeSocketAttachment = {
+  connectedAt: number;
+  agentId: string | null;
+  participantId: string | null;
+  participantRole: RealtimeParticipantRole | null;
+};
 
 type MessageRow = {
   id: string;
@@ -328,9 +336,8 @@ export class ConversationRoom extends DurableObject<Bindings> {
       const agentId = body?.agentId?.trim();
       if (!agentId) return new Response('Agent ID required', { status: 400 });
       for (const socket of this.ctx.getWebSockets()) {
-        const attachment = socket.deserializeAttachment() as {
-          agentId?: string | null;
-        } | null;
+        const attachment =
+          socket.deserializeAttachment() as RealtimeSocketAttachment | null;
         if (attachment?.agentId === agentId) {
           socket.close(1008, 'Agent access revoked');
         }
@@ -356,9 +363,19 @@ export class ConversationRoom extends DurableObject<Bindings> {
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    const agentId = url.searchParams.get('agentId')?.trim() || null;
+    const agentId = request.headers.get('X-CS-Agent-ID')?.trim() || null;
+    const participantRole = normalizeRealtimeParticipantRole(
+      request.headers.get('X-CS-Participant-Role'),
+    );
+    const participantId =
+      request.headers.get('X-CS-Participant-ID')?.trim().slice(0, 200) || null;
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ connectedAt: Date.now(), agentId });
+    server.serializeAttachment({
+      connectedAt: Date.now(),
+      agentId,
+      participantId,
+      participantRole,
+    } satisfies RealtimeSocketAttachment);
     if (agentId) await this.touchAgent(agentId);
     server.send(
       JSON.stringify({ type: 'ready', time: new Date().toISOString() }),
@@ -370,14 +387,41 @@ export class ConversationRoom extends DurableObject<Bindings> {
     socket: WebSocket,
     message: string | ArrayBuffer,
   ): Promise<void> {
-    if (message !== 'ping') return;
-    const attachment = socket.deserializeAttachment() as {
-      agentId?: string | null;
-    } | null;
-    if (attachment?.agentId) await this.touchAgent(attachment.agentId);
-    socket.send(
-      JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
-    );
+    const attachment =
+      socket.deserializeAttachment() as RealtimeSocketAttachment | null;
+    if (message === 'ping') {
+      if (attachment?.agentId) await this.touchAgent(attachment.agentId);
+      socket.send(
+        JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
+      );
+      return;
+    }
+
+    if (
+      typeof message !== 'string' ||
+      message.length > 512 ||
+      !attachment?.participantRole ||
+      !attachment.participantId
+    ) {
+      return;
+    }
+    const signal = parseTypingSignal(message);
+    if (!signal) return;
+
+    const payload = JSON.stringify({
+      type: 'typing',
+      actor: attachment.participantRole,
+      active: signal.active,
+      sentAt: new Date().toISOString(),
+    });
+    for (const peer of this.ctx.getWebSockets()) {
+      if (peer === socket) continue;
+      try {
+        peer.send(payload);
+      } catch {
+        // Dead sockets are cleaned up by the runtime.
+      }
+    }
   }
 
   private async touchAgent(agentId: string): Promise<void> {
@@ -394,6 +438,24 @@ export class ConversationRoom extends DurableObject<Bindings> {
 
   webSocketClose(socket: WebSocket, code: number, reason: string): void {
     socket.close(code, reason);
+  }
+}
+
+function normalizeRealtimeParticipantRole(
+  value: string | null,
+): RealtimeParticipantRole | null {
+  return value === 'visitor' || value === 'agent' ? value : null;
+}
+
+function parseTypingSignal(value: string): { active: boolean } | null {
+  try {
+    const parsed = JSON.parse(value) as { type?: unknown; active?: unknown };
+    if (parsed.type !== 'typing' || typeof parsed.active !== 'boolean') {
+      return null;
+    }
+    return { active: parsed.active };
+  } catch {
+    return null;
   }
 }
 

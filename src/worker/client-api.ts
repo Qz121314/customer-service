@@ -192,6 +192,26 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
   });
 });
 
+clientApi.get('/client/v1/conversations/:id/realtime', async (c) => {
+  const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
+    visitorId: c.req.query('visitorId'),
+    projectId: c.req.query('projectId'),
+  });
+  if (!identity.ok)
+    return error(c, identity.status, identity.code, identity.message);
+  if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
+    return error(c, 426, 'WEBSOCKET_REQUIRED', 'WebSocket upgrade required.');
+  }
+
+  const requestUrl = new URL(c.req.url);
+  const headers = new Headers(c.req.raw.headers);
+  headers.set('X-CS-Participant-Role', 'visitor');
+  headers.set('X-CS-Participant-ID', identity.conversation.visitor_id);
+  return room(c.env, identity.conversation.id).fetch(
+    new Request(requestUrl, { ...c.req.raw, headers }),
+  );
+});
+
 clientApi.post('/client/v1/conversations', async (c) => {
   const body = await readJson<{
     visitorId?: string;

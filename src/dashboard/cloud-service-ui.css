@@ -1291,6 +1291,43 @@ select:focus-visible {
   font-size: 10px;
 }
 
+.quick-reply-search {
+  min-height: 38px;
+  margin-bottom: 8px;
+  padding: 0 10px;
+  border: 1px solid #e1e3e7;
+  border-radius: 10px;
+  background: #f8f8fa;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quick-reply-search:focus-within {
+  border-color: rgba(91, 91, 214, 0.44);
+  box-shadow: 0 0 0 3px rgba(91, 91, 214, 0.08);
+}
+
+.quick-reply-search svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: #8b9099;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.quick-reply-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--cs-ink);
+  font: inherit;
+  font-size: 11px;
+}
+
 .quick-replies-list {
   margin-bottom: 9px;
   display: grid;
@@ -1304,6 +1341,11 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 30px;
   gap: 3px;
+}
+
+.quick-replies-list > div.is-active {
+  background: #efeeff;
+  box-shadow: inset 0 0 0 1px rgba(91, 91, 214, 0.14);
 }
 
 .quick-replies-list button {
@@ -1335,6 +1377,66 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.quick-reply-empty {
+  margin-bottom: 9px;
+  padding: 16px 10px;
+  border-radius: 10px;
+  background: #f7f8fa;
+  color: #8a9099;
+  font-size: 11px;
+  text-align: center;
+}
+
+.visitor-typing {
+  width: fit-content;
+  margin: 2px 0 4px;
+  padding: 8px 11px;
+  border: 1px solid #e7e8ec;
+  border-radius: 13px 13px 13px 4px;
+  background: #fff;
+  color: #7a808a;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  box-shadow: 0 5px 18px rgba(24, 28, 35, 0.05);
+}
+
+.visitor-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.visitor-typing-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--cs-accent);
+  animation: cs-typing-dot 1.1s infinite ease-in-out;
+}
+
+.visitor-typing-dots i:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.visitor-typing-dots i:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes cs-typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
 }
 
 .quick-replies-list strong {
@@ -2449,6 +2551,10 @@ select:focus-visible {
 }
 
 .workspace-sidebar .workspace-notification-button.is-enabled {
+  color: #8ce2b7;
+}
+
+.workspace-sidebar .workspace-sound-button.is-enabled {
   color: #8ce2b7;
 }
 

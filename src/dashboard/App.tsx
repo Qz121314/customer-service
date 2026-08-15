@@ -66,7 +66,8 @@ type UiIconName =
   | 'workspace'
   | 'external'
   | 'logout'
-  | 'notification';
+  | 'notification'
+  | 'sound';
 
 function UiIcon({ name }: { name: UiIconName }) {
   const paths: Record<UiIconName, React.ReactNode> = {
@@ -112,6 +113,13 @@ function UiIcon({ name }: { name: UiIconName }) {
       <>
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
         <path d="M10 21h4" />
+      </>
+    ),
+    sound: (
+      <>
+        <path d="M11 5 6 9H3v6h3l5 4Z" />
+        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+        <path d="M18.5 5.5a9 9 0 0 1 0 13" />
       </>
     ),
   };
@@ -163,6 +171,8 @@ const filterLabels: Record<Filter, string> = {
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
 const AGENT_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+const AGENT_TYPING_IDLE_MS = 1400;
+const REMOTE_TYPING_STALE_MS = 3000;
 
 type AgentConversationDraft = {
   body: string;
@@ -223,6 +233,46 @@ function saveAgentConversationDrafts(
   }
 }
 
+function loadAgentSoundEnabled(agentId: string): boolean {
+  try {
+    return window.localStorage.getItem(`cs-agent-sound:${agentId}`) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+function saveAgentSoundEnabled(agentId: string, enabled: boolean): void {
+  try {
+    window.localStorage.setItem(
+      `cs-agent-sound:${agentId}`,
+      enabled ? 'on' : 'off',
+    );
+  } catch {
+    // Sound preference is local-only and must never interrupt reception work.
+  }
+}
+
+function emitAgentMessageTone(context: AudioContext): void {
+  const now = context.currentTime;
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(0.11, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+  gain.connect(context.destination);
+
+  for (const [frequency, offset] of [
+    [660, 0],
+    [880, 0.075],
+  ] as const) {
+    const oscillator = context.createOscillator();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, now + offset);
+    oscillator.connect(gain);
+    oscillator.start(now + offset);
+    oscillator.stop(now + offset + 0.13);
+  }
+}
+
 type InboxRealtimeEvent = {
   type?: string;
   conversation?: Conversation;
@@ -237,6 +287,8 @@ type ThreadRealtimeEvent = {
   lastMessageId?: string | null;
   status?: Conversation['status'];
   assignment?: { id: string; name: string } | null;
+  actor?: 'agent' | 'visitor';
+  active?: boolean;
 };
 
 function parseRealtimeEvent<T>(event: MessageEvent): T | null {
@@ -1343,6 +1395,9 @@ function AgentWorkspace({
   const [notificationState, setNotificationState] =
     useState<AgentNotificationState>('disabled');
   const [notificationBusy, setNotificationBusy] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(() =>
+    loadAgentSoundEnabled(identity.id),
+  );
   const [availability, setAvailability] = useState<AgentAvailability>(
     identity.status === 'busy' ? 'busy' : 'online',
   );
@@ -1362,6 +1417,8 @@ function AgentWorkspace({
   const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
   const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
+  const [quickReplySearch, setQuickReplySearch] = useState('');
+  const [quickReplyActiveIndex, setQuickReplyActiveIndex] = useState(0);
   const [quickReplyTitle, setQuickReplyTitle] = useState('');
   const [quickReplyBody, setQuickReplyBody] = useState('');
   const [quickReplySaving, setQuickReplySaving] = useState(false);
@@ -1384,11 +1441,21 @@ function AgentWorkspace({
   >({});
   const [inboxConnected, setInboxConnected] = useState(false);
   const [threadConnected, setThreadConnected] = useState(false);
+  const [visitorTyping, setVisitorTyping] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const quickReplySearchRef = useRef<HTMLInputElement | null>(null);
   const detailRef = useRef<ConversationDetail | null>(null);
+  const threadSocketRef = useRef<WebSocket | null>(null);
+  const agentTypingDesiredRef = useRef(false);
+  const agentTypingSentRef = useRef(false);
+  const agentTypingTimerRef = useRef<number | null>(null);
+  const visitorTypingTimerRef = useRef<number | null>(null);
+  const soundEnabledRef = useRef(soundEnabled);
+  const soundContextRef = useRef<AudioContext | null>(null);
+  const unreadCountRef = useRef(new Map<string, number>());
   const lastScrolledConversationRef = useRef<string | null>(null);
   const baseTitleRef = useRef(document.title);
   const draft = selectedId ? (drafts[selectedId]?.body ?? '') : '';
@@ -1431,6 +1498,15 @@ function AgentWorkspace({
       );
     });
   }, [conversations, filter, searchQuery, unreadFirst]);
+  const filteredQuickReplies = useMemo(() => {
+    const query = quickReplySearch.trim().toLocaleLowerCase('zh-CN');
+    if (!query) return quickReplies;
+    return quickReplies.filter((reply) =>
+      [reply.title, reply.body].some((value) =>
+        value.toLocaleLowerCase('zh-CN').includes(query),
+      ),
+    );
+  }, [quickReplies, quickReplySearch]);
   const lastVisibleVisitorMessageId = useMemo(
     () =>
       detail?.messages
@@ -1464,6 +1540,63 @@ function AgentWorkspace({
   }, [drafts, identity.id]);
 
   useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+    saveAgentSoundEnabled(identity.id, soundEnabled);
+  }, [identity.id, soundEnabled]);
+
+  const ensureSoundContext = useCallback((): AudioContext | null => {
+    if (soundContextRef.current) return soundContextRef.current;
+    try {
+      soundContextRef.current = new AudioContext();
+      return soundContextRef.current;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const playIncomingTone = useCallback(() => {
+    if (!soundEnabledRef.current || document.visibilityState !== 'visible') {
+      return;
+    }
+    const context = ensureSoundContext();
+    if (!context) return;
+    if (context.state === 'running') {
+      emitAgentMessageTone(context);
+      return;
+    }
+    void context
+      .resume()
+      .then(() => emitAgentMessageTone(context))
+      .catch(() => undefined);
+  }, [ensureSoundContext]);
+
+  useEffect(() => {
+    const primeSound = () => {
+      if (!soundEnabledRef.current) return;
+      const context = ensureSoundContext();
+      if (context?.state === 'suspended') {
+        void context.resume().catch(() => undefined);
+      }
+    };
+    window.addEventListener('pointerdown', primeSound, { once: true });
+    window.addEventListener('keydown', primeSound, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', primeSound);
+      window.removeEventListener('keydown', primeSound);
+    };
+  }, [ensureSoundContext]);
+
+  useEffect(
+    () => () => {
+      if (soundContextRef.current) {
+        void soundContextRef.current.close().catch(() => undefined);
+        soundContextRef.current = null;
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
     detailRef.current = detail;
   }, [detail]);
 
@@ -1481,6 +1614,7 @@ function AgentWorkspace({
   const acknowledgeConversation = useCallback(
     async (id: string, lastMessageId: string | null = null) => {
       await markConversationRead(id, lastMessageId);
+      unreadCountRef.current.set(id, 0);
       setConversations((current) =>
         current.map((item) =>
           item.id === id ? { ...item, agent_unread_count: 0 } : item,
@@ -1502,6 +1636,12 @@ function AgentWorkspace({
   const applyInbox = useCallback((inbox: AgentInbox) => {
     setOverview(inbox.overview);
     setConversations(inbox.conversations);
+    unreadCountRef.current = new Map(
+      inbox.conversations.map((conversation) => [
+        conversation.id,
+        conversation.agent_unread_count,
+      ]),
+    );
     setTransferTargets(inbox.transferTargets);
     setQuickReplies(inbox.quickReplies);
     setAvailability(inbox.availability);
@@ -1583,6 +1723,19 @@ function AgentWorkspace({
 
         const next = payload.conversation;
         const belongsToAgent = next.assigned_agent === identity.id;
+        const previousUnread = unreadCountRef.current.get(next.id) ?? 0;
+        if (belongsToAgent) {
+          unreadCountRef.current.set(next.id, next.agent_unread_count);
+        } else {
+          unreadCountRef.current.delete(next.id);
+        }
+        if (
+          belongsToAgent &&
+          next.agent_unread_count > previousUnread &&
+          document.visibilityState === 'visible'
+        ) {
+          playIncomingTone();
+        }
         setConversations((current) => {
           const withoutCurrent = current.filter((item) => item.id !== next.id);
           if (!belongsToAgent) return withoutCurrent;
@@ -1619,10 +1772,57 @@ function AgentWorkspace({
       if (timer !== null) window.clearTimeout(timer);
       if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
-  }, [applyInbox, identity.id, refresh]);
+  }, [applyInbox, identity.id, playIncomingTone, refresh]);
+
+  const sendAgentTyping = useCallback((active: boolean) => {
+    agentTypingDesiredRef.current = active;
+    const socket = threadSocketRef.current;
+    if (
+      !socket ||
+      socket.readyState !== WebSocket.OPEN ||
+      agentTypingSentRef.current === active
+    ) {
+      return;
+    }
+    try {
+      socket.send(JSON.stringify({ type: 'typing', active }));
+      agentTypingSentRef.current = active;
+    } catch {
+      // Reconnect recovery sends the current typing state on the new socket.
+    }
+  }, []);
+
+  const updateAgentTyping = useCallback(
+    (value: string) => {
+      if (agentTypingTimerRef.current !== null) {
+        window.clearTimeout(agentTypingTimerRef.current);
+        agentTypingTimerRef.current = null;
+      }
+      const active = Boolean(value.trim());
+      sendAgentTyping(active);
+      if (!active) return;
+      agentTypingTimerRef.current = window.setTimeout(() => {
+        agentTypingTimerRef.current = null;
+        sendAgentTyping(false);
+      }, AGENT_TYPING_IDLE_MS);
+    },
+    [sendAgentTyping],
+  );
 
   useEffect(() => {
     setQuickRepliesOpen(false);
+    setQuickReplySearch('');
+    setVisitorTyping(false);
+    if (visitorTypingTimerRef.current !== null) {
+      window.clearTimeout(visitorTypingTimerRef.current);
+      visitorTypingTimerRef.current = null;
+    }
+    if (agentTypingTimerRef.current !== null) {
+      window.clearTimeout(agentTypingTimerRef.current);
+      agentTypingTimerRef.current = null;
+    }
+    agentTypingDesiredRef.current = false;
+    agentTypingSentRef.current = false;
     if (!selectedId) {
       setDetail(null);
       setMediaItems([]);
@@ -1721,9 +1921,12 @@ function AgentWorkspace({
     const connect = () => {
       if (!active) return;
       socket = openConversationSocket(selectedId);
+      threadSocketRef.current = socket;
       socket.addEventListener('open', () => {
         if (!active) return;
         setThreadConnected(true);
+        agentTypingSentRef.current = false;
+        if (agentTypingDesiredRef.current) sendAgentTyping(true);
         if (stableTimer !== null) window.clearTimeout(stableTimer);
         stableTimer = window.setTimeout(() => {
           retryAttempt = 0;
@@ -1737,6 +1940,24 @@ function AgentWorkspace({
         if (!payload || payload.type === 'ready' || payload.type === 'pong')
           return;
 
+        if (
+          payload.type === 'typing' &&
+          payload.actor === 'visitor' &&
+          typeof payload.active === 'boolean'
+        ) {
+          if (visitorTypingTimerRef.current !== null) {
+            window.clearTimeout(visitorTypingTimerRef.current);
+          }
+          setVisitorTyping(payload.active);
+          visitorTypingTimerRef.current = payload.active
+            ? window.setTimeout(() => {
+                visitorTypingTimerRef.current = null;
+                setVisitorTyping(false);
+              }, REMOTE_TYPING_STALE_MS)
+            : null;
+          return;
+        }
+
         if (payload.type === 'conversation.transferred') {
           setSelectedId(null);
           setDetail(null);
@@ -1746,6 +1967,13 @@ function AgentWorkspace({
 
         if (payload.type === 'message' && payload.message) {
           const incoming = payload.message;
+          if (incoming.sender_type === 'visitor') {
+            setVisitorTyping(false);
+            if (visitorTypingTimerRef.current !== null) {
+              window.clearTimeout(visitorTypingTimerRef.current);
+              visitorTypingTimerRef.current = null;
+            }
+          }
           if (incoming.client_message_id) {
             setPendingTextMessages((current) => {
               const pending = current[selectedId];
@@ -1859,6 +2087,8 @@ function AgentWorkspace({
       socket.addEventListener('close', () => {
         if (!active) return;
         setThreadConnected(false);
+        if (threadSocketRef.current === socket) threadSocketRef.current = null;
+        agentTypingSentRef.current = false;
         socket = null;
         if (stableTimer !== null) window.clearTimeout(stableTimer);
         stableTimer = null;
@@ -1882,11 +2112,29 @@ function AgentWorkspace({
       active = false;
       setThreadConnected(false);
       window.removeEventListener('online', reconnectNow);
+      if (socket?.readyState === WebSocket.OPEN && agentTypingSentRef.current) {
+        try {
+          socket.send(JSON.stringify({ type: 'typing', active: false }));
+        } catch {
+          // The socket may already be closing.
+        }
+      }
+      if (threadSocketRef.current === socket) threadSocketRef.current = null;
       socket?.close();
+      agentTypingDesiredRef.current = false;
+      agentTypingSentRef.current = false;
+      if (agentTypingTimerRef.current !== null) {
+        window.clearTimeout(agentTypingTimerRef.current);
+        agentTypingTimerRef.current = null;
+      }
+      if (visitorTypingTimerRef.current !== null) {
+        window.clearTimeout(visitorTypingTimerRef.current);
+        visitorTypingTimerRef.current = null;
+      }
       if (timer !== null) window.clearTimeout(timer);
       if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
-  }, [acknowledgeConversation, refresh, selectedId]);
+  }, [acknowledgeConversation, refresh, selectedId, sendAgentTyping]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
   const selectedExpiresAt = detail?.conversation.expires_at ?? null;
@@ -2024,6 +2272,11 @@ function AgentWorkspace({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!selectedId || !draft.trim() || currentPendingText) return;
+    sendAgentTyping(false);
+    if (agentTypingTimerRef.current !== null) {
+      window.clearTimeout(agentTypingTimerRef.current);
+      agentTypingTimerRef.current = null;
+    }
     const pending: PendingAgentText = {
       conversationId: selectedId,
       clientMessageId: crypto.randomUUID(),
@@ -2209,6 +2462,23 @@ function AgentWorkspace({
     }
   }
 
+  function toggleSound() {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    soundEnabledRef.current = next;
+    if (!next) return;
+    const context = ensureSoundContext();
+    if (!context) return;
+    if (context.state === 'running') {
+      emitAgentMessageTone(context);
+      return;
+    }
+    void context
+      .resume()
+      .then(() => emitAgentMessageTone(context))
+      .catch(() => undefined);
+  }
+
   async function logoutFromWorkspace() {
     if (notificationState === 'enabled') {
       await disableAgentNotifications().catch(() => undefined);
@@ -2271,6 +2541,21 @@ function AgentWorkspace({
       current.trim() ? `${current.trimEnd()}\n${reply.body}` : reply.body,
     );
     setQuickRepliesOpen(false);
+    setQuickReplySearch('');
+    setQuickReplyActiveIndex(0);
+  }
+
+  function openQuickReplies() {
+    setQuickRepliesOpen(true);
+    setQuickReplySearch('');
+    setQuickReplyActiveIndex(0);
+    window.requestAnimationFrame(() => quickReplySearchRef.current?.focus());
+  }
+
+  function closeQuickReplies() {
+    setQuickRepliesOpen(false);
+    setQuickReplySearch('');
+    setQuickReplyActiveIndex(0);
   }
 
   return (
@@ -2318,6 +2603,23 @@ function AgentWorkspace({
                   : notificationState === 'blocked'
                     ? '通知已被阻止'
                     : '开启新消息通知'}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`ghost-button full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
+            aria-pressed={soundEnabled}
+            aria-label={
+              soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
+            }
+            title={
+              soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'
+            }
+            onClick={toggleSound}
+          >
+            <UiIcon name="sound" />
+            <span>
+              {soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}
             </span>
           </button>
           <button
@@ -2705,6 +3007,20 @@ function AgentWorkspace({
                   </div>
                 </div>
               ) : null}
+              {visitorTyping ? (
+                <div
+                  className="visitor-typing"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="visitor-typing-dots" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span>访客正在输入</span>
+                </div>
+              ) : null}
             </div>
             <form className="composer" onSubmit={(event) => void submit(event)}>
               <div className="composer-tools">
@@ -2732,7 +3048,12 @@ function AgentWorkspace({
                     className="quick-replies-trigger"
                     aria-expanded={quickRepliesOpen}
                     disabled={detail.conversation.status === 'closed'}
-                    onClick={() => setQuickRepliesOpen((current) => !current)}
+                    title="快捷回复（输入 / 也可打开）"
+                    onClick={() =>
+                      quickRepliesOpen
+                        ? closeQuickReplies()
+                        : openQuickReplies()
+                    }
                   >
                     <span aria-hidden="true">⚡</span>
                     <span>快捷回复</span>
@@ -2741,12 +3062,68 @@ function AgentWorkspace({
                     <div className="quick-replies-panel">
                       <header>
                         <strong>快捷回复</strong>
-                        <span>选择后填入输入框，可继续修改再发送。</span>
+                        <span>搜索名称或内容，选择后仍可编辑再发送。</span>
                       </header>
-                      {quickReplies.length > 0 && (
+                      <label className="quick-reply-search">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <circle cx="11" cy="11" r="7" />
+                          <path d="m20 20-4-4" />
+                        </svg>
+                        <input
+                          ref={quickReplySearchRef}
+                          type="search"
+                          value={quickReplySearch}
+                          placeholder="搜索快捷回复"
+                          aria-label="搜索快捷回复"
+                          onChange={(event) => {
+                            setQuickReplySearch(event.target.value);
+                            setQuickReplyActiveIndex(0);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Escape') {
+                              event.preventDefault();
+                              closeQuickReplies();
+                              return;
+                            }
+                            if (filteredQuickReplies.length === 0) return;
+                            if (event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              setQuickReplyActiveIndex((current) =>
+                                Math.min(
+                                  current + 1,
+                                  filteredQuickReplies.length - 1,
+                                ),
+                              );
+                            } else if (event.key === 'ArrowUp') {
+                              event.preventDefault();
+                              setQuickReplyActiveIndex((current) =>
+                                Math.max(0, current - 1),
+                              );
+                            } else if (event.key === 'Enter') {
+                              event.preventDefault();
+                              applyQuickReply(
+                                filteredQuickReplies[
+                                  Math.min(
+                                    quickReplyActiveIndex,
+                                    filteredQuickReplies.length - 1,
+                                  )
+                                ],
+                              );
+                            }
+                          }}
+                        />
+                      </label>
+                      {filteredQuickReplies.length > 0 && (
                         <div className="quick-replies-list">
-                          {quickReplies.map((reply) => (
-                            <div key={reply.id}>
+                          {filteredQuickReplies.map((reply, index) => (
+                            <div
+                              key={reply.id}
+                              className={
+                                index === quickReplyActiveIndex
+                                  ? 'is-active'
+                                  : undefined
+                              }
+                            >
                               <button
                                 type="button"
                                 onClick={() => applyQuickReply(reply)}
@@ -2765,6 +3142,12 @@ function AgentWorkspace({
                           ))}
                         </div>
                       )}
+                      {quickReplies.length > 0 &&
+                        filteredQuickReplies.length === 0 && (
+                          <div className="quick-reply-empty">
+                            没有找到匹配的快捷回复
+                          </div>
+                        )}
                       <div className="quick-reply-create">
                         <input
                           value={quickReplyTitle}
@@ -2803,13 +3186,30 @@ function AgentWorkspace({
                 value={draft}
                 rows={3}
                 disabled={detail.conversation.status === 'closed'}
-                onChange={(event) => updateDraft(event.target.value)}
+                onChange={(event) => {
+                  updateDraft(event.target.value);
+                  updateAgentTyping(event.target.value);
+                }}
                 placeholder={
                   detail.conversation.status === 'closed'
                     ? '会话已关闭'
                     : '输入回复内容…'
                 }
                 onKeyDown={(event) => {
+                  if (
+                    event.key === '/' &&
+                    !draft &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault();
+                    openQuickReplies();
+                    return;
+                  }
+                  if (event.key === 'Escape' && quickRepliesOpen) {
+                    event.preventDefault();
+                    closeQuickReplies();
+                    return;
+                  }
                   if (
                     event.key === 'Enter' &&
                     !event.shiftKey &&
@@ -2819,6 +3219,7 @@ function AgentWorkspace({
                     event.currentTarget.form?.requestSubmit();
                   }
                 }}
+                onBlur={() => sendAgentTyping(false)}
               />
               <div className="composer-foot">
                 <span
