@@ -1,0 +1,46 @@
+name: Format Cloud Service UI
+
+on:
+  push:
+    branches:
+      - agent/cloud-service-ui-refresh
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: agent/cloud-service-ui-refresh
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format UI stylesheet
+        run: pnpm exec prettier --write src/dashboard/cloud-service-ui.css
+
+      - name: Commit formatted stylesheet
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/dashboard/cloud-service-ui.css; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/dashboard/cloud-service-ui.css
+          git commit -m "style: apply Prettier to cloud service UI"
+          git push origin HEAD:agent/cloud-service-ui-refresh
