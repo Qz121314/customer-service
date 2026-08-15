@@ -116,6 +116,9 @@ export type ConversationDetail = {
   conversation: Conversation & Record<string, unknown>;
   messages: Message[];
   media: ConversationMediaItem[];
+  readState?: Array<
+    Pick<Message, 'id' | 'read_by_visitor_at' | 'read_by_agent_at'>
+  >;
 };
 
 export type ConversationMediaItem = {
@@ -187,6 +190,9 @@ const errorMessages: Record<string, string> = {
   QUICK_REPLY_LIMIT_REACHED: '每个客服最多保存 30 条快捷回复',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
   MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
+  INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
+  INVALID_MEDIA_UPLOAD_ID: '图片上传标识无效，请重新选择图片',
+  MEDIA_UPLOAD_ID_CONFLICT: '图片上传标识冲突，请重新选择图片',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -318,8 +324,16 @@ export async function getAgentInbox(): Promise<AgentInbox> {
   return request('/api/agent/conversations');
 }
 
-export async function getConversation(id: string): Promise<ConversationDetail> {
-  return request(`/api/agent/conversations/${encodeURIComponent(id)}/messages`);
+export async function getConversation(
+  id: string,
+  after?: { id: string; createdAt: string } | null,
+): Promise<ConversationDetail> {
+  const query = after
+    ? `?afterId=${encodeURIComponent(after.id)}&afterCreatedAt=${encodeURIComponent(after.createdAt)}`
+    : '';
+  return request(
+    `/api/agent/conversations/${encodeURIComponent(id)}/messages${query}`,
+  );
 }
 
 export async function markConversationRead(
@@ -393,6 +407,27 @@ export function openAgentInboxSocket(): WebSocket {
 
 export function openConversationSocket(id: string): WebSocket {
   return openSocket(`/api/agent/realtime/${encodeURIComponent(id)}`);
+}
+
+const REALTIME_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
+
+export function realtimeReconnectDelay(
+  attempt: number,
+  randomUnit = secureRandomUnit(),
+): number {
+  const index = Math.min(
+    Math.max(0, Math.trunc(attempt)),
+    REALTIME_RECONNECT_DELAYS_MS.length - 1,
+  );
+  const base = REALTIME_RECONNECT_DELAYS_MS[index];
+  const jitter = 0.8 + Math.min(1, Math.max(0, randomUnit)) * 0.4;
+  return Math.round(base * jitter);
+}
+
+function secureRandomUnit(): number {
+  const value = new Uint16Array(1);
+  crypto.getRandomValues(value);
+  return value[0] / 65_535;
 }
 
 async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {

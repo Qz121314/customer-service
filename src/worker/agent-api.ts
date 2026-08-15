@@ -41,6 +41,11 @@ type MessageRow = {
   created_at: string;
 };
 
+type MessageReadState = Pick<
+  MessageRow,
+  'id' | 'read_by_visitor_at' | 'read_by_agent_at'
+>;
+
 type ReadBoundary = {
   id: string;
   created_at: string;
@@ -471,26 +476,63 @@ agentApi.delete('/api/agent/quick-replies/:id', async (c) => {
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
+  const afterIdValue = c.req.query('afterId');
+  const afterCreatedAtValue = c.req.query('afterCreatedAt');
+  const afterId = normalizeMessageId(afterIdValue);
+  const afterCreatedAt = normalizeCursorDateTime(afterCreatedAtValue);
+  if (
+    (afterIdValue !== undefined || afterCreatedAtValue !== undefined) &&
+    (!afterId || !afterCreatedAt)
+  ) {
+    return c.json({ error: 'INVALID_MESSAGE_CURSOR' }, 400);
+  }
+  const after =
+    afterId && afterCreatedAt
+      ? { id: afterId, createdAt: afterCreatedAt }
+      : null;
   const conversation = await assignedConversation(
     c.env.DB,
     c.req.param('id'),
     agent.id,
   );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  const [messages, media] = await Promise.all([
+  const readStateRequest = after
+    ? c.env.DB.prepare(
+        `SELECT id, read_by_visitor_at, read_by_agent_at
+         FROM messages
+         WHERE conversation_id = ?1
+           AND (read_by_visitor_at IS NOT NULL OR read_by_agent_at IS NOT NULL)
+         ORDER BY julianday(created_at) ASC, id ASC
+         LIMIT 500`,
+      )
+        .bind(c.req.param('id'))
+        .all<MessageReadState>()
+    : Promise.resolve({ results: [] as MessageReadState[] });
+  const [messages, media, readState] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, conversation_id, sender_type, sender_id, body,
        client_message_id, read_by_visitor_at, read_by_agent_at, created_at
      FROM messages
      WHERE conversation_id = ?1
-     ORDER BY created_at ASC, id ASC
+       AND (
+         ?2 IS NULL
+         OR julianday(created_at) > julianday(?2)
+         OR (julianday(created_at) = julianday(?2) AND id > ?3)
+       )
+     ORDER BY julianday(created_at) ASC, id ASC
      LIMIT 500`,
     )
-      .bind(c.req.param('id'))
+      .bind(c.req.param('id'), after?.createdAt ?? null, after?.id ?? null)
       .all<MessageRow>(),
-    listConversationMedia(c.env.DB, c.req.param('id')),
+    listConversationMedia(c.env.DB, c.req.param('id'), after),
+    readStateRequest,
   ]);
-  return c.json({ conversation, messages: messages.results ?? [], media });
+  return c.json({
+    conversation,
+    messages: messages.results ?? [],
+    media,
+    readState: readState.results ?? [],
+  });
 });
 
 agentApi.post('/api/agent/conversations/:id/read', async (c) => {
@@ -1002,6 +1044,14 @@ function normalizeOptionalId(value?: string | null): string | null {
   if (value === null || value === undefined || value === '') return null;
   const id = value.trim();
   return id && id.length <= 200 ? id : null;
+}
+
+function normalizeCursorDateTime(value?: string | null): string | null {
+  const text = value?.trim() ?? '';
+  if (!text || text.length > 40 || !Number.isFinite(Date.parse(text))) {
+    return null;
+  }
+  return text;
 }
 
 function normalizeText(value: unknown, maxLength: number): string | null {

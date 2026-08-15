@@ -4,12 +4,14 @@ import { requireAgentSession } from './agent-session';
 import { createUploadTarget } from './media-signing';
 import {
   completeMedia,
+  MediaUploadIdConflictError,
   readMediaObject,
   reserveMedia,
   storeProxyUpload,
 } from './media-store';
 import {
   normalizeMediaInput,
+  normalizeText,
   publicMedia,
   type MediaBindings,
   type MediaRow,
@@ -40,6 +42,7 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     width?: number | null;
     height?: number | null;
     originalName?: string | null;
+    clientUploadId?: string;
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
   if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
@@ -56,28 +59,28 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     return clientError(c, 409, 'CONVERSATION_CLOSED');
   const media = normalizeMediaInput(body);
   if (!media) return clientError(c, 400, 'INVALID_MEDIA');
+  const clientUploadId = normalizeText(body?.clientUploadId, 160);
+  if (body?.clientUploadId !== undefined && !clientUploadId) {
+    return clientError(c, 400, 'INVALID_MEDIA_UPLOAD_ID');
+  }
 
-  const row = await reserveMedia(c.env.DB, {
+  const reservation = await reserve(c, {
     conversationId: conversation.id,
     senderType: 'visitor',
     senderId: conversation.visitor_id,
+    clientUploadId,
     media,
   });
+  if (!reservation.ok) {
+    return clientError(c, 409, 'MEDIA_UPLOAD_ID_CONFLICT');
+  }
+  const { row, reused } = reservation.value;
   const proxy = new URL(`/client/v1/media/${row.id}/content`, c.req.url);
   proxy.searchParams.set('visitorId', visitorId);
   proxy.searchParams.set('projectId', normalizeProjectId(body?.projectId));
   return c.json(
-    {
-      conversationId: row.conversation_id,
-      media: publicMedia(row),
-      upload: await createUploadTarget(
-        c.env,
-        proxy.toString(),
-        row.object_key,
-        row.mime_type,
-      ),
-    },
-    201,
+    await mediaReservationResponse(c.env, row, proxy.toString()),
+    reused ? 200 : 201,
   );
 });
 
@@ -143,31 +146,32 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
     width?: number | null;
     height?: number | null;
     originalName?: string | null;
+    clientUploadId?: string;
   }>(c.req.raw);
   const media = normalizeMediaInput(body);
   if (!media) return c.json({ error: 'INVALID_MEDIA' }, 400);
-  const row = await reserveMedia(c.env.DB, {
+  const clientUploadId = normalizeText(body?.clientUploadId, 160);
+  if (body?.clientUploadId !== undefined && !clientUploadId) {
+    return c.json({ error: 'INVALID_MEDIA_UPLOAD_ID' }, 400);
+  }
+  const reservation = await reserve(c, {
     conversationId: conversation.id,
     senderType: 'agent',
     senderId: agent.id,
+    clientUploadId,
     media,
   });
+  if (!reservation.ok) {
+    return c.json({ error: 'MEDIA_UPLOAD_ID_CONFLICT' }, 409);
+  }
+  const { row, reused } = reservation.value;
   const proxy = new URL(
     `/api/agent/media/${row.id}/content`,
     c.req.url,
   ).toString();
   return c.json(
-    {
-      conversationId: row.conversation_id,
-      media: publicMedia(row),
-      upload: await createUploadTarget(
-        c.env,
-        proxy,
-        row.object_key,
-        row.mime_type,
-      ),
-    },
-    201,
+    await mediaReservationResponse(c.env, row, proxy),
+    reused ? 200 : 201,
   );
 });
 
@@ -210,17 +214,26 @@ mediaApi.get('/api/agent/media/:id/content', async (c) => {
 export async function listConversationMedia(
   db: D1Database,
   conversationId: string,
+  after?: { id: string; createdAt: string } | null,
 ) {
   const result = await db
     .prepare(
-      `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
-         sender_id, object_key, mime_type, byte_size, width, height, original_name,
-         status, is_initial, reserved_created_at
-       FROM media_items
-       WHERE conversation_id = ?1 AND status = 'ready' AND message_id IS NOT NULL
-       ORDER BY reserved_created_at ASC, id ASC`,
+      `SELECT mi.id, mi.conversation_id, mi.message_id,
+         mi.reserved_message_id, mi.sender_type, mi.sender_id, mi.object_key,
+         mi.mime_type, mi.byte_size, mi.width, mi.height, mi.original_name,
+         mi.client_upload_id, mi.status, mi.is_initial, mi.reserved_created_at
+       FROM media_items mi
+       JOIN messages m ON m.id = mi.message_id
+       WHERE mi.conversation_id = ?1 AND mi.status = 'ready'
+         AND mi.message_id IS NOT NULL
+         AND (
+           ?2 IS NULL
+           OR julianday(m.created_at) > julianday(?2)
+           OR (julianday(m.created_at) = julianday(?2) AND m.id > ?3)
+         )
+       ORDER BY julianday(m.created_at) ASC, m.id ASC`,
     )
-    .bind(conversationId)
+    .bind(conversationId, after?.createdAt ?? null, after?.id ?? null)
     .all<ReadyMediaRow>();
   return (result.results ?? []).map((row) => ({
     messageId: row.message_id,
@@ -247,7 +260,8 @@ async function authorizedVisitorMedia(
   const media = await c.env.DB.prepare(
     `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
-         mi.width, mi.height, mi.original_name, mi.status, mi.is_initial,
+         mi.width, mi.height, mi.original_name, mi.client_upload_id,
+         mi.status, mi.is_initial,
          mi.reserved_created_at
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
@@ -274,7 +288,8 @@ async function authorizedAgentMedia(
   const media = await c.env.DB.prepare(
     `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
-         mi.width, mi.height, mi.original_name, mi.status, mi.is_initial,
+         mi.width, mi.height, mi.original_name, mi.client_upload_id,
+         mi.status, mi.is_initial,
          mi.reserved_created_at
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
@@ -360,4 +375,47 @@ async function readJson<T>(request: Request): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+type ReservationInput = Parameters<typeof reserveMedia>[1];
+
+async function reserve(
+  c: Context<Env>,
+  input: ReservationInput,
+): Promise<
+  { ok: true; value: Awaited<ReturnType<typeof reserveMedia>> } | { ok: false }
+> {
+  try {
+    return { ok: true, value: await reserveMedia(c.env.DB, input) };
+  } catch (error) {
+    if (error instanceof MediaUploadIdConflictError) return { ok: false };
+    throw error;
+  }
+}
+
+async function mediaReservationResponse(
+  env: MediaBindings,
+  row: MediaRow,
+  proxyUrl: string,
+) {
+  if (row.status === 'ready' && row.message_id) {
+    return {
+      conversationId: row.conversation_id,
+      media: publicMedia(row),
+      completed: {
+        messageId: row.message_id,
+        createdAt: row.reserved_created_at,
+      },
+    };
+  }
+  return {
+    conversationId: row.conversation_id,
+    media: publicMedia(row),
+    upload: await createUploadTarget(
+      env,
+      proxyUrl,
+      row.object_key,
+      row.mime_type,
+    ),
+  };
 }

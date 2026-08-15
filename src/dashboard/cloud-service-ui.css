@@ -589,6 +589,50 @@ select:focus-visible {
   letter-spacing: -0.025em;
 }
 
+.conversation-head-status {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6e7785;
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.connection-status i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #35a56f;
+}
+
+.connection-status.is-connecting i,
+.connection-status.is-reconnecting i {
+  background: #d4953f;
+  animation: connection-pulse 1.2s ease-in-out infinite;
+}
+
+.connection-status.is-offline {
+  color: #b44949;
+}
+
+.connection-status.is-offline i {
+  background: #d85b5b;
+}
+
+@keyframes connection-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .unread-total {
   border: 0;
   background: var(--cs-accent);
@@ -651,28 +695,24 @@ select:focus-visible {
   box-shadow: 0 0 0 3px rgba(212, 149, 63, 0.12);
 }
 
-.availability-pill.is-reconnecting > span {
-  background: #a8adb5;
-  box-shadow: 0 0 0 3px rgba(168, 173, 181, 0.12);
-}
-
-.availability-pill small {
-  padding-left: 6px;
-  border-left: 1px solid currentColor;
-  color: inherit;
-  font-size: 9px;
-  font-weight: 650;
-  opacity: 0.62;
-}
-
 .availability-pill:hover:not(:disabled) {
   filter: brightness(0.98);
   box-shadow: 0 3px 10px rgba(25, 29, 37, 0.06);
 }
 
 .availability-pill:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.68;
+}
+
+.composer-foot .media-upload-progress.is-connection-warning {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: block;
+  padding: 2px 8px 0;
+  color: #b06d2d;
+  font-size: 10px;
+  font-weight: 650;
 }
 
 .filters {
@@ -2600,11 +2640,6 @@ select:focus-visible {
     padding: 0 9px;
     gap: 5px;
     font-size: 10px;
-  }
-
-  .availability-pill small {
-    padding-left: 5px;
-    font-size: 8px;
   }
 
   .thread-actions {

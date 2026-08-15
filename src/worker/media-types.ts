@@ -23,6 +23,7 @@ export type MediaRow = {
   width: number | null;
   height: number | null;
   original_name: string | null;
+  client_upload_id: string | null;
   status: 'pending' | 'ready' | 'failed';
   is_initial: number;
   reserved_created_at: string;

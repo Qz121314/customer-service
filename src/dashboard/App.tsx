@@ -39,6 +39,7 @@ import {
   markConversationRead,
   openAgentInboxSocket,
   openConversationSocket,
+  realtimeReconnectDelay,
   sendMessage,
   setAgentAvailability,
   setConversationStatus,
@@ -252,6 +253,11 @@ function sortedConversationList(items: Conversation[]): Conversation[] {
     const rightTime = Date.parse(right.last_message_at || right.created_at);
     return rightTime - leftTime;
   });
+}
+
+function compareMessages(left: Message, right: Message): number {
+  const difference = Date.parse(left.created_at) - Date.parse(right.created_at);
+  return difference || left.id.localeCompare(right.id);
 }
 
 type AgentScopeSummary = {
@@ -1366,6 +1372,9 @@ function AgentWorkspace({
   const [mediaProgress, setMediaProgress] = useState<number | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const [mediaPendingFile, setMediaPendingFile] = useState<File | null>(null);
+  const [mediaClientUploadId, setMediaClientUploadId] = useState<string | null>(
+    null,
+  );
   const [mediaFailed, setMediaFailed] = useState(false);
   const [drafts, setDrafts] = useState<AgentConversationDrafts>(() =>
     loadAgentConversationDrafts(identity.id),
@@ -1375,15 +1384,25 @@ function AgentWorkspace({
   >({});
   const [inboxConnected, setInboxConnected] = useState(false);
   const [threadConnected, setThreadConnected] = useState(false);
+  const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const detailRef = useRef<ConversationDetail | null>(null);
   const lastScrolledConversationRef = useRef<string | null>(null);
   const baseTitleRef = useRef(document.title);
   const draft = selectedId ? (drafts[selectedId]?.body ?? '') : '';
   const currentPendingText = selectedId
     ? (pendingTextMessages[selectedId] ?? null)
     : null;
+  const realtimeConnected = inboxConnected && (!selectedId || threadConnected);
+  const connectionState = !networkOnline
+    ? 'offline'
+    : realtimeConnected
+      ? 'connected'
+      : busy
+        ? 'connecting'
+        : 'reconnecting';
   const totalUnread = useMemo(
     () => conversations.reduce((sum, item) => sum + item.agent_unread_count, 0),
     [conversations],
@@ -1443,6 +1462,21 @@ function AgentWorkspace({
   useEffect(() => {
     saveAgentConversationDrafts(identity.id, drafts);
   }, [drafts, identity.id]);
+
+  useEffect(() => {
+    detailRef.current = detail;
+  }, [detail]);
+
+  useEffect(() => {
+    const online = () => setNetworkOnline(true);
+    const offline = () => setNetworkOnline(false);
+    window.addEventListener('online', online);
+    window.addEventListener('offline', offline);
+    return () => {
+      window.removeEventListener('online', online);
+      window.removeEventListener('offline', offline);
+    };
+  }, []);
 
   const acknowledgeConversation = useCallback(
     async (id: string, lastMessageId: string | null = null) => {
@@ -1517,13 +1551,19 @@ function AgentWorkspace({
     let active = true;
     let socket: WebSocket | null = null;
     let timer: number | null = null;
+    let stableTimer: number | null = null;
     let openedOnce = false;
+    let retryAttempt = 0;
     const connect = () => {
       if (!active) return;
       socket = openAgentInboxSocket();
       socket.addEventListener('open', () => {
         if (!active) return;
         setInboxConnected(true);
+        if (stableTimer !== null) window.clearTimeout(stableTimer);
+        stableTimer = window.setTimeout(() => {
+          retryAttempt = 0;
+        }, 10_000);
         if (openedOnce) {
           void heartbeat()
             .then(applyInbox)
@@ -1553,16 +1593,31 @@ function AgentWorkspace({
       socket.addEventListener('close', () => {
         if (!active) return;
         setInboxConnected(false);
-        timer = window.setTimeout(connect, 1200);
+        socket = null;
+        if (stableTimer !== null) window.clearTimeout(stableTimer);
+        stableTimer = null;
+        const delay = realtimeReconnectDelay(retryAttempt);
+        retryAttempt += 1;
+        timer = window.setTimeout(connect, delay);
       });
       socket.addEventListener('error', () => socket?.close());
     };
+    const reconnectNow = () => {
+      if (!active || socket) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+      retryAttempt = 0;
+      connect();
+    };
     connect();
+    window.addEventListener('online', reconnectNow);
     return () => {
       active = false;
       setInboxConnected(false);
+      window.removeEventListener('online', reconnectNow);
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
+      if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
   }, [applyInbox, identity.id, refresh]);
 
@@ -1578,12 +1633,45 @@ function AgentWorkspace({
     let active = true;
     let socket: WebSocket | null = null;
     let timer: number | null = null;
+    let stableTimer: number | null = null;
     let openedOnce = false;
-    const load = () =>
-      getConversation(selectedId)
+    let retryAttempt = 0;
+    const load = (incremental = false) => {
+      const current = detailRef.current;
+      const lastMessage =
+        incremental && current?.conversation.id === selectedId
+          ? current.messages.at(-1)
+          : null;
+      return getConversation(
+        selectedId,
+        lastMessage
+          ? { id: lastMessage.id, createdAt: lastMessage.created_at }
+          : null,
+      )
         .then((value) => {
           if (active) {
-            setDetail(value);
+            setDetail((currentDetail) => {
+              if (
+                !incremental ||
+                !currentDetail ||
+                currentDetail.conversation.id !== selectedId
+              ) {
+                return value;
+              }
+              const messages = new Map(
+                currentDetail.messages.map((item) => [item.id, item]),
+              );
+              for (const readState of value.readState ?? []) {
+                const existing = messages.get(readState.id);
+                if (existing)
+                  messages.set(readState.id, { ...existing, ...readState });
+              }
+              for (const item of value.messages) messages.set(item.id, item);
+              return {
+                ...value,
+                messages: [...messages.values()].sort(compareMessages),
+              };
+            });
             const deliveredClientIds = new Set(
               value.messages
                 .map((item) => item.client_message_id)
@@ -1601,12 +1689,18 @@ function AgentWorkspace({
               delete next[selectedId];
               return next;
             });
-            setMediaItems(
-              value.media.map((item) => ({
-                ...item,
-                url: `/api/agent/media/${encodeURIComponent(item.id)}/content`,
-              })),
-            );
+            const incomingMedia = value.media.map((item) => ({
+              ...item,
+              url: `/api/agent/media/${encodeURIComponent(item.id)}/content`,
+            }));
+            setMediaItems((currentMedia) => {
+              if (!incremental) return incomingMedia;
+              const media = new Map(
+                currentMedia.map((item) => [item.id, item]),
+              );
+              for (const item of incomingMedia) media.set(item.id, item);
+              return [...media.values()];
+            });
             if (document.visibilityState === 'visible') {
               const lastVisitorMessageId =
                 value.messages
@@ -1623,13 +1717,18 @@ function AgentWorkspace({
         .catch((reason) => {
           if (active) setError(message(reason, '无法加载会话'));
         });
+    };
     const connect = () => {
       if (!active) return;
       socket = openConversationSocket(selectedId);
       socket.addEventListener('open', () => {
         if (!active) return;
         setThreadConnected(true);
-        if (openedOnce) void load();
+        if (stableTimer !== null) window.clearTimeout(stableTimer);
+        stableTimer = window.setTimeout(() => {
+          retryAttempt = 0;
+        }, 10_000);
+        if (openedOnce) void load(true);
         openedOnce = true;
       });
       socket.addEventListener('message', (event) => {
@@ -1760,17 +1859,32 @@ function AgentWorkspace({
       socket.addEventListener('close', () => {
         if (!active) return;
         setThreadConnected(false);
-        timer = window.setTimeout(connect, 1200);
+        socket = null;
+        if (stableTimer !== null) window.clearTimeout(stableTimer);
+        stableTimer = null;
+        const delay = realtimeReconnectDelay(retryAttempt);
+        retryAttempt += 1;
+        timer = window.setTimeout(connect, delay);
       });
       socket.addEventListener('error', () => socket?.close());
     };
-    void load();
+    const reconnectNow = () => {
+      if (!active || socket) return;
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+      retryAttempt = 0;
+      connect();
+    };
+    void load(false);
     connect();
+    window.addEventListener('online', reconnectNow);
     return () => {
       active = false;
       setThreadConnected(false);
+      window.removeEventListener('online', reconnectNow);
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
+      if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
   }, [acknowledgeConversation, refresh, selectedId]);
 
@@ -1779,6 +1893,7 @@ function AgentWorkspace({
 
   useEffect(() => {
     setMediaPendingFile(null);
+    setMediaClientUploadId(null);
     setMediaFailed(false);
     setMediaProgress(null);
     setMediaPreviewUrl((current) => {
@@ -1937,12 +2052,21 @@ function AgentWorkspace({
     );
   }
 
-  async function uploadImage(file: File, previewUrl: string) {
+  async function uploadImage(
+    file: File,
+    previewUrl: string,
+    clientUploadId: string,
+  ) {
     if (!selectedId) return;
     setMediaProgress(0);
     setMediaFailed(false);
     try {
-      const sent = await sendAgentImage(selectedId, file, setMediaProgress);
+      const sent = await sendAgentImage(
+        selectedId,
+        file,
+        clientUploadId,
+        setMediaProgress,
+      );
       const message: Message = {
         id: sent.messageId,
         conversation_id: selectedId,
@@ -1975,6 +2099,7 @@ function AgentWorkspace({
           : [...current, sent.media],
       );
       setMediaPendingFile(null);
+      setMediaClientUploadId(null);
       setMediaPreviewUrl(null);
       URL.revokeObjectURL(previewUrl);
     } catch (reason) {
@@ -1991,12 +2116,20 @@ function AgentWorkspace({
     const previewUrl = URL.createObjectURL(file);
     setMediaPreviewUrl(previewUrl);
     setMediaPendingFile(file);
-    await uploadImage(file, previewUrl);
+    const clientUploadId = crypto.randomUUID();
+    setMediaClientUploadId(clientUploadId);
+    await uploadImage(file, previewUrl, clientUploadId);
   }
 
   async function retryImage() {
-    if (!mediaPendingFile || !mediaPreviewUrl || mediaProgress !== null) return;
-    await uploadImage(mediaPendingFile, mediaPreviewUrl);
+    if (
+      !mediaPendingFile ||
+      !mediaPreviewUrl ||
+      !mediaClientUploadId ||
+      mediaProgress !== null
+    )
+      return;
+    await uploadImage(mediaPendingFile, mediaPreviewUrl, mediaClientUploadId);
   }
 
   async function changeStatus(status: Conversation['status']) {
@@ -2221,29 +2354,40 @@ function AgentWorkspace({
               )}
             </h1>
           </div>
-          <button
-            type="button"
-            className={`availability-pill is-${availability}${inboxConnected && (!selectedId || threadConnected) ? '' : ' is-reconnecting'}`}
-            aria-live="polite"
-            aria-pressed={availability === 'busy'}
-            disabled={availabilitySaving}
-            title={
-              availability === 'online'
-                ? '点击暂停接收新会话'
-                : '点击恢复接收新会话'
-            }
-            onClick={() => void toggleAvailability()}
-          >
-            <span aria-hidden="true" />
-            {availabilitySaving
-              ? '切换中…'
-              : availability === 'online'
-                ? '在线接待'
-                : '暂停接待'}
-            {(!inboxConnected || (selectedId && !threadConnected)) && (
-              <small>重连中</small>
-            )}
-          </button>
+          <div className="conversation-head-status">
+            <button
+              type="button"
+              className={`availability-pill is-${availability}`}
+              aria-pressed={availability === 'busy'}
+              disabled={availabilitySaving || !networkOnline || !inboxConnected}
+              title={
+                availability === 'online'
+                  ? '点击暂停接收新会话'
+                  : '点击恢复接收新会话'
+              }
+              onClick={() => void toggleAvailability()}
+            >
+              <span aria-hidden="true" />
+              {availabilitySaving
+                ? '切换中…'
+                : availability === 'online'
+                  ? '在线接待'
+                  : '暂停接待'}
+            </button>
+            <span
+              className={`connection-status is-${connectionState}`}
+              aria-live="polite"
+            >
+              <i aria-hidden="true" />
+              {connectionState === 'connected'
+                ? '实时连接正常'
+                : connectionState === 'offline'
+                  ? '网络已断开 · 草稿已保存'
+                  : connectionState === 'connecting'
+                    ? '正在建立连接'
+                    : '连接中断 · 正在恢复'}
+            </span>
+          </div>
         </header>
         <div className="inbox-overview" aria-label="会话概览">
           <Metric label="新会话" value={overview.open} />
@@ -2502,6 +2646,7 @@ function AgentWorkspace({
                         <span className="pending-text-actions">
                           <button
                             type="button"
+                            disabled={!networkOnline || !threadConnected}
                             onClick={() => void retryTextMessage()}
                           >
                             重试
@@ -2527,7 +2672,12 @@ function AgentWorkspace({
                       <button
                         type="button"
                         className={`media-inline-status${mediaFailed ? ' is-failed' : ''}`}
-                        disabled={!mediaFailed || !mediaPendingFile}
+                        disabled={
+                          !mediaFailed ||
+                          !mediaPendingFile ||
+                          !networkOnline ||
+                          !threadConnected
+                        }
                         aria-label={mediaFailed ? '重试发送图片' : '图片发送中'}
                         onClick={() => void retryImage()}
                       >
@@ -2565,7 +2715,9 @@ function AgentWorkspace({
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     disabled={
                       detail.conversation.status === 'closed' ||
-                      mediaProgress !== null
+                      mediaProgress !== null ||
+                      !networkOnline ||
+                      !threadConnected
                     }
                     onChange={(event) => {
                       const file = event.target.files?.[0];
@@ -2669,15 +2821,23 @@ function AgentWorkspace({
                 }}
               />
               <div className="composer-foot">
-                <span className="media-upload-progress">
-                  Enter 发送 · Shift + Enter 换行
+                <span
+                  className={`media-upload-progress${networkOnline && threadConnected ? '' : ' is-connection-warning'}`}
+                >
+                  {!networkOnline
+                    ? '网络已断开，当前草稿已保存在本机'
+                    : !threadConnected
+                      ? '实时连接恢复后即可发送'
+                      : 'Enter 发送 · Shift + Enter 换行'}
                 </span>
                 <button
                   className="primary-button"
                   disabled={
                     Boolean(currentPendingText) ||
                     !draft.trim() ||
-                    detail.conversation.status === 'closed'
+                    detail.conversation.status === 'closed' ||
+                    !networkOnline ||
+                    !threadConnected
                   }
                 >
                   发送

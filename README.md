@@ -74,6 +74,9 @@ groups
 - 坐席可把会话直接转给同站点内仍有容量的在线客服，也可排除自己后重新进入自动分流；
 - 每个坐席可维护最多 30 条自己的快捷回复；模板和可转接客服随收件箱一起返回，不增加轮询请求；
 - 文字草稿仅在当前浏览器按会话保存 24 小时；发送失败可使用同一消息标识重试，D1 唯一索引阻止重复消息；
+- 图片发送同样使用客户端上传标识；初始化、上传完成和失败重试均可安全重复调用，不会重复创建图片消息；中断两小时的上传会先隔离，之后由既有定时清理任务删除残留记录和 R2 对象；
+- 实时连接使用带抖动的指数退避，网络恢复时立即重连；当前会话重连后只补取最后一条消息之后的增量，不重复下载完整记录；
+- 坐席端分别显示实时连接正常、正在连接、恢复中和网络已断开；断网期间仍可继续输入并保留本地草稿；
 - 会话内展示商品封面、商品名、分区 / 分类和商品链接，切换会话时无需离开工作台；
 - 只向已登录且心跳有效的客服分流；
 - 停用客服时立即撤销登录与实时连接，并将其未结束会话重新分流；
@@ -271,8 +274,9 @@ POST /api/agent/auth/status      # 在线接待 / 暂停接待
 
 GET  /api/agent/overview
 GET  /api/agent/conversations
-GET  /api/agent/conversations/:id/messages
+GET  /api/agent/conversations/:id/messages # 可带 afterId + afterCreatedAt 增量同步
 POST /api/agent/conversations/:id/messages
+POST /api/agent/conversations/:id/media/init # clientUploadId 支持幂等重试
 POST /api/agent/conversations/:id/status
 POST /api/agent/conversations/:id/transfer
 POST /api/agent/quick-replies

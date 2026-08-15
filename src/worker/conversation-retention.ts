@@ -15,6 +15,10 @@ type MediaObjectRow = {
   object_key: string;
 };
 
+type StaleMediaRow = MediaObjectRow & {
+  id: string;
+};
+
 type OrphanVisitorRow = {
   id: string;
   site_id: string;
@@ -35,7 +39,12 @@ export function conversationExpiresAt(createdAt: string | Date): string {
 export async function purgeExpiredConversations(
   env: RetentionBindings,
   now = new Date(),
-): Promise<{ conversations: number; mediaObjects: number; visitors: number }> {
+): Promise<{
+  conversations: number;
+  mediaObjects: number;
+  staleMediaObjects: number;
+  visitors: number;
+}> {
   const nowIso = now.toISOString();
   let conversations = 0;
   let mediaObjects = 0;
@@ -85,8 +94,60 @@ export async function purgeExpiredConversations(
     mediaObjects += keys.length;
   }
 
+  const staleMediaObjects =
+    now.getUTCMinutes() % 10 === 0
+      ? await purgeStaleMediaUploads(env, nowIso)
+      : 0;
   const visitors = await purgeOrphanVisitors(env.DB, nowIso);
-  return { conversations, mediaObjects, visitors };
+  return { conversations, mediaObjects, staleMediaObjects, visitors };
+}
+
+async function purgeStaleMediaUploads(
+  env: RetentionBindings,
+  nowIso: string,
+): Promise<number> {
+  // First quarantine abandoned uploads. A separate pass deletes them only
+  // after a one-hour grace period, so a slow in-flight PUT cannot escape R2
+  // cleanup even if it started before the reservation was quarantined.
+  await env.DB.prepare(
+    `UPDATE media_items
+     SET status = 'failed', updated_at = ?1
+     WHERE status = 'pending'
+       AND datetime(updated_at) <= datetime(?1, '-2 hours')`,
+  )
+    .bind(nowIso)
+    .run();
+
+  const result = await env.DB.prepare(
+    `SELECT id, object_key
+     FROM media_items
+     WHERE status = 'failed'
+       AND datetime(updated_at) <= datetime(?1, '-1 hour')
+     ORDER BY updated_at ASC, id ASC
+     LIMIT ?2`,
+  )
+    .bind(nowIso, DELETE_BATCH_SIZE)
+    .all<StaleMediaRow>();
+  const rows = result.results ?? [];
+  if (rows.length === 0) return 0;
+
+  const keys = [...new Set(rows.map((row) => row.object_key).filter(Boolean))];
+  for (let index = 0; index < keys.length; index += 1000) {
+    const chunk = keys.slice(index, index + 1000);
+    if (chunk.length > 0) await env.MEDIA.delete(chunk);
+  }
+
+  const ids = rows.map((row) => row.id);
+  const placeholders = ids.map((_, index) => `?${index + 2}`).join(', ');
+  await env.DB.prepare(
+    `DELETE FROM media_items
+     WHERE status = 'failed'
+       AND datetime(updated_at) <= datetime(?1, '-1 hour')
+       AND id IN (${placeholders})`,
+  )
+    .bind(nowIso, ...ids)
+    .run();
+  return keys.length;
 }
 
 async function purgeOrphanVisitors(

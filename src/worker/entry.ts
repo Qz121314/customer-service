@@ -31,6 +31,7 @@ type AppEnv = { Bindings: Bindings };
 
 type MediaCompletePayload = {
   conversationId?: string;
+  duplicate?: boolean;
   [key: string]: unknown;
 };
 
@@ -59,9 +60,10 @@ app.use('/client/v1/*', async (c, next) => {
     CLIENT_CONVERSATION_CREATE_PATH.test(pathname) &&
     c.res.status === 201
   ) {
-    conversationId = await responseConversationId(c.res, 'nested');
+    conversationId = await responseConversationId(c.res);
   } else if (CLIENT_MEDIA_COMPLETE_PATH.test(pathname)) {
-    conversationId = await responseConversationId(c.res, 'direct');
+    const payload = await responseMediaComplete(c.res);
+    if (!payload?.duplicate) conversationId = payload?.conversationId ?? null;
   }
   if (!conversationId) return;
 
@@ -103,7 +105,7 @@ app.use('/api/agent/*', async (c, next) => {
   if (!AGENT_MEDIA_COMPLETE_PATH.test(pathname)) return;
   try {
     const payload = (await c.res.clone().json()) as MediaCompletePayload;
-    if (!payload.conversationId) return;
+    if (!payload.conversationId || payload.duplicate) return;
     c.executionCtx.waitUntil(
       sendVisitorPushForConversation(c.env, payload.conversationId).catch(
         (error) => {
@@ -154,16 +156,23 @@ export { ConversationRoom };
 
 async function responseConversationId(
   response: Response,
-  shape: 'nested' | 'direct',
 ): Promise<string | null> {
   try {
     const value = (await response.clone().json()) as {
-      conversationId?: string;
       conversation?: { id?: string };
     };
-    const id =
-      shape === 'nested' ? value.conversation?.id : value.conversationId;
+    const id = value.conversation?.id;
     return typeof id === 'string' && id ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+async function responseMediaComplete(
+  response: Response,
+): Promise<MediaCompletePayload | null> {
+  try {
+    return (await response.clone().json()) as MediaCompletePayload;
   } catch {
     return null;
   }

@@ -19,7 +19,10 @@ test('agent inbox returns overview, conversations, messages and media in two req
     /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
   );
   assert.match(worker, /transferTargets,[\s\S]*quickReplies/u);
-  assert.match(worker, /messages: messages\.results \?\? \[\], media/u);
+  assert.match(
+    worker,
+    /messages: messages\.results \?\? \[\],[\s\S]*media,[\s\S]*readState/u,
+  );
   assert.doesNotMatch(app, /getConversations\(filter/u);
   assert.doesNotMatch(app, /getAgentMedia\(selectedId\)/u);
 });

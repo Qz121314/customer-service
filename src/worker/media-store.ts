@@ -15,21 +15,23 @@ export async function reserveMedia(
     conversationId: string;
     senderType: MediaSenderType;
     senderId: string;
+    clientUploadId: string | null;
     media: NormalizedMedia;
   },
-): Promise<MediaRow> {
+): Promise<{ row: MediaRow; reused: boolean }> {
   const id = crypto.randomUUID();
   const messageId = crypto.randomUUID();
   const now = new Date().toISOString();
   const objectKey = `chat/${input.conversationId}/${id}.${MIME_EXTENSIONS[input.media.mimeType]}`;
-  await db
+  const inserted = await db
     .prepare(
-      `INSERT INTO media_items (
+      `INSERT OR IGNORE INTO media_items (
          id, conversation_id, reserved_message_id, sender_type, sender_id,
          object_key, mime_type, byte_size, width, height, original_name,
-         status, is_initial, reserved_created_at, created_at, updated_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-         'pending', 0, ?12, ?12, ?12)`,
+         client_upload_id, status, is_initial, reserved_created_at, created_at,
+         updated_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+         'pending', 0, ?13, ?13, ?13)`,
     )
     .bind(
       id,
@@ -43,12 +45,44 @@ export async function reserveMedia(
       input.media.width,
       input.media.height,
       input.media.originalName,
+      input.clientUploadId,
       now,
     )
     .run();
-  const row = await findMedia(db, id);
-  if (!row) throw new Error('Media reservation failed');
-  return row;
+  if (inserted.meta.changes) {
+    const row = await findMedia(db, id);
+    if (!row) throw new Error('Media reservation failed');
+    return { row, reused: false };
+  }
+
+  const existing = input.clientUploadId
+    ? await findMediaByClientUploadId(db, {
+        ...input,
+        clientUploadId: input.clientUploadId,
+      })
+    : null;
+  if (!existing || !sameMedia(existing, input.media)) {
+    throw new MediaUploadIdConflictError();
+  }
+  if (existing.status === 'failed') {
+    await db
+      .prepare(
+        `UPDATE media_items
+         SET status = 'pending', updated_at = ?1
+         WHERE id = ?2 AND status = 'failed'`,
+      )
+      .bind(now, existing.id)
+      .run();
+    existing.status = 'pending';
+  }
+  return { row: existing, reused: true };
+}
+
+export class MediaUploadIdConflictError extends Error {
+  constructor() {
+    super('MEDIA_UPLOAD_ID_CONFLICT');
+    this.name = 'MediaUploadIdConflictError';
+  }
 }
 
 export async function findMedia(
@@ -59,11 +93,49 @@ export async function findMedia(
     .prepare(
       `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
          sender_id, object_key, mime_type, byte_size, width, height, original_name,
-         status, is_initial, reserved_created_at
+         client_upload_id, status, is_initial, reserved_created_at
        FROM media_items WHERE id = ?1 LIMIT 1`,
     )
     .bind(id)
     .first<MediaRow>();
+}
+
+async function findMediaByClientUploadId(
+  db: D1Database,
+  input: {
+    conversationId: string;
+    senderType: MediaSenderType;
+    senderId: string;
+    clientUploadId: string;
+  },
+): Promise<MediaRow | null> {
+  return db
+    .prepare(
+      `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
+         sender_id, object_key, mime_type, byte_size, width, height, original_name,
+         client_upload_id, status, is_initial, reserved_created_at
+       FROM media_items
+       WHERE conversation_id = ?1 AND sender_type = ?2 AND sender_id = ?3
+         AND client_upload_id = ?4
+       LIMIT 1`,
+    )
+    .bind(
+      input.conversationId,
+      input.senderType,
+      input.senderId,
+      input.clientUploadId,
+    )
+    .first<MediaRow>();
+}
+
+function sameMedia(existing: MediaRow, media: NormalizedMedia): boolean {
+  return (
+    existing.mime_type === media.mimeType &&
+    existing.byte_size === media.byteSize &&
+    existing.width === media.width &&
+    existing.height === media.height &&
+    existing.original_name === media.originalName
+  );
 }
 
 export async function storeProxyUpload(
@@ -97,15 +169,7 @@ export async function completeMedia(
   | { ok: false; status: 400 | 404 | 409; code: string }
 > {
   if (media.status === 'ready' && media.message_id) {
-    return {
-      ok: true,
-      value: {
-        ok: true,
-        conversationId: media.conversation_id,
-        messageId: media.message_id,
-        media: publicMedia(media),
-      },
-    };
+    return completedMedia(media);
   }
   if (media.status !== 'pending')
     return { ok: false, status: 409, code: 'MEDIA_NOT_PENDING' };
@@ -127,21 +191,21 @@ export async function completeMedia(
   const createdAt = media.reserved_created_at;
   const statements = [
     env.DB.prepare(
-      `INSERT INTO messages (
+      `INSERT OR IGNORE INTO messages (
          id, conversation_id, sender_type, sender_id, body, kind, created_at
-       ) VALUES (?1, ?2, ?3, ?4, '', 'image', ?5)`,
+       )
+       SELECT ?1, ?2, ?3, ?4, '', 'image', ?5
+       WHERE EXISTS (
+         SELECT 1 FROM media_items WHERE id = ?6 AND status = 'pending'
+       )`,
     ).bind(
       messageId,
       media.conversation_id,
       media.sender_type,
       media.sender_id,
       createdAt,
+      media.id,
     ),
-    env.DB.prepare(
-      `UPDATE media_items
-       SET message_id = ?1, status = 'ready', updated_at = ?2
-       WHERE id = ?3 AND status = 'pending'`,
-    ).bind(messageId, new Date().toISOString(), media.id),
   ];
 
   if (media.sender_type === 'agent') {
@@ -152,8 +216,11 @@ export async function completeMedia(
              visitor_unread_count = visitor_unread_count + 1,
              agent_unread_count = 0,
              last_message_at = ?1, updated_at = ?1
-         WHERE id = ?2`,
-      ).bind(createdAt, media.conversation_id),
+         WHERE id = ?2
+           AND EXISTS (
+             SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
+           )`,
+      ).bind(createdAt, media.conversation_id, media.id),
     );
   } else {
     statements.push(
@@ -161,11 +228,29 @@ export async function completeMedia(
         `UPDATE conversations
          SET agent_unread_count = agent_unread_count + 1,
              last_message_at = ?1, updated_at = ?1
-         WHERE id = ?2`,
-      ).bind(createdAt, media.conversation_id),
+         WHERE id = ?2
+           AND EXISTS (
+             SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
+           )`,
+      ).bind(createdAt, media.conversation_id, media.id),
     );
   }
-  await env.DB.batch(statements);
+  statements.push(
+    env.DB.prepare(
+      `UPDATE media_items
+       SET message_id = ?1, status = 'ready', updated_at = ?2
+       WHERE id = ?3 AND status = 'pending'`,
+    ).bind(messageId, new Date().toISOString(), media.id),
+  );
+  const results = await env.DB.batch(statements);
+  const readyResult = results.at(-1);
+  if (!readyResult?.meta.changes) {
+    const current = await findMedia(env.DB, media.id);
+    if (current?.status === 'ready' && current.message_id) {
+      return completedMedia(current);
+    }
+    return { ok: false, status: 409, code: 'MEDIA_NOT_PENDING' };
+  }
 
   await Promise.all([
     broadcastRoom(env, media.conversation_id, {
@@ -233,7 +318,25 @@ export async function completeMedia(
       conversationId: media.conversation_id,
       messageId,
       createdAt,
+      duplicate: false,
       media: publicMedia({ ...media, message_id: messageId, status: 'ready' }),
+    },
+  };
+}
+
+function completedMedia(media: MediaRow): {
+  ok: true;
+  value: Record<string, unknown>;
+} {
+  return {
+    ok: true,
+    value: {
+      ok: true,
+      conversationId: media.conversation_id,
+      messageId: media.message_id,
+      createdAt: media.reserved_created_at,
+      duplicate: true,
+      media: publicMedia(media),
     },
   };
 }

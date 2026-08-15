@@ -16,8 +16,11 @@ export type AgentMediaItem = {
 
 type InitResponse = {
   conversationId: string;
-  media: Omit<AgentMediaItem, 'messageId' | 'url'>;
-  upload: UploadTarget;
+  media: Omit<AgentMediaItem, 'messageId' | 'url' | 'status'> & {
+    status: 'pending' | 'ready';
+  };
+  upload?: UploadTarget;
+  completed?: { messageId: string; createdAt: string };
 };
 
 export async function getAgentMedia(
@@ -35,6 +38,7 @@ export async function getAgentMedia(
 export async function sendAgentImage(
   conversationId: string,
   file: File,
+  clientUploadId: string,
   onProgress?: (progress: number) => void,
 ): Promise<{ messageId: string; createdAt: string; media: AgentMediaItem }> {
   const image = await prepareChatImage(file);
@@ -49,9 +53,24 @@ export async function sendAgentImage(
           width: image.width,
           height: image.height,
           originalName: image.originalName,
+          clientUploadId,
         }),
       },
     );
+    if (init.completed && init.media.status === 'ready') {
+      onProgress?.(1);
+      return {
+        messageId: init.completed.messageId,
+        createdAt: init.completed.createdAt,
+        media: {
+          ...init.media,
+          status: 'ready',
+          messageId: init.completed.messageId,
+          url: `/api/agent/media/${encodeURIComponent(init.media.id)}/content`,
+        },
+      };
+    }
+    if (!init.upload) throw new Error('图片上传地址无效');
     await uploadPreparedImage(init.upload, image, onProgress);
     const complete = await request<{
       messageId: string;

@@ -32,12 +32,15 @@ for (const directory of [workerDirectory, sharedDirectory]) {
 let adminConfigApi;
 let agentApi;
 let clientApi;
+let mediaApi;
 try {
-  [{ adminConfigApi }, { agentApi }, { clientApi }] = await Promise.all([
-    import('../src/worker/admin-config-api.ts'),
-    import('../src/worker/agent-api.ts'),
-    import('../src/worker/client-api.ts'),
-  ]);
+  [{ adminConfigApi }, { agentApi }, { clientApi }, { mediaApi }] =
+    await Promise.all([
+      import('../src/worker/admin-config-api.ts'),
+      import('../src/worker/agent-api.ts'),
+      import('../src/worker/client-api.ts'),
+      import('../src/worker/media-api.ts'),
+    ]);
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }
@@ -109,6 +112,47 @@ function fakeRooms() {
             return { status: 204 };
           },
         };
+      },
+    },
+  };
+}
+
+function fakeMediaBucket() {
+  const objects = new Map();
+  return {
+    objects,
+    bucket: {
+      async put(key, body, options) {
+        const bytes = Buffer.from(
+          await new globalThis.Response(body).arrayBuffer(),
+        );
+        objects.set(key, {
+          bytes,
+          contentType: options?.httpMetadata?.contentType ?? null,
+        });
+      },
+      async head(key) {
+        const object = objects.get(key);
+        if (!object) return null;
+        return {
+          size: object.bytes.length,
+          httpMetadata: { contentType: object.contentType },
+        };
+      },
+      async get(key) {
+        const object = objects.get(key);
+        if (!object) return null;
+        return {
+          size: object.bytes.length,
+          httpEtag: 'test-etag',
+          httpMetadata: { contentType: object.contentType },
+          body: object.bytes,
+        };
+      },
+      async delete(keyOrKeys) {
+        for (const key of Array.isArray(keyOrKeys) ? keyOrKeys : [keyOrKeys]) {
+          objects.delete(key);
+        }
       },
     },
   };
@@ -193,7 +237,12 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   applyMigrations(database);
   const db = d1(database);
   const rooms = fakeRooms();
-  const env = { DB: db, CONVERSATION_ROOMS: rooms.namespace };
+  const media = fakeMediaBucket();
+  const env = {
+    DB: db,
+    MEDIA: media.bucket,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
 
   const token = 'agent-session-e2e';
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -316,19 +365,126 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     1,
   );
 
+  const uploadId = 'agent-image-e2e-1';
+  const imageInitBody = JSON.stringify({
+    mimeType: 'image/png',
+    byteSize: 4,
+    width: 1,
+    height: 1,
+    originalName: 'test.png',
+    clientUploadId: uploadId,
+  });
+  const firstInitResponse = await mediaApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
+    {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: imageInitBody,
+    },
+    env,
+  );
+  assert.equal(firstInitResponse.status, 201);
+  const firstInit = await json(firstInitResponse);
+  const retryInitResponse = await mediaApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
+    {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: imageInitBody,
+    },
+    env,
+  );
+  assert.equal(retryInitResponse.status, 200);
+  const retryInit = await json(retryInitResponse);
+  assert.equal(retryInit.media.id, firstInit.media.id);
+  assert.equal(
+    database
+      .prepare(
+        'SELECT COUNT(*) AS count FROM media_items WHERE client_upload_id = ?',
+      )
+      .get(uploadId).count,
+    1,
+  );
+
+  const uploadPath = new URL(firstInit.upload.url).pathname;
+  const uploadResponse = await mediaApi.request(
+    uploadPath,
+    {
+      method: 'PUT',
+      headers: { cookie, 'content-type': 'image/png' },
+      body: new Uint8Array([1, 2, 3, 4]),
+    },
+    env,
+  );
+  await json(uploadResponse);
+  const completePath = `/api/agent/media/${encodeURIComponent(firstInit.media.id)}/complete`;
+  const firstComplete = await json(
+    await mediaApi.request(
+      completePath,
+      { method: 'POST', headers: { cookie }, body: '{}' },
+      env,
+    ),
+  );
+  const retryComplete = await json(
+    await mediaApi.request(
+      completePath,
+      { method: 'POST', headers: { cookie }, body: '{}' },
+      env,
+    ),
+  );
+  assert.equal(retryComplete.messageId, firstComplete.messageId);
+  assert.equal(firstComplete.duplicate, false);
+  assert.equal(retryComplete.duplicate, true);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = ? AND kind = 'image'`,
+      )
+      .get(conversationId).count,
+    1,
+  );
+
+  const completedInit = await json(
+    await mediaApi.request(
+      `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: imageInitBody,
+      },
+      env,
+    ),
+  );
+  assert.equal(completedInit.completed.messageId, firstComplete.messageId);
+
+  const deltaResponse = await agentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages?afterId=${encodeURIComponent(created.conversation.messages[0].id)}&afterCreatedAt=${encodeURIComponent(created.conversation.messages[0].sentAt)}`,
+    { headers: { cookie } },
+    env,
+  );
+  const delta = await json(deltaResponse);
+  assert.deepEqual(
+    delta.messages.map((item) => item.id),
+    [reply.message.id, firstComplete.messageId],
+  );
+  assert.equal(delta.media.length, 1);
+  assert.equal(delta.media[0].messageId, firstComplete.messageId);
+
   const clientDetailResponse = await clientApi.request(
     `/client/v1/conversations/${encodeURIComponent(conversationId)}?visitorId=${encodeURIComponent(visitorId)}`,
     undefined,
     env,
   );
   const clientDetail = await json(clientDetailResponse);
-  assert.equal(clientDetail.conversation.messages.length, 2);
+  assert.equal(clientDetail.conversation.messages.length, 3);
   assert.equal(
     clientDetail.conversation.messages[0].body,
     'Hello from visitor',
   );
   assert.equal(clientDetail.conversation.messages[1].body, 'Hello from agent');
   assert.equal(clientDetail.conversation.messages[1].direction, 'agent');
+  assert.equal(clientDetail.conversation.messages[2].direction, 'agent');
 
   const visitorEvents = rooms.events.get(`client:default:${visitorId}`) ?? [];
   assert.ok(
