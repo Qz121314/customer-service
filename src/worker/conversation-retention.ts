@@ -99,6 +99,20 @@ export async function purgeExpiredConversations(
       ? await purgeStaleMediaUploads(env, nowIso)
       : 0;
   const visitors = await purgeOrphanVisitors(env.DB, nowIso);
+  if (now.getUTCHours() === 0 && now.getUTCMinutes() === 0) {
+    await env.DB.prepare(
+      `DELETE FROM conversation_creation_limits
+       WHERE rowid IN (
+         SELECT rowid
+         FROM conversation_creation_limits
+         WHERE datetime(expires_at) <= datetime(?1)
+         ORDER BY expires_at ASC
+         LIMIT 1000
+       )`,
+    )
+      .bind(nowIso)
+      .run();
+  }
   return { conversations, mediaObjects, staleMediaObjects, visitors };
 }
 
