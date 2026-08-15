@@ -64,9 +64,9 @@ groups
 - D1 独立客服账号、密码凭据和登录 Session；
 - 客服分组与客服成员配置；
 - 客服启用 / 停用、最大同时会话数；
-- 客服在线心跳；
+- WebSocket 长连接心跳维护客服在线状态，网络恢复时使用 REST heartbeat 对账；
 - 只向已登录且心跳有效的客服分流；
-- 最少进行中会话优先分流；
+- 分区 / 分类 / 指定产品动态负责范围，最少进行中会话优先分流；
 - 客服只读取和回复分配给自己的会话；
 - Durable Object + WebSocket 实时消息广播；
 - D1 持久化访客、会话和消息；
@@ -94,16 +94,31 @@ groups
 
 ## 客服在线与分流
 
-客服登录成功后状态变为在线，坐席端每 30 秒发送一次心跳。
+客服登录成功后状态变为在线。坐席工作台以 WebSocket 为主通道，连接建立和 ping/pong 会维护 `last_seen_at`；不再通过固定 30 秒 HTTP 轮询维持在线。浏览器从离线、休眠或断线状态恢复时，会执行一次 REST heartbeat + 状态对账。
 
-分流只选择：
+负责范围按规则保存，不展开成大量产品 ID：
+
+```text
+整个分区
+→ 动态覆盖该分区当前及未来新增产品
+
+指定分类
+→ 动态覆盖分区内选中的分类
+
+指定产品
+→ 只覆盖明确选择的产品
+```
+
+分流优先使用上述 `agent_routing_scopes`。只有没有任何分区 / 分类 / 产品范围命中时，才使用旧客服分组成员关系作为兼容回退。
+
+候选客服必须满足：
 
 ```text
 账号已启用
-属于目标客服分组
-分组已启用
+账号可登录
 客服状态为 online
-最近 2 分钟内有有效心跳
+最近 2 分钟内有有效在线记录
+负责范围命中当前产品（或进入兼容分组回退）
 未超过最大同时会话数
 ```
 
@@ -111,12 +126,13 @@ groups
 
 ```text
 进行中会话最少
-→ 分组成员优先级
 → 最久未分配
 → 客服 ID
 ```
 
-如果访客发起会话时目标分组没有在线客服，会话保持未分配；当符合条件的客服登录或发送心跳时，会重新尝试分流。
+候选选择、容量判断和会话写入在同一个 SQLite CTE + UPDATE 中完成，避免并发会话基于过期容量快照重复压给同一客服。
+
+如果访客发起会话时没有符合条件的客服，会话保持未分配；客服登录、恢复 heartbeat，或已有会话关闭释放容量时，会重新尝试分流。
 
 ## Cloudflare 资源
 
@@ -165,9 +181,11 @@ D1 主要表：
 ```text
 sites
 support_groups
-agents
 group_agents
+agents
+agent_routing_scopes
 agent_sessions
+product_catalog
 visitors
 conversations
 messages
@@ -176,12 +194,22 @@ messages
 关系：
 
 ```text
+agents
+  ├─ agent_routing_scopes
+  │    ├─ section
+  │    ├─ category
+  │    └─ product
+  └─ agent_sessions
+
+product_catalog
+  └─ 为分流保存产品 / 分区 / 分类上下文
+
 support_groups
   └─ group_agents
-       └─ agents
-            └─ agent_sessions
+       └─ 仅作为未命中 scope 时的兼容回退
 
 conversations
+  ├─ product_id / section_id / category_id
   ├─ group_id
   └─ assigned_agent
 ```
@@ -223,7 +251,7 @@ PATCH /api/admin/groups/:id
 GET  /api/agent/auth/session
 POST /api/agent/auth/login
 POST /api/agent/auth/logout
-POST /api/agent/auth/heartbeat
+POST /api/agent/auth/heartbeat   # 恢复/兼容对账，不是固定周期轮询
 
 GET  /api/agent/overview
 GET  /api/agent/conversations
@@ -294,7 +322,8 @@ pnpm dev
 简单稳定
 管理员配置与客服聊天分离
 客服账号独立登录
-按客服分组进行自动分流
+按分区 / 分类 / 产品动态范围自动分流
+客服分组仅保留兼容回退
 实时消息与长期数据分离
 不做大型企业 RBAC
 不依赖 Site 数据库
