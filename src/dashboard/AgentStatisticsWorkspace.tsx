@@ -29,7 +29,9 @@ export function AgentStatisticsWorkspace({
       })
       .catch((reason) => {
         if (active)
-          setError(reason instanceof Error ? reason.message : '无法加载会话统计');
+          setError(
+            reason instanceof Error ? reason.message : '无法加载会话统计',
+          );
       })
       .finally(() => {
         if (active) setBusy(false);
@@ -80,7 +82,9 @@ export function AgentStatisticsWorkspace({
           <div>
             <span className="eyebrow">MY STATISTICS</span>
             <h1>我的会话统计</h1>
-            <p>按美国西海岸时间统计首次分配给你的新会话，统计数据保留 45 天。</p>
+            <p>
+              按美国西海岸时间统计首次分配给你的新会话，统计数据保留 45 天。
+            </p>
           </div>
           <label>
             <span>月份</span>
@@ -121,9 +125,7 @@ export function AgentStatisticsWorkspace({
               <strong>{month} 每日接待</strong>
               <span>1–30 日；31 日仍参与每日限额，但不计入月表。</span>
             </div>
-            <small>
-              可查询范围从 {stats?.retainedFrom ?? '—'} 起
-            </small>
+            <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
           </div>
           <div className="agent-statistics-days">
             {days.map((day) => {

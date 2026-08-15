@@ -61,6 +61,17 @@ export type AgentMonthlyStats = {
   month: string;
   days: number[];
   counts: Array<{ agentId: string; day: number; count: number }>;
+  retainedFrom: string;
+};
+
+export type AgentSelfMonthlyStats = {
+  month: string;
+  days: number[];
+  counts: Array<{ day: number; count: number }>;
+  total: number;
+  todayCount: number;
+  dailyLimit: number;
+  retainedFrom: string;
 };
 
 export type Conversation = {
@@ -198,6 +209,12 @@ export async function getAgentMonthlyStats(
   month: string,
 ): Promise<AgentMonthlyStats> {
   return request(`/api/admin/agent-stats?month=${encodeURIComponent(month)}`);
+}
+
+export async function getAgentSelfMonthlyStats(
+  month: string,
+): Promise<AgentSelfMonthlyStats> {
+  return request(`/api/agent/stats?month=${encodeURIComponent(month)}`);
 }
 
 export async function getAgentSession(): Promise<AgentSessionState> {

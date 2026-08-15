@@ -74,20 +74,20 @@ adminConfigApi.get('/api/admin/agent-stats', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const month = normalizeMonth(c.req.query('month'));
   if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  const retainedFrom = reportingRetentionCutoff();
   const result = await c.env.DB.prepare(
-    `SELECT assigned_agent AS agent_id,
-       CAST(substr(assigned_business_date, 9, 2) AS INTEGER) AS day,
-       COUNT(*) AS count
-     FROM conversations
+    `SELECT agent_id,
+       CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
+       conversation_count AS count
+     FROM agent_daily_stats
      WHERE site_id = 'default'
-       AND assigned_agent IS NOT NULL
-       AND assigned_business_date >= ?1
-       AND assigned_business_date <= ?2
-       AND CAST(substr(assigned_business_date, 9, 2) AS INTEGER) BETWEEN 1 AND 30
-     GROUP BY assigned_agent, assigned_business_date
-     ORDER BY assigned_agent ASC, assigned_business_date ASC`,
+       AND business_date >= ?1
+       AND business_date <= ?2
+       AND business_date >= ?3
+       AND CAST(substr(business_date, 9, 2) AS INTEGER) BETWEEN 1 AND 30
+     ORDER BY agent_id ASC, business_date ASC`,
   )
-    .bind(`${month}-01`, `${month}-30`)
+    .bind(`${month}-01`, `${month}-30`, retainedFrom)
     .all<{ agent_id: string; day: number; count: number }>();
   return c.json({
     month,
@@ -97,6 +97,7 @@ adminConfigApi.get('/api/admin/agent-stats', async (c) => {
       day: Number(row.day),
       count: Number(row.count),
     })),
+    retainedFrom,
   });
 });
 
@@ -319,12 +320,10 @@ async function loadAgents(db: D1Database) {
       .all<ScopeRow>(),
     db
       .prepare(
-        `SELECT assigned_agent AS agent_id, COUNT(*) AS count
-         FROM conversations
+        `SELECT agent_id, conversation_count AS count
+         FROM agent_daily_stats
          WHERE site_id = 'default'
-           AND assigned_agent IS NOT NULL
-           AND assigned_business_date = ?1
-         GROUP BY assigned_agent`,
+           AND business_date = ?1`,
       )
       .bind(businessDate)
       .all<{ agent_id: string; count: number }>(),
@@ -673,6 +672,13 @@ function reportingBusinessDate(now = new Date()): string {
     parts.map((part) => [part.type, part.value]),
   );
   return `${values.year}-${values.month}-${values.day}`;
+}
+
+function reportingRetentionCutoff(now = new Date()): string {
+  const today = reportingBusinessDate(now);
+  const date = new Date(`${today}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 44);
+  return date.toISOString().slice(0, 10);
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {

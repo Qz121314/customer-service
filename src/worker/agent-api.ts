@@ -178,11 +178,12 @@ agentApi.get('/api/agent/overview', async (c) => {
       .all<{ status: ConversationStatus; count: number }>(),
     c.env.DB.prepare(
       `SELECT a.daily_conversation_limit,
-         (SELECT COUNT(*) FROM conversations c
-          WHERE c.assigned_agent = a.id
-            AND c.site_id = a.site_id
-            AND c.assigned_business_date = ?2) AS today_count
+         COALESCE(s.conversation_count, 0) AS today_count
        FROM agents a
+       LEFT JOIN agent_daily_stats s
+         ON s.site_id = a.site_id
+        AND s.agent_id = a.id
+        AND s.business_date = ?2
        WHERE a.id = ?1
        LIMIT 1`,
     )
@@ -197,6 +198,57 @@ agentApi.get('/api/agent/overview', async (c) => {
     total: counts.open + counts.pending + counts.closed,
     todayAccepted: Number(quotaRow?.today_count ?? 0),
     dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
+  });
+});
+
+agentApi.get('/api/agent/stats', async (c) => {
+  const agent = await authenticateAgent(c);
+  if (!agent) return unauthorized(c);
+  const month = normalizeMonth(c.req.query('month'));
+  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+
+  const businessDate = routingBusinessDate();
+  const retainedFrom = retentionCutoffBusinessDate();
+  const [result, quotaRow] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
+         conversation_count AS count
+       FROM agent_daily_stats
+       WHERE agent_id = ?1
+         AND business_date >= ?2
+         AND business_date <= ?3
+         AND business_date >= ?4
+         AND CAST(substr(business_date, 9, 2) AS INTEGER) BETWEEN 1 AND 30
+       ORDER BY business_date ASC`,
+    )
+      .bind(agent.id, `${month}-01`, `${month}-30`, retainedFrom)
+      .all<{ day: number; count: number }>(),
+    c.env.DB.prepare(
+      `SELECT a.daily_conversation_limit,
+         COALESCE(s.conversation_count, 0) AS today_count
+       FROM agents a
+       LEFT JOIN agent_daily_stats s
+         ON s.site_id = a.site_id
+        AND s.agent_id = a.id
+        AND s.business_date = ?2
+       WHERE a.id = ?1
+       LIMIT 1`,
+    )
+      .bind(agent.id, businessDate)
+      .first<{ daily_conversation_limit: number; today_count: number }>(),
+  ]);
+  const counts = (result.results ?? []).map((row) => ({
+    day: Number(row.day),
+    count: Number(row.count),
+  }));
+  return c.json({
+    month,
+    days: Array.from({ length: 30 }, (_, index) => index + 1),
+    counts,
+    total: counts.reduce((sum, row) => sum + row.count, 0),
+    todayCount: Number(quotaRow?.today_count ?? 0),
+    dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
+    retainedFrom,
   });
 });
 
@@ -560,6 +612,18 @@ function cookieValue(header: string | undefined, name: string): string | null {
 function normalizeMessageId(value?: string | null): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 200 ? trimmed : null;
+}
+
+function normalizeMonth(value?: string): string | null {
+  const month = value?.trim() ?? '';
+  return /^\d{4}-(0[1-9]|1[0-2])$/u.test(month) ? month : null;
+}
+
+function retentionCutoffBusinessDate(now = new Date()): string {
+  const today = routingBusinessDate(now);
+  const date = new Date(`${today}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() - 44);
+  return date.toISOString().slice(0, 10);
 }
 
 function clientRealtimeMessage(message: MessageRow) {

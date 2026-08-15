@@ -39,6 +39,7 @@ import {
   updateAgent,
 } from './api';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
+import { AgentStatisticsWorkspace } from './AgentStatisticsWorkspace';
 import {
   getAgentMedia,
   sendAgentImage,
@@ -951,8 +952,9 @@ function MonthlyAgentStatistics({
         </table>
       </div>
       <p className="statistics-note">
-        每日上限按 America/Los_Angeles
-        自然日计算；达到上限后仅停止接收新会话，已分配会话仍可继续处理。31
+        每日上限按 America/Los_Angeles 自然日计算；统计数据独立于 24
+        小时聊天记录保存并保留 45
+        天。达到上限后仅停止接收新会话，已分配会话仍可继续处理。31
         日会正常参与每日限额，但月度表按要求只展示 1–30 日。
       </p>
     </section>
@@ -1012,15 +1014,16 @@ function AgentPortal() {
     );
   }
 
-  return (
-    <AgentWorkspace
-      identity={identity}
-      onLogout={async () => {
-        await agentLogout();
-        setIdentity(null);
-        setState('signed-out');
-      }}
-    />
+  const onLogout = async () => {
+    await agentLogout();
+    setIdentity(null);
+    setState('signed-out');
+  };
+
+  return window.location.pathname.startsWith('/agent/stats') ? (
+    <AgentStatisticsWorkspace identity={identity} onLogout={onLogout} />
+  ) : (
+    <AgentWorkspace identity={identity} onLogout={onLogout} />
   );
 }
 
@@ -1545,6 +1548,9 @@ function AgentWorkspace({
           <Metric label="新会话" value={overview.open} />
           <Metric label="已关闭" value={overview.closed} />
         </div>
+        <a className="ghost-button full" href="/agent/stats">
+          会话统计
+        </a>
         <button
           type="button"
           className="ghost-button full"
