@@ -644,6 +644,83 @@ select:focus-visible {
   box-shadow: none;
 }
 
+.inbox-tools {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--cs-line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.inbox-search {
+  min-width: 0;
+  flex: 1;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #e1e3e8;
+  border-radius: 9px;
+  background: #f7f8fa;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.inbox-search:focus-within {
+  border-color: rgba(91, 91, 214, 0.38);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(91, 91, 214, 0.08);
+}
+
+.inbox-search svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: #9a9faa;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.inbox-search input {
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--cs-ink);
+  font: inherit;
+  font-size: 12px;
+}
+
+.inbox-search input::placeholder {
+  color: #a0a5ae;
+}
+
+.unread-first-toggle {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #e1e3e8;
+  border-radius: 9px;
+  background: #fff;
+  color: #7b818c;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.unread-first-toggle:hover,
+.unread-first-toggle.is-active {
+  border-color: rgba(91, 91, 214, 0.16);
+  background: var(--cs-accent-soft);
+  color: var(--cs-accent-strong);
+}
+
 .conversation-list {
   background: #f8f8f9;
 }
@@ -1860,12 +1937,33 @@ select:focus-visible {
   margin-top: 0;
 }
 
+.workspace-sidebar .workspace-notification-button.is-enabled {
+  color: #8ce2b7;
+}
+
+.workspace-sidebar .workspace-notification-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 @media (max-width: 760px) {
   .workspace-sidebar-actions {
     width: auto;
     margin-top: 0;
     display: flex;
     gap: 6px;
+  }
+
+  .inbox-tools {
+    padding: 8px 10px;
+  }
+
+  .inbox-search {
+    min-height: 38px;
+  }
+
+  .unread-first-toggle {
+    min-height: 38px;
   }
 
   .admin-statistics-backdrop {

@@ -207,7 +207,10 @@ mediaApi.get('/api/agent/media/:id/content', async (c) => {
   return readMediaObject(c.env.MEDIA, media.value);
 });
 
-async function listConversationMedia(db: D1Database, conversationId: string) {
+export async function listConversationMedia(
+  db: D1Database,
+  conversationId: string,
+) {
   const result = await db
     .prepare(
       `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,

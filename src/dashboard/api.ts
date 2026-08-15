@@ -108,6 +108,24 @@ export type Message = {
 export type ConversationDetail = {
   conversation: Conversation & Record<string, unknown>;
   messages: Message[];
+  media: ConversationMediaItem[];
+};
+
+export type ConversationMediaItem = {
+  messageId: string;
+  id: string;
+  kind: 'image';
+  mimeType: string;
+  byteSize: number;
+  width: number | null;
+  height: number | null;
+  originalName: string | null;
+  status: 'ready';
+};
+
+export type AgentInbox = {
+  conversations: Conversation[];
+  overview: Overview;
 };
 
 type AdminBootstrapAgent = Omit<AgentAccount, 'routingScope'> & {
@@ -255,6 +273,10 @@ export async function getConversations(
     `/api/agent/conversations${query}`,
   );
   return response.conversations;
+}
+
+export async function getAgentInbox(): Promise<AgentInbox> {
+  return request('/api/agent/conversations');
 }
 
 export async function getConversation(id: string): Promise<ConversationDetail> {

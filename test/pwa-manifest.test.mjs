@@ -18,4 +18,20 @@ test('agent PWA opens directly into the standalone workspace', () => {
     manifest.icons.map((icon) => icon.sizes),
     ['192x192', '512x512'],
   );
+  assert.deepEqual(
+    manifest.icons.map((icon) => icon.src),
+    ['/icons/customer-service-192.svg', '/icons/customer-service-512.svg'],
+  );
+});
+
+test('agent service worker shows background messages and focuses workspace', async () => {
+  const source = await readFile(
+    new URL('../public/agent-sw.js', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /addEventListener\('push'/u);
+  assert.match(source, /visibilityState === 'visible'/u);
+  assert.match(source, /showNotification\('客服坐席有新消息'/u);
+  assert.match(source, /addEventListener\('notificationclick'/u);
+  assert.match(source, /'\/agent'/u);
 });

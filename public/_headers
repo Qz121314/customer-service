@@ -1,5 +1,9 @@
 /agent*
   Cache-Control: no-store
 
+/agent-sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+  Service-Worker-Allowed: /
+
 /
   Cache-Control: no-store

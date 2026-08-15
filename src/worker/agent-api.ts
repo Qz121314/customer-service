@@ -4,6 +4,8 @@ import { assignConversationAgent, routingBusinessDate } from './routing';
 import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
+import { listConversationMedia } from './media-api';
+import { sendAgentPushForConversation } from './agent-push';
 
 type Bindings = {
   DB: D1Database;
@@ -115,7 +117,11 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   });
-  await assignWaitingConversations(c.env, agent.id);
+  const assignedConversationIds = await assignWaitingConversations(
+    c.env,
+    agent.id,
+  );
+  scheduleAgentPush(c, assignedConversationIds);
   return c.json({
     ok: true,
     agent: {
@@ -159,26 +165,36 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
   )
     .bind(agent.id)
     .run();
-  await assignWaitingConversations(c.env, agent.id);
+  const assignedConversationIds = await assignWaitingConversations(
+    c.env,
+    agent.id,
+  );
+  scheduleAgentPush(c, assignedConversationIds);
   return c.json({ ok: true });
 });
 
 agentApi.get('/api/agent/overview', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
+  return c.json(await loadAgentOverview(c.env.DB, agent.id));
+});
+
+async function loadAgentOverview(db: D1Database, agentId: string) {
   const businessDate = routingBusinessDate();
   const [statusResult, quotaRow] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT status, COUNT(*) AS count
+    db
+      .prepare(
+        `SELECT status, COUNT(*) AS count
        FROM conversations
        WHERE assigned_agent = ?1
          AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
        GROUP BY status`,
-    )
-      .bind(agent.id)
+      )
+      .bind(agentId)
       .all<{ status: ConversationStatus; count: number }>(),
-    c.env.DB.prepare(
-      `SELECT a.daily_conversation_limit,
+    db
+      .prepare(
+        `SELECT a.daily_conversation_limit,
          COALESCE(s.conversation_count, 0) AS today_count
        FROM agents a
        LEFT JOIN agent_daily_stats s
@@ -187,20 +203,20 @@ agentApi.get('/api/agent/overview', async (c) => {
         AND s.business_date = ?2
        WHERE a.id = ?1
        LIMIT 1`,
-    )
-      .bind(agent.id, businessDate)
+      )
+      .bind(agentId, businessDate)
       .first<{ daily_conversation_limit: number; today_count: number }>(),
   ]);
   const counts = { open: 0, pending: 0, closed: 0 };
   for (const row of statusResult.results ?? [])
     counts[row.status] = Number(row.count ?? 0);
-  return c.json({
+  return {
     ...counts,
     total: counts.open + counts.pending + counts.closed,
     todayAccepted: Number(quotaRow?.today_count ?? 0),
     dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
-  });
-});
+  };
+}
 
 agentApi.get('/api/agent/stats', async (c) => {
   const agent = await authenticateAgent(c);
@@ -279,8 +295,11 @@ agentApi.get('/api/agent/conversations', async (c) => {
   statement = filtered
     ? statement.bind(agent.id, status)
     : statement.bind(agent.id);
-  const result = await statement.all();
-  return c.json({ conversations: result.results ?? [] });
+  const [result, overview] = await Promise.all([
+    statement.all(),
+    loadAgentOverview(c.env.DB, agent.id),
+  ]);
+  return c.json({ conversations: result.results ?? [], overview });
 });
 
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
@@ -292,17 +311,20 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
     agent.id,
   );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  const messages = await c.env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body,
+  const [messages, media] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id, conversation_id, sender_type, sender_id, body,
        read_by_visitor_at, read_by_agent_at, created_at
      FROM messages
      WHERE conversation_id = ?1
      ORDER BY created_at ASC, id ASC
      LIMIT 500`,
-  )
-    .bind(c.req.param('id'))
-    .all<MessageRow>();
-  return c.json({ conversation, messages: messages.results ?? [] });
+    )
+      .bind(c.req.param('id'))
+      .all<MessageRow>(),
+    listConversationMedia(c.env.DB, c.req.param('id')),
+  ]);
+  return c.json({ conversation, messages: messages.results ?? [], media });
 });
 
 agentApi.post('/api/agent/conversations/:id/read', async (c) => {
@@ -516,7 +538,7 @@ async function assignedConversation(
 async function assignWaitingConversations(
   env: Bindings,
   agentId: string,
-): Promise<void> {
+): Promise<string[]> {
   const waiting = await env.DB.prepare(
     `SELECT DISTINCT c.id
      FROM conversations c
@@ -575,13 +597,26 @@ async function assignWaitingConversations(
     .bind(agentId)
     .all<{ id: string }>();
 
+  const assignedConversationIds: string[] = [];
   for (const conversation of waiting.results ?? []) {
     const assignment = await assignConversationAgent(env.DB, conversation.id);
     if (!assignment) continue;
+    assignedConversationIds.push(conversation.id);
     await broadcastClientConversationEvent(
       env,
       conversation.id,
       'conversation.assigned',
+    );
+  }
+  return assignedConversationIds;
+}
+
+function scheduleAgentPush(c: Context<Env>, conversationIds: string[]): void {
+  for (const conversationId of conversationIds) {
+    c.executionCtx.waitUntil(
+      sendAgentPushForConversation(c.env, conversationId).catch((error) => {
+        console.warn('Agent push dispatch failed.', error);
+      }),
     );
   }
 }

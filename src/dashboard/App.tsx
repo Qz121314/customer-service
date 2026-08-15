@@ -24,11 +24,10 @@ import {
   createAgent,
   getAdminSession,
   getAgentMonthlyStats,
+  getAgentInbox,
   getAgentSession,
   getAgents,
   getConversation,
-  getConversations,
-  getOverview,
   getProductCatalog,
   heartbeat,
   markConversationRead,
@@ -41,16 +40,24 @@ import {
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { calendarMonthPeriod } from '../shared/calendar-month';
+import { sendAgentImage, type AgentMediaItem } from './agent-media';
 import {
-  getAgentMedia,
-  sendAgentImage,
-  type AgentMediaItem,
-} from './agent-media';
+  disableAgentNotifications,
+  enableAgentNotifications,
+  prepareAgentNotifications,
+  type AgentNotificationState,
+} from './agent-push';
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
 type AdminSection = 'agents' | 'workspace';
-type UiIconName = 'agents' | 'statistics' | 'workspace' | 'external' | 'logout';
+type UiIconName =
+  | 'agents'
+  | 'statistics'
+  | 'workspace'
+  | 'external'
+  | 'logout'
+  | 'notification';
 
 function UiIcon({ name }: { name: UiIconName }) {
   const paths: Record<UiIconName, React.ReactNode> = {
@@ -90,6 +97,12 @@ function UiIcon({ name }: { name: UiIconName }) {
         <path d="M10 17l5-5-5-5" />
         <path d="M15 12H3" />
         <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+      </>
+    ),
+    notification: (
+      <>
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+        <path d="M10 21h4" />
       </>
     ),
   };
@@ -1250,6 +1263,11 @@ function AgentWorkspace({
   onLogout: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [unreadFirst, setUnreadFirst] = useState(true);
+  const [notificationState, setNotificationState] =
+    useState<AgentNotificationState>('disabled');
+  const [notificationBusy, setNotificationBusy] = useState(false);
   const [statisticsOpen, setStatisticsOpen] = useState(() =>
     window.location.pathname.startsWith('/agent/stats'),
   );
@@ -1282,6 +1300,30 @@ function AgentWorkspace({
     () => conversations.reduce((sum, item) => sum + item.agent_unread_count, 0),
     [conversations],
   );
+  const visibleConversations = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase('zh-CN');
+    const filtered = conversations.filter((conversation) => {
+      if (filter !== 'all' && conversation.status !== filter) return false;
+      if (!query) return true;
+      return [
+        conversation.visitor_name,
+        conversation.product_title,
+        conversation.subject,
+        conversation.last_message,
+      ].some((value) => value?.toLocaleLowerCase('zh-CN').includes(query));
+    });
+    if (!unreadFirst) return filtered;
+    return [...filtered].sort((left, right) => {
+      const unreadDifference =
+        Number(right.agent_unread_count > 0) -
+        Number(left.agent_unread_count > 0);
+      if (unreadDifference) return unreadDifference;
+      return (
+        new Date(right.last_message_at).getTime() -
+        new Date(left.last_message_at).getTime()
+      );
+    });
+  }, [conversations, filter, searchQuery, unreadFirst]);
   const lastVisibleVisitorMessageId = useMemo(
     () =>
       detail?.messages
@@ -1294,6 +1336,20 @@ function AgentWorkspace({
   useEffect(() => {
     if (!window.location.pathname.startsWith('/agent/stats')) return;
     window.history.replaceState(null, '', '/agent');
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void prepareAgentNotifications()
+      .then((state) => {
+        if (active) setNotificationState(state);
+      })
+      .catch(() => {
+        if (active) setNotificationState('unsupported');
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const acknowledgeConversation = useCallback(
@@ -1318,13 +1374,10 @@ function AgentWorkspace({
   }, [totalUnread]);
 
   const refresh = useCallback(async () => {
-    const [nextOverview, nextConversations] = await Promise.all([
-      getOverview(),
-      getConversations(filter === 'all' ? undefined : filter),
-    ]);
-    setOverview(nextOverview);
-    setConversations(nextConversations);
-  }, [filter]);
+    const inbox = await getAgentInbox();
+    setOverview(inbox.overview);
+    setConversations(inbox.conversations);
+  }, []);
 
   useEffect(() => {
     setBusy(true);
@@ -1393,7 +1446,6 @@ function AgentWorkspace({
         setConversations((current) => {
           const withoutCurrent = current.filter((item) => item.id !== next.id);
           if (!belongsToAgent) return withoutCurrent;
-          if (filter !== 'all' && next.status !== filter) return withoutCurrent;
           return sortedConversationList([next, ...withoutCurrent]);
         });
         if (belongsToAgent && payload.overview) setOverview(payload.overview);
@@ -1412,7 +1464,7 @@ function AgentWorkspace({
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [filter, identity.id, refresh]);
+  }, [identity.id, refresh]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -1427,11 +1479,16 @@ function AgentWorkspace({
     let timer: number | null = null;
     let openedOnce = false;
     const load = () =>
-      Promise.all([getConversation(selectedId), getAgentMedia(selectedId)])
-        .then(([value, media]) => {
+      getConversation(selectedId)
+        .then((value) => {
           if (active) {
             setDetail(value);
-            setMediaItems(media);
+            setMediaItems(
+              value.media.map((item) => ({
+                ...item,
+                url: `/api/agent/media/${encodeURIComponent(item.id)}/content`,
+              })),
+            );
             if (document.visibilityState === 'visible') {
               const lastVisitorMessageId =
                 value.messages
@@ -1734,14 +1791,11 @@ function AgentWorkspace({
             }
           : current,
       );
-      setConversations((current) => {
-        const updated = current.map((item) =>
+      setConversations((current) =>
+        current.map((item) =>
           item.id === selectedId ? { ...item, status } : item,
-        );
-        return filter !== 'all' && status !== filter
-          ? updated.filter((item) => item.id !== selectedId)
-          : updated;
-      });
+        ),
+      );
       if (previousStatus && previousStatus !== status) {
         setOverview((current) => ({
           ...current,
@@ -1752,6 +1806,36 @@ function AgentWorkspace({
     } catch (reason) {
       setError(message(reason, '更新会话状态失败'));
     }
+  }
+
+  async function toggleNotifications() {
+    if (notificationBusy || notificationState === 'unsupported') return;
+    if (notificationState === 'blocked') {
+      setError('浏览器已阻止通知，请在站点权限中重新开启');
+      return;
+    }
+    setNotificationBusy(true);
+    try {
+      const nextState =
+        notificationState === 'enabled'
+          ? await disableAgentNotifications()
+          : await enableAgentNotifications();
+      setNotificationState(nextState);
+      if (nextState === 'blocked') {
+        setError('浏览器已阻止通知，请在站点权限中重新开启');
+      }
+    } catch (reason) {
+      setError(message(reason, '通知设置失败'));
+    } finally {
+      setNotificationBusy(false);
+    }
+  }
+
+  async function logoutFromWorkspace() {
+    if (notificationState === 'enabled') {
+      await disableAgentNotifications().catch(() => undefined);
+    }
+    await onLogout();
   }
 
   return (
@@ -1772,6 +1856,37 @@ function AgentWorkspace({
         <div className="workspace-sidebar-actions">
           <button
             type="button"
+            className={`ghost-button full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
+            aria-label={
+              notificationState === 'enabled'
+                ? '关闭新消息通知'
+                : '开启新消息通知'
+            }
+            title={
+              notificationState === 'unsupported'
+                ? '当前浏览器不支持后台通知'
+                : notificationState === 'blocked'
+                  ? '通知已被浏览器阻止'
+                  : notificationState === 'enabled'
+                    ? '新消息通知已开启'
+                    : '开启新消息通知'
+            }
+            disabled={notificationBusy || notificationState === 'unsupported'}
+            onClick={() => void toggleNotifications()}
+          >
+            <UiIcon name="notification" />
+            <span>
+              {notificationBusy
+                ? '正在设置…'
+                : notificationState === 'enabled'
+                  ? '新消息通知已开启'
+                  : notificationState === 'blocked'
+                    ? '通知已被阻止'
+                    : '开启新消息通知'}
+            </span>
+          </button>
+          <button
+            type="button"
             className="ghost-button full workspace-statistics-button"
             aria-label="打开会话统计"
             title="会话统计"
@@ -1785,7 +1900,7 @@ function AgentWorkspace({
             className="ghost-button full workspace-logout-button"
             aria-label="退出客服账号"
             title="退出客服账号"
-            onClick={() => void onLogout()}
+            onClick={() => void logoutFromWorkspace()}
           >
             <UiIcon name="logout" />
             <span>退出客服账号</span>
@@ -1827,18 +1942,47 @@ function AgentWorkspace({
             </button>
           ))}
         </div>
+        <div className="inbox-tools">
+          <label className="inbox-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-4-4" />
+            </svg>
+            <input
+              type="search"
+              value={searchQuery}
+              placeholder="搜索访客、产品或消息"
+              aria-label="搜索会话"
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className={`unread-first-toggle${unreadFirst ? ' is-active' : ''}`}
+            aria-pressed={unreadFirst}
+            onClick={() => setUnreadFirst((current) => !current)}
+          >
+            未读优先
+          </button>
+        </div>
         <div className="conversation-list">
           {busy ? (
             <div className="empty-state">正在加载…</div>
-          ) : conversations.length === 0 ? (
+          ) : visibleConversations.length === 0 ? (
             <div className="empty-state">
-              <strong>当前没有分配给你的会话</strong>
-              <span>
-                保持在线，负责产品的新会话会在对应在线客服之间自动轮询。
-              </span>
+              <strong>
+                {conversations.length === 0
+                  ? '当前没有分配给你的会话'
+                  : '没有找到匹配的会话'}
+              </strong>
+              {conversations.length === 0 && (
+                <span>
+                  保持在线，负责产品的新会话会在对应在线客服之间自动轮询。
+                </span>
+              )}
             </div>
           ) : (
-            conversations.map((conversation) => (
+            visibleConversations.map((conversation) => (
               <button
                 type="button"
                 key={conversation.id}

@@ -66,7 +66,10 @@ groups
 - 客服启用 / 停用、最大同时会话数、每日新会话上限；
 - 管理员和客服本人都可查看完整自然月的会话统计，按月份自动展示 28、29、30 或 31 天；坐席端在当前工作台弹窗内查看，不发生页面切换；统计按 America/Los_Angeles 自然日记账并独立保留 45 天；
 - WebSocket 长连接心跳维护客服在线状态，网络恢复时使用 REST heartbeat 对账；
+- 坐席可主动开启浏览器后台新消息通知；通知使用独立客服订阅，页面可见时不重复弹出；
 - 每个客服使用独立实时收件箱，不接收其他客服的会话摘要；
+- 收件箱支持本地搜索、状态筛选和未读优先，不因切换筛选重复请求 Worker；
+- 收件箱概览与列表一次返回，会话消息与媒体一次返回，减少 Worker 请求数；
 - 只向已登录且心跳有效的客服分流；
 - 停用客服时立即撤销登录与实时连接，并将其未结束会话重新分流；
 - 分区 / 分类 / 指定产品动态负责范围，最少进行中会话优先分流；
@@ -193,6 +196,9 @@ product_catalog
 visitors
 conversations
 messages
+media_items
+visitor_push_subscriptions
+agent_push_subscriptions
 ```
 
 关系：
@@ -262,6 +268,9 @@ GET  /api/agent/conversations
 GET  /api/agent/conversations/:id/messages
 POST /api/agent/conversations/:id/messages
 POST /api/agent/conversations/:id/status
+GET  /api/agent/push/config
+POST /api/agent/push/subscriptions
+POST /api/agent/push/subscriptions/remove
 GET  /api/agent/realtime/inbox
 GET  /api/agent/realtime/:id
 ```

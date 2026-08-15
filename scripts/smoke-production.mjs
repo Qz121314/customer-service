@@ -130,6 +130,21 @@ async function assertClientWebSocket() {
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('visitorId', 'SMK123');
 
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await connectClientWebSocket(url);
+      console.log(`CLIENT_WEBSOCKET=ready attempt=${attempt}`);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await sleep(attempt * 1_500);
+    }
+  }
+  throw lastError ?? new Error('Client WebSocket smoke check failed.');
+}
+
+async function connectClientWebSocket(url) {
   await new Promise((resolve, reject) => {
     const socket = new WebSocket(url);
     let settled = false;
@@ -170,8 +185,6 @@ async function assertClientWebSocket() {
       finish(() => reject(new Error('Client WebSocket connection failed.'))),
     );
   });
-
-  console.log('CLIENT_WEBSOCKET=ready');
 }
 
 const health = await waitForHealth();

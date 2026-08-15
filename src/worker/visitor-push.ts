@@ -2,7 +2,7 @@ type VisitorPushBindings = {
   DB: D1Database;
 };
 
-type VapidRow = {
+export type VapidRow = {
   public_key: string;
   private_jwk: string;
   subject: string;
@@ -113,7 +113,9 @@ async function getOrCreateVapidConfig(
   return saved;
 }
 
-async function readVapidConfig(db: D1Database): Promise<VapidRow | null> {
+export async function readVapidConfig(
+  db: D1Database,
+): Promise<VapidRow | null> {
   return db
     .prepare(
       `SELECT public_key, private_jwk, subject
@@ -123,7 +125,7 @@ async function readVapidConfig(db: D1Database): Promise<VapidRow | null> {
     .first<VapidRow>();
 }
 
-async function sendDataLessPush(
+export async function sendDataLessPush(
   endpoint: string,
   config: VapidRow,
 ): Promise<Response> {
