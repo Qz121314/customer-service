@@ -17,11 +17,15 @@ import {
   ConversationDetail,
   Message,
   Overview,
+  QuickReply,
+  TransferTarget,
   adminLogin,
   adminLogout,
   agentLogin,
   agentLogout,
   createAgent,
+  createQuickReply,
+  deleteQuickReply,
   getAdminSession,
   getAgentMonthlyStats,
   getAgentInbox,
@@ -35,6 +39,7 @@ import {
   openConversationSocket,
   sendMessage,
   setConversationStatus,
+  transferConversation,
   updateAgent,
 } from './api';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
@@ -167,6 +172,7 @@ type ThreadRealtimeEvent = {
   reader?: 'agent' | 'visitor';
   lastMessageId?: string | null;
   status?: Conversation['status'];
+  assignment?: { id: string; name: string } | null;
 };
 
 function parseRealtimeEvent<T>(event: MessageEvent): T | null {
@@ -1280,6 +1286,13 @@ function AgentWorkspace({
     dailyLimit: 0,
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
+  const [quickReplyTitle, setQuickReplyTitle] = useState('');
+  const [quickReplyBody, setQuickReplyBody] = useState('');
+  const [quickReplySaving, setQuickReplySaving] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [mediaItems, setMediaItems] = useState<AgentMediaItem[]>([]);
@@ -1377,6 +1390,8 @@ function AgentWorkspace({
     const inbox = await getAgentInbox();
     setOverview(inbox.overview);
     setConversations(inbox.conversations);
+    setTransferTargets(inbox.transferTargets);
+    setQuickReplies(inbox.quickReplies);
   }, []);
 
   useEffect(() => {
@@ -1467,6 +1482,7 @@ function AgentWorkspace({
   }, [identity.id, refresh]);
 
   useEffect(() => {
+    setQuickRepliesOpen(false);
     if (!selectedId) {
       setDetail(null);
       setMediaItems([]);
@@ -1519,6 +1535,13 @@ function AgentWorkspace({
         const payload = parseRealtimeEvent<ThreadRealtimeEvent>(event);
         if (!payload || payload.type === 'ready' || payload.type === 'pong')
           return;
+
+        if (payload.type === 'conversation.transferred') {
+          setSelectedId(null);
+          setDetail(null);
+          void refresh().catch(() => undefined);
+          return;
+        }
 
         if (payload.type === 'message' && payload.message) {
           const incoming = payload.message;
@@ -1636,7 +1659,7 @@ function AgentWorkspace({
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [acknowledgeConversation, selectedId]);
+  }, [acknowledgeConversation, refresh, selectedId]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
   const selectedExpiresAt = detail?.conversation.expires_at ?? null;
@@ -1836,6 +1859,56 @@ function AgentWorkspace({
       await disableAgentNotifications().catch(() => undefined);
     }
     await onLogout();
+  }
+
+  async function handoffConversation(targetAgentId: string | null) {
+    if (!selectedId || transferring) return;
+    setTransferring(true);
+    try {
+      await transferConversation(selectedId, targetAgentId);
+      setSelectedId(null);
+      setDetail(null);
+      await refresh();
+    } catch (reason) {
+      setError(message(reason, '转接会话失败'));
+    } finally {
+      setTransferring(false);
+    }
+  }
+
+  async function saveQuickReply() {
+    if (!quickReplyTitle.trim() || !quickReplyBody.trim() || quickReplySaving)
+      return;
+    setQuickReplySaving(true);
+    try {
+      const reply = await createQuickReply({
+        title: quickReplyTitle,
+        body: quickReplyBody,
+      });
+      setQuickReplies((current) => [reply, ...current]);
+      setQuickReplyTitle('');
+      setQuickReplyBody('');
+    } catch (reason) {
+      setError(message(reason, '保存快捷回复失败'));
+    } finally {
+      setQuickReplySaving(false);
+    }
+  }
+
+  async function removeQuickReply(id: string) {
+    try {
+      await deleteQuickReply(id);
+      setQuickReplies((current) => current.filter((reply) => reply.id !== id));
+    } catch (reason) {
+      setError(message(reason, '删除快捷回复失败'));
+    }
+  }
+
+  function applyQuickReply(reply: QuickReply) {
+    setDraft((current) =>
+      current.trim() ? `${current.trimEnd()}\n${reply.body}` : reply.body,
+    );
+    setQuickRepliesOpen(false);
   }
 
   return (
@@ -2067,20 +2140,94 @@ function AgentWorkspace({
                   expiresAt={detail.conversation.expires_at}
                 />
               </div>
-              <select
-                value={String(detail.conversation.status)}
-                onChange={(event) =>
-                  void changeStatus(
-                    event.target.value as Conversation['status'],
-                  )
-                }
-                aria-label="会话状态"
-              >
-                <option value="open">新会话</option>
-                <option value="pending">处理中</option>
-                <option value="closed">已关闭</option>
-              </select>
+              <div className="thread-actions">
+                <select
+                  value={String(detail.conversation.status)}
+                  onChange={(event) =>
+                    void changeStatus(
+                      event.target.value as Conversation['status'],
+                    )
+                  }
+                  aria-label="会话状态"
+                >
+                  <option value="open">新会话</option>
+                  <option value="pending">处理中</option>
+                  <option value="closed">已关闭</option>
+                </select>
+                {detail.conversation.status !== 'closed' && (
+                  <details className="transfer-menu">
+                    <summary>转接</summary>
+                    <div className="transfer-menu-panel">
+                      <header>
+                        <strong>转接会话</strong>
+                        <span>交给其他在线客服，或重新进入自动分流。</span>
+                      </header>
+                      <button
+                        type="button"
+                        disabled={transferring}
+                        onClick={() => void handoffConversation(null)}
+                      >
+                        <span>重新排队</span>
+                        <small>排除当前客服后自动分流</small>
+                      </button>
+                      {transferTargets.map((target) => (
+                        <button
+                          type="button"
+                          key={target.id}
+                          disabled={transferring}
+                          onClick={() => void handoffConversation(target.id)}
+                        >
+                          <span>{target.name}</span>
+                          <small>
+                            处理中 {target.active_count}
+                            {target.max_active_conversations > 0
+                              ? ` / ${target.max_active_conversations}`
+                              : ''}
+                          </small>
+                        </button>
+                      ))}
+                      {transferTargets.length === 0 && (
+                        <p>当前没有其他可接收会话的在线客服。</p>
+                      )}
+                    </div>
+                  </details>
+                )}
+              </div>
             </header>
+            {detail.conversation.product_title && (
+              <div className="conversation-context-card">
+                {detail.conversation.product_cover_url ? (
+                  <img
+                    src={detail.conversation.product_cover_url}
+                    alt=""
+                    loading="lazy"
+                  />
+                ) : (
+                  <span className="conversation-context-placeholder">CS</span>
+                )}
+                <div>
+                  <span>咨询商品</span>
+                  <strong>{detail.conversation.product_title}</strong>
+                  <small>
+                    {[
+                      detail.conversation.section_name,
+                      detail.conversation.category_name,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || '商品咨询'}
+                  </small>
+                </div>
+                {detail.conversation.product_href && (
+                  <a
+                    href={detail.conversation.product_href}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    查看商品 ↗
+                  </a>
+                )}
+              </div>
+            )}
             <div className="messages" ref={messagesRef}>
               {(detail.messages as Message[]).map((item) => (
                 <Bubble
@@ -2134,22 +2281,96 @@ function AgentWorkspace({
               ) : null}
             </div>
             <form className="composer" onSubmit={(event) => void submit(event)}>
-              <label className="media-picker" aria-label="发送图片">
-                ＋
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif"
-                  disabled={
-                    detail.conversation.status === 'closed' ||
-                    mediaProgress !== null
-                  }
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    event.currentTarget.value = '';
-                    if (file) void submitImage(file);
-                  }}
-                />
-              </label>
+              <div className="composer-tools">
+                <label className="media-picker" aria-label="发送图片">
+                  ＋
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    disabled={
+                      detail.conversation.status === 'closed' ||
+                      mediaProgress !== null
+                    }
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void submitImage(file);
+                    }}
+                  />
+                </label>
+                <div className="quick-replies">
+                  <button
+                    type="button"
+                    className="quick-replies-trigger"
+                    aria-expanded={quickRepliesOpen}
+                    disabled={detail.conversation.status === 'closed'}
+                    onClick={() => setQuickRepliesOpen((current) => !current)}
+                  >
+                    <span aria-hidden="true">⚡</span>
+                    <span>快捷回复</span>
+                  </button>
+                  {quickRepliesOpen && (
+                    <div className="quick-replies-panel">
+                      <header>
+                        <strong>快捷回复</strong>
+                        <span>选择后填入输入框，可继续修改再发送。</span>
+                      </header>
+                      {quickReplies.length > 0 && (
+                        <div className="quick-replies-list">
+                          {quickReplies.map((reply) => (
+                            <div key={reply.id}>
+                              <button
+                                type="button"
+                                onClick={() => applyQuickReply(reply)}
+                              >
+                                <strong>{reply.title}</strong>
+                                <span>{reply.body}</span>
+                              </button>
+                              <button
+                                type="button"
+                                aria-label={`删除快捷回复 ${reply.title}`}
+                                onClick={() => void removeQuickReply(reply.id)}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="quick-reply-create">
+                        <input
+                          value={quickReplyTitle}
+                          maxLength={40}
+                          placeholder="名称，例如：发货说明"
+                          onChange={(event) =>
+                            setQuickReplyTitle(event.target.value)
+                          }
+                        />
+                        <textarea
+                          value={quickReplyBody}
+                          maxLength={1000}
+                          rows={3}
+                          placeholder="输入常用回复内容"
+                          onChange={(event) =>
+                            setQuickReplyBody(event.target.value)
+                          }
+                        />
+                        <button
+                          type="button"
+                          disabled={
+                            quickReplySaving ||
+                            !quickReplyTitle.trim() ||
+                            !quickReplyBody.trim()
+                          }
+                          onClick={() => void saveQuickReply()}
+                        >
+                          {quickReplySaving ? '保存中…' : '保存快捷回复'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
               <textarea
                 value={draft}
                 rows={3}

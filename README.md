@@ -70,6 +70,9 @@ groups
 - 每个客服使用独立实时收件箱，不接收其他客服的会话摘要；
 - 收件箱支持本地搜索、状态筛选和未读优先，不因切换筛选重复请求 Worker；
 - 收件箱概览与列表一次返回，会话消息与媒体一次返回，减少 Worker 请求数；
+- 坐席可把会话直接转给同站点内仍有容量的在线客服，也可排除自己后重新进入自动分流；
+- 每个坐席可维护最多 30 条自己的快捷回复；模板和可转接客服随收件箱一起返回，不增加轮询请求；
+- 会话内展示商品封面、商品名、分区 / 分类和商品链接，切换会话时无需离开工作台；
 - 只向已登录且心跳有效的客服分流；
 - 停用客服时立即撤销登录与实时连接，并将其未结束会话重新分流；
 - 分区 / 分类 / 指定产品动态负责范围，最少进行中会话优先分流；
@@ -268,6 +271,9 @@ GET  /api/agent/conversations
 GET  /api/agent/conversations/:id/messages
 POST /api/agent/conversations/:id/messages
 POST /api/agent/conversations/:id/status
+POST /api/agent/conversations/:id/transfer
+POST /api/agent/quick-replies
+DELETE /api/agent/quick-replies/:id
 GET  /api/agent/push/config
 POST /api/agent/push/subscriptions
 POST /api/agent/push/subscriptions/remove

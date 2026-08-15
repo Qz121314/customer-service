@@ -82,6 +82,10 @@ export type Conversation = {
   subject: string | null;
   group_id: string | null;
   product_id: string | null;
+  section_id: string | null;
+  section_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
   product_title: string | null;
   product_cover_url: string | null;
   product_href: string | null;
@@ -126,6 +130,22 @@ export type ConversationMediaItem = {
 export type AgentInbox = {
   conversations: Conversation[];
   overview: Overview;
+  transferTargets: TransferTarget[];
+  quickReplies: QuickReply[];
+};
+
+export type TransferTarget = {
+  id: string;
+  name: string;
+  status: 'online' | 'busy' | 'offline';
+  active_count: number;
+  max_active_conversations: number;
+};
+
+export type QuickReply = {
+  id: string;
+  title: string;
+  body: string;
 };
 
 type AdminBootstrapAgent = Omit<AgentAccount, 'routingScope'> & {
@@ -157,6 +177,10 @@ const errorMessages: Record<string, string> = {
   INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
+  INVALID_TRANSFER_TARGET: '请选择有效的转接客服',
+  TRANSFER_TARGET_UNAVAILABLE: '该客服当前无法接收新会话',
+  INVALID_QUICK_REPLY: '快捷回复名称或内容无效',
+  QUICK_REPLY_LIMIT_REACHED: '每个客服最多保存 30 条快捷回复',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -311,6 +335,36 @@ export async function setConversationStatus(
   await request(`/api/agent/conversations/${encodeURIComponent(id)}/status`, {
     method: 'POST',
     body: JSON.stringify({ status }),
+  });
+}
+
+export async function transferConversation(
+  id: string,
+  targetAgentId: string | null,
+): Promise<{ assignment: { id: string; name: string } | null }> {
+  return request(
+    `/api/agent/conversations/${encodeURIComponent(id)}/transfer`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ targetAgentId }),
+    },
+  );
+}
+
+export async function createQuickReply(input: {
+  title: string;
+  body: string;
+}): Promise<QuickReply> {
+  const response = await request<{ reply: QuickReply }>(
+    '/api/agent/quick-replies',
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return response.reply;
+}
+
+export async function deleteQuickReply(id: string): Promise<void> {
+  await request(`/api/agent/quick-replies/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }
 

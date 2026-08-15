@@ -379,5 +379,106 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     ),
   );
 
+  const standbyToken = 'agent-session-standby';
+  const transferToken = 'agent-session-transfer';
+  database
+    .prepare(
+      `INSERT INTO agents (
+         id, site_id, name, username, password_hash, password_salt,
+         status, is_enabled, max_active_conversations, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
+    )
+    .run('agent-transfer', 'Agent Transfer', 'agent-transfer', 'hash', 'salt');
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
+    )
+    .run(
+      'session-standby',
+      'agent-standby',
+      sha256(standbyToken),
+      expiresAt,
+      'session-transfer',
+      'agent-transfer',
+      sha256(transferToken),
+      expiresAt,
+    );
+
+  const standbyCookie = `cs_agent_session=${standbyToken}`;
+  const quickReplyResponse = await agentApi.request(
+    '/api/agent/quick-replies',
+    {
+      method: 'POST',
+      headers: { cookie: standbyCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Welcome', body: 'How can I help?' }),
+    },
+    env,
+  );
+  assert.equal(quickReplyResponse.status, 201);
+  const standbyInbox = await json(
+    await agentApi.request(
+      '/api/agent/conversations',
+      { headers: { cookie: standbyCookie } },
+      env,
+    ),
+  );
+  assert.equal(standbyInbox.quickReplies[0].title, 'Welcome');
+  assert.ok(
+    standbyInbox.transferTargets.some(
+      (target) => target.id === 'agent-transfer',
+    ),
+  );
+
+  const transferResponse = await agentApi.fetch(
+    new globalThis.Request(
+      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(conversationId)}/transfer`,
+      {
+        method: 'POST',
+        headers: { cookie: standbyCookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ targetAgentId: 'agent-transfer' }),
+      },
+    ),
+    env,
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+  const transferred = await json(transferResponse);
+  assert.equal(transferred.assignment.id, 'agent-transfer');
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(conversationId).assigned_agent,
+    'agent-transfer',
+  );
+  assert.ok(
+    (rooms.events.get('agent-inbox:agent-transfer') ?? []).some(
+      (event) => event.type === 'conversation.refresh',
+    ),
+  );
+
+  const requeueResponse = await agentApi.fetch(
+    new globalThis.Request(
+      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(conversationId)}/transfer`,
+      {
+        method: 'POST',
+        headers: {
+          cookie: `cs_agent_session=${transferToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ targetAgentId: null }),
+      },
+    ),
+    env,
+    {
+      waitUntil() {},
+      passThroughOnException() {},
+    },
+  );
+  const requeued = await json(requeueResponse);
+  assert.equal(requeued.assignment.id, 'agent-standby');
+
   database.close();
 });

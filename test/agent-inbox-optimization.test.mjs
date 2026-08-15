@@ -14,7 +14,11 @@ test('agent inbox returns overview, conversations, messages and media in two req
 
   assert.match(api, /getAgentInbox/u);
   assert.match(api, /request\('\/api\/agent\/conversations'\)/u);
-  assert.match(worker, /conversations: result\.results \?\? \[\], overview/u);
+  assert.match(
+    worker,
+    /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
+  );
+  assert.match(worker, /transferTargets,[\s\S]*quickReplies/u);
   assert.match(worker, /messages: messages\.results \?\? \[\], media/u);
   assert.doesNotMatch(app, /getConversations\(filter/u);
   assert.doesNotMatch(app, /getAgentMedia\(selectedId\)/u);

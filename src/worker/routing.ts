@@ -39,6 +39,7 @@ type ConversationRoutingRow = {
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
+  excludedAgentId: string | null = null,
 ): Promise<AgentAssignment | null> {
   const conversation = await db
     .prepare(
@@ -110,6 +111,7 @@ export async function assignConversationAgent(
            GROUP BY assigned_agent
          ) daily ON daily.assigned_agent = a.id
          WHERE a.is_enabled = 1
+           AND (?9 = '' OR a.id <> ?9)
            AND a.status = 'online'
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
@@ -163,6 +165,7 @@ export async function assignConversationAgent(
            AND ga.is_enabled = 1
            AND sg.is_enabled = 1
            AND a.is_enabled = 1
+           AND (?9 = '' OR a.id <> ?9)
            AND a.status = 'online'
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
@@ -209,6 +212,7 @@ export async function assignConversationAgent(
       conversationId,
       now,
       businessDate,
+      excludedAgentId ?? '',
     )
     .run();
 
