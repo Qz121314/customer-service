@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { URL } from 'node:url';
 
 function createDatabase() {
   const database = new DatabaseSync(':memory:');
