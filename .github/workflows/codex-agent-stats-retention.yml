@@ -1,0 +1,49 @@
+name: Codex agent stats retention patch
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: codex-agent-stats-retention
+  cancel-in-progress: true
+
+jobs:
+  apply-and-verify:
+    if: github.event.head_commit.message == 'chore: run agent stats retention patch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Apply implementation
+        run: python .github/scripts/apply_agent_stats_retention.py
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Format changed sources
+        run: pnpm format:write
+      - name: Verify project
+        run: pnpm verify
+      - name: Commit verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f .github/workflows/codex-agent-stats-retention.yml .github/scripts/apply_agent_stats_retention.py
+          git add -A
+          git config user.name 'OpenAI Codex'
+          git config user.email 'codex@openai.com'
+          git commit -m 'feat: persist 45-day agent stats and add self-service view'
+          git push origin HEAD:main
