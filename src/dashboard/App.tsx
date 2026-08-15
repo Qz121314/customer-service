@@ -40,6 +40,7 @@ import {
 } from './api';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
+import { calendarMonthPeriod } from '../shared/calendar-month';
 import {
   getAgentMedia,
   sendAgentImage,
@@ -530,7 +531,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <UiIcon name="statistics" />
               <span>会话统计</span>
             </span>
-            <small>1–30 日</small>
+            <small>自然月</small>
           </button>
           <button
             type="button"
@@ -1023,7 +1024,7 @@ function MonthlyAgentStatistics({
     return map;
   }, [stats]);
   const days =
-    stats?.days ?? Array.from({ length: 30 }, (_, index) => index + 1);
+    stats?.month === month ? stats.days : calendarMonthPeriod(month).days;
   const agentTotals = new Map(
     agents.map((agent) => [
       agent.id,
@@ -1147,7 +1148,7 @@ function MonthlyAgentStatistics({
                   <strong>每日新会话</strong>
                   <span>会话首次分配给该坐席时计 1 次</span>
                 </div>
-                <small>1–30 日</small>
+                <small>完整月份 · {days.length} 天</small>
               </header>
               <div className="statistics-day-grid">
                 {days.map((day) => {
@@ -1171,9 +1172,9 @@ function MonthlyAgentStatistics({
       )}
       <p className="statistics-note">
         每日上限按 America/Los_Angeles 自然日计算；统计数据独立于 24
-        小时聊天记录保存并保留 45
-        天。达到上限后仅停止接收新会话，已分配会话仍可继续处理。31
-        日会正常参与每日限额，但月度表按要求只展示 1–30 日。
+        小时聊天记录保存并保留 45 天。每个统计周期对应一个完整自然月，自动展示
+        28、29、30 或 31
+        天。达到上限后仅停止接收新会话，已分配会话仍可继续处理。
       </p>
     </section>
   );

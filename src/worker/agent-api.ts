@@ -3,6 +3,7 @@ import { deleteCookie, setCookie } from 'hono/cookie';
 import { assignConversationAgent, routingBusinessDate } from './routing';
 import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
+import { calendarMonthPeriod } from '../shared/calendar-month';
 
 type Bindings = {
   DB: D1Database;
@@ -206,6 +207,7 @@ agentApi.get('/api/agent/stats', async (c) => {
   if (!agent) return unauthorized(c);
   const month = normalizeMonth(c.req.query('month'));
   if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  const period = calendarMonthPeriod(month);
 
   const businessDate = routingBusinessDate();
   const retainedFrom = retentionCutoffBusinessDate();
@@ -218,10 +220,9 @@ agentApi.get('/api/agent/stats', async (c) => {
          AND business_date >= ?2
          AND business_date <= ?3
          AND business_date >= ?4
-         AND CAST(substr(business_date, 9, 2) AS INTEGER) BETWEEN 1 AND 30
        ORDER BY business_date ASC`,
     )
-      .bind(agent.id, `${month}-01`, `${month}-30`, retainedFrom)
+      .bind(agent.id, period.start, period.end, retainedFrom)
       .all<{ day: number; count: number }>(),
     c.env.DB.prepare(
       `SELECT a.daily_conversation_limit,
@@ -243,7 +244,7 @@ agentApi.get('/api/agent/stats', async (c) => {
   }));
   return c.json({
     month,
-    days: Array.from({ length: 30 }, (_, index) => index + 1),
+    days: period.days,
     counts,
     total: counts.reduce((sum, row) => sum + row.count, 0),
     todayCount: Number(quotaRow?.today_count ?? 0),

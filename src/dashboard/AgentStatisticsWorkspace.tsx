@@ -4,6 +4,7 @@ import {
   type AgentSelfMonthlyStats,
   getAgentSelfMonthlyStats,
 } from './api';
+import { calendarMonthPeriod } from '../shared/calendar-month';
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
 
@@ -54,7 +55,7 @@ export function AgentStatisticsModal({
     [stats],
   );
   const days =
-    stats?.days ?? Array.from({ length: 30 }, (_, index) => index + 1);
+    stats?.month === month ? stats.days : calendarMonthPeriod(month).days;
 
   return (
     <div className="agent-statistics-backdrop" onMouseDown={onClose}>
@@ -98,7 +99,7 @@ export function AgentStatisticsModal({
             <div>
               <span>本月接待</span>
               <strong>{busy ? '—' : (stats?.total ?? 0)}</strong>
-              <small>1–30 日累计</small>
+              <small>完整自然月累计</small>
             </div>
             <div>
               <span>今日接待</span>
@@ -118,7 +119,9 @@ export function AgentStatisticsModal({
             <div className="agent-statistics-card-head">
               <div>
                 <strong>{month} 每日接待</strong>
-                <span>颜色越深代表当天接待量越高</span>
+                <span>
+                  完整展示本月 {days.length} 天，颜色越深代表接待量越高
+                </span>
               </div>
               <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
             </div>

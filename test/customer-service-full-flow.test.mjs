@@ -15,13 +15,18 @@ import test from 'node:test';
 const workerDirectory = fileURLToPath(
   new URL('../src/worker/', import.meta.url),
 );
+const sharedDirectory = fileURLToPath(
+  new URL('../src/shared/', import.meta.url),
+);
 const moduleShims = [];
-for (const name of readdirSync(workerDirectory)) {
-  if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
-  const shimPath = join(workerDirectory, name.slice(0, -3));
-  if (existsSync(shimPath)) continue;
-  symlinkSync(name, shimPath);
-  moduleShims.push(shimPath);
+for (const directory of [workerDirectory, sharedDirectory]) {
+  for (const name of readdirSync(directory)) {
+    if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
+    const shimPath = join(directory, name.slice(0, -3));
+    if (existsSync(shimPath)) continue;
+    symlinkSync(name, shimPath);
+    moduleShims.push(shimPath);
+  }
 }
 
 let adminConfigApi;

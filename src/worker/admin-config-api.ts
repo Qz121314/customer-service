@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { hashAgentPassword } from './agent-password';
 import { broadcastClientConversationEvent } from './client-api';
 import { assignConversationAgent } from './routing';
+import { calendarMonthPeriod } from '../shared/calendar-month';
 
 type Bindings = {
   DB: D1Database;
@@ -77,6 +78,7 @@ adminConfigApi.get('/api/admin/agent-stats', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const month = normalizeMonth(c.req.query('month'));
   if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  const period = calendarMonthPeriod(month);
   const retainedFrom = reportingRetentionCutoff();
   const result = await c.env.DB.prepare(
     `SELECT agent_id,
@@ -87,14 +89,13 @@ adminConfigApi.get('/api/admin/agent-stats', async (c) => {
        AND business_date >= ?1
        AND business_date <= ?2
        AND business_date >= ?3
-       AND CAST(substr(business_date, 9, 2) AS INTEGER) BETWEEN 1 AND 30
      ORDER BY agent_id ASC, business_date ASC`,
   )
-    .bind(`${month}-01`, `${month}-30`, retainedFrom)
+    .bind(period.start, period.end, retainedFrom)
     .all<{ agent_id: string; day: number; count: number }>();
   return c.json({
     month,
-    days: Array.from({ length: 30 }, (_, index) => index + 1),
+    days: period.days,
     counts: (result.results ?? []).map((row) => ({
       agentId: row.agent_id,
       day: Number(row.day),
