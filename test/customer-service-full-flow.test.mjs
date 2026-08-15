@@ -507,6 +507,46 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   );
   assert.equal(completedInit.completed.messageId, firstComplete.messageId);
 
+  for (let index = 0; index < 3; index += 1) {
+    const pending = await mediaApi.request(
+      `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mimeType: 'image/png',
+          byteSize: 4,
+          width: 1,
+          height: 1,
+          originalName: `pending-${index}.png`,
+          clientUploadId: `pending-agent-image-${index}`,
+        }),
+      },
+      env,
+    );
+    assert.equal(pending.status, 201);
+  }
+  const excessPending = await mediaApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
+    {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mimeType: 'image/png',
+        byteSize: 4,
+        width: 1,
+        height: 1,
+        originalName: 'pending-excess.png',
+        clientUploadId: 'pending-agent-image-excess',
+      }),
+    },
+    env,
+  );
+  assert.equal(excessPending.status, 429);
+  assert.deepEqual(await excessPending.json(), {
+    error: 'MEDIA_RESERVATION_LIMIT_REACHED',
+  });
+
   const deltaResponse = await agentApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages?afterId=${encodeURIComponent(created.conversation.messages[0].id)}&afterCreatedAt=${encodeURIComponent(created.conversation.messages[0].sentAt)}`,
     { headers: { cookie } },
