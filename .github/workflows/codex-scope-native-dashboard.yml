@@ -31,6 +31,7 @@ jobs:
         run: |
           python .github/scripts/fix_scope_native_patch.py
           python .github/scripts/apply_scope_native_dashboard.py
+          python .github/scripts/fix_scope_native_tests.py
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Format changed sources
@@ -41,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm -f .github/workflows/codex-scope-native-dashboard.yml .github/scripts/apply_scope_native_dashboard.py .github/scripts/fix_scope_native_patch.py
+          git rm -f .github/workflows/codex-scope-native-dashboard.yml .github/scripts/apply_scope_native_dashboard.py .github/scripts/fix_scope_native_patch.py .github/scripts/fix_scope_native_tests.py
           git add -A
           git config user.name 'OpenAI Codex'
           git config user.email 'codex@openai.com'
