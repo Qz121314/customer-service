@@ -48,7 +48,7 @@ import {
 
 type LoadState = 'loading' | 'signed-out' | 'authenticated' | 'not-configured';
 type Filter = 'all' | Conversation['status'];
-type AdminSection = 'agents' | 'statistics' | 'workspace';
+type AdminSection = 'agents' | 'workspace';
 type UiIconName = 'agents' | 'statistics' | 'workspace' | 'external' | 'logout';
 
 function UiIcon({ name }: { name: UiIconName }) {
@@ -338,6 +338,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [section, setSection] = useState<AdminSection>('agents');
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
   const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -349,6 +350,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     null,
   );
   const [statsBusy, setStatsBusy] = useState(false);
+  const [statsError, setStatsError] = useState('');
 
   const refresh = useCallback(async () => {
     const [nextAgents, nextProducts] = await Promise.all([
@@ -366,15 +368,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (section !== 'statistics') return;
+    if (!statisticsOpen) return;
     let active = true;
+    setStatsError('');
     setStatsBusy(true);
     getAgentMonthlyStats(statsMonth)
       .then((result) => {
         if (active) setMonthlyStats(result);
       })
       .catch((reason) => {
-        if (active) setError(message(reason, '无法加载会话统计'));
+        if (active) setStatsError(message(reason, '无法加载会话统计'));
       })
       .finally(() => {
         if (active) setStatsBusy(false);
@@ -382,7 +385,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return () => {
       active = false;
     };
-  }, [section, statsMonth]);
+  }, [statisticsOpen, statsMonth]);
+
+  useEffect(() => {
+    if (!statisticsOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setStatisticsOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [statisticsOpen]);
 
   useEffect(() => {
     if (!editorOpen || saving) return;
@@ -478,18 +490,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
-  const sectionTitle =
-    section === 'agents'
-      ? '客服坐席'
-      : section === 'statistics'
-        ? '会话统计'
-        : '坐席工作台';
+  const sectionTitle = section === 'agents' ? '客服坐席' : '坐席工作台';
   const sectionHint =
     section === 'agents'
       ? '管理员创建客服账号，并配置负责范围、同时会话上限和每日接待配额。'
-      : section === 'statistics'
-        ? '按客服查看所选月份 1 号到 30 号每天实际接收的新会话数量。'
-        : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
+      : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
 
   return (
     <div className="admin-console">
@@ -504,7 +509,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <nav className="admin-nav" aria-label="客服管理导航">
           <button
             type="button"
-            className={section === 'agents' ? 'active' : ''}
+            className={section === 'agents' && !statisticsOpen ? 'active' : ''}
             onClick={() => setSection('agents')}
           >
             <span className="admin-nav-label">
@@ -515,8 +520,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
           <button
             type="button"
-            className={section === 'statistics' ? 'active' : ''}
-            onClick={() => setSection('statistics')}
+            className={statisticsOpen ? 'active' : ''}
+            onClick={() => {
+              setStatsBusy(true);
+              setStatisticsOpen(true);
+            }}
           >
             <span className="admin-nav-label">
               <UiIcon name="statistics" />
@@ -526,7 +534,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
           <button
             type="button"
-            className={section === 'workspace' ? 'active' : ''}
+            className={
+              section === 'workspace' && !statisticsOpen ? 'active' : ''
+            }
             onClick={() => setSection('workspace')}
           >
             <span className="admin-nav-label">
@@ -729,16 +739,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </div>
         )}
 
-        {section === 'statistics' && (
-          <MonthlyAgentStatistics
-            agents={agents}
-            month={statsMonth}
-            stats={monthlyStats}
-            busy={statsBusy}
-            onMonthChange={setStatsMonth}
-          />
-        )}
-
         {section === 'workspace' && (
           <section className="workspace-access-card">
             <div className="workspace-access-icon">CS</div>
@@ -770,6 +770,58 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </section>
         )}
       </main>
+
+      {statisticsOpen && (
+        <div
+          className="modal-backdrop admin-statistics-backdrop"
+          onMouseDown={() => setStatisticsOpen(false)}
+        >
+          <section
+            className="admin-statistics-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-statistics-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="admin-statistics-modal-head">
+              <div>
+                <span className="eyebrow">运营数据</span>
+                <h2 id="admin-statistics-title">会话统计</h2>
+                <p>按客服查看每天实际接收的新会话，日期数据无需横向拖动。</p>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                aria-label="关闭会话统计"
+                onClick={() => setStatisticsOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="admin-statistics-modal-body">
+              {statsError && (
+                <button
+                  type="button"
+                  className="notice error"
+                  onClick={() => setStatsError('')}
+                >
+                  {statsError}
+                </button>
+              )}
+              <MonthlyAgentStatistics
+                agents={agents}
+                month={statsMonth}
+                stats={monthlyStats}
+                busy={statsBusy}
+                onMonthChange={(month) => {
+                  setStatsBusy(true);
+                  setStatsMonth(month);
+                }}
+              />
+            </div>
+          </section>
+        </div>
+      )}
 
       {editorOpen && (
         <div
@@ -1017,39 +1069,44 @@ function MonthlyAgentStatistics({
           </strong>
         </div>
       </div>
-      <div className="statistics-table-wrap">
-        <table className="statistics-table">
-          <thead>
-            <tr>
-              <th className="sticky-agent">客服</th>
-              {days.map((day) => (
-                <th key={day}>{day}</th>
-              ))}
-              <th>合计</th>
-            </tr>
-          </thead>
-          <tbody>
-            {agents.map((agent) => (
-              <tr key={agent.id}>
-                <th className="sticky-agent">
-                  <strong>{agent.name}</strong>
-                  <small>{agent.username || '—'}</small>
-                </th>
+      <div className="statistics-agent-list" aria-live="polite">
+        {agents.length === 0 ? (
+          <div className="statistics-empty">
+            <strong>暂无客服数据</strong>
+            <span>创建客服账号后，这里会按日显示接待数量。</span>
+          </div>
+        ) : (
+          agents.map((agent) => (
+            <article className="statistics-agent-card" key={agent.id}>
+              <header>
+                <div className="statistics-agent-identity">
+                  <span className="avatar small">{initials(agent.name)}</span>
+                  <div>
+                    <strong>{agent.name}</strong>
+                    <small>@{agent.username || '未设置账号'}</small>
+                  </div>
+                </div>
+                <div className="statistics-agent-total">
+                  <span>本月合计</span>
+                  <strong>
+                    {busy ? '—' : (agentTotals.get(agent.id) ?? 0)}
+                  </strong>
+                </div>
+              </header>
+              <div className="statistics-day-grid">
                 {days.map((day) => {
                   const value = countMap.get(`${agent.id}:${day}`) ?? 0;
                   return (
-                    <td key={day} className={value ? 'has-value' : ''}>
-                      {busy ? '·' : value || '—'}
-                    </td>
+                    <div key={day} className={value ? 'has-value' : ''}>
+                      <span>{day} 日</span>
+                      <strong>{busy ? '·' : value || '—'}</strong>
+                    </div>
                   );
                 })}
-                <td className="statistics-total">
-                  {busy ? '—' : (agentTotals.get(agent.id) ?? 0)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </div>
+            </article>
+          ))
+        )}
       </div>
       <p className="statistics-note">
         每日上限按 America/Los_Angeles 自然日计算；统计数据独立于 24
@@ -1650,26 +1707,28 @@ function AgentWorkspace({
           </div>
           <i className="presence online" />
         </div>
-        <button
-          type="button"
-          className="ghost-button full workspace-statistics-button"
-          aria-label="打开会话统计"
-          title="会话统计"
-          onClick={() => setStatisticsOpen(true)}
-        >
-          <UiIcon name="statistics" />
-          <span>会话统计</span>
-        </button>
-        <button
-          type="button"
-          className="ghost-button full"
-          aria-label="退出客服账号"
-          title="退出客服账号"
-          onClick={() => void onLogout()}
-        >
-          <UiIcon name="logout" />
-          <span>退出客服账号</span>
-        </button>
+        <div className="workspace-sidebar-actions">
+          <button
+            type="button"
+            className="ghost-button full workspace-statistics-button"
+            aria-label="打开会话统计"
+            title="会话统计"
+            onClick={() => setStatisticsOpen(true)}
+          >
+            <UiIcon name="statistics" />
+            <span>会话统计</span>
+          </button>
+          <button
+            type="button"
+            className="ghost-button full workspace-logout-button"
+            aria-label="退出客服账号"
+            title="退出客服账号"
+            onClick={() => void onLogout()}
+          >
+            <UiIcon name="logout" />
+            <span>退出客服账号</span>
+          </button>
+        </div>
       </aside>
 
       <section className="conversation-pane">

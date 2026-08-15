@@ -20,4 +20,20 @@ test('agent statistics opens inside the workspace instead of navigating away', (
   assert.ok(statistics.includes("event.key === 'Escape'"));
   assert.ok(styles.includes('grid-template-columns: 82px 360px'));
   assert.ok(styles.includes('width: min(1480px, calc(100% - 24px))'));
+  assert.ok(app.includes('className="workspace-sidebar-actions"'));
+  assert.ok(styles.includes('.workspace-sidebar-actions'));
+  assert.ok(styles.includes('margin-top: auto'));
+});
+
+test('admin statistics opens as a modal with a wrapped day grid', () => {
+  const app = source('../src/dashboard/App.tsx');
+  const styles = source('../src/dashboard/cloud-service-ui.css');
+
+  assert.ok(app.includes('onClick={() => setStatisticsOpen(true)}'));
+  assert.ok(app.includes('className="admin-statistics-modal"'));
+  assert.ok(app.includes('aria-labelledby="admin-statistics-title"'));
+  assert.ok(app.includes('className="statistics-day-grid"'));
+  assert.ok(!app.includes("setSection('statistics')"));
+  assert.ok(!app.includes('className="statistics-table"'));
+  assert.ok(styles.includes('grid-template-columns: repeat(10'));
 });

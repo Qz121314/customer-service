@@ -1407,10 +1407,6 @@ select:focus-visible {
     justify-content: center;
   }
 
-  .workspace-sidebar .workspace-statistics-button {
-    margin-top: auto;
-  }
-
   .workspace-sidebar .ghost-button:hover {
     border-color: var(--cs-sidebar-line);
     background: rgba(255, 255, 255, 0.08);
@@ -1497,6 +1493,302 @@ select:focus-visible {
     color: #9196a0;
     font-size: 12px;
     line-height: 1.55;
+  }
+}
+
+/* Modal-first admin statistics with a scan-friendly day grid. */
+.admin-statistics-backdrop {
+  z-index: 70;
+  padding: 20px;
+}
+
+.admin-statistics-modal {
+  width: min(1120px, 100%);
+  height: min(820px, calc(100dvh - 40px));
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #dedfe4;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 28px 90px rgba(20, 23, 31, 0.24);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.admin-statistics-modal-head {
+  min-height: 86px;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--cs-line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.admin-statistics-modal-head > div {
+  min-width: 0;
+}
+
+.admin-statistics-modal-head .eyebrow {
+  margin-bottom: 3px;
+  color: var(--cs-accent-strong);
+}
+
+.admin-statistics-modal-head h2 {
+  color: var(--cs-ink);
+  font-size: 21px;
+  letter-spacing: -0.025em;
+}
+
+.admin-statistics-modal-head p {
+  margin-top: 4px;
+  color: var(--cs-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-statistics-modal-body {
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #f6f6f7;
+}
+
+.admin-statistics-modal .statistics-panel {
+  gap: 12px;
+}
+
+.admin-statistics-modal .statistics-toolbar {
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 11px;
+  box-shadow: var(--cs-shadow);
+}
+
+.admin-statistics-modal .statistics-summary {
+  border-radius: 11px;
+  box-shadow: var(--cs-shadow);
+}
+
+.admin-statistics-modal .statistics-summary > div {
+  min-height: 76px;
+  padding: 13px 16px;
+  background: #fff;
+}
+
+.admin-statistics-modal .statistics-summary strong {
+  font-size: 22px;
+}
+
+.statistics-agent-list {
+  display: grid;
+  gap: 12px;
+}
+
+.statistics-agent-card {
+  overflow: hidden;
+  border: 1px solid var(--cs-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: var(--cs-shadow);
+}
+
+.statistics-agent-card > header {
+  min-height: 62px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eceef1;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.statistics-agent-identity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.statistics-agent-identity .avatar {
+  border: 1px solid #e4e3f3;
+  background: var(--cs-accent-soft);
+  color: var(--cs-accent-strong);
+}
+
+.statistics-agent-identity > div,
+.statistics-agent-total {
+  display: grid;
+  gap: 2px;
+}
+
+.statistics-agent-identity strong {
+  color: var(--cs-ink);
+  font-size: 13px;
+}
+
+.statistics-agent-identity small,
+.statistics-agent-total span {
+  color: var(--cs-muted);
+  font-size: 10px;
+}
+
+.statistics-agent-total {
+  text-align: right;
+}
+
+.statistics-agent-total strong {
+  color: var(--cs-ink);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.statistics-day-grid {
+  padding: 10px;
+  background: #fafafb;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.statistics-day-grid > div {
+  min-height: 50px;
+  padding: 7px 6px;
+  border: 1px solid #e8e9ed;
+  border-radius: 8px;
+  background: #fff;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  text-align: center;
+}
+
+.statistics-day-grid > div.has-value {
+  border-color: #d9d7fb;
+  background: var(--cs-accent-soft);
+}
+
+.statistics-day-grid span {
+  color: #9297a1;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.statistics-day-grid strong {
+  color: #a2a6ae;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.statistics-day-grid .has-value strong {
+  color: var(--cs-accent-strong);
+}
+
+.statistics-empty {
+  min-height: 180px;
+  padding: 24px;
+  border: 1px solid var(--cs-line);
+  border-radius: 12px;
+  background: #fff;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.statistics-empty strong {
+  color: var(--cs-ink);
+}
+
+.statistics-empty span {
+  color: var(--cs-muted);
+  font-size: 12px;
+}
+
+.admin-statistics-modal .statistics-note {
+  border-radius: 10px;
+  background: #fff;
+}
+
+.workspace-sidebar-actions {
+  width: 100%;
+  margin-top: auto;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.workspace-sidebar-actions .ghost-button,
+.workspace-sidebar-actions .ghost-button.full {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .workspace-sidebar-actions {
+    width: auto;
+    margin-top: 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .admin-statistics-backdrop {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .admin-statistics-modal {
+    width: 100%;
+    height: calc(100dvh - env(safe-area-inset-top));
+    border-radius: 14px 14px 0 0;
+  }
+
+  .admin-statistics-modal-head {
+    min-height: 76px;
+    padding: 14px 16px;
+  }
+
+  .admin-statistics-modal-head p {
+    display: none;
+  }
+
+  .admin-statistics-modal-body {
+    padding: 10px;
+  }
+
+  .admin-statistics-modal .statistics-toolbar {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .admin-statistics-modal .statistics-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .admin-statistics-modal .statistics-summary > div {
+    min-height: 70px;
+    padding: 10px;
+  }
+
+  .admin-statistics-modal .statistics-summary > div + div {
+    border-top: 0;
+    border-left: 1px solid #eceef1;
+  }
+
+  .admin-statistics-modal .statistics-summary strong {
+    font-size: 19px;
+  }
+
+  .statistics-day-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 5px;
+    padding: 8px;
+  }
+
+  .statistics-day-grid > div {
+    min-height: 46px;
   }
 }
 
