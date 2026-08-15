@@ -125,6 +125,7 @@ const errorMessages: Record<string, string> = {
   INVALID_GROUP: '客服分组名称无效',
   INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
   INVALID_ROUTING_SCOPE: '负责范围无效，请重新选择分区、分类或产品',
+  INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
 };
@@ -282,42 +283,40 @@ export function openConversationSocket(id: string): WebSocket {
   return openSocket(`/api/agent/realtime/${encodeURIComponent(id)}`);
 }
 
-function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
-  if (!adminBootstrapRequest) {
-    const pending = request<AdminBootstrapPayload>('/api/admin/bootstrap');
-    adminBootstrapRequest = pending;
-    void pending.then(
-      () => {
-        if (adminBootstrapRequest === pending) adminBootstrapRequest = null;
-      },
-      () => {
-        if (adminBootstrapRequest === pending) adminBootstrapRequest = null;
-      },
-    );
-  }
-  return adminBootstrapRequest;
+async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
+  if (adminBootstrapRequest) return adminBootstrapRequest;
+  const requestPromise = request<AdminBootstrapPayload>('/api/admin/bootstrap');
+  adminBootstrapRequest = requestPromise;
+  requestPromise.finally(() => {
+    if (adminBootstrapRequest === requestPromise) adminBootstrapRequest = null;
+  });
+  return requestPromise;
 }
 
 function normalizeRoutingScope(
   scope: AgentRoutingScope | undefined,
-  productIds: string[],
+  fallbackProductIds: string[],
 ): AgentRoutingScope {
-  if (!scope) {
-    return productIds.length
-      ? { type: 'product', productIds: [...productIds] }
-      : { type: 'none' };
+  if (scope?.type === 'section' && scope.sectionId) {
+    return { type: 'section', sectionId: scope.sectionId };
   }
-  if (scope.type === 'category') {
+  if (scope?.type === 'category' && scope.sectionId) {
     return {
       type: 'category',
       sectionId: scope.sectionId,
-      categoryIds: [...scope.categoryIds],
+      categoryIds: [...new Set(scope.categoryIds.filter(Boolean))],
     };
   }
-  if (scope.type === 'product') {
-    return { type: 'product', productIds: [...scope.productIds] };
+  if (scope?.type === 'product') {
+    return {
+      type: 'product',
+      productIds: [...new Set(scope.productIds.filter(Boolean))],
+    };
   }
-  return scope;
+  const legacyProductIds = [...new Set(fallbackProductIds.filter(Boolean))];
+  return legacyProductIds.length
+    ? { type: 'product', productIds: legacyProductIds }
+    : { type: 'none' };
 }
 
 function openSocket(path: string, keepAlive = false): WebSocket {
@@ -348,25 +347,23 @@ function openSocket(path: string, keepAlive = false): WebSocket {
   return socket;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T = { ok: boolean }>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(path, {
-    credentials: 'same-origin',
-    headers: {
-      'Content-Type': 'application/json',
-      ...init?.headers,
-    },
     ...init,
+    headers: {
+      ...(init?.body ? { 'content-type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
-
-  if (response.status === 204) return undefined as T;
-  const payload = (await response.json().catch(() => ({}))) as {
+  const body = (await response.json().catch(() => ({}))) as T & {
     error?: string;
-  } & T;
+  };
   if (!response.ok) {
-    throw new Error(
-      (payload.error && errorMessages[payload.error]) ||
-        `请求失败（状态码 ${response.status}）`,
-    );
+    const code = body.error ?? 'REQUEST_FAILED';
+    throw new Error(errorMessages[code] ?? code);
   }
-  return payload;
+  return body;
 }
