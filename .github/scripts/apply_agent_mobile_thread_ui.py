@@ -86,16 +86,6 @@ replace_once(
               <div className="thread-head-copy">
                 <span className="eyebrow">VISITOR</span>""",
 )
-replace_once(
-    'src/dashboard/App.tsx',
-    """                <button
-                  className="primary-button"
-                  disabled={""",
-    """                <button
-                  type="submit"
-                  className="primary-button"
-                  disabled={""",
-)
 
 # Replace the mobile layout with a true inbox -> thread navigation model.
 write(
