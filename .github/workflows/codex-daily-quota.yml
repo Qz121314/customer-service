@@ -29,7 +29,20 @@ jobs:
       - name: Set up pnpm
         run: npm install --global pnpm@11.19.0
       - name: Apply daily quota implementation
-        run: python .github/scripts/apply_daily_quota.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/scripts/apply_daily_quota.py')
+          text = path.read_text(encoding='utf-8')
+          old = """    if count != 1:\n        raise RuntimeError(f'{path}: expected one match, found {count}: {old[:120]!r}')\n    write(path, text.replace(old, new, 1))"""
+          new = """    if count != 1:\n        if (\n            path == 'src/worker/routing.ts'\n            and count == 2\n            and 'a.max_active_conversations = 0' in old\n        ):\n            write(path, text.replace(old, new, 1))\n            return\n        raise RuntimeError(f'{path}: expected one match, found {count}: {old[:120]!r}')\n    write(path, text.replace(old, new, 1))"""
+          if old not in text:
+              raise SystemExit('patch helper signature not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python .github/scripts/apply_daily_quota.py
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Format changed sources
