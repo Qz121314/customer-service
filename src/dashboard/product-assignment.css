@@ -248,3 +248,60 @@
     flex-direction: column;
   }
 }
+
+/* Scope picker: flatter configuration controls with a clearer selected rule. */
+.product-assignment-modes button {
+  min-height: 68px;
+  border-color: #e2e4e8;
+  border-radius: 9px;
+  background: #fff;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.product-assignment-modes button.is-active {
+  border-color: #25292f;
+  background: #f7f8f9;
+  box-shadow: inset 0 0 0 1px #25292f;
+}
+.product-assignment-note,
+.product-assignment-empty {
+  border: 1px solid #eceef1;
+  border-radius: 9px;
+  background: #f8f9fa;
+}
+.product-assignment-category,
+.product-assignment-selected-item,
+.product-assignment-option {
+  border-color: #e4e6e9;
+  border-radius: 9px;
+  background: #fff;
+}
+.product-assignment-category:has(input:checked),
+.product-assignment-option:has(input:checked) {
+  border-color: #777d86;
+  background: #f8f9fa;
+}
+.product-assignment-toolbar input,
+.product-assignment-toolbar select,
+.product-assignment-panel select {
+  min-height: 42px;
+  border: 1px solid #dfe2e6;
+  border-radius: 9px;
+  background: #fff;
+  outline: none;
+}
+.product-assignment-toolbar input {
+  padding: 0 12px;
+}
+.product-assignment-toolbar select,
+.product-assignment-panel select {
+  padding: 0 10px;
+}
+.product-assignment-toolbar input:focus,
+.product-assignment-toolbar select:focus,
+.product-assignment-panel select:focus {
+  border-color: #868c95;
+  box-shadow: 0 0 0 3px rgba(30, 34, 40, 0.06);
+}

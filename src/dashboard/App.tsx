@@ -106,6 +106,71 @@ function sortedConversationList(items: Conversation[]): Conversation[] {
   });
 }
 
+type AgentScopeSummary = {
+  tone: 'none' | 'section' | 'category' | 'product';
+  title: string;
+  detail: string;
+};
+
+function agentScopeSummary(
+  agent: AgentAccount,
+  products: ProductCatalogItem[],
+): AgentScopeSummary {
+  const scope = agent.routingScope;
+  if (!scope || scope.type === 'none') {
+    return {
+      tone: 'none',
+      title: '未配置负责范围',
+      detail: '不会参与基于产品范围的新会话分流',
+    };
+  }
+
+  if (scope.type === 'section') {
+    const product = products.find((item) => item.sectionId === scope.sectionId);
+    const sectionName = product?.sectionName || scope.sectionId;
+    return {
+      tone: 'section',
+      title: `${sectionName} · 整个分区`,
+      detail: `动态覆盖 ${agent.productIds.length} 个产品`,
+    };
+  }
+
+  if (scope.type === 'category') {
+    const sectionProduct = products.find(
+      (item) => item.sectionId === scope.sectionId,
+    );
+    const sectionName = sectionProduct?.sectionName || scope.sectionId;
+    const names = scope.categoryIds.map((categoryId) => {
+      const product = products.find(
+        (item) =>
+          item.sectionId === scope.sectionId && item.categoryId === categoryId,
+      );
+      return product?.categoryName || categoryId;
+    });
+    const visible = names.slice(0, 2).join('、');
+    const remainder = Math.max(0, names.length - 2);
+    return {
+      tone: 'category',
+      title: `${sectionName} · ${scope.categoryIds.length} 个分类`,
+      detail: `${visible}${remainder ? ` 等 ${names.length} 个分类` : ''} · 动态覆盖 ${agent.productIds.length} 个产品`,
+    };
+  }
+
+  const names = scope.productIds.map(
+    (productId) =>
+      products.find((item) => item.id === productId)?.title || productId,
+  );
+  const visible = names.slice(0, 2).join('、');
+  const remainder = Math.max(0, names.length - 2);
+  return {
+    tone: 'product',
+    title: `指定 ${scope.productIds.length} 个产品`,
+    detail: names.length
+      ? `${visible}${remainder ? ` 等 ${names.length} 个产品` : ''}`
+      : '未选择产品',
+  };
+}
+
 export function App() {
   return window.location.pathname.startsWith('/agent') ? (
     <AgentPortal />
@@ -187,15 +252,20 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       .finally(() => setBusy(false));
   }, [refresh]);
 
+  useEffect(() => {
+    if (!editorOpen || saving) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEditorOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [editorOpen, saving]);
+
   const workspaceUrl = `${window.location.origin}/agent`;
   const onlineCount = agents.filter(
     (agent) => agent.isEnabled && agent.status === 'online',
   ).length;
   const enabledCount = agents.filter((agent) => agent.isEnabled).length;
-  const productById = useMemo(
-    () => new Map(products.map((product) => [product.id, product])),
-    [products],
-  );
   const assignedProductCount = new Set(
     agents.flatMap((agent) => agent.productIds),
   ).size;
@@ -272,7 +342,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const sectionTitle = section === 'agents' ? '客服坐席' : '坐席工作台';
   const sectionHint =
     section === 'agents'
-      ? '管理员创建客服账号，并给每个坐席分配负责的产品。'
+      ? '管理员创建客服账号，并按分区、分类或单个产品配置负责范围。'
       : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
 
   return (
@@ -352,7 +422,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <div className="admin-table-title">
                 <div>
                   <strong>客服账号列表</strong>
-                  <span>员工使用各自账号登录坐席工作台</span>
+                  <span>
+                    负责范围以动态分流规则保存，分区和分类后续新增产品会自动纳入
+                  </span>
                 </div>
               </div>
               {busy ? (
@@ -372,7 +444,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                       <tr>
                         <th>客服</th>
                         <th>登录账号</th>
-                        <th>负责产品</th>
+                        <th>负责范围</th>
                         <th>状态</th>
                         <th>最大会话</th>
                         <th>最后在线</th>
@@ -392,22 +464,20 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                           </td>
                           <td>{agent.username || '—'}</td>
                           <td>
-                            <div className="group-tags">
-                              {agent.productIds.length ? (
-                                <>
-                                  {agent.productIds.slice(0, 2).map((id) => (
-                                    <span key={id}>
-                                      {productById.get(id)?.title || '未知产品'}
-                                    </span>
-                                  ))}
-                                  {agent.productIds.length > 2 ? (
-                                    <em>+{agent.productIds.length - 2}</em>
-                                  ) : null}
-                                </>
-                              ) : (
-                                <em>未分配产品</em>
-                              )}
-                            </div>
+                            {(() => {
+                              const summary = agentScopeSummary(
+                                agent,
+                                products,
+                              );
+                              return (
+                                <div
+                                  className={`agent-scope-summary ${summary.tone}`}
+                                >
+                                  <strong>{summary.title}</strong>
+                                  <small>{summary.detail}</small>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td>
                             <span
@@ -480,12 +550,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         >
           <section
             className="agent-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agent-editor-title"
             onMouseDown={(event) => event.stopPropagation()}
           >
             <header>
               <div>
-                <h2>{draft.id ? '编辑客服账号' : '新增客服账号'}</h2>
-                <p>账号和负责产品都由管理员统一配置。</p>
+                <h2 id="agent-editor-title">
+                  {draft.id ? '编辑客服账号' : '新增客服账号'}
+                </h2>
+                <p>账号与分流负责范围由管理员统一配置。</p>
               </div>
               <button
                 type="button"
@@ -500,6 +575,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               className="agent-editor-form"
               onSubmit={(event) => void saveAgent(event)}
             >
+              <div className="agent-editor-section-title">
+                <strong>账号设置</strong>
+                <span>配置坐席身份、登录凭据和同时接待上限</span>
+              </div>
               <div className="form-two-columns">
                 <label>
                   <span>显示名称</span>
@@ -554,6 +633,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 />
                 <small>填写 0 表示不限制。</small>
               </label>
+              <div className="agent-editor-section-title scope-title">
+                <strong>分流负责范围</strong>
+                <span>分区 = 全选，分类 = 批量选择，指定产品 = 精确选择</span>
+              </div>
               <ProductAssignmentPicker
                 products={products}
                 selectedIds={draft.productIds}

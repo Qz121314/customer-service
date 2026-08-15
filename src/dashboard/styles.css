@@ -1685,3 +1685,127 @@ p {
 .media-inline-ring > * {
   position: relative;
 }
+
+/* Admin scope semantics and editor workspace */
+.agent-scope-summary {
+  display: grid;
+  min-width: 170px;
+  max-width: 330px;
+  gap: 3px;
+}
+.agent-scope-summary strong {
+  overflow: hidden;
+  color: #30343b;
+  font-size: 12px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-scope-summary small {
+  overflow: hidden;
+  color: #9297a0;
+  font-size: 11px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-scope-summary.section strong::before,
+.agent-scope-summary.category strong::before,
+.agent-scope-summary.product strong::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #2f343b;
+  vertical-align: 1px;
+  content: '';
+}
+.agent-scope-summary.none strong,
+.agent-scope-summary.none small {
+  color: #a0a4ac;
+}
+.agent-modal {
+  width: min(780px, 100%);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: contain;
+}
+.agent-modal > header {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  background: #fff;
+}
+.agent-editor-form {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.agent-editor-section-title {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 2px;
+}
+.agent-editor-section-title strong {
+  color: #24272d;
+  font-size: 13px;
+}
+.agent-editor-section-title span {
+  color: #9297a0;
+  font-size: 11px;
+  font-weight: 500;
+}
+.agent-editor-section-title.scope-title {
+  margin-top: 2px;
+  padding-top: 15px;
+  border-top: 1px solid #eff0f2;
+}
+.agent-editor-form footer {
+  position: sticky;
+  bottom: -22px;
+  z-index: 3;
+  margin: 0 -22px -22px;
+  padding: 14px 22px calc(14px + env(safe-area-inset-bottom));
+  border-top: 1px solid #e9ebee;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 -8px 22px rgba(20, 23, 29, 0.035);
+  backdrop-filter: blur(10px);
+}
+@media (min-width: 1200px) {
+  .workspace-shell {
+    grid-template-columns: 216px minmax(330px, 372px) minmax(520px, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  .admin-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .modal-backdrop {
+    padding: 0;
+    place-items: end stretch;
+  }
+  .agent-modal {
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    border-radius: 16px 16px 0 0;
+  }
+  .agent-modal > header {
+    padding: 16px 16px 14px;
+  }
+  .agent-editor-form {
+    padding: 18px 16px;
+  }
+  .agent-editor-form footer {
+    bottom: -18px;
+    margin: 0 -16px -18px;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .agent-scope-summary {
+    min-width: 145px;
+  }
+}

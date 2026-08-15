@@ -162,6 +162,7 @@ export async function getAgents(): Promise<AgentAccount[]> {
     const scope = normalizeRoutingScope(agent.routingScope, agent.productIds);
     return {
       ...agent,
+      routingScope: scope,
       productIds: attachProductSelectionScope(
         expandRoutingScopeProductIds(scope, response.products),
         scope,
