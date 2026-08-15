@@ -9,6 +9,8 @@ import {
 } from 'react';
 import {
   AgentAccount,
+  AgentAvailability,
+  AgentInbox,
   AgentRoutingScope,
   AgentMonthlyStats,
   ProductCatalogItem,
@@ -38,6 +40,7 @@ import {
   openAgentInboxSocket,
   openConversationSocket,
   sendMessage,
+  setAgentAvailability,
   setConversationStatus,
   transferConversation,
   updateAgent,
@@ -158,6 +161,66 @@ const filterLabels: Record<Filter, string> = {
 };
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
+const AGENT_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+
+type AgentConversationDraft = {
+  body: string;
+  updatedAt: number;
+};
+
+type AgentConversationDrafts = Record<string, AgentConversationDraft>;
+
+type PendingAgentText = {
+  conversationId: string;
+  clientMessageId: string;
+  body: string;
+  status: 'sending' | 'failed';
+};
+
+function loadAgentConversationDrafts(agentId: string): AgentConversationDrafts {
+  try {
+    const raw = window.localStorage.getItem(`cs-agent-drafts:${agentId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<
+      string,
+      { body?: unknown; updatedAt?: unknown }
+    >;
+    const cutoff = Date.now() - AGENT_DRAFT_TTL_MS;
+    return Object.fromEntries(
+      Object.entries(parsed).flatMap(([conversationId, value]) => {
+        if (
+          typeof value?.body !== 'string' ||
+          !value.body ||
+          typeof value.updatedAt !== 'number' ||
+          value.updatedAt < cutoff
+        ) {
+          return [];
+        }
+        return [
+          [conversationId, { body: value.body, updatedAt: value.updatedAt }],
+        ];
+      }),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function saveAgentConversationDrafts(
+  agentId: string,
+  drafts: AgentConversationDrafts,
+): void {
+  try {
+    const key = `cs-agent-drafts:${agentId}`;
+    if (Object.keys(drafts).length === 0) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(drafts));
+  } catch {
+    // Local drafts are best-effort and must never interrupt active chat work.
+  }
+}
 
 type InboxRealtimeEvent = {
   type?: string;
@@ -1274,6 +1337,10 @@ function AgentWorkspace({
   const [notificationState, setNotificationState] =
     useState<AgentNotificationState>('disabled');
   const [notificationBusy, setNotificationBusy] = useState(false);
+  const [availability, setAvailability] = useState<AgentAvailability>(
+    identity.status === 'busy' ? 'busy' : 'online',
+  );
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
   const [statisticsOpen, setStatisticsOpen] = useState(() =>
     window.location.pathname.startsWith('/agent/stats'),
   );
@@ -1300,8 +1367,12 @@ function AgentWorkspace({
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const [mediaPendingFile, setMediaPendingFile] = useState<File | null>(null);
   const [mediaFailed, setMediaFailed] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
+  const [drafts, setDrafts] = useState<AgentConversationDrafts>(() =>
+    loadAgentConversationDrafts(identity.id),
+  );
+  const [pendingTextMessages, setPendingTextMessages] = useState<
+    Record<string, PendingAgentText>
+  >({});
   const [inboxConnected, setInboxConnected] = useState(false);
   const [threadConnected, setThreadConnected] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -1309,6 +1380,10 @@ function AgentWorkspace({
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const lastScrolledConversationRef = useRef<string | null>(null);
   const baseTitleRef = useRef(document.title);
+  const draft = selectedId ? (drafts[selectedId]?.body ?? '') : '';
+  const currentPendingText = selectedId
+    ? (pendingTextMessages[selectedId] ?? null)
+    : null;
   const totalUnread = useMemo(
     () => conversations.reduce((sum, item) => sum + item.agent_unread_count, 0),
     [conversations],
@@ -1365,6 +1440,10 @@ function AgentWorkspace({
     };
   }, []);
 
+  useEffect(() => {
+    saveAgentConversationDrafts(identity.id, drafts);
+  }, [drafts, identity.id]);
+
   const acknowledgeConversation = useCallback(
     async (id: string, lastMessageId: string | null = null) => {
       await markConversationRead(id, lastMessageId);
@@ -1386,13 +1465,18 @@ function AgentWorkspace({
     };
   }, [totalUnread]);
 
-  const refresh = useCallback(async () => {
-    const inbox = await getAgentInbox();
+  const applyInbox = useCallback((inbox: AgentInbox) => {
     setOverview(inbox.overview);
     setConversations(inbox.conversations);
     setTransferTargets(inbox.transferTargets);
     setQuickReplies(inbox.quickReplies);
+    setAvailability(inbox.availability);
   }, []);
+
+  const refresh = useCallback(async () => {
+    const inbox = await getAgentInbox();
+    applyInbox(inbox);
+  }, [applyInbox]);
 
   useEffect(() => {
     setBusy(true);
@@ -1405,8 +1489,8 @@ function AgentWorkspace({
     const recover = () => {
       if (document.visibilityState !== 'visible') return;
       void heartbeat()
-        .catch(() => undefined)
-        .finally(() => void refresh().catch(() => undefined));
+        .then(applyInbox)
+        .catch(() => void refresh().catch(() => undefined));
       if (selectedId) {
         void acknowledgeConversation(
           selectedId,
@@ -1423,6 +1507,7 @@ function AgentWorkspace({
     };
   }, [
     acknowledgeConversation,
+    applyInbox,
     lastVisibleVisitorMessageId,
     refresh,
     selectedId,
@@ -1441,8 +1526,8 @@ function AgentWorkspace({
         setInboxConnected(true);
         if (openedOnce) {
           void heartbeat()
-            .catch(() => undefined)
-            .finally(() => void refresh().catch(() => undefined));
+            .then(applyInbox)
+            .catch(() => void refresh().catch(() => undefined));
         }
         openedOnce = true;
       });
@@ -1479,7 +1564,7 @@ function AgentWorkspace({
       socket?.close();
       if (timer !== null) window.clearTimeout(timer);
     };
-  }, [identity.id, refresh]);
+  }, [applyInbox, identity.id, refresh]);
 
   useEffect(() => {
     setQuickRepliesOpen(false);
@@ -1499,6 +1584,23 @@ function AgentWorkspace({
         .then((value) => {
           if (active) {
             setDetail(value);
+            const deliveredClientIds = new Set(
+              value.messages
+                .map((item) => item.client_message_id)
+                .filter((id): id is string => Boolean(id)),
+            );
+            setPendingTextMessages((current) => {
+              const pending = current[selectedId];
+              if (
+                !pending ||
+                !deliveredClientIds.has(pending.clientMessageId)
+              ) {
+                return current;
+              }
+              const next = { ...current };
+              delete next[selectedId];
+              return next;
+            });
             setMediaItems(
               value.media.map((item) => ({
                 ...item,
@@ -1545,6 +1647,17 @@ function AgentWorkspace({
 
         if (payload.type === 'message' && payload.message) {
           const incoming = payload.message;
+          if (incoming.client_message_id) {
+            setPendingTextMessages((current) => {
+              const pending = current[selectedId];
+              if (pending?.clientMessageId !== incoming.client_message_id) {
+                return current;
+              }
+              const next = { ...current };
+              delete next[selectedId];
+              return next;
+            });
+          }
           setDetail((current) => {
             if (!current || current.conversation.id !== selectedId)
               return current;
@@ -1708,18 +1821,52 @@ function AgentWorkspace({
     scroll();
     const frame = window.requestAnimationFrame(scroll);
     return () => window.cancelAnimationFrame(frame);
-  }, [lastMessageId, selectedId]);
+  }, [
+    currentPendingText?.clientMessageId,
+    currentPendingText?.status,
+    lastMessageId,
+    selectedId,
+  ]);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (!selectedId || !draft.trim() || sending) return;
-    const text = draft.trim();
-    setSending(true);
-    setDraft('');
+  function updateDraft(value: string | ((current: string) => string)) {
+    if (!selectedId) return;
+    setDrafts((current) => {
+      const previous = current[selectedId]?.body ?? '';
+      const nextBody = typeof value === 'function' ? value(previous) : value;
+      const next = { ...current };
+      if (!nextBody) {
+        delete next[selectedId];
+      } else {
+        next[selectedId] = { body: nextBody, updatedAt: Date.now() };
+      }
+      return next;
+    });
+  }
+
+  function clearConversationDraft(conversationId: string) {
+    setDrafts((current) => {
+      if (!current[conversationId]) return current;
+      const next = { ...current };
+      delete next[conversationId];
+      return next;
+    });
+  }
+
+  async function deliverTextMessage(pending: PendingAgentText) {
+    setPendingTextMessages((current) => ({
+      ...current,
+      [pending.conversationId]: { ...pending, status: 'sending' },
+    }));
     try {
-      const sent = await sendMessage(selectedId, text);
+      const sent = await sendMessage(
+        pending.conversationId,
+        pending.body,
+        pending.clientMessageId,
+      );
       setDetail((current) => {
-        if (!current || current.conversation.id !== selectedId) return current;
+        if (!current || current.conversation.id !== pending.conversationId) {
+          return current;
+        }
         const exists = current.messages.some((item) => item.id === sent.id);
         return {
           ...current,
@@ -1731,12 +1878,63 @@ function AgentWorkspace({
           messages: exists ? current.messages : [...current.messages, sent],
         };
       });
+      setPendingTextMessages((current) => {
+        if (
+          current[pending.conversationId]?.clientMessageId !==
+          pending.clientMessageId
+        ) {
+          return current;
+        }
+        const next = { ...current };
+        delete next[pending.conversationId];
+        return next;
+      });
     } catch (reason) {
-      setDraft((current) => current || text);
-      setError(message(reason, '发送失败'));
-    } finally {
-      setSending(false);
+      setPendingTextMessages((current) => {
+        if (
+          current[pending.conversationId]?.clientMessageId !==
+          pending.clientMessageId
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          [pending.conversationId]: { ...pending, status: 'failed' },
+        };
+      });
+      setError(message(reason, '消息发送失败，可点击消息重试'));
     }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!selectedId || !draft.trim() || currentPendingText) return;
+    const pending: PendingAgentText = {
+      conversationId: selectedId,
+      clientMessageId: crypto.randomUUID(),
+      body: draft.trim(),
+      status: 'sending',
+    };
+    updateDraft('');
+    await deliverTextMessage(pending);
+  }
+
+  async function retryTextMessage() {
+    if (!currentPendingText || currentPendingText.status !== 'failed') return;
+    await deliverTextMessage(currentPendingText);
+  }
+
+  function editFailedTextMessage() {
+    if (!selectedId || currentPendingText?.status !== 'failed') return;
+    const failedBody = currentPendingText.body;
+    setPendingTextMessages((current) => {
+      const next = { ...current };
+      delete next[selectedId];
+      return next;
+    });
+    updateDraft((current) =>
+      current.trim() ? `${failedBody}\n${current.trimStart()}` : failedBody,
+    );
   }
 
   async function uploadImage(file: File, previewUrl: string) {
@@ -1751,6 +1949,7 @@ function AgentWorkspace({
         sender_type: 'agent',
         sender_id: identity.id,
         body: '',
+        client_message_id: null,
         read_by_visitor_at: null,
         read_by_agent_at: null,
         created_at: sent.createdAt,
@@ -1826,8 +2025,31 @@ function AgentWorkspace({
           [status]: current[status] + 1,
         }));
       }
+      if (status === 'closed') {
+        clearConversationDraft(selectedId);
+        setPendingTextMessages((current) => {
+          if (!current[selectedId]) return current;
+          const next = { ...current };
+          delete next[selectedId];
+          return next;
+        });
+      }
     } catch (reason) {
       setError(message(reason, '更新会话状态失败'));
+    }
+  }
+
+  async function toggleAvailability() {
+    if (availabilitySaving) return;
+    const nextStatus: AgentAvailability =
+      availability === 'online' ? 'busy' : 'online';
+    setAvailabilitySaving(true);
+    try {
+      applyInbox(await setAgentAvailability(nextStatus));
+    } catch (reason) {
+      setError(message(reason, '切换接待状态失败'));
+    } finally {
+      setAvailabilitySaving(false);
     }
   }
 
@@ -1866,6 +2088,13 @@ function AgentWorkspace({
     setTransferring(true);
     try {
       await transferConversation(selectedId, targetAgentId);
+      clearConversationDraft(selectedId);
+      setPendingTextMessages((current) => {
+        if (!current[selectedId]) return current;
+        const next = { ...current };
+        delete next[selectedId];
+        return next;
+      });
       setSelectedId(null);
       setDetail(null);
       await refresh();
@@ -1905,7 +2134,7 @@ function AgentWorkspace({
   }
 
   function applyQuickReply(reply: QuickReply) {
-    setDraft((current) =>
+    updateDraft((current) =>
       current.trim() ? `${current.trimEnd()}\n${reply.body}` : reply.body,
     );
     setQuickRepliesOpen(false);
@@ -1924,7 +2153,7 @@ function AgentWorkspace({
             <strong>{identity.name}</strong>
             <small>@{identity.username}</small>
           </div>
-          <i className="presence online" />
+          <i className={`presence ${availability}`} />
         </div>
         <div className="workspace-sidebar-actions">
           <button
@@ -1992,11 +2221,29 @@ function AgentWorkspace({
               )}
             </h1>
           </div>
-          <span className="online-pill" aria-live="polite">
-            {inboxConnected && (!selectedId || threadConnected)
-              ? '实时在线'
-              : '正在重连'}
-          </span>
+          <button
+            type="button"
+            className={`availability-pill is-${availability}${inboxConnected && (!selectedId || threadConnected) ? '' : ' is-reconnecting'}`}
+            aria-live="polite"
+            aria-pressed={availability === 'busy'}
+            disabled={availabilitySaving}
+            title={
+              availability === 'online'
+                ? '点击暂停接收新会话'
+                : '点击恢复接收新会话'
+            }
+            onClick={() => void toggleAvailability()}
+          >
+            <span aria-hidden="true" />
+            {availabilitySaving
+              ? '切换中…'
+              : availability === 'online'
+                ? '在线接待'
+                : '暂停接待'}
+            {(!inboxConnected || (selectedId && !threadConnected)) && (
+              <small>重连中</small>
+            )}
+          </button>
         </header>
         <div className="inbox-overview" aria-label="会话概览">
           <Metric label="新会话" value={overview.open} />
@@ -2239,6 +2486,35 @@ function AgentWorkspace({
                   }
                 />
               ))}
+              {currentPendingText ? (
+                <div
+                  className={`message mine pending-text-message${currentPendingText.status === 'failed' ? ' is-failed' : ''}`}
+                >
+                  <div>
+                    <p>{currentPendingText.body}</p>
+                    <div className="pending-text-status">
+                      <span>
+                        {currentPendingText.status === 'failed'
+                          ? '发送失败'
+                          : '发送中…'}
+                      </span>
+                      {currentPendingText.status === 'failed' && (
+                        <span className="pending-text-actions">
+                          <button
+                            type="button"
+                            onClick={() => void retryTextMessage()}
+                          >
+                            重试
+                          </button>
+                          <button type="button" onClick={editFailedTextMessage}>
+                            重新编辑
+                          </button>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
               {mediaPreviewUrl ? (
                 <div className="message mine is-uploading">
                   <div>
@@ -2375,7 +2651,7 @@ function AgentWorkspace({
                 value={draft}
                 rows={3}
                 disabled={detail.conversation.status === 'closed'}
-                onChange={(event) => setDraft(event.target.value)}
+                onChange={(event) => updateDraft(event.target.value)}
                 placeholder={
                   detail.conversation.status === 'closed'
                     ? '会话已关闭'
@@ -2399,7 +2675,7 @@ function AgentWorkspace({
                 <button
                   className="primary-button"
                   disabled={
-                    sending ||
+                    Boolean(currentPendingText) ||
                     !draft.trim() ||
                     detail.conversation.status === 'closed'
                   }

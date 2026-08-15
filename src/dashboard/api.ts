@@ -43,6 +43,8 @@ export type AgentIdentity = {
   status: 'online' | 'busy' | 'offline';
 };
 
+export type AgentAvailability = 'online' | 'busy';
+
 export type AgentSessionState = {
   authenticated: boolean;
   agent: AgentIdentity | null;
@@ -104,6 +106,7 @@ export type Message = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
+  client_message_id: string | null;
   read_by_visitor_at: string | null;
   read_by_agent_at: string | null;
   created_at: string;
@@ -132,6 +135,7 @@ export type AgentInbox = {
   overview: Overview;
   transferTargets: TransferTarget[];
   quickReplies: QuickReply[];
+  availability: AgentAvailability;
 };
 
 export type TransferTarget = {
@@ -181,6 +185,8 @@ const errorMessages: Record<string, string> = {
   TRANSFER_TARGET_UNAVAILABLE: '该客服当前无法接收新会话',
   INVALID_QUICK_REPLY: '快捷回复名称或内容无效',
   QUICK_REPLY_LIMIT_REACHED: '每个客服最多保存 30 条快捷回复',
+  INVALID_AGENT_STATUS: '坐席接待状态无效',
+  MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -281,8 +287,17 @@ export async function agentLogout(): Promise<void> {
   await request('/api/agent/auth/logout', { method: 'POST' });
 }
 
-export async function heartbeat(): Promise<void> {
-  await request('/api/agent/auth/heartbeat', { method: 'POST' });
+export async function heartbeat(): Promise<AgentInbox> {
+  return request('/api/agent/auth/heartbeat', { method: 'POST' });
+}
+
+export async function setAgentAvailability(
+  status: AgentAvailability,
+): Promise<AgentInbox> {
+  return request('/api/agent/auth/status', {
+    method: 'POST',
+    body: JSON.stringify({ status }),
+  });
 }
 
 export async function getOverview(): Promise<Overview> {
@@ -317,12 +332,16 @@ export async function markConversationRead(
   });
 }
 
-export async function sendMessage(id: string, body: string): Promise<Message> {
+export async function sendMessage(
+  id: string,
+  body: string,
+  clientMessageId: string,
+): Promise<Message> {
   const response = await request<{ message: Message }>(
     `/api/agent/conversations/${encodeURIComponent(id)}/messages`,
     {
       method: 'POST',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, clientMessageId }),
     },
   );
   return response.message;

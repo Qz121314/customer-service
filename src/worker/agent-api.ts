@@ -14,6 +14,7 @@ type Bindings = {
 
 type Env = { Bindings: Bindings };
 type ConversationStatus = 'open' | 'pending' | 'closed';
+type AgentAvailability = 'online' | 'busy';
 
 type AgentSession = {
   id: string;
@@ -34,6 +35,7 @@ type MessageRow = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
+  client_message_id: string | null;
   read_by_visitor_at: string | null;
   read_by_agent_at: string | null;
   created_at: string;
@@ -171,20 +173,58 @@ agentApi.post('/api/agent/auth/logout', async (c) => {
 agentApi.post('/api/agent/auth/heartbeat', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
+  const nextStatus: AgentAvailability =
+    agent.status === 'busy' ? 'busy' : 'online';
   await c.env.DB.prepare(
     `UPDATE agents
-     SET status = 'online', last_seen_at = CURRENT_TIMESTAMP,
+     SET status = CASE WHEN status = 'busy' THEN 'busy' ELSE 'online' END,
+         last_seen_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?1`,
   )
     .bind(agent.id)
     .run();
-  const assignedConversationIds = await assignWaitingConversations(
-    c.env,
-    agent.id,
-  );
-  scheduleAgentPush(c, assignedConversationIds);
-  return c.json({ ok: true });
+  if (nextStatus === 'online') {
+    const assignedConversationIds = await assignWaitingConversations(
+      c.env,
+      agent.id,
+    );
+    scheduleAgentPush(c, assignedConversationIds);
+  }
+  return c.json({
+    ok: true,
+    ...(await loadAgentInbox(c.env.DB, { ...agent, status: nextStatus })),
+  });
+});
+
+agentApi.post('/api/agent/auth/status', async (c) => {
+  const agent = await authenticateAgent(c);
+  if (!agent) return unauthorized(c);
+  const body = await readJson<{ status?: AgentAvailability }>(c.req.raw);
+  if (body?.status !== 'online' && body?.status !== 'busy') {
+    return c.json({ error: 'INVALID_AGENT_STATUS' }, 400);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE agents
+     SET status = ?1, last_seen_at = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?2 AND is_enabled = 1`,
+  )
+    .bind(body.status, agent.id)
+    .run();
+
+  if (body.status === 'online') {
+    const assignedConversationIds = await assignWaitingConversations(
+      c.env,
+      agent.id,
+    );
+    scheduleAgentPush(c, assignedConversationIds);
+  }
+  return c.json({
+    ok: true,
+    ...(await loadAgentInbox(c.env.DB, { ...agent, status: body.status })),
+  });
 });
 
 agentApi.get('/api/agent/overview', async (c) => {
@@ -288,6 +328,51 @@ async function loadQuickReplies(db: D1Database, agentId: string) {
   return result.results ?? [];
 }
 
+async function loadAgentInbox(
+  db: D1Database,
+  agent: AgentSession,
+  requestedStatus?: string,
+) {
+  const filtered =
+    requestedStatus === 'open' ||
+    requestedStatus === 'pending' ||
+    requestedStatus === 'closed';
+  let statement = db.prepare(
+    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
+       c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
+       c.expires_at,
+       v.display_name AS visitor_name,
+       (SELECT body FROM messages m WHERE m.conversation_id = c.id
+        ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+     FROM conversations c
+     JOIN visitors v ON v.id = c.visitor_id
+     WHERE c.assigned_agent = ?1
+       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+       ${filtered ? 'AND c.status = ?2' : ''}
+     ORDER BY CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END,
+       c.last_message_at DESC, c.id DESC
+     LIMIT 100`,
+  );
+  statement = filtered
+    ? statement.bind(agent.id, requestedStatus)
+    : statement.bind(agent.id);
+  const [result, overview, transferTargets, quickReplies] = await Promise.all([
+    statement.all(),
+    loadAgentOverview(db, agent.id),
+    loadTransferTargets(db, agent.id),
+    loadQuickReplies(db, agent.id),
+  ]);
+  return {
+    conversations: result.results ?? [],
+    overview,
+    transferTargets,
+    quickReplies,
+    availability: agent.status === 'busy' ? 'busy' : 'online',
+  };
+}
+
 agentApi.get('/api/agent/stats', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
@@ -342,42 +427,7 @@ agentApi.get('/api/agent/stats', async (c) => {
 agentApi.get('/api/agent/conversations', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const status = c.req.query('status');
-  const filtered =
-    status === 'open' || status === 'pending' || status === 'closed';
-  let statement = c.env.DB.prepare(
-    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
-       c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
-       c.expires_at,
-       v.display_name AS visitor_name,
-       (SELECT body FROM messages m WHERE m.conversation_id = c.id
-        ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.assigned_agent = ?1
-       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
-       ${filtered ? 'AND c.status = ?2' : ''}
-     ORDER BY CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END,
-       c.last_message_at DESC, c.id DESC
-     LIMIT 100`,
-  );
-  statement = filtered
-    ? statement.bind(agent.id, status)
-    : statement.bind(agent.id);
-  const [result, overview, transferTargets, quickReplies] = await Promise.all([
-    statement.all(),
-    loadAgentOverview(c.env.DB, agent.id),
-    loadTransferTargets(c.env.DB, agent.id),
-    loadQuickReplies(c.env.DB, agent.id),
-  ]);
-  return c.json({
-    conversations: result.results ?? [],
-    overview,
-    transferTargets,
-    quickReplies,
-  });
+  return c.json(await loadAgentInbox(c.env.DB, agent, c.req.query('status')));
 });
 
 agentApi.post('/api/agent/quick-replies', async (c) => {
@@ -430,7 +480,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const [messages, media] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, conversation_id, sender_type, sender_id, body,
-       read_by_visitor_at, read_by_agent_at, created_at
+       client_message_id, read_by_visitor_at, read_by_agent_at, created_at
      FROM messages
      WHERE conversation_id = ?1
      ORDER BY created_at ASC, id ASC
@@ -512,35 +562,68 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   const id = c.req.param('id');
   const conversation = await assignedConversation(c.env.DB, id, agent.id);
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  if (conversation.status === 'closed')
-    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
 
-  const body = await readJson<{ body?: string }>(c.req.raw);
+  const body = await readJson<{ body?: string; clientMessageId?: string }>(
+    c.req.raw,
+  );
   const text = body?.body?.trim() ?? '';
-  if (!text || text.length > MESSAGE_LIMIT)
+  const clientMessageId = normalizeMessageId(body?.clientMessageId);
+  if (
+    !text ||
+    text.length > MESSAGE_LIMIT ||
+    (body?.clientMessageId !== undefined && !clientMessageId)
+  )
     return c.json({ error: 'INVALID_MESSAGE' }, 400);
+
+  if (conversation.status === 'closed') {
+    const existing = clientMessageId
+      ? await findAgentMessageByClientId(
+          c.env.DB,
+          id,
+          agent.id,
+          clientMessageId,
+        )
+      : null;
+    if (existing) return c.json({ message: existing, duplicate: true });
+    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
+  }
 
   const messageId = crypto.randomUUID();
   const now = new Date().toISOString();
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      `INSERT INTO messages (id, conversation_id, sender_type, sender_id, body)
-       VALUES (?1, ?2, 'agent', ?3, ?4)`,
-    ).bind(messageId, id, agent.id, text),
-    c.env.DB.prepare(
-      `UPDATE conversations
-       SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-           visitor_unread_count = visitor_unread_count + 1,
-           agent_unread_count = 0,
-           last_message_at = ?1,
-           updated_at = ?1
-       WHERE id = ?2 AND assigned_agent = ?3
+  const inserted = await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO messages
+       (id, conversation_id, sender_type, sender_id, body, client_message_id)
+     VALUES (?1, ?2, 'agent', ?3, ?4, ?5)`,
+  )
+    .bind(messageId, id, agent.id, text, clientMessageId)
+    .run();
+
+  if (!inserted.meta.changes && clientMessageId) {
+    const existing = await findAgentMessageByClientId(
+      c.env.DB,
+      id,
+      agent.id,
+      clientMessageId,
+    );
+    if (existing) return c.json({ message: existing, duplicate: true });
+    return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE conversations
+     SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
+         visitor_unread_count = visitor_unread_count + 1,
+         agent_unread_count = 0,
+         last_message_at = ?1,
+         updated_at = ?1
+     WHERE id = ?2 AND assigned_agent = ?3
        AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
-    ).bind(now, id, agent.id),
-  ]);
+  )
+    .bind(now, id, agent.id)
+    .run();
   const message = await c.env.DB.prepare(
     `SELECT id, conversation_id, sender_type, sender_id, body,
-       read_by_visitor_at, read_by_agent_at, created_at
+       client_message_id, read_by_visitor_at, read_by_agent_at, created_at
      FROM messages WHERE id = ?1`,
   )
     .bind(messageId)
@@ -777,6 +860,27 @@ async function assignedConversation(
     )
     .bind(id, agentId)
     .first<Record<string, unknown> & { status: ConversationStatus }>();
+}
+
+async function findAgentMessageByClientId(
+  db: D1Database,
+  conversationId: string,
+  agentId: string,
+  clientMessageId: string,
+): Promise<MessageRow | null> {
+  return db
+    .prepare(
+      `SELECT id, conversation_id, sender_type, sender_id, body,
+         client_message_id, read_by_visitor_at, read_by_agent_at, created_at
+       FROM messages
+       WHERE conversation_id = ?1
+         AND client_message_id = ?2
+         AND sender_type = 'agent'
+         AND sender_id = ?3
+       LIMIT 1`,
+    )
+    .bind(conversationId, clientMessageId, agentId)
+    .first<MessageRow>();
 }
 
 async function assignWaitingConversations(

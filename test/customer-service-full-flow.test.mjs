@@ -279,7 +279,10 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     {
       method: 'POST',
       headers: { cookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ body: 'Hello from agent' }),
+      body: JSON.stringify({
+        body: 'Hello from agent',
+        clientMessageId: 'agent-message-e2e-1',
+      }),
     },
     env,
   );
@@ -287,6 +290,31 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   const reply = await json(replyResponse);
   assert.equal(reply.message.sender_type, 'agent');
   assert.equal(reply.message.body, 'Hello from agent');
+
+  const retryResponse = await agentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        body: 'Hello from agent',
+        clientMessageId: 'agent-message-e2e-1',
+      }),
+    },
+    env,
+  );
+  assert.equal(retryResponse.status, 200);
+  const retried = await json(retryResponse);
+  assert.equal(retried.message.id, reply.message.id);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = ? AND client_message_id = ?`,
+      )
+      .get(conversationId, 'agent-message-e2e-1').count,
+    1,
+  );
 
   const clientDetailResponse = await clientApi.request(
     `/client/v1/conversations/${encodeURIComponent(conversationId)}?visitorId=${encodeURIComponent(visitorId)}`,
@@ -320,6 +348,44 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     ),
   );
   assert.equal(rooms.events.has('admin-inbox'), false);
+
+  const paused = await json(
+    await agentApi.request(
+      '/api/agent/auth/status',
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'busy' }),
+      },
+      env,
+    ),
+  );
+  assert.equal(paused.availability, 'busy');
+  const heartbeatResult = await json(
+    await agentApi.request(
+      '/api/agent/auth/heartbeat',
+      { method: 'POST', headers: { cookie } },
+      env,
+    ),
+  );
+  assert.equal(heartbeatResult.availability, 'busy');
+  assert.equal(
+    database.prepare('SELECT status FROM agents WHERE id = ?').get('agent-e2e')
+      .status,
+    'busy',
+  );
+  const resumed = await json(
+    await agentApi.request(
+      '/api/agent/auth/status',
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'online' }),
+      },
+      env,
+    ),
+  );
+  assert.equal(resumed.availability, 'online');
 
   database
     .prepare(

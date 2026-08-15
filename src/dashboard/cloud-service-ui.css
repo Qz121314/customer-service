@@ -616,6 +616,65 @@ select:focus-visible {
   box-shadow: 0 0 0 3px rgba(53, 165, 111, 0.1);
 }
 
+.availability-pill {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d9e6df;
+  border-radius: 999px;
+  background: #f6faf8;
+  color: #287a58;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.availability-pill > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #35a56f;
+  box-shadow: 0 0 0 3px rgba(53, 165, 111, 0.1);
+}
+
+.availability-pill.is-busy {
+  border-color: #eadfc9;
+  background: #fffaf1;
+  color: #966322;
+}
+
+.availability-pill.is-busy > span {
+  background: #d4953f;
+  box-shadow: 0 0 0 3px rgba(212, 149, 63, 0.12);
+}
+
+.availability-pill.is-reconnecting > span {
+  background: #a8adb5;
+  box-shadow: 0 0 0 3px rgba(168, 173, 181, 0.12);
+}
+
+.availability-pill small {
+  padding-left: 6px;
+  border-left: 1px solid currentColor;
+  color: inherit;
+  font-size: 9px;
+  font-weight: 650;
+  opacity: 0.62;
+}
+
+.availability-pill:hover:not(:disabled) {
+  filter: brightness(0.98);
+  box-shadow: 0 3px 10px rgba(25, 29, 37, 0.06);
+}
+
+.availability-pill:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
 .filters {
   min-height: 48px;
   padding: 8px 10px;
@@ -1029,6 +1088,56 @@ select:focus-visible {
   background: #ebeaff;
   color: #30304f;
   border-bottom-right-radius: 5px;
+}
+
+.pending-text-message > div {
+  opacity: 0.82;
+}
+
+.pending-text-message.is-failed > div {
+  opacity: 1;
+}
+
+.pending-text-message.is-failed p {
+  border-color: #efc9c9;
+  background: #fff4f4;
+  color: #694141;
+}
+
+.pending-text-status {
+  min-height: 21px;
+  margin-top: 3px;
+  color: #969ba3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  font-size: 10px;
+}
+
+.pending-text-message.is-failed .pending-text-status {
+  color: #a65f5f;
+}
+
+.pending-text-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.pending-text-actions button {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #e7caca;
+  border-radius: 7px;
+  background: #fff;
+  color: #895252;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pending-text-actions button:hover {
+  background: #fff7f7;
 }
 
 .message-meta {
@@ -2484,6 +2593,18 @@ select:focus-visible {
     display: block;
     width: 16px;
     height: 16px;
+  }
+
+  .availability-pill {
+    min-height: 32px;
+    padding: 0 9px;
+    gap: 5px;
+    font-size: 10px;
+  }
+
+  .availability-pill small {
+    padding-left: 5px;
+    font-size: 8px;
   }
 
   .thread-actions {
