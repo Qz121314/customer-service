@@ -23,6 +23,7 @@ export async function reserveMedia(
   const messageId = crypto.randomUUID();
   const now = new Date().toISOString();
   const objectKey = `chat/${input.conversationId}/${id}.${MIME_EXTENSIONS[input.media.mimeType]}`;
+  const senderMediaLimit = input.senderType === 'visitor' ? 10 : 30;
   const inserted = await db
     .prepare(
       `INSERT OR IGNORE INTO media_items (
@@ -30,8 +31,18 @@ export async function reserveMedia(
          object_key, mime_type, byte_size, width, height, original_name,
          client_upload_id, status, is_initial, reserved_created_at, created_at,
          updated_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
-         'pending', 0, ?13, ?13, ?13)`,
+       )
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+         'pending', 0, ?13, ?13, ?13
+       WHERE (
+         SELECT COUNT(*) FROM media_items
+         WHERE conversation_id = ?2 AND sender_type = ?4 AND status = 'pending'
+       ) < 3
+       AND (
+         SELECT COUNT(*) FROM media_items
+         WHERE conversation_id = ?2 AND sender_type = ?4
+           AND status IN ('pending', 'ready')
+       ) < ?14`,
     )
     .bind(
       id,
@@ -47,6 +58,7 @@ export async function reserveMedia(
       input.media.originalName,
       input.clientUploadId,
       now,
+      senderMediaLimit,
     )
     .run();
   if (inserted.meta.changes) {
@@ -62,6 +74,23 @@ export async function reserveMedia(
       })
     : null;
   if (!existing || !sameMedia(existing, input.media)) {
+    if (!input.clientUploadId) throw new MediaReservationLimitError();
+    const active = await db
+      .prepare(
+        `SELECT COUNT(*) AS total,
+           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending
+         FROM media_items
+         WHERE conversation_id = ?1 AND sender_type = ?2
+           AND status IN ('pending', 'ready')`,
+      )
+      .bind(input.conversationId, input.senderType)
+      .first<{ total: number; pending: number | null }>();
+    if (
+      Number(active?.pending ?? 0) >= 3 ||
+      Number(active?.total ?? 0) >= senderMediaLimit
+    ) {
+      throw new MediaReservationLimitError();
+    }
     throw new MediaUploadIdConflictError();
   }
   if (existing.status === 'failed') {
@@ -82,6 +111,13 @@ export class MediaUploadIdConflictError extends Error {
   constructor() {
     super('MEDIA_UPLOAD_ID_CONFLICT');
     this.name = 'MediaUploadIdConflictError';
+  }
+}
+
+export class MediaReservationLimitError extends Error {
+  constructor() {
+    super('MEDIA_RESERVATION_LIMIT_REACHED');
+    this.name = 'MediaReservationLimitError';
   }
 }
 
