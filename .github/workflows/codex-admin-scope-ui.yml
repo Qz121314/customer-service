@@ -31,7 +31,9 @@ jobs:
         run: npm install --global pnpm@11.19.0
 
       - name: Apply UI refinement
-        run: python .github/scripts/apply_admin_scope_ui.py
+        run: |
+          python .github/scripts/apply_admin_scope_ui.py
+          python .github/scripts/fix_admin_scope_ui_test.py
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -46,7 +48,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm -f .github/workflows/codex-admin-scope-ui.yml .github/scripts/apply_admin_scope_ui.py
+          git rm -f .github/workflows/codex-admin-scope-ui.yml .github/scripts/apply_admin_scope_ui.py .github/scripts/fix_admin_scope_ui_test.py
           git add -A
           git config user.name 'OpenAI Codex'
           git config user.email 'codex@openai.com'
