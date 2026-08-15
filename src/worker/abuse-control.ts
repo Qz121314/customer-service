@@ -53,41 +53,104 @@ export async function consumeConversationCreationQuota(
   const expiresAt = new Date(now.getTime() + WINDOW_MS).toISOString();
   const visitorKey = `visitor:${input.visitorId}`;
   const sourceKey = `source:${input.sourceHash}`;
-  try {
-    await db
-      .prepare(
-        `INSERT INTO conversation_creation_quota_gate (
-           site_id, visitor_key, source_key, window_started_at, expires_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5)`,
-      )
-      .bind(input.siteId, visitorKey, sourceKey, nowIso, expiresAt)
-      .run();
-    return { allowed: true };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const code = message.includes('VISITOR_CONVERSATION_LIMIT_REACHED')
-      ? 'VISITOR_CONVERSATION_LIMIT_REACHED'
-      : message.includes('SOURCE_CONVERSATION_LIMIT_REACHED')
-        ? 'SOURCE_CONVERSATION_LIMIT_REACHED'
-        : null;
-    if (!code) throw error;
-    const subjectKey =
-      code === 'VISITOR_CONVERSATION_LIMIT_REACHED' ? visitorKey : sourceKey;
-    const row = await db
-      .prepare(
-        `SELECT expires_at
-         FROM conversation_creation_limits
-         WHERE site_id = ?1 AND subject_key = ?2
-         LIMIT 1`,
-      )
-      .bind(input.siteId, subjectKey)
-      .first<{ expires_at: string }>();
+  const source = await consumeSubject(
+    db,
+    input.siteId,
+    sourceKey,
+    SOURCE_CONVERSATION_LIMIT,
+    nowIso,
+    expiresAt,
+  );
+  if (!source) {
     return {
       allowed: false,
-      code,
-      retryAfterSeconds: retryAfter(row?.expires_at, now),
+      code: 'SOURCE_CONVERSATION_LIMIT_REACHED',
+      retryAfterSeconds: await subjectRetryAfter(
+        db,
+        input.siteId,
+        sourceKey,
+        now,
+      ),
     };
   }
+  const visitor = await consumeSubject(
+    db,
+    input.siteId,
+    visitorKey,
+    VISITOR_CONVERSATION_LIMIT,
+    nowIso,
+    expiresAt,
+  );
+  if (!visitor) {
+    return {
+      allowed: false,
+      code: 'VISITOR_CONVERSATION_LIMIT_REACHED',
+      retryAfterSeconds: await subjectRetryAfter(
+        db,
+        input.siteId,
+        visitorKey,
+        now,
+      ),
+    };
+  }
+  return { allowed: true };
+}
+
+async function consumeSubject(
+  db: D1Database,
+  siteId: string,
+  subjectKey: string,
+  limit: number,
+  nowIso: string,
+  expiresAt: string,
+): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `INSERT INTO conversation_creation_limits (
+         site_id, subject_key, accepted_count, window_started_at,
+         expires_at, updated_at
+       ) VALUES (?1, ?2, 1, ?3, ?4, ?3)
+       ON CONFLICT(site_id, subject_key) DO UPDATE SET
+         accepted_count = CASE
+           WHEN datetime(expires_at) <= datetime(excluded.window_started_at) THEN 1
+           ELSE accepted_count + 1
+         END,
+         window_started_at = CASE
+           WHEN datetime(expires_at) <= datetime(excluded.window_started_at)
+             THEN excluded.window_started_at
+           ELSE window_started_at
+         END,
+         expires_at = CASE
+           WHEN datetime(expires_at) <= datetime(excluded.window_started_at)
+             THEN excluded.expires_at
+           ELSE expires_at
+         END,
+         updated_at = excluded.updated_at
+       WHERE datetime(expires_at) <= datetime(excluded.window_started_at)
+          OR accepted_count < ?5
+       RETURNING accepted_count`,
+    )
+    .bind(siteId, subjectKey, nowIso, expiresAt, limit)
+    .first<{ accepted_count: number }>();
+  return row !== null;
+}
+
+async function subjectRetryAfter(
+  db: D1Database,
+  siteId: string,
+  subjectKey: string,
+  now: Date,
+): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT expires_at
+       FROM conversation_creation_limits
+       WHERE site_id = ?1 AND subject_key = ?2
+       LIMIT 1`,
+    )
+    .bind(siteId, subjectKey)
+    .first<{ expires_at: string }>();
+  return retryAfter(row?.expires_at, now);
 }
 
 function retryAfter(expiresAt: string | undefined, now: Date): number {
