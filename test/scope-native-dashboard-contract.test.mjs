@@ -21,7 +21,10 @@ test('admin dashboard stores and submits routing scopes without expanded product
 
   assert.ok(picker.includes('scope: AgentRoutingScope'));
   assert.ok(picker.includes('onChange: (scope: AgentRoutingScope) => void'));
-  assert.ok(picker.includes("{ type: 'section', sectionId }"));
+  assert.ok(picker.includes("{ type: 'section', sectionIds }"));
+  assert.ok(picker.includes('toggleSection(section.id'));
+  assert.ok(picker.includes('可同时选择多个分区'));
+  assert.ok(api.includes("{ type: 'section'; sectionIds: string[] }"));
   assert.ok(!picker.includes('attachProductSelectionScope'));
   assert.ok(!picker.includes('.map((product) => product.id)'));
 

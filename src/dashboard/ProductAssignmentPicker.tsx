@@ -110,7 +110,10 @@ export function ProductAssignmentPicker({
     );
   }, [enabledProducts, filterSectionId]);
 
-  const selectedSectionId = scope.type === 'section' ? scope.sectionId : '';
+  const selectedSectionIds = useMemo(
+    () => new Set(scope.type === 'section' ? scope.sectionIds : []),
+    [scope],
+  );
   const selectedCategoryIds = useMemo(
     () =>
       new Set(
@@ -165,11 +168,15 @@ export function ProductAssignmentPicker({
     normalizedQuery,
   ]);
 
-  const sectionProductCount = selectedSectionId
-    ? enabledProducts.filter(
-        (product) => product.sectionId === selectedSectionId,
-      ).length
-    : 0;
+  const sectionProductCount = useMemo(
+    () =>
+      enabledProducts.filter(
+        (product) =>
+          Boolean(product.sectionId) &&
+          selectedSectionIds.has(product.sectionId as string),
+      ).length,
+    [enabledProducts, selectedSectionIds],
+  );
   const categoryProductCount = useMemo(() => {
     if (scope.type !== 'category') return 0;
     const ids = new Set(scope.categoryIds);
@@ -185,16 +192,20 @@ export function ProductAssignmentPicker({
     if (nextMode === mode) return;
     if (nextMode === 'category') {
       setCategorySectionId(
-        scope.type === 'section' || scope.type === 'category'
-          ? scope.sectionId
-          : '',
+        scope.type === 'section'
+          ? (scope.sectionIds[0] ?? '')
+          : scope.type === 'category'
+            ? scope.sectionId
+            : '',
       );
     }
     if (nextMode === 'product') {
       setFilterSectionId(
-        scope.type === 'section' || scope.type === 'category'
-          ? scope.sectionId
-          : '',
+        scope.type === 'section'
+          ? (scope.sectionIds[0] ?? '')
+          : scope.type === 'category'
+            ? scope.sectionId
+            : '',
       );
       setFilterCategoryId('');
       setQuery('');
@@ -203,8 +214,14 @@ export function ProductAssignmentPicker({
     onChange({ type: 'none' });
   }
 
-  function selectSection(sectionId: string) {
-    onChange(sectionId ? { type: 'section', sectionId } : { type: 'none' });
+  function toggleSection(sectionId: string, checked: boolean) {
+    const next = new Set(selectedSectionIds);
+    if (checked) next.add(sectionId);
+    else next.delete(sectionId);
+    const sectionIds = [...next];
+    onChange(
+      sectionIds.length ? { type: 'section', sectionIds } : { type: 'none' },
+    );
   }
 
   function toggleCategory(categoryId: string, checked: boolean) {
@@ -280,28 +297,41 @@ export function ProductAssignmentPicker({
 
       {mode === 'section' ? (
         <div className="product-assignment-panel">
-          <label>
-            <span>负责分区</span>
-            <select
-              value={selectedSectionId}
-              disabled={disabled}
-              onChange={(event) => selectSection(event.target.value)}
-            >
-              <option value="">选择分区</option>
-              {sections.map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name}（{section.count}）
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="product-assignment-panel-head">
+            <div>
+              <strong>选择负责分区</strong>
+              <span>可同时选择多个分区</span>
+            </div>
+            <span className="selection-count">
+              已选 {selectedSectionIds.size} 个
+            </span>
+          </div>
+          <div className="product-assignment-sections">
+            {sections.map((section) => (
+              <label key={section.id} className="product-assignment-section">
+                <input
+                  type="checkbox"
+                  checked={selectedSectionIds.has(section.id)}
+                  disabled={disabled}
+                  onChange={(event) =>
+                    toggleSection(section.id, event.target.checked)
+                  }
+                />
+                <span>
+                  <strong>{section.name}</strong>
+                  <small>{section.count} 个产品</small>
+                </span>
+                <i aria-hidden="true">✓</i>
+              </label>
+            ))}
+          </div>
           <div className="product-assignment-note">
             <strong>
-              {selectedSectionId
-                ? `当前覆盖 ${sectionProductCount} 个产品`
-                : '选择一个分区'}
+              {selectedSectionIds.size
+                ? `已选 ${selectedSectionIds.size} 个分区，当前覆盖 ${sectionProductCount} 个产品`
+                : '请选择至少一个负责分区'}
             </strong>
-            <span>保存的是分区规则，之后新增到该分区的产品会自动纳入。</span>
+            <span>保存的是分区规则，之后新增到这些分区的产品会自动纳入。</span>
           </div>
         </div>
       ) : null}

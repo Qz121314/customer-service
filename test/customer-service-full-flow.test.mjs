@@ -123,6 +123,60 @@ function adminCookie(password) {
   return `cs_session=${payload}.${signature}`;
 }
 
+test('admin can save multiple whole-section routing rules in one request', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  database.exec(`
+    INSERT INTO product_catalog (
+      site_id, id, title, section_id, section_name, is_enabled
+    ) VALUES
+      ('default', 'product-west', 'West product', 'west', 'West', 1),
+      ('default', 'product-east', 'East product', 'east', 'East', 1);
+  `);
+
+  const adminPassword = 'admin-password';
+  const response = await adminConfigApi.request(
+    '/api/admin/agents',
+    {
+      method: 'POST',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Multi Section Agent',
+        username: 'multi-section',
+        password: 'pass',
+        routingScope: { type: 'section', sectionIds: ['west', 'east'] },
+        maxActiveConversations: 0,
+        dailyConversationLimit: 0,
+        isEnabled: true,
+      }),
+    },
+    {
+      DB: d1(database),
+      CONVERSATION_ROOMS: fakeRooms().namespace,
+      ADMIN_PASSWORD: adminPassword,
+    },
+  );
+  const created = await json(response);
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT section_id
+         FROM agent_routing_scopes
+         WHERE agent_id = ? AND scope_type = 'section'
+         ORDER BY section_id`,
+      )
+      .all(created.id)
+      .map((row) => row.section_id),
+    ['east', 'west'],
+  );
+  database.close();
+});
+
 async function json(response) {
   const value = await response.json();
   assert.ok(response.ok, `${response.status}: ${JSON.stringify(value)}`);

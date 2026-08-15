@@ -17,7 +17,7 @@ export type ProductCatalogItem = {
 
 export type AgentRoutingScope =
   | { type: 'none' }
-  | { type: 'section'; sectionId: string }
+  | { type: 'section'; sectionIds: string[] }
   | { type: 'category'; sectionId: string; categoryIds: string[] }
   | { type: 'product'; productIds: string[] };
 
@@ -314,8 +314,19 @@ function normalizeRoutingScope(
   scope: AgentRoutingScope | undefined,
   fallbackProductIds: string[],
 ): AgentRoutingScope {
-  if (scope?.type === 'section' && scope.sectionId) {
-    return { type: 'section', sectionId: scope.sectionId };
+  if (scope?.type === 'section') {
+    const legacySectionId = (scope as { sectionId?: string }).sectionId;
+    const sectionIds = [
+      ...new Set(
+        [
+          ...(Array.isArray(scope.sectionIds) ? scope.sectionIds : []),
+          legacySectionId,
+        ].filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    return sectionIds.length
+      ? { type: 'section', sectionIds }
+      : { type: 'none' };
   }
   if (scope?.type === 'category' && scope.sectionId) {
     return {

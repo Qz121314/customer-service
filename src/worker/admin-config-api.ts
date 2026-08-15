@@ -50,7 +50,7 @@ type ScopeRow = {
 
 type AgentRoutingScope =
   | { type: 'none' }
-  | { type: 'section'; sectionId: string }
+  | { type: 'section'; sectionIds: string[] }
   | { type: 'category'; sectionId: string; categoryIds: string[] }
   | { type: 'product'; productIds: string[] };
 
@@ -477,7 +477,10 @@ function scopeFromRows(rows: ScopeRow[]): AgentRoutingScope {
 
   const sectionRows = rows.filter((row) => row.scope_type === 'section');
   if (sectionRows.length) {
-    return { type: 'section', sectionId: sectionRows[0]?.section_id ?? '' };
+    return {
+      type: 'section',
+      sectionIds: distinct(sectionRows.map((row) => row.section_id)),
+    };
   }
 
   const categoryRows = rows.filter((row) => row.scope_type === 'category');
@@ -516,20 +519,28 @@ async function normalizeRoutingScope(
   if (raw.type === 'none') return { type: 'none' };
 
   if (raw.type === 'section') {
-    const sectionId = normalizeIdentifier(raw.sectionId);
-    if (!sectionId) return null;
-    const exists = await db
+    const legacySectionId = normalizeIdentifier(raw.sectionId);
+    const sectionIds = normalizedIdentifiers([
+      ...(Array.isArray(raw.sectionIds) ? raw.sectionIds : []),
+      legacySectionId,
+    ]);
+    if (!sectionIds.length) return null;
+    const result = await db
       .prepare(
-        `SELECT 1 AS found
+        `SELECT DISTINCT section_id
          FROM product_catalog
          WHERE site_id = 'default'
            AND is_enabled = 1
-           AND section_id = ?1
-         LIMIT 1`,
+           AND section_id IS NOT NULL
+           AND section_id <> ''`,
       )
-      .bind(sectionId)
-      .first<{ found: number }>();
-    return exists ? { type: 'section', sectionId } : null;
+      .all<{ section_id: string }>();
+    const allowed = new Set(
+      (result.results ?? []).map((row) => row.section_id),
+    );
+    return sectionIds.every((id) => allowed.has(id))
+      ? { type: 'section', sectionIds }
+      : null;
   }
 
   if (raw.type === 'category') {
@@ -577,7 +588,7 @@ function routingScopeStatements(
   if (scope.type === 'none') return [];
 
   if (scope.type === 'section') {
-    return [
+    return scope.sectionIds.map((sectionId) =>
       db
         .prepare(
           `INSERT INTO agent_routing_scopes (
@@ -585,8 +596,8 @@ function routingScopeStatements(
              category_id, product_id, is_enabled
            ) VALUES ('default', ?1, 'section', ?2, '', '', 1)`,
         )
-        .bind(agentId, scope.sectionId),
-    ];
+        .bind(agentId, sectionId),
+    );
   }
 
   if (scope.type === 'category') {

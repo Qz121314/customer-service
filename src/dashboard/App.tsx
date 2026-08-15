@@ -189,8 +189,12 @@ function productsForScope(
     );
   }
   if (scope.type === 'section') {
+    const sectionIds = new Set(scope.sectionIds);
     return products.filter(
-      (product) => product.isEnabled && product.sectionId === scope.sectionId,
+      (product) =>
+        product.isEnabled &&
+        Boolean(product.sectionId) &&
+        sectionIds.has(product.sectionId as string),
     );
   }
   const categoryIds = new Set(scope.categoryIds);
@@ -224,12 +228,18 @@ function agentScopeSummary(
   }
 
   if (scope.type === 'section') {
-    const product = products.find((item) => item.sectionId === scope.sectionId);
-    const sectionName = product?.sectionName || scope.sectionId;
+    const sectionNames = scope.sectionIds.map((sectionId) => {
+      const product = products.find((item) => item.sectionId === sectionId);
+      return product?.sectionName || sectionId;
+    });
+    const title =
+      sectionNames.length === 1
+        ? `${sectionNames[0]} · 整个分区`
+        : `${sectionNames.slice(0, 2).join('、')}${sectionNames.length > 2 ? ` 等 ${sectionNames.length} 个分区` : ''}`;
     return {
       tone: 'section',
-      title: `${sectionName} · 整个分区`,
-      detail: `动态覆盖 ${scopeProductCount(scope, products)} 个产品`,
+      title,
+      detail: `${scope.sectionIds.length} 个分区 · 动态覆盖 ${scopeProductCount(scope, products)} 个产品`,
     };
   }
 
@@ -570,7 +580,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         )}
 
         {section === 'agents' && (
-          <>
+          <div className="admin-agent-layout">
             <section className="admin-stats">
               <div>
                 <span>客服总数</span>
@@ -716,7 +726,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 </div>
               )}
             </section>
-          </>
+          </div>
         )}
 
         {section === 'statistics' && (
@@ -793,110 +803,126 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               className="agent-editor-form"
               onSubmit={(event) => void saveAgent(event)}
             >
-              <div className="agent-editor-section-title">
-                <strong>账号设置</strong>
-                <span>配置坐席身份、登录凭据和同时接待上限</span>
-              </div>
-              <div className="form-two-columns">
-                <label>
-                  <span>显示名称</span>
-                  <input
-                    value={draft.name}
-                    onChange={(event) =>
-                      setDraft({ ...draft, name: event.target.value })
+              <div className="agent-editor-layout">
+                <aside className="agent-editor-account-pane">
+                  <div className="agent-editor-pane-heading">
+                    <span>01</span>
+                    <div>
+                      <strong>账号与接待能力</strong>
+                      <small>登录身份、并发与每日配额</small>
+                    </div>
+                  </div>
+                  <div className="agent-editor-identity-preview">
+                    <span>{initials(draft.name || '客服')}</span>
+                    <div>
+                      <strong>{draft.name.trim() || '新客服'}</strong>
+                      <small>@{draft.username.trim() || '登录账号'}</small>
+                    </div>
+                  </div>
+                  <label>
+                    <span>显示名称</span>
+                    <input
+                      value={draft.name}
+                      onChange={(event) =>
+                        setDraft({ ...draft, name: event.target.value })
+                      }
+                      placeholder="例如 Amy"
+                      autoFocus
+                    />
+                  </label>
+                  <label>
+                    <span>登录账号</span>
+                    <input
+                      value={draft.username}
+                      onChange={(event) =>
+                        setDraft({ ...draft, username: event.target.value })
+                      }
+                      placeholder="例如 amy01"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <label>
+                    <span>{draft.id ? '重置登录密码' : '登录密码'}</span>
+                    <input
+                      type="password"
+                      value={draft.password}
+                      onChange={(event) =>
+                        setDraft({ ...draft, password: event.target.value })
+                      }
+                      placeholder={
+                        draft.id ? '留空表示不修改密码' : '至少 4 个字符'
+                      }
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <div className="agent-editor-limits">
+                    <label>
+                      <span>同时会话</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999"
+                        value={draft.maxActiveConversations}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            maxActiveConversations:
+                              Number(event.target.value) || 0,
+                          })
+                        }
+                      />
+                      <small>0 表示不限</small>
+                    </label>
+                    <label>
+                      <span>每日接待</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="9999"
+                        value={draft.dailyConversationLimit}
+                        onChange={(event) =>
+                          setDraft({
+                            ...draft,
+                            dailyConversationLimit:
+                              Number(event.target.value) || 0,
+                          })
+                        }
+                      />
+                      <small>次日自动恢复，0 表示不限</small>
+                    </label>
+                  </div>
+                  <label className="account-enable-line">
+                    <input
+                      type="checkbox"
+                      checked={draft.isEnabled}
+                      onChange={(event) =>
+                        setDraft({ ...draft, isEnabled: event.target.checked })
+                      }
+                    />
+                    <span>
+                      <strong>启用客服账号</strong>
+                      <small>关闭后立即停止登录和新会话分流</small>
+                    </span>
+                  </label>
+                </aside>
+                <section className="agent-editor-routing-pane">
+                  <div className="agent-editor-pane-heading">
+                    <span>02</span>
+                    <div>
+                      <strong>分流负责范围</strong>
+                      <small>分区可多选，分类批量负责，产品用于精确指定</small>
+                    </div>
+                  </div>
+                  <ProductAssignmentPicker
+                    products={products}
+                    scope={draft.routingScope}
+                    disabled={saving}
+                    onChange={(routingScope) =>
+                      setDraft({ ...draft, routingScope })
                     }
-                    placeholder="例如 Amy"
-                    autoFocus
                   />
-                </label>
-                <label>
-                  <span>登录账号</span>
-                  <input
-                    value={draft.username}
-                    onChange={(event) =>
-                      setDraft({ ...draft, username: event.target.value })
-                    }
-                    placeholder="例如 amy01"
-                    autoComplete="off"
-                  />
-                </label>
+                </section>
               </div>
-              <label>
-                <span>{draft.id ? '重置登录密码' : '登录密码'}</span>
-                <input
-                  type="password"
-                  value={draft.password}
-                  onChange={(event) =>
-                    setDraft({ ...draft, password: event.target.value })
-                  }
-                  placeholder={
-                    draft.id ? '留空表示不修改密码' : '至少 4 个字符'
-                  }
-                  autoComplete="new-password"
-                />
-              </label>
-              <div className="form-two-columns quota-fields">
-                <label>
-                  <span>最大同时会话数</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="999"
-                    value={draft.maxActiveConversations}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        maxActiveConversations: Number(event.target.value) || 0,
-                      })
-                    }
-                  />
-                  <small>控制正在处理中的并发会话，0 表示不限制。</small>
-                </label>
-                <label>
-                  <span>每日会话上限</span>
-                  <input
-                    type="number"
-                    min="0"
-                    max="9999"
-                    value={draft.dailyConversationLimit}
-                    onChange={(event) =>
-                      setDraft({
-                        ...draft,
-                        dailyConversationLimit: Number(event.target.value) || 0,
-                      })
-                    }
-                  />
-                  <small>
-                    例如 40：当天接满 40 个后停止分流，第二天自动恢复。0
-                    表示不限。
-                  </small>
-                </label>
-              </div>
-              <div className="agent-editor-section-title scope-title">
-                <strong>分流负责范围</strong>
-                <span>分区 = 全选，分类 = 批量选择，指定产品 = 精确选择</span>
-              </div>
-              <ProductAssignmentPicker
-                products={products}
-                scope={draft.routingScope}
-                disabled={saving}
-                onChange={(routingScope) =>
-                  setDraft({ ...draft, routingScope })
-                }
-              />
-              <label className="account-enable-line">
-                <input
-                  type="checkbox"
-                  checked={draft.isEnabled}
-                  onChange={(event) =>
-                    setDraft({ ...draft, isEnabled: event.target.checked })
-                  }
-                />
-                <span>
-                  <strong>启用客服账号</strong>
-                  <small>停用后该客服无法登录，也不会参与新会话分流。</small>
-                </span>
-              </label>
               <footer>
                 <button
                   type="button"

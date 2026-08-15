@@ -187,6 +187,31 @@ test('agents covering the same section receive conversations round-robin', async
   database.close();
 });
 
+test('one agent can cover multiple whole sections', async () => {
+  const database = createDatabase();
+  addAgent(database, { id: 'multi-section-agent' });
+  addScope(database, 'multi-section-agent', {
+    type: 'section',
+    sectionId: 'west',
+  });
+  addScope(database, 'multi-section-agent', {
+    type: 'section',
+    sectionId: 'east',
+  });
+  addConversation(database, 'conversation-west', 'product-west');
+  addConversation(database, 'conversation-east', 'product-east', {
+    sectionId: 'east',
+  });
+
+  const db = d1(database);
+  const west = await assignConversationAgent(db, 'conversation-west');
+  const east = await assignConversationAgent(db, 'conversation-east');
+
+  assert.equal(west?.id, 'multi-section-agent');
+  assert.equal(east?.id, 'multi-section-agent');
+  database.close();
+});
+
 test('configured category never falls back to a legacy group when its agent is unavailable', async () => {
   const database = createDatabase();
   addAgent(database, { id: 'category-agent', status: 'offline' });

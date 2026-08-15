@@ -11,6 +11,7 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
   const app = source('../src/dashboard/App.tsx');
   const api = source('../src/dashboard/api.ts');
   const styles = source('../src/dashboard/styles.css');
+  const visualStyles = source('../src/dashboard/cloud-service-ui.css');
 
   assert.ok(app.includes('<th>负责范围</th>'));
   assert.ok(app.includes('agentScopeSummary('));
@@ -19,6 +20,10 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
   assert.ok(!app.includes('<th>负责产品</th>'));
   assert.ok(api.includes('routingScope: normalizeRoutingScope('));
   assert.ok(styles.includes('width: min(780px, 100%)'));
+  assert.ok(visualStyles.includes('width: min(1120px, 100%)'));
+  assert.ok(
+    visualStyles.includes('grid-template-columns: 320px minmax(0, 1fr)'),
+  );
   assert.ok(
     styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'),
   );
