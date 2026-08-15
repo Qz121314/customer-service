@@ -1014,6 +1014,7 @@ function MonthlyAgentStatistics({
   busy: boolean;
   onMonthChange: (month: string) => void;
 }) {
+  const [selectedAgentId, setSelectedAgentId] = useState('');
   const countMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of stats?.counts ?? []) {
@@ -1021,10 +1022,6 @@ function MonthlyAgentStatistics({
     }
     return map;
   }, [stats]);
-  const total = (stats?.counts ?? []).reduce(
-    (sum, item) => sum + item.count,
-    0,
-  );
   const days =
     stats?.days ?? Array.from({ length: 30 }, (_, index) => index + 1);
   const agentTotals = new Map(
@@ -1036,13 +1033,35 @@ function MonthlyAgentStatistics({
       ),
     ]),
   );
+  const selectedAgent =
+    agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
+  const selectedTotal = selectedAgent
+    ? (agentTotals.get(selectedAgent.id) ?? 0)
+    : 0;
+  const selectedActiveDays = selectedAgent
+    ? days.filter(
+        (day) => (countMap.get(`${selectedAgent.id}:${day}`) ?? 0) > 0,
+      ).length
+    : 0;
+  const selectedDailyAverage = days.length
+    ? (selectedTotal / days.length).toFixed(1)
+    : '0.0';
+
+  useEffect(() => {
+    if (agents.length === 0) {
+      if (selectedAgentId) setSelectedAgentId('');
+      return;
+    }
+    if (agents.some((agent) => agent.id === selectedAgentId)) return;
+    setSelectedAgentId(agents[0].id);
+  }, [agents, selectedAgentId]);
 
   return (
     <section className="statistics-panel">
       <div className="statistics-toolbar">
         <div>
-          <strong>每日新会话</strong>
-          <span>统计口径：会话首次分配给客服时计 1 次</span>
+          <strong>按坐席统计</strong>
+          <span>选择客服坐席，查看该坐席每天实际接收的新会话</span>
         </div>
         <label>
           <span>月份</span>
@@ -1053,49 +1072,86 @@ function MonthlyAgentStatistics({
           />
         </label>
       </div>
-      <div className="statistics-summary">
-        <div>
-          <span>本月 1–30 日</span>
-          <strong>{busy ? '—' : total}</strong>
-        </div>
-        <div>
-          <span>客服人数</span>
-          <strong>{agents.length}</strong>
-        </div>
-        <div>
-          <span>平均每客服</span>
-          <strong>
-            {agents.length && !busy ? Math.round(total / agents.length) : 0}
-          </strong>
-        </div>
-      </div>
-      <div className="statistics-agent-list" aria-live="polite">
-        {agents.length === 0 ? (
-          <div className="statistics-empty">
-            <strong>暂无客服数据</strong>
-            <span>创建客服账号后，这里会按日显示接待数量。</span>
-          </div>
-        ) : (
-          agents.map((agent) => (
-            <article className="statistics-agent-card" key={agent.id}>
+      {selectedAgent ? (
+        <div className="statistics-seat-layout">
+          <aside className="statistics-seat-sidebar">
+            <header>
+              <div>
+                <strong>客服坐席</strong>
+                <span>{agents.length} 个账号</span>
+              </div>
+              <small>本月接待</small>
+            </header>
+            <nav aria-label="选择客服坐席">
+              {agents.map((agent) => {
+                const isSelected = agent.id === selectedAgent.id;
+                return (
+                  <button
+                    type="button"
+                    key={agent.id}
+                    className={isSelected ? 'active' : ''}
+                    aria-pressed={isSelected}
+                    onClick={() => setSelectedAgentId(agent.id)}
+                  >
+                    <span className="avatar tiny">{initials(agent.name)}</span>
+                    <span>
+                      <strong>{agent.name}</strong>
+                      <small>@{agent.username || '未设置账号'}</small>
+                    </span>
+                    <b>{busy ? '—' : (agentTotals.get(agent.id) ?? 0)}</b>
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+
+          <section className="statistics-seat-detail" aria-live="polite">
+            <header className="statistics-seat-head">
+              <div className="statistics-agent-identity">
+                <span className="avatar small">
+                  {initials(selectedAgent.name)}
+                </span>
+                <div>
+                  <span>当前坐席</span>
+                  <strong>{selectedAgent.name}</strong>
+                  <small>@{selectedAgent.username || '未设置账号'}</small>
+                </div>
+              </div>
+              <span
+                className={`account-status ${presenceClass(selectedAgent)}`}
+              >
+                {selectedAgent.isEnabled
+                  ? statusLabel(selectedAgent.status)
+                  : '已停用'}
+              </span>
+            </header>
+
+            <div className="statistics-summary">
+              <div>
+                <span>本月接待</span>
+                <strong>{busy ? '—' : selectedTotal}</strong>
+              </div>
+              <div>
+                <span>有接待天数</span>
+                <strong>{busy ? '—' : selectedActiveDays}</strong>
+              </div>
+              <div>
+                <span>日均接待</span>
+                <strong>{busy ? '—' : selectedDailyAverage}</strong>
+              </div>
+            </div>
+
+            <div className="statistics-day-section">
               <header>
-                <div className="statistics-agent-identity">
-                  <span className="avatar small">{initials(agent.name)}</span>
-                  <div>
-                    <strong>{agent.name}</strong>
-                    <small>@{agent.username || '未设置账号'}</small>
-                  </div>
+                <div>
+                  <strong>每日新会话</strong>
+                  <span>会话首次分配给该坐席时计 1 次</span>
                 </div>
-                <div className="statistics-agent-total">
-                  <span>本月合计</span>
-                  <strong>
-                    {busy ? '—' : (agentTotals.get(agent.id) ?? 0)}
-                  </strong>
-                </div>
+                <small>1–30 日</small>
               </header>
               <div className="statistics-day-grid">
                 {days.map((day) => {
-                  const value = countMap.get(`${agent.id}:${day}`) ?? 0;
+                  const value = countMap.get(`${selectedAgent.id}:${day}`) ?? 0;
                   return (
                     <div key={day} className={value ? 'has-value' : ''}>
                       <span>{day} 日</span>
@@ -1104,10 +1160,15 @@ function MonthlyAgentStatistics({
                   );
                 })}
               </div>
-            </article>
-          ))
-        )}
-      </div>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <div className="statistics-empty">
+          <strong>暂无客服坐席</strong>
+          <span>创建客服账号后，这里会按坐席显示每日接待数量。</span>
+        </div>
+      )}
       <p className="statistics-note">
         每日上限按 America/Los_Angeles 自然日计算；统计数据独立于 24
         小时聊天记录保存并保留 45
