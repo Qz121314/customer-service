@@ -16,6 +16,8 @@ interface Bindings {
   MEDIA: R2Bucket;
   ASSETS: Fetcher;
   CONVERSATION_ROOMS: DurableObjectNamespace;
+  CONVERSATION_BURST_LIMITER: RateLimit;
+  MEDIA_BURST_LIMITER: RateLimit;
   ADMIN_PASSWORD?: string;
   MANAGEMENT_TOKEN?: string;
   INTEGRATION_VERIFY_TOKEN?: string;
