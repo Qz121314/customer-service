@@ -30,6 +30,24 @@
       "bucket_name": "customer-service-media",
     },
   ],
+  "ratelimits": [
+    {
+      "name": "CONVERSATION_BURST_LIMITER",
+      "namespace_id": "12131401",
+      "simple": {
+        "limit": 1,
+        "period": 60,
+      },
+    },
+    {
+      "name": "MEDIA_BURST_LIMITER",
+      "namespace_id": "12131402",
+      "simple": {
+        "limit": 6,
+        "period": 60,
+      },
+    },
+  ],
   "durable_objects": {
     "bindings": [
       {
