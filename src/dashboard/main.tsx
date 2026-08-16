@@ -12,6 +12,7 @@ import './agent-mobile-composer.css';
 import './media-view.css';
 import './agent-statistics.css';
 import './cloud-service-ui.css';
+import './ui-polish.css';
 
 setupAgentMobileNavigation();
 
