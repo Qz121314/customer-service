@@ -14,8 +14,13 @@ test('dashboard polish removes narrow chat constraints and keeps the final overr
 
   assert.ok(!dialogueFlow.includes('dialogue-width.css'));
   assert.ok(!dialogueFlow.includes('max-width: 464px'));
-  assert.ok(main.indexOf("'./ui-polish.css'") > main.indexOf("'./cloud-service-ui.css'"));
-  assert.ok(polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
+  assert.ok(
+    main.indexOf("'./ui-polish.css'") >
+      main.indexOf("'./cloud-service-ui.css'"),
+  );
+  assert.ok(
+    polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
+  );
   assert.ok(polish.includes('overflow-y: auto;'));
   assert.ok(polish.includes('max-width: none;'));
   assert.ok(polish.includes('width: min(100%, 980px);'));
