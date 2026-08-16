@@ -27,7 +27,7 @@ jobs:
       - name: Remove one-time tooling
         run: rm scripts/optimize-agent-active-load-once.mjs .github/workflows/optimize-agent-active-load-once.yml
       - name: Format changed files
-        run: pnpm exec prettier --write src/worker/agent-api.ts migrations/0028_conversation_agent_status_index.sql test/agent-active-load-cost.test.mjs
+        run: pnpm exec prettier --write src/worker/agent-api.ts test/agent-active-load-cost.test.mjs
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
       - run: pnpm lint
