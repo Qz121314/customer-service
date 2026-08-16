@@ -351,12 +351,10 @@ export async function completeMedia(
   ]);
 
   if (media.sender_type === 'visitor') {
-    const assignedAgent = (
-      results[1]?.results?.[0] as
-        | { assigned_agent?: string | null }
-        | undefined
-    )?.assigned_agent;
-    if (!assignedAgent) {
+    const assignmentResult = results[1]?.results?.[0] as
+      | { assigned_agent?: string | null }
+      | undefined;
+    if (!assignmentResult?.assigned_agent) {
       const assignment = await assignConversationAgent(
         env.DB,
         media.conversation_id,
