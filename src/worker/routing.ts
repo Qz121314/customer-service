@@ -23,19 +23,18 @@ type ConversationRoutingRow = {
   product_id: string | null;
   section_id: string | null;
   category_id: string | null;
-  group_id: string | null;
   assigned_agent: string | null;
 };
 
 /**
  * Assign one conversation to one currently-eligible agent.
  *
- * The candidate selection and conversation write happen in the same SQLite
- * UPDATE statement, so concurrent requests cannot both pass a stale capacity
- * check before writing. Active load is balanced first; today's accepted count
- * is a secondary fairness signal; last_assigned_at and id provide deterministic
- * ordering for equal loads. Legacy groups are considered only when no
- * hierarchical routing scope matches at all.
+ * Routing is scope-native: product, section and category scopes are the only
+ * assignment source. Candidate selection and the conversation write happen in
+ * the same SQLite UPDATE statement, so concurrent requests cannot both pass a
+ * stale capacity check before writing. Active load is balanced first; today's
+ * accepted count is a secondary fairness signal; last_assigned_at and id make
+ * equal-load ordering deterministic.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -49,7 +48,6 @@ export async function assignConversationAgent(
          c.product_id,
          COALESCE(c.section_id, p.section_id) AS section_id,
          COALESCE(c.category_id, p.category_id) AS category_id,
-         c.group_id,
          c.assigned_agent
        FROM conversations c
        LEFT JOIN product_catalog p
@@ -88,7 +86,7 @@ export async function assignConversationAgent(
              )
            )
        ),
-       scoped_candidate AS (
+       candidate AS (
          SELECT a.id
          FROM matching m
          JOIN agents a
@@ -106,9 +104,9 @@ export async function assignConversationAgent(
          LEFT JOIN agent_daily_stats daily
            ON daily.site_id = a.site_id
           AND daily.agent_id = a.id
-          AND daily.business_date = ?8
+          AND daily.business_date = ?7
          WHERE a.is_enabled = 1
-           AND (?9 = '' OR a.id <> ?9)
+           AND (?8 = '' OR a.id <> ?8)
            AND a.status = 'online'
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
@@ -131,75 +129,15 @@ export async function assignConversationAgent(
            COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC
-         LIMIT 1
-       ),
-       legacy_candidate AS (
-         SELECT a.id
-         FROM group_agents ga
-         JOIN agents a
-           ON a.id = ga.agent_id
-          AND a.site_id = ga.site_id
-         JOIN support_groups sg
-           ON sg.site_id = ga.site_id
-          AND sg.id = ga.group_id
-         LEFT JOIN (
-           SELECT assigned_agent, COUNT(*) AS active_count
-           FROM conversations
-           WHERE site_id = ?1
-             AND status IN ('open', 'pending')
-             AND assigned_agent IS NOT NULL
-             AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-           GROUP BY assigned_agent
-         ) load ON load.assigned_agent = a.id
-         LEFT JOIN agent_daily_stats daily
-           ON daily.site_id = a.site_id
-          AND daily.agent_id = a.id
-          AND daily.business_date = ?8
-         WHERE ?5 <> ''
-           AND NOT EXISTS (SELECT 1 FROM matching)
-           AND ga.site_id = ?1
-           AND ga.group_id = ?5
-           AND ga.is_enabled = 1
-           AND sg.is_enabled = 1
-           AND a.is_enabled = 1
-           AND (?9 = '' OR a.id <> ?9)
-           AND a.status = 'online'
-           AND a.username IS NOT NULL
-           AND a.password_hash IS NOT NULL
-           AND a.last_seen_at IS NOT NULL
-           AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
-           AND (
-             a.max_active_conversations = 0
-             OR COALESCE(load.active_count, 0) < a.max_active_conversations
-           )
-           AND (
-             a.daily_conversation_limit = 0
-             OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
-           )
-           AND (
-             a.traffic_quota_enabled = 0
-             OR a.traffic_quota_used < a.traffic_quota_total
-           )
-         ORDER BY
-           COALESCE(load.active_count, 0) ASC,
-           COALESCE(daily.conversation_count, 0) ASC,
-           COALESCE(a.last_assigned_at, '') ASC,
-           a.id ASC
-         LIMIT 1
-       ),
-       candidate AS (
-         SELECT id FROM scoped_candidate
-         UNION ALL
-         SELECT id FROM legacy_candidate
          LIMIT 1
        )
        UPDATE conversations
        SET assigned_agent = (SELECT id FROM candidate),
-           assigned_at = ?7,
-           assigned_business_date = ?8,
+           assigned_at = ?6,
+           assigned_business_date = ?7,
            status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-           updated_at = ?7
-       WHERE id = ?6
+           updated_at = ?6
+       WHERE id = ?5
          AND assigned_agent IS NULL
          AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
          AND EXISTS (SELECT 1 FROM candidate)`,
@@ -209,7 +147,6 @@ export async function assignConversationAgent(
       conversation.product_id ?? '',
       conversation.section_id ?? '',
       conversation.category_id ?? '',
-      conversation.group_id ?? '',
       conversationId,
       now,
       businessDate,
