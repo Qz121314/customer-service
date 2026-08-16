@@ -121,6 +121,10 @@ export async function assignConversationAgent(
              a.daily_conversation_limit = 0
              OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
            )
+           AND (
+             a.traffic_quota_enabled = 0
+             OR a.traffic_quota_used < a.traffic_quota_total
+           )
          ORDER BY
            COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
@@ -170,6 +174,10 @@ export async function assignConversationAgent(
            AND (
              a.daily_conversation_limit = 0
              OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
+           )
+           AND (
+             a.traffic_quota_enabled = 0
+             OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
            COALESCE(daily.conversation_count, 0) ASC,
