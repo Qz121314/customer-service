@@ -689,21 +689,41 @@ export async function broadcastClientConversationEvent(
 async function loadAgentOverview(db: D1Database, agentId: string) {
   const result = await db
     .prepare(
-      `SELECT status, COUNT(*) AS count
-       FROM conversations
-       WHERE assigned_agent = ?1
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-       GROUP BY status`,
+      `SELECT c.status, COUNT(c.id) AS count,
+         a.traffic_quota_enabled, a.traffic_quota_total,
+         a.traffic_quota_used
+       FROM agents a
+       LEFT JOIN conversations c
+         ON c.assigned_agent = a.id
+        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+       WHERE a.id = ?1
+       GROUP BY c.status, a.traffic_quota_enabled,
+         a.traffic_quota_total, a.traffic_quota_used`,
     )
     .bind(agentId)
-    .all<{ status: ConversationStatus; count: number }>();
+    .all<{
+      status: ConversationStatus | null;
+      count: number;
+      traffic_quota_enabled: number;
+      traffic_quota_total: number;
+      traffic_quota_used: number;
+    }>();
   const counts = { open: 0, pending: 0, closed: 0 };
   for (const row of result.results ?? []) {
-    counts[row.status] = Number(row.count ?? 0);
+    if (row.status) counts[row.status] = Number(row.count ?? 0);
   }
+  const quota = result.results?.[0];
   return {
     ...counts,
     total: counts.open + counts.pending + counts.closed,
+    trafficQuotaEnabled: quota?.traffic_quota_enabled === 1,
+    trafficQuotaTotal: Number(quota?.traffic_quota_total ?? 0),
+    trafficQuotaUsed: Number(quota?.traffic_quota_used ?? 0),
+    trafficQuotaRemaining: Math.max(
+      0,
+      Number(quota?.traffic_quota_total ?? 0) -
+        Number(quota?.traffic_quota_used ?? 0),
+    ),
   };
 }
 
