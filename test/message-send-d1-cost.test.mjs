@@ -98,5 +98,9 @@ test('realtime overview scans run only when assignment or status counts can chan
   assert.match(broadcaster, /includeOverview\s*\? await loadAgentOverview/u);
   assert.match(clientRoute, /includeOverview: assignmentChanged/u);
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);
-  assert.match(mediaSource, /\{ includeOverview: true \}/u);
+  assert.doesNotMatch(mediaSource, /\{ includeOverview: true \}/u);
+  assert.match(
+    mediaSource,
+    /media\.sender_type === 'agent' &&\s*context\.conversationStatus === 'open'/u,
+  );
 });

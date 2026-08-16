@@ -35,14 +35,15 @@ export async function reserveMedia(
        SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
          'pending', 0, ?13, ?13, ?13
        WHERE (
-         SELECT COUNT(*) FROM media_items
-         WHERE conversation_id = ?2 AND sender_type = ?4 AND status = 'pending'
-       ) < 3
-       AND (
-         SELECT COUNT(*) FROM media_items
+         SELECT COUNT(*) < ?14
+           AND COALESCE(
+             SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END),
+             0
+           ) < 3
+         FROM media_items
          WHERE conversation_id = ?2 AND sender_type = ?4
            AND status IN ('pending', 'ready')
-       ) < ?14`,
+       )`,
     )
     .bind(
       id,
@@ -62,8 +63,24 @@ export async function reserveMedia(
     )
     .run();
   if (inserted.meta.changes) {
-    const row = await findMedia(db, id);
-    if (!row) throw new Error('Media reservation failed');
+    const row: MediaRow = {
+      id,
+      conversation_id: input.conversationId,
+      message_id: null,
+      reserved_message_id: messageId,
+      sender_type: input.senderType,
+      sender_id: input.senderId,
+      object_key: objectKey,
+      mime_type: input.media.mimeType,
+      byte_size: input.media.byteSize,
+      width: input.media.width,
+      height: input.media.height,
+      original_name: input.media.originalName,
+      client_upload_id: input.clientUploadId,
+      status: 'pending',
+      is_initial: 0,
+      reserved_created_at: now,
+    };
     return { row, reused: false };
   }
 
@@ -200,6 +217,7 @@ export async function storeProxyUpload(
 export async function completeMedia(
   env: MediaBindings,
   media: MediaRow,
+  context: { conversationStatus?: 'open' | 'pending' | 'closed' } = {},
 ): Promise<
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; status: 400 | 404 | 409; code: string }
@@ -323,7 +341,11 @@ export async function completeMedia(
           ...publicMedia({ ...media, message_id: messageId, status: 'ready' }),
         },
       },
-      { includeOverview: true },
+      {
+        includeOverview:
+          media.sender_type === 'agent' &&
+          context.conversationStatus === 'open',
+      },
     ),
   ]);
 

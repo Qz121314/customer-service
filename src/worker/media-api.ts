@@ -23,6 +23,10 @@ type Env = { Bindings: MediaBindings };
 
 type ReadyMediaRow = MediaRow & { message_id: string };
 
+type AuthorizedAgentMediaRow = MediaRow & {
+  conversation_status: 'open' | 'pending' | 'closed';
+};
+
 export const mediaApi = new Hono<Env>();
 
 mediaApi.use(
@@ -64,15 +68,18 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     c.header('Retry-After', '60');
     return clientError(c, 429, 'MEDIA_RATE_LIMITED');
   }
-  const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
-  if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+  const projectId = normalizeProjectId(body?.projectId);
   const conversation = await ownedVisitorConversation(
     c.env.DB,
     c.req.param('id'),
-    site.id,
+    projectId,
     visitorId,
   );
-  if (!conversation) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
+  if (!conversation) {
+    const site = await findSite(c.env.DB, projectId);
+    if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+    return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
+  }
   if (conversation.status === 'closed')
     return clientError(c, 409, 'CONVERSATION_CLOSED');
   const reservation = await reserve(c, {
@@ -90,7 +97,7 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
   const { row, reused } = reservation.value;
   const proxy = new URL(`/client/v1/media/${row.id}/content`, c.req.url);
   proxy.searchParams.set('visitorId', visitorId);
-  proxy.searchParams.set('projectId', normalizeProjectId(body?.projectId));
+  proxy.searchParams.set('projectId', projectId);
   return c.json(
     await mediaReservationResponse(c.env, row, proxy.toString()),
     reused ? 200 : 201,
@@ -100,18 +107,18 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
 mediaApi.get('/client/v1/conversations/:id/media', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
   if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
-  const site = await findSite(
-    c.env.DB,
-    normalizeProjectId(c.req.query('projectId')),
-  );
-  if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+  const projectId = normalizeProjectId(c.req.query('projectId'));
   const conversation = await ownedVisitorConversation(
     c.env.DB,
     c.req.param('id'),
-    site.id,
+    projectId,
     visitorId,
   );
-  if (!conversation) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
+  if (!conversation) {
+    const site = await findSite(c.env.DB, projectId);
+    if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+    return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
+  }
   return c.json({
     items: await listConversationMedia(c.env.DB, conversation.id),
   });
@@ -224,7 +231,9 @@ mediaApi.put('/api/agent/media/:id/content', async (c) => {
 mediaApi.post('/api/agent/media/:id/complete', async (c) => {
   const media = await authorizedAgentMedia(c, false);
   if (!media.ok) return c.json({ error: media.code }, media.status);
-  const result = await completeMedia(c.env, media.value);
+  const result = await completeMedia(c.env, media.value, {
+    conversationStatus: media.value.conversation_status,
+  });
   if (!result.ok) return c.json({ error: result.code }, result.status);
   return c.json(result.value);
 });
@@ -276,27 +285,32 @@ async function authorizedVisitorMedia(
     body?.visitorId ?? c.req.query('visitorId'),
   );
   if (!visitorId) return { ok: false, status: 400, code: 'INVALID_VISITOR_ID' };
-  const site = await findSite(
-    c.env.DB,
-    normalizeProjectId(body?.projectId ?? c.req.query('projectId')),
+  const projectId = normalizeProjectId(
+    body?.projectId ?? c.req.query('projectId'),
   );
-  if (!site) return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND' };
   const media = await c.env.DB.prepare(
     `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.client_upload_id,
-         mi.status, mi.is_initial,
-         mi.reserved_created_at
+         mi.status, mi.is_initial, mi.reserved_created_at
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
        JOIN visitors v ON v.id = c.visitor_id
-       WHERE mi.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
+       JOIN sites s ON s.id = c.site_id
+       WHERE mi.id = ?1
+         AND (s.id = ?2 OR s.public_key = ?2) AND s.is_enabled = 1
+         AND v.external_id = ?3
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
   )
-    .bind(c.req.param('id'), site.id, visitorId)
+    .bind(c.req.param('id'), projectId, visitorId)
     .first<MediaRow>();
-  if (!media || (readyOnly && media.status !== 'ready'))
+  if (!media) {
+    const site = await findSite(c.env.DB, projectId);
+    if (!site) return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND' };
+    return { ok: false, status: 404, code: 'MEDIA_NOT_FOUND' };
+  }
+  if (readyOnly && media.status !== 'ready')
     return { ok: false, status: 404, code: 'MEDIA_NOT_FOUND' };
   return { ok: true, value: media };
 }
@@ -305,7 +319,8 @@ async function authorizedAgentMedia(
   c: Context<Env>,
   readyOnly: boolean,
 ): Promise<
-  { ok: true; value: MediaRow } | { ok: false; status: 401 | 404; code: string }
+  | { ok: true; value: AuthorizedAgentMediaRow }
+  | { ok: false; status: 401 | 404; code: string }
 > {
   const agent = await requireAgentSession(c);
   if (!agent) return { ok: false, status: 401, code: 'UNAUTHORIZED' };
@@ -313,8 +328,8 @@ async function authorizedAgentMedia(
     `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.client_upload_id,
-         mi.status, mi.is_initial,
-         mi.reserved_created_at
+         mi.status, mi.is_initial, mi.reserved_created_at,
+         c.status AS conversation_status
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
        WHERE mi.id = ?1 AND c.assigned_agent = ?2
@@ -322,7 +337,7 @@ async function authorizedAgentMedia(
        LIMIT 1`,
   )
     .bind(c.req.param('id'), agent.id)
-    .first<MediaRow>();
+    .first<AuthorizedAgentMediaRow>();
   if (!media || (readyOnly && media.status !== 'ready'))
     return { ok: false, status: 404, code: 'NOT_FOUND' };
   return { ok: true, value: media };
@@ -341,7 +356,7 @@ async function findSite(db: D1Database, projectId: string) {
 async function ownedVisitorConversation(
   db: D1Database,
   id: string,
-  siteId: string,
+  projectId: string,
   visitorId: string,
 ) {
   return db
@@ -349,11 +364,14 @@ async function ownedVisitorConversation(
       `SELECT c.id, c.visitor_id, c.status
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
-       WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
+       JOIN sites s ON s.id = c.site_id
+       WHERE c.id = ?1
+         AND (s.id = ?2 OR s.public_key = ?2) AND s.is_enabled = 1
+         AND v.external_id = ?3
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
-    .bind(id, siteId, visitorId)
+    .bind(id, projectId, visitorId)
     .first<{
       id: string;
       visitor_id: string;
