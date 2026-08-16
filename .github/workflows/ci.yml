@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,15 +42,19 @@ jobs:
           src/dashboard/agent-editor.css
           test/agent-editor-ui-contract.test.mjs
 
-      - name: Upload formatted agent editor sources
+      - name: Commit agent editor formatting
         if: github.event_name == 'pull_request' && github.head_ref == 'ui/commercial-agent-editor'
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-editor-prettier
-          path: |
-            src/dashboard/AgentEditorModal.tsx
-            src/dashboard/agent-editor.css
-            test/agent-editor-ui-contract.test.mjs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/dashboard/AgentEditorModal.tsx src/dashboard/agent-editor.css test/agent-editor-ui-contract.test.mjs
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format commercial agent editor"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
