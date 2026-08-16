@@ -62,7 +62,10 @@ test('runtime source no longer references legacy routing services', () => {
   );
 
   for (const source of [clientApi, integrationApi, routing, waiting]) {
-    assert.doesNotMatch(source, /support_groups|group_agents|group_routing_rules/u);
+    assert.doesNotMatch(
+      source,
+      /support_groups|group_agents|group_routing_rules/u,
+    );
   }
   assert.doesNotMatch(clientApi, /management\/v1\/groups|MANAGEMENT_TOKEN/u);
   assert.doesNotMatch(integrationApi, /\bgroups\s*:/u);
