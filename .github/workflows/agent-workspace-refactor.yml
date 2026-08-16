@@ -51,13 +51,13 @@ jobs:
           test/agent-mobile-layout-contract.test.mjs
           test/agent-workspace-ui-contract.test.mjs
 
-      - name: Validate formatting
-        run: pnpm format
-
       - name: Remove temporary refactor files
         run: |
           rm -f scripts/refactor-agent-workspace.mjs
           rm -f .github/workflows/agent-workspace-refactor.yml
+
+      - name: Validate formatting
+        run: pnpm format
 
       - name: Commit generated refactor
         shell: bash
