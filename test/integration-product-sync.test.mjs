@@ -92,19 +92,29 @@ async function syncRequest(db, products) {
   );
 }
 
+function scalar(database, sql, column) {
+  return database.prepare(sql).get()[column];
+}
+
 test('large product catalogs sync with bounded D1 query count', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   const db = d1(database);
 
-  const firstProducts = Array.from({ length: 1200 }, (_, index) => product(index));
+  const firstProducts = Array.from({ length: 1200 }, (_, index) =>
+    product(index),
+  );
   const firstResponse = await syncRequest(db, firstProducts);
   assert.equal(firstResponse.status, 200);
   assert.equal((await firstResponse.json()).productCatalog.productCount, 1200);
   assert.equal(
-    database
-      .prepare("SELECT COUNT(*) AS count FROM product_catalog WHERE site_id = 'default' AND is_enabled = 1")
-      .get().count,
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM product_catalog
+       WHERE site_id = 'default' AND is_enabled = 1`,
+      'count',
+    ),
     1200,
   );
   assert.equal(db.counter.count, 8);
@@ -115,15 +125,23 @@ test('large product catalogs sync with bounded D1 query count', async () => {
   assert.equal(secondResponse.status, 200);
   assert.equal((await secondResponse.json()).productCatalog.productCount, 2);
   assert.equal(
-    database
-      .prepare("SELECT COUNT(*) AS count FROM product_catalog WHERE site_id = 'default' AND is_enabled = 1")
-      .get().count,
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM product_catalog
+       WHERE site_id = 'default' AND is_enabled = 1`,
+      'count',
+    ),
     2,
   );
   assert.equal(
-    database
-      .prepare("SELECT is_enabled FROM product_catalog WHERE site_id = 'default' AND id = 'product-0'")
-      .get().is_enabled,
+    scalar(
+      database,
+      `SELECT is_enabled
+       FROM product_catalog
+       WHERE site_id = 'default' AND id = 'product-0'`,
+      'is_enabled',
+    ),
     0,
   );
   assert.equal(db.counter.count, 4);
