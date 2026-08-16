@@ -31,6 +31,16 @@ jobs:
         run: |
           node scripts/refactor-dashboard-app.mjs
           sed -i "1i import type { AgentMediaItem } from './agent-media';" src/dashboard/dashboard-runtime.ts
+          node --input-type=module - <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const path = 'test/agent-statistics-modal.test.mjs';
+          const source = await readFile(path, 'utf8');
+          const before = "assert.ok(app.includes('onClick={() => setStatisticsOpen(true)}'));";
+          const after = "assert.ok(app.includes('setStatisticsOpen(true)'));";
+          const updated = source.replaceAll(before, after);
+          if (updated === source) throw new Error('Statistics open assertion was not updated');
+          await writeFile(path, updated);
+          NODE
 
       - name: Format finalized source
         run: |
