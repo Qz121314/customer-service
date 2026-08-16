@@ -28,7 +28,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Finalize dashboard modules
-        run: node scripts/refactor-dashboard-app.mjs
+        run: |
+          node scripts/refactor-dashboard-app.mjs
+          sed -i "1i import type { AgentMediaItem } from './agent-media';" src/dashboard/dashboard-runtime.ts
 
       - name: Format finalized source
         run: |
