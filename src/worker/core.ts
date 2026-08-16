@@ -81,10 +81,13 @@ coreApp.post('/api/auth/logout', (c) => {
   return c.json({ ok: true });
 });
 
-// Unknown API paths must never fall through to the SPA. This also guarantees
-// that removed legacy chat protocols stay unreachable after deployment.
-coreApp.all('/api/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
-coreApp.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
+coreApp.all('*', (c) => {
+  const pathname = new URL(c.req.url).pathname;
+  if (pathname === '/api' || pathname.startsWith('/api/')) {
+    return c.json({ error: 'NOT_FOUND' }, 404);
+  }
+  return c.env.ASSETS.fetch(c.req.raw);
+});
 
 export class ConversationRoom extends DurableObject<Bindings> {
   async fetch(request: Request): Promise<Response> {
