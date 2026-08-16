@@ -285,7 +285,8 @@ export async function completeMedia(
          WHERE id = ?2
            AND EXISTS (
              SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
-           )`,
+           )
+         RETURNING assigned_agent`,
       ).bind(createdAt, media.conversation_id, media.id),
     );
   }
@@ -350,12 +351,9 @@ export async function completeMedia(
   ]);
 
   if (media.sender_type === 'visitor') {
-    const conversation = await env.DB.prepare(
-      'SELECT assigned_agent FROM conversations WHERE id = ?1',
-    )
-      .bind(media.conversation_id)
-      .first<{ assigned_agent: string | null }>();
-    if (!conversation?.assigned_agent) {
+    const assignmentResult = results[1]?.results?.[0] as
+      { assigned_agent?: string | null } | undefined;
+    if (!assignmentResult?.assigned_agent) {
       const assignment = await assignConversationAgent(
         env.DB,
         media.conversation_id,

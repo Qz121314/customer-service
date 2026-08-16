@@ -8,7 +8,7 @@ export type VapidRow = {
   subject: string;
 };
 
-type SubscriptionRow = {
+type VisitorPushRow = VapidRow & {
   endpoint: string;
 };
 
@@ -28,57 +28,64 @@ export async function sendVisitorPushForConversation(
   env: VisitorPushBindings,
   conversationId: string,
 ): Promise<void> {
-  const identity = await env.DB.prepare(
-    `SELECT c.site_id, v.external_id
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.id = ?1
-     LIMIT 1`,
-  )
-    .bind(conversationId)
-    .first<{ site_id: string; external_id: string | null }>();
-  if (!identity?.external_id) return;
-
-  const config = await readVapidConfig(env.DB);
-  if (!config) return;
-
   const now = Date.now();
-  await env.DB.prepare(
-    `DELETE FROM visitor_push_subscriptions
-     WHERE expiration_time IS NOT NULL AND expiration_time <= ?1`,
-  )
-    .bind(now)
-    .run();
-
   const subscriptions = await env.DB.prepare(
-    `SELECT endpoint
-     FROM visitor_push_subscriptions
-     WHERE site_id = ?1 AND visitor_external_id = ?2`,
+    `SELECT
+       subscription.endpoint,
+       vapid.public_key,
+       vapid.private_jwk,
+       vapid.subject
+     FROM conversations conversation
+     JOIN visitors visitor
+       ON visitor.id = conversation.visitor_id
+     JOIN visitor_push_subscriptions subscription
+       ON subscription.site_id = conversation.site_id
+      AND subscription.visitor_external_id = visitor.external_id
+     JOIN visitor_push_vapid vapid
+       ON vapid.id = 'default'
+     WHERE conversation.id = ?1
+       AND visitor.external_id IS NOT NULL
+       AND COALESCE(
+         conversation.expires_at,
+         datetime(conversation.created_at, '+1 day')
+       ) > CURRENT_TIMESTAMP
+       AND (
+         subscription.expiration_time IS NULL
+         OR subscription.expiration_time > ?2
+       )`,
   )
-    .bind(identity.site_id, identity.external_id)
-    .all<SubscriptionRow>();
+    .bind(conversationId, now)
+    .all<VisitorPushRow>();
   if (!subscriptions.results?.length) return;
 
   await Promise.all(
-    subscriptions.results.map(async ({ endpoint }) => {
-      try {
-        const response = await sendDataLessPush(endpoint, config);
-        if (response.status === 404 || response.status === 410) {
-          await env.DB.prepare(
-            'DELETE FROM visitor_push_subscriptions WHERE endpoint = ?1',
-          )
-            .bind(endpoint)
-            .run();
-          return;
-        }
-        if (!response.ok) {
-          console.warn('Visitor push delivery failed.', response.status);
-        }
-      } catch (error) {
-        console.warn('Visitor push delivery failed.', error);
-      }
-    }),
+    subscriptions.results.map((subscription) =>
+      deliverVisitorPush(env, subscription.endpoint, subscription),
+    ),
   );
+}
+
+async function deliverVisitorPush(
+  env: VisitorPushBindings,
+  endpoint: string,
+  config: VapidRow,
+): Promise<void> {
+  try {
+    const response = await sendDataLessPush(endpoint, config);
+    if (response.status === 404 || response.status === 410) {
+      await env.DB.prepare(
+        'DELETE FROM visitor_push_subscriptions WHERE endpoint = ?1',
+      )
+        .bind(endpoint)
+        .run();
+      return;
+    }
+    if (!response.ok) {
+      console.warn('Visitor push delivery failed.', response.status);
+    }
+  } catch (error) {
+    console.warn('Visitor push delivery failed.', error);
+  }
 }
 
 async function getOrCreateVapidConfig(
