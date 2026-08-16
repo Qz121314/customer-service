@@ -2002,6 +2002,61 @@ select:focus-visible {
   line-height: 1.5;
 }
 
+.traffic-quota-history {
+  padding-top: 11px;
+  border-top: 1px solid #ececf2;
+  display: grid;
+  gap: 8px;
+}
+
+.traffic-quota-history-head,
+.traffic-quota-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.traffic-quota-history-head strong {
+  color: var(--cs-ink);
+  font-size: 11px;
+}
+
+.traffic-quota-history-head span,
+.traffic-quota-history > p,
+.traffic-quota-history-row span,
+.traffic-quota-history-row time {
+  margin: 0;
+  color: #8a8f99;
+  font-size: 10px;
+}
+
+.traffic-quota-history-head span {
+  grid-column: 2 / -1;
+}
+
+.traffic-quota-history-list {
+  display: grid;
+  gap: 6px;
+}
+
+.traffic-quota-history-row {
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: #f7f7fb;
+}
+
+.traffic-quota-history-row strong {
+  color: #4f46d8;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.traffic-quota-history-row span,
+.traffic-quota-history-row time {
+  font-variant-numeric: tabular-nums;
+}
+
 .switch-control {
   position: relative;
   width: 38px;
