@@ -17,7 +17,8 @@ test('realtime protocol carries deltas instead of forcing REST refreshes', () =>
     clientApi.includes('conversation: conversationSummary(conversation)'),
   );
   assert.ok(clientApi.includes('message?: Record<string, unknown>'));
-  assert.ok(clientApi.includes('overview,'));
+  assert.ok(clientApi.includes('includeOverview'));
+  assert.ok(clientApi.includes('...(overview ? { overview } : {})'));
   assert.ok(
     dashboard.includes("payload.type === 'message' && payload.message"),
   );

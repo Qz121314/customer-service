@@ -703,7 +703,11 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const id = c.req.param('id');
-  const conversation = await assignedConversation(c.env.DB, id, agent.id);
+  const conversation = await assignedConversationForMessageWrite(
+    c.env.DB,
+    id,
+    agent.id,
+  );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
 
   const body = await readJson<{ body?: string; clientMessageId?: string }>(
@@ -735,10 +739,10 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   const now = new Date().toISOString();
   const inserted = await c.env.DB.prepare(
     `INSERT OR IGNORE INTO messages
-       (id, conversation_id, sender_type, sender_id, body, client_message_id)
-     VALUES (?1, ?2, 'agent', ?3, ?4, ?5)`,
+       (id, conversation_id, sender_type, sender_id, body, client_message_id, created_at)
+     VALUES (?1, ?2, 'agent', ?3, ?4, ?5, ?6)`,
   )
-    .bind(messageId, id, agent.id, text, clientMessageId)
+    .bind(messageId, id, agent.id, text, clientMessageId, now)
     .run();
 
   if (!inserted.meta.changes && clientMessageId) {
@@ -764,17 +768,25 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   )
     .bind(now, id, agent.id)
     .run();
-  const message = await c.env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body,
-       client_message_id, read_by_visitor_at, read_by_agent_at, created_at
-     FROM messages WHERE id = ?1`,
-  )
-    .bind(messageId)
-    .first<MessageRow>();
+  const message: MessageRow = {
+    id: messageId,
+    conversation_id: id,
+    sender_type: 'agent',
+    sender_id: agent.id,
+    body: text,
+    client_message_id: clientMessageId,
+    read_by_visitor_at: null,
+    read_by_agent_at: null,
+    created_at: now,
+  };
   await broadcastConversationRoom(c.env, id, { type: 'message', message });
-  await broadcastClientConversationEvent(c.env, id, 'message.created', {
-    message: message ? clientRealtimeMessage(message) : undefined,
-  });
+  await broadcastClientConversationEvent(
+    c.env,
+    id,
+    'message.created',
+    { message: clientRealtimeMessage(message) },
+    { includeOverview: conversation.status === 'open' },
+  );
   return c.json({ message }, 201);
 });
 
@@ -987,6 +999,23 @@ async function authenticateAgentToken(
     )
     .bind(await sha256(token))
     .first<AgentSession>();
+}
+
+async function assignedConversationForMessageWrite(
+  db: D1Database,
+  id: string,
+  agentId: string,
+) {
+  return db
+    .prepare(
+      `SELECT id, status
+       FROM conversations
+       WHERE id = ?1 AND assigned_agent = ?2
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       LIMIT 1`,
+    )
+    .bind(id, agentId)
+    .first<{ id: string; status: ConversationStatus }>();
 }
 
 async function assignedConversation(

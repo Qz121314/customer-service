@@ -323,6 +323,7 @@ export async function completeMedia(
           ...publicMedia({ ...media, message_id: messageId, status: 'ready' }),
         },
       },
+      { includeOverview: true },
     ),
   ]);
 
