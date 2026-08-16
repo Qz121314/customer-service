@@ -219,10 +219,7 @@ test('reporting history cleanup runs once daily and preserves the 400-day window
       ('boundary-receipt', 'default', 'boundary-agent', '2025-07-13');
   `);
 
-  await purgeExpiredConversations(
-    env,
-    new Date('2026-08-16T12:00:00.000Z'),
-  );
+  await purgeExpiredConversations(env, new Date('2026-08-16T12:00:00.000Z'));
 
   assert.equal(rowCount(database, 'agent_daily_stats'), 1);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 1);
@@ -242,10 +239,7 @@ test('reporting history cleanup runs once daily and preserves the 400-day window
     ) VALUES ('late-old-receipt', 'default', 'late-old-agent', '2025-07-12');
   `);
 
-  await purgeExpiredConversations(
-    env,
-    new Date('2026-08-16T12:01:00.000Z'),
-  );
+  await purgeExpiredConversations(env, new Date('2026-08-16T12:01:00.000Z'));
 
   assert.equal(rowCount(database, 'agent_daily_stats'), 2);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 2);

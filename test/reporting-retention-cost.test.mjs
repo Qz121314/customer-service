@@ -15,7 +15,10 @@ const retentionSource = readFileSync(
 );
 
 test('assignment trigger does not prune reporting history on every reception', () => {
-  assert.match(migration, /CREATE TRIGGER trg_conversation_assignment_daily_stats/u);
+  assert.match(
+    migration,
+    /CREATE TRIGGER trg_conversation_assignment_daily_stats/u,
+  );
   assert.match(migration, /INSERT OR IGNORE INTO agent_traffic_receipts/u);
   assert.match(migration, /INSERT INTO agent_daily_stats/u);
   assert.doesNotMatch(migration, /DELETE FROM agent_daily_stats/u);
