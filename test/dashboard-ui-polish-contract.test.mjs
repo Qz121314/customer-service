@@ -26,3 +26,15 @@ test('dashboard polish removes narrow chat constraints and keeps the final overr
   assert.ok(polish.includes('width: min(100%, 980px);'));
   assert.ok(polish.includes('@media (max-width: 760px)'));
 });
+
+test('dashboard second polish pass keeps dense desktop controls and a 360px fallback', () => {
+  const polish = source('../src/dashboard/ui-polish.css');
+
+  assert.ok(polish.includes('min-height: 74px;'));
+  assert.ok(polish.includes('width: min(100%, 920px);'));
+  assert.ok(polish.includes('max-width: min(64%, 620px);'));
+  assert.ok(polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
+  assert.ok(polish.includes('@media (max-width: 360px)'));
+  assert.ok(polish.includes("content: '↗';"));
+  assert.ok(polish.includes('border-radius: 50%;'));
+});
