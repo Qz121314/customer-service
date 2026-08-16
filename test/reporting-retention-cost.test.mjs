@@ -14,6 +14,8 @@ const retentionSource = readFileSync(
   'utf8',
 );
 
+// Keep historical pruning out of the first-reception transaction as the
+// reporting tables grow; cron owns that low-frequency maintenance cost.
 test('assignment trigger does not prune reporting history on every reception', () => {
   assert.match(
     migration,
