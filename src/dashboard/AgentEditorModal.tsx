@@ -23,6 +23,9 @@ export function AgentEditorModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const identityName = draft.name.trim() || '新客服';
+  const identityUsername = draft.username.trim() || '登录账号';
+
   return (
     <div className="modal-backdrop" onMouseDown={() => !saving && onClose()}>
       <section
@@ -32,12 +35,19 @@ export function AgentEditorModal({
         aria-labelledby="agent-editor-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header>
-          <div>
-            <h2 id="agent-editor-title">
-              {draft.id ? '编辑客服账号' : '新增客服账号'}
-            </h2>
-            <p>账号、接待规则、额度与分流范围在一个工作台内完成配置。</p>
+        <header className="agent-editor-header">
+          <div className="agent-editor-title-block">
+            <span className="agent-editor-kicker">客服配置</span>
+            <div>
+              <h2 id="agent-editor-title">
+                {draft.id ? '编辑客服账号' : '新增客服账号'}
+              </h2>
+              <p>
+                {draft.id
+                  ? `${identityName} · @${identityUsername}`
+                  : '建立登录身份，并配置接待规则与分流范围'}
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -48,14 +58,14 @@ export function AgentEditorModal({
             ×
           </button>
         </header>
+
         <form className="agent-editor-form" onSubmit={onSubmit}>
           <div className="agent-editor-layout">
-            <aside className="agent-editor-account-pane">
+            <section className="agent-editor-account-pane agent-editor-workspace-card">
               <div className="agent-editor-pane-heading">
-                <span>01</span>
                 <div>
-                  <strong>账号与接待配置</strong>
-                  <small>登录身份、接待上限、账号状态与流量额度</small>
+                  <strong>账号与接待</strong>
+                  <small>登录身份、接待上限、账号状态与额度控制</small>
                 </div>
               </div>
 
@@ -63,9 +73,14 @@ export function AgentEditorModal({
                 <div className="agent-editor-identity-preview">
                   <span>{initials(draft.name || '客服')}</span>
                   <div>
-                    <strong>{draft.name.trim() || '新客服'}</strong>
-                    <small>@{draft.username.trim() || '登录账号'}</small>
+                    <strong>{identityName}</strong>
+                    <small>@{identityUsername}</small>
                   </div>
+                  <em
+                    className={draft.isEnabled ? 'is-enabled' : 'is-disabled'}
+                  >
+                    {draft.isEnabled ? '启用' : '停用'}
+                  </em>
                 </div>
 
                 <label className="agent-editor-field">
@@ -108,72 +123,84 @@ export function AgentEditorModal({
                 </label>
               </div>
 
-              <div className="agent-editor-policy-grid">
-                <label className="agent-editor-limit-card">
-                  <span>同时会话</span>
+              <section className="agent-editor-subsection agent-editor-policy-section">
+                <div className="agent-editor-subsection-head">
                   <div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="999"
-                      value={draft.maxActiveConversations}
-                      onChange={(event) =>
-                        onDraftChange({
-                          ...draft,
-                          maxActiveConversations:
-                            Number(event.target.value) || 0,
-                        })
-                      }
-                    />
-                    <small>0 = 不限</small>
+                    <strong>接待规则</strong>
+                    <small>限制坐席负载，0 表示不限制</small>
                   </div>
-                </label>
+                </div>
 
-                <label className="agent-editor-limit-card">
-                  <span>每日接待</span>
-                  <div>
-                    <input
-                      type="number"
-                      min="0"
-                      max="9999"
-                      value={draft.dailyConversationLimit}
-                      onChange={(event) =>
-                        onDraftChange({
-                          ...draft,
-                          dailyConversationLimit:
-                            Number(event.target.value) || 0,
-                        })
-                      }
-                    />
-                    <small>次日恢复 · 0 = 不限</small>
+                <div className="agent-editor-policy-grid">
+                  <label className="agent-editor-limit-card">
+                    <span>同时会话</span>
+                    <div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999"
+                        value={draft.maxActiveConversations}
+                        onChange={(event) =>
+                          onDraftChange({
+                            ...draft,
+                            maxActiveConversations:
+                              Number(event.target.value) || 0,
+                          })
+                        }
+                      />
+                      <small>0 = 不限</small>
+                    </div>
+                  </label>
+
+                  <label className="agent-editor-limit-card">
+                    <span>每日接待</span>
+                    <div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="9999"
+                        value={draft.dailyConversationLimit}
+                        onChange={(event) =>
+                          onDraftChange({
+                            ...draft,
+                            dailyConversationLimit:
+                              Number(event.target.value) || 0,
+                          })
+                        }
+                      />
+                      <small>次日恢复</small>
+                    </div>
+                  </label>
+
+                  <div className="agent-editor-status-card">
+                    <span>
+                      <strong>启用客服账号</strong>
+                      <small>允许登录并参与新会话分流</small>
+                    </span>
+                    <label className="switch-control" aria-label="启用客服账号">
+                      <input
+                        type="checkbox"
+                        checked={draft.isEnabled}
+                        onChange={(event) =>
+                          onDraftChange({
+                            ...draft,
+                            isEnabled: event.target.checked,
+                          })
+                        }
+                      />
+                      <span aria-hidden="true" />
+                    </label>
                   </div>
-                </label>
-
-                <label className="account-enable-line agent-editor-status-card">
-                  <input
-                    type="checkbox"
-                    checked={draft.isEnabled}
-                    onChange={(event) =>
-                      onDraftChange({
-                        ...draft,
-                        isEnabled: event.target.checked,
-                      })
-                    }
-                  />
-                  <span>
-                    <strong>启用客服账号</strong>
-                    <small>关闭后停止登录和新会话分流</small>
-                  </span>
-                </label>
-              </div>
+                </div>
+              </section>
 
               <section className="traffic-quota-editor agent-editor-quota-workspace">
                 <div className="traffic-quota-editor-head">
                   <div>
-                    <strong>接待额度套餐</strong>
-                    <small>按有效咨询扣减，用完停止新分流</small>
+                    <strong>接待额度</strong>
+                    <small>按有效咨询扣减，用完后停止接收新会话</small>
                   </div>
-                  <label className="switch-control">
+                  <label className="switch-control" aria-label="启用接待额度">
                     <input
                       type="checkbox"
                       checked={draft.trafficQuotaEnabled}
@@ -190,7 +217,7 @@ export function AgentEditorModal({
 
                 <div className="traffic-quota-summary">
                   <div>
-                    <span>保存后总额度</span>
+                    <span>保存后总额</span>
                     <strong>
                       {draft.trafficQuotaTotal + draft.trafficQuotaTopUp}
                     </strong>
@@ -200,7 +227,7 @@ export function AgentEditorModal({
                     <strong>{draft.trafficQuotaUsed}</strong>
                   </div>
                   <div>
-                    <span>保存后剩余</span>
+                    <span>保存后可用</span>
                     <strong>
                       {Math.max(
                         0,
@@ -255,14 +282,14 @@ export function AgentEditorModal({
                 </div>
 
                 <p className="agent-editor-quota-note">
-                  追加额度只累加，不清零已消耗；保存失败后重试不会重复增加额度。
+                  追加额度只累加，不清零已消耗；保存失败后重试不会重复增加。
                 </p>
 
                 {draft.id ? (
                   <div className="traffic-quota-history">
                     <div className="traffic-quota-history-head">
                       <strong>最近额度变更</strong>
-                      <span>打开编辑时读取</span>
+                      <span>进入编辑时读取</span>
                     </div>
                     {quotaHistoryBusy ? (
                       <p>正在读取…</p>
@@ -292,14 +319,13 @@ export function AgentEditorModal({
                   </div>
                 ) : null}
               </section>
-            </aside>
+            </section>
 
-            <section className="agent-editor-routing-pane">
+            <section className="agent-editor-routing-pane agent-editor-workspace-card">
               <div className="agent-editor-pane-heading">
-                <span>02</span>
                 <div>
                   <strong>分流负责范围</strong>
-                  <small>分区可多选，分类批量负责，产品用于精确指定</small>
+                  <small>按分区、分类或指定产品建立负责规则</small>
                 </div>
               </div>
               <ProductAssignmentPicker
@@ -314,20 +340,27 @@ export function AgentEditorModal({
           </div>
 
           <footer>
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={saving}
-              onClick={onClose}
-            >
-              取消
-            </button>
-            <button
-              className="primary-button"
-              disabled={saving || !draft.name.trim() || !draft.username.trim()}
-            >
-              {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
-            </button>
+            <span className="agent-editor-save-note">
+              保存后，新规则会立即用于后续会话分流
+            </span>
+            <div className="agent-editor-footer-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={saving}
+                onClick={onClose}
+              >
+                取消
+              </button>
+              <button
+                className="primary-button"
+                disabled={
+                  saving || !draft.name.trim() || !draft.username.trim()
+                }
+              >
+                {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
+              </button>
+            </div>
           </footer>
         </form>
       </section>
