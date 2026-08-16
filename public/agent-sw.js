@@ -1,6 +1,87 @@
-/* global self, URL */
+/* global self, URL, caches, fetch */
 
 const AGENT_WORKSPACE_URL = '/agent';
+const AGENT_CACHE = 'agent-workspace-v1';
+const APP_SHELL = [
+  AGENT_WORKSPACE_URL,
+  '/agent.webmanifest',
+  '/icons/customer-service-192.svg',
+  '/icons/customer-service-512.svg',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches
+      .open(AGENT_CACHE)
+      .then((cache) => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting()),
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter(
+              (key) => key.startsWith('agent-workspace-') && key !== AGENT_CACHE,
+            )
+            .map((key) => caches.delete(key)),
+        ),
+      )
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            void caches
+              .open(AGENT_CACHE)
+              .then((cache) => cache.put(AGENT_WORKSPACE_URL, response.clone()));
+          }
+          return response;
+        })
+        .catch(() => caches.match(AGENT_WORKSPACE_URL)),
+    );
+    return;
+  }
+
+  if (
+    url.pathname === '/agent.webmanifest' ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/assets/')
+  ) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        const fresh = fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              void caches
+                .open(AGENT_CACHE)
+                .then((cache) => cache.put(request, response.clone()));
+            }
+            return response;
+          })
+          .catch(() => cached);
+        return cached || fresh;
+      }),
+    );
+  }
+});
 
 self.addEventListener('push', (event) => {
   event.waitUntil(
