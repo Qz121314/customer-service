@@ -18,20 +18,17 @@ import {
   LoadState,
   AdminSection,
   AgentDraft,
-  UiIcon,
   emptyAgentDraft,
   CHAT_TIME_ZONE,
   productsForScope,
   agentScopeSummary,
-  AdminLogin,
-  AdminSetup,
-  Startup,
   presenceClass,
   statusLabel,
   initials,
   relativeTime,
   message,
-} from './dashboard-shared';
+} from './dashboard-runtime';
+import { UiIcon, AdminLogin, AdminSetup, Startup } from './dashboard-ui';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 

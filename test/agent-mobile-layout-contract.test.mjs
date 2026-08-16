@@ -8,7 +8,7 @@ function source(path) {
 }
 
 test('agent mobile workspace uses separate inbox and thread surfaces', () => {
-  const app = source('../src/dashboard/App.tsx');
+  const app = source('../src/dashboard/AgentPortal.tsx');
   const css = source('../src/dashboard/agent-mobile-layout.css');
 
   assert.ok(

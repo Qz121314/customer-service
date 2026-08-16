@@ -8,11 +8,11 @@ function source(path) {
 }
 
 test('agent statistics opens inside the workspace instead of navigating away', () => {
-  const app = source('../src/dashboard/App.tsx');
+  const app = source('../src/dashboard/AgentPortal.tsx');
   const statistics = source('../src/dashboard/AgentStatisticsWorkspace.tsx');
   const styles = source('../src/dashboard/cloud-service-ui.css');
 
-  assert.ok(app.includes('onClick={() => setStatisticsOpen(true)}'));
+  assert.ok(app.includes('setStatisticsOpen(true)'));
   assert.ok(app.includes('<AgentStatisticsModal'));
   assert.ok(!app.includes('href="/agent/stats"'));
   assert.ok(statistics.includes('className="agent-statistics-backdrop"'));
@@ -26,10 +26,10 @@ test('agent statistics opens inside the workspace instead of navigating away', (
 });
 
 test('admin statistics opens as a modal with a wrapped day grid', () => {
-  const app = source('../src/dashboard/App.tsx');
+  const app = source('../src/dashboard/AdminPortal.tsx');
   const styles = source('../src/dashboard/cloud-service-ui.css');
 
-  assert.ok(app.includes('onClick={() => setStatisticsOpen(true)}'));
+  assert.ok(app.includes('setStatisticsOpen(true)'));
   assert.ok(app.includes('className="admin-statistics-modal"'));
   assert.ok(app.includes('aria-labelledby="admin-statistics-title"'));
   assert.ok(app.includes('aria-label="选择客服坐席"'));

@@ -9,7 +9,7 @@ test('agent inbox returns overview, conversations, messages and media in two req
   const [api, worker, app] = await Promise.all([
     read('../src/dashboard/api.ts'),
     read('../src/worker/agent-api.ts'),
-    read('../src/dashboard/App.tsx'),
+    read('../src/dashboard/AgentPortal.tsx'),
   ]);
 
   assert.match(api, /getAgentInbox/u);
@@ -28,7 +28,7 @@ test('agent inbox returns overview, conversations, messages and media in two req
 });
 
 test('agent inbox filters, searches and prioritizes unread conversations locally', async () => {
-  const app = await read('../src/dashboard/App.tsx');
+  const app = await read('../src/dashboard/AgentPortal.tsx');
   assert.match(app, /visibleConversations = useMemo/u);
   assert.match(app, /搜索访客、产品或消息/u);
   assert.match(app, /未读优先/u);

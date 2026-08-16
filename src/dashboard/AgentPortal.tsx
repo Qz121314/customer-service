@@ -41,7 +41,6 @@ import {
   PendingAgentText,
   InboxRealtimeEvent,
   ThreadRealtimeEvent,
-  UiIcon,
   filterLabels,
   AGENT_TYPING_IDLE_MS,
   REMOTE_TYPING_STALE_MS,
@@ -53,15 +52,18 @@ import {
   parseRealtimeEvent,
   sortedConversationList,
   compareMessages,
+  initials,
+  relativeTime,
+  message,
+} from './dashboard-runtime';
+import {
+  UiIcon,
   AgentLogin,
   Startup,
   Metric,
   ConversationExpiryCountdown,
   Bubble,
-  initials,
-  relativeTime,
-  message,
-} from './dashboard-shared';
+} from './dashboard-ui';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { sendAgentImage, type AgentMediaItem } from './agent-media';
 import {

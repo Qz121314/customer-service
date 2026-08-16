@@ -8,16 +8,17 @@ function source(path) {
 }
 
 test('admin UI presents dynamic routing scopes instead of expanded product lists', () => {
-  const app = source('../src/dashboard/App.tsx');
+  const admin = source('../src/dashboard/AdminPortal.tsx');
+  const runtime = source('../src/dashboard/dashboard-runtime.ts');
   const api = source('../src/dashboard/api.ts');
   const styles = source('../src/dashboard/styles.css');
   const visualStyles = source('../src/dashboard/cloud-service-ui.css');
 
-  assert.ok(app.includes('<th>负责范围</th>'));
-  assert.ok(app.includes('agentScopeSummary('));
-  assert.ok(app.includes('整个分区'));
-  assert.ok(app.includes('动态覆盖'));
-  assert.ok(!app.includes('<th>负责产品</th>'));
+  assert.ok(admin.includes('<th>负责范围</th>'));
+  assert.ok(admin.includes('agentScopeSummary('));
+  assert.ok(runtime.includes('整个分区'));
+  assert.ok(runtime.includes('动态覆盖'));
+  assert.ok(!admin.includes('<th>负责产品</th>'));
   assert.ok(api.includes('routingScope: normalizeRoutingScope('));
   assert.ok(styles.includes('width: min(780px, 100%)'));
   assert.ok(visualStyles.includes('width: min(1200px, 100%)'));
@@ -27,7 +28,7 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
   assert.ok(
     styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'),
   );
-  assert.ok(app.includes('aria-modal="true"'));
-  assert.ok(app.includes('再配置它的分流负责范围'));
-  assert.ok(!app.includes('分配负责产品'));
+  assert.ok(admin.includes('aria-modal="true"'));
+  assert.ok(admin.includes('再配置它的分流负责范围'));
+  assert.ok(!admin.includes('分配负责产品'));
 });

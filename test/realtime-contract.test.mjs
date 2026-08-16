@@ -8,7 +8,7 @@ const clientApi = readFileSync(
   'utf8',
 );
 const dashboard = readFileSync(
-  new URL('../src/dashboard/App.tsx', import.meta.url),
+  new URL('../src/dashboard/AgentPortal.tsx', import.meta.url),
   'utf8',
 );
 

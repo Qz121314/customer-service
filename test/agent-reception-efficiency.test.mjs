@@ -26,17 +26,18 @@ test('typing signals stay ephemeral and use authenticated conversation sockets',
 });
 
 test('agent workspace offers local sound, typing presence, and searchable slash replies', () => {
-  const app = source('../src/dashboard/App.tsx');
+  const agent = source('../src/dashboard/AgentPortal.tsx');
+  const runtime = source('../src/dashboard/dashboard-runtime.ts');
 
-  assert.ok(app.includes('cs-agent-sound:${agentId}'));
-  assert.ok(app.includes('emitAgentMessageTone'));
-  assert.ok(app.includes("document.visibilityState !== 'visible'"));
+  assert.ok(runtime.includes('cs-agent-sound:${agentId}'));
+  assert.ok(runtime.includes('emitAgentMessageTone'));
+  assert.ok(agent.includes("document.visibilityState !== 'visible'"));
   assert.ok(
-    app.includes("socket.send(JSON.stringify({ type: 'typing', active }))"),
+    agent.includes("socket.send(JSON.stringify({ type: 'typing', active }))"),
   );
-  assert.ok(app.includes('访客正在输入'));
-  assert.ok(app.includes('filteredQuickReplies'));
-  assert.ok(app.includes('placeholder="搜索快捷回复"'));
-  assert.ok(app.includes("event.key === '/'"));
-  assert.ok(app.includes('没有找到匹配的快捷回复'));
+  assert.ok(agent.includes('访客正在输入'));
+  assert.ok(agent.includes('filteredQuickReplies'));
+  assert.ok(agent.includes('placeholder="搜索快捷回复"'));
+  assert.ok(agent.includes("event.key === '/'"));
+  assert.ok(agent.includes('没有找到匹配的快捷回复'));
 });
