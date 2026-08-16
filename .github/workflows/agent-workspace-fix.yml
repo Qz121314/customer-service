@@ -19,7 +19,7 @@ jobs:
           ref: ui/agent-workspace-local
           fetch-depth: 0
 
-      - name: Remove stale server quick reply reference
+      - name: Remove stale server quick reply code
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -28,7 +28,19 @@ jobs:
           stale = '    quickRepliesRequest,\n'
           if stale not in text:
               raise SystemExit('expected stale quickRepliesRequest reference not found')
-          path.write_text(text.replace(stale, '', 1))
+          text = text.replace(stale, '', 1)
+          helper = """function normalizeText(value: unknown, maxLength: number): string | null {
+            if (typeof value !== 'string') return null;
+            const text = value.trim();
+            return text && text.length <= maxLength ? text : null;
+          }
+
+          """
+          # Source indentation is normalized below to avoid coupling this cleanup to Prettier.
+          helper = helper.replace('            ', '')
+          if helper not in text:
+              raise SystemExit('expected unused normalizeText helper not found')
+          path.write_text(text.replace(helper, '', 1))
           PY
           rm -f .github/workflows/agent-workspace-fix.yml
           if grep -R -n -E 'quickRepliesRequest|agent_quick_replies|api/agent/quick-replies' src/dashboard src/worker; then
