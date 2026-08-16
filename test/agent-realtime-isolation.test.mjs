@@ -22,7 +22,10 @@ test('agent inbox realtime events are isolated by authenticated agent id', () =>
     clientApi,
     /broadcastRoom\(env, agentInboxRoom\(conversation\.assigned_agent\)/u,
   );
-  assert.match(clientApi, /if \(!conversation\.assigned_agent\) return;/u);
+  assert.match(
+    clientApi,
+    /if \(!conversation\.assigned_agent\) return conversation;/u,
+  );
   assert.doesNotMatch(agentApi, /room\(c\.env, 'admin-inbox'\)/u);
   assert.doesNotMatch(clientApi, /broadcastRoom\(env, 'admin-inbox'/u);
 });
