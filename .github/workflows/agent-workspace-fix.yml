@@ -23,6 +23,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           worker = Path('src/worker/agent-api.ts')
           text = worker.read_text()
@@ -30,16 +31,17 @@ jobs:
           if stale not in text:
               raise SystemExit('expected stale quickRepliesRequest reference not found')
           text = text.replace(stale, '', 1)
-          helper = """function normalizeText(value: unknown, maxLength: number): string | null {
-          if (typeof value !== 'string') return null;
-          const text = value.trim();
-          return text && text.length <= maxLength ? text : null;
-          }
-
-          """
-          if helper not in text:
+          pattern = re.compile(
+              r"\nfunction normalizeText\(value: unknown, maxLength: number\): string \| null \{\n"
+              r"\s+if \(typeof value !== 'string'\) return null;\n"
+              r"\s+const text = value\.trim\(\);\n"
+              r"\s+return text && text\.length <= maxLength \? text : null;\n"
+              r"\}\n"
+          )
+          text, count = pattern.subn('\n', text, count=1)
+          if count != 1:
               raise SystemExit('expected unused normalizeText helper not found')
-          worker.write_text(text.replace(helper, '', 1))
+          worker.write_text(text)
 
           portal = Path('src/dashboard/AgentPortal.tsx')
           portal_text = portal.read_text()
