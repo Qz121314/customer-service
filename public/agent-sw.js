@@ -26,7 +26,8 @@ self.addEventListener('activate', (event) => {
         Promise.all(
           keys
             .filter(
-              (key) => key.startsWith('agent-workspace-') && key !== AGENT_CACHE,
+              (key) =>
+                key.startsWith('agent-workspace-') && key !== AGENT_CACHE,
             )
             .map((key) => caches.delete(key)),
         ),
@@ -51,7 +52,9 @@ self.addEventListener('fetch', (event) => {
           if (response.ok) {
             void caches
               .open(AGENT_CACHE)
-              .then((cache) => cache.put(AGENT_WORKSPACE_URL, response.clone()));
+              .then((cache) =>
+                cache.put(AGENT_WORKSPACE_URL, response.clone()),
+              );
           }
           return response;
         })
