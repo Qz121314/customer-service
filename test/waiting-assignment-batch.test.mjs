@@ -1,11 +1,19 @@
 import assert from 'node:assert/strict';
-import { existsSync, readdirSync, readFileSync, symlinkSync, unlinkSync } from 'node:fs';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
 
-const workerDirectory = fileURLToPath(new URL('../src/worker/', import.meta.url));
+const workerDirectory = fileURLToPath(
+  new URL('../src/worker/', import.meta.url),
+);
 const moduleShims = [];
 for (const name of ['assignment-broadcast.ts', 'routing.ts']) {
   const shimPath = join(workerDirectory, name.slice(0, -3));
@@ -16,7 +24,9 @@ for (const name of ['assignment-broadcast.ts', 'routing.ts']) {
 
 let assignWaitingConversations;
 try {
-  ({ assignWaitingConversations } = await import('../src/worker/waiting-assignment.ts'));
+  ({ assignWaitingConversations } = await import(
+    '../src/worker/waiting-assignment.ts'
+  ));
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }
@@ -32,6 +42,7 @@ function applyMigrations(database) {
 
 function d1(database) {
   const counter = { count: 0 };
+
   function statement(sql) {
     let bindings = [];
     return {
@@ -56,6 +67,7 @@ function d1(database) {
       },
     };
   }
+
   return {
     counter,
     prepare: statement,
@@ -85,13 +97,20 @@ function fakeRooms() {
       get(name) {
         return {
           async fetch(_input, init) {
-            events.push({ name, payload: JSON.parse(String(init?.body ?? '{}')) });
+            events.push({
+              name,
+              payload: JSON.parse(String(init?.body ?? '{}')),
+            });
             return new Response(null, { status: 204 });
           },
         };
       },
     },
   };
+}
+
+function scalar(database, sql, column) {
+  return database.prepare(sql).get()[column];
 }
 
 test('waiting recovery fills seat capacity in one bounded D1 batch', async () => {
@@ -120,13 +139,20 @@ test('waiting recovery fills seat capacity in one bounded D1 batch', async () =>
         `INSERT INTO visitors (id, site_id, token_hash, external_id, expires_at)
          VALUES (?, 'default', ?, ?, datetime('now', '+1 day'))`,
       )
-      .run(`visitor-${index}`, `token-${index}`, `ABC${String(index).padStart(3, '0')}`);
+      .run(
+        `visitor-${index}`,
+        `token-${index}`,
+        `ABC${String(index).padStart(3, '0')}`,
+      );
     database
       .prepare(
         `INSERT INTO conversations (
            id, site_id, visitor_id, status, product_id, section_id,
            product_title, expires_at, last_message_at
-         ) VALUES (?, 'default', ?, 'open', ?, 'west', ?, datetime('now', '+1 day'), CURRENT_TIMESTAMP)`,
+         ) VALUES (
+           ?, 'default', ?, 'open', ?, 'west', ?,
+           datetime('now', '+1 day'), CURRENT_TIMESTAMP
+         )`,
       )
       .run(
         `conversation-${index}`,
@@ -145,21 +171,33 @@ test('waiting recovery fills seat capacity in one bounded D1 batch', async () =>
   assert.equal(ids.length, 3);
   assert.equal(db.counter.count, 4);
   assert.equal(
-    database
-      .prepare("SELECT COUNT(*) AS count FROM conversations WHERE assigned_agent = 'batch-agent'")
-      .get().count,
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM conversations
+       WHERE assigned_agent = 'batch-agent'`,
+      'count',
+    ),
     3,
   );
   assert.equal(
-    database
-      .prepare("SELECT traffic_quota_used FROM agents WHERE id = 'batch-agent'")
-      .get().traffic_quota_used,
+    scalar(
+      database,
+      `SELECT traffic_quota_used
+       FROM agents
+       WHERE id = 'batch-agent'`,
+      'traffic_quota_used',
+    ),
     3,
   );
   assert.equal(
-    database
-      .prepare("SELECT COUNT(*) AS count FROM agent_traffic_receipts WHERE agent_id = 'batch-agent'")
-      .get().count,
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM agent_traffic_receipts
+       WHERE agent_id = 'batch-agent'`,
+      'count',
+    ),
     3,
   );
   assert.ok(rooms.events.length >= 3);
