@@ -84,6 +84,45 @@ async function waitForIntegrationProtocol() {
   throw lastError ?? new Error('Integration protocol rollout check failed.');
 }
 
+async function assertRemovedLegacyProtocols() {
+  const checks = [
+    ['/api/public/sites/pk_default', 'legacy public site API'],
+    ['/management/v1/groups', 'legacy management API'],
+  ];
+
+  for (const [path, label] of checks) {
+    const response = await fetch(endpoint(path), {
+      headers: { Accept: 'application/json' },
+    });
+    assert.equal(
+      response.status,
+      404,
+      `${label} must remain unavailable; got HTTP ${response.status}.`,
+    );
+  }
+
+  const conversationResponse = await fetch(
+    endpoint('/api/public/conversations'),
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        siteKey: 'pk_default',
+        message: 'legacy protocol smoke probe',
+      }),
+    },
+  );
+  assert.equal(
+    conversationResponse.status,
+    404,
+    `legacy public conversation API must remain unavailable; got HTTP ${conversationResponse.status}.`,
+  );
+  console.log('LEGACY_PROTOCOLS=removed');
+}
+
 async function assertBrowserCors() {
   const response = await fetch(endpoint('/client/v1/conversations'), {
     method: 'OPTIONS',
@@ -189,6 +228,7 @@ async function connectClientWebSocket(url) {
 
 const health = await waitForHealth();
 await waitForIntegrationProtocol();
+await assertRemovedLegacyProtocols();
 await assertBrowserCors();
 await assertClientRest();
 await assertClientWebSocket();
