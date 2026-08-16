@@ -253,7 +253,8 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
       .all<{ status: ConversationStatus; count: number }>(),
     db
       .prepare(
-        `SELECT a.daily_conversation_limit,
+        `SELECT a.daily_conversation_limit, a.traffic_quota_enabled,
+         a.traffic_quota_total, a.traffic_quota_used,
          COALESCE(s.conversation_count, 0) AS today_count
        FROM agents a
        LEFT JOIN agent_daily_stats s
@@ -264,7 +265,13 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
        LIMIT 1`,
       )
       .bind(agentId, businessDate)
-      .first<{ daily_conversation_limit: number; today_count: number }>(),
+      .first<{
+        daily_conversation_limit: number;
+        today_count: number;
+        traffic_quota_enabled: number;
+        traffic_quota_total: number;
+        traffic_quota_used: number;
+      }>(),
   ]);
   const counts = { open: 0, pending: 0, closed: 0 };
   for (const row of statusResult.results ?? [])
@@ -274,6 +281,14 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
     total: counts.open + counts.pending + counts.closed,
     todayAccepted: Number(quotaRow?.today_count ?? 0),
     dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
+    trafficQuotaEnabled: quotaRow?.traffic_quota_enabled === 1,
+    trafficQuotaTotal: Number(quotaRow?.traffic_quota_total ?? 0),
+    trafficQuotaUsed: Number(quotaRow?.traffic_quota_used ?? 0),
+    trafficQuotaRemaining: Math.max(
+      0,
+      Number(quotaRow?.traffic_quota_total ?? 0) -
+        Number(quotaRow?.traffic_quota_used ?? 0),
+    ),
   };
 }
 
@@ -311,6 +326,10 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
          AND (
            a.daily_conversation_limit = 0
            OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
+         )
+         AND (
+           a.traffic_quota_enabled = 0
+           OR a.traffic_quota_used < a.traffic_quota_total
          )
        ORDER BY COALESCE(load.active_count, 0) ASC, a.name ASC, a.id ASC`,
     )
@@ -401,7 +420,8 @@ agentApi.get('/api/agent/stats', async (c) => {
       .bind(agent.id, period.start, period.end, retainedFrom)
       .all<{ day: number; count: number }>(),
     c.env.DB.prepare(
-      `SELECT a.daily_conversation_limit,
+      `SELECT a.daily_conversation_limit, a.traffic_quota_enabled,
+         a.traffic_quota_total, a.traffic_quota_used,
          COALESCE(s.conversation_count, 0) AS today_count
        FROM agents a
        LEFT JOIN agent_daily_stats s
@@ -412,7 +432,13 @@ agentApi.get('/api/agent/stats', async (c) => {
        LIMIT 1`,
     )
       .bind(agent.id, businessDate)
-      .first<{ daily_conversation_limit: number; today_count: number }>(),
+      .first<{
+        daily_conversation_limit: number;
+        today_count: number;
+        traffic_quota_enabled: number;
+        traffic_quota_total: number;
+        traffic_quota_used: number;
+      }>(),
   ]);
   const counts = (result.results ?? []).map((row) => ({
     day: Number(row.day),
@@ -425,6 +451,14 @@ agentApi.get('/api/agent/stats', async (c) => {
     total: counts.reduce((sum, row) => sum + row.count, 0),
     todayCount: Number(quotaRow?.today_count ?? 0),
     dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
+    trafficQuotaEnabled: quotaRow?.traffic_quota_enabled === 1,
+    trafficQuotaTotal: Number(quotaRow?.traffic_quota_total ?? 0),
+    trafficQuotaUsed: Number(quotaRow?.traffic_quota_used ?? 0),
+    trafficQuotaRemaining: Math.max(
+      0,
+      Number(quotaRow?.traffic_quota_total ?? 0) -
+        Number(quotaRow?.traffic_quota_used ?? 0),
+    ),
     retainedFrom,
   });
 });
@@ -769,6 +803,10 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
              AND (
                target.daily_conversation_limit = 0
                OR COALESCE(daily.conversation_count, 0) < target.daily_conversation_limit
+             )
+             AND (
+               target.traffic_quota_enabled = 0
+               OR target.traffic_quota_used < target.traffic_quota_total
              )
          )`,
     )
