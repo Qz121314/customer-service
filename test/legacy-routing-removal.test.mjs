@@ -4,25 +4,35 @@ import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
 
+const migrationsDirectory = fileURLToPath(
+  new URL('../migrations/', import.meta.url),
+);
+const workerDirectory = fileURLToPath(
+  new URL('../src/worker/', import.meta.url),
+);
+const legacyRoutingPattern =
+  /support_groups|group_agents|group_routing_rules/u;
+
 function applyMigrations(database) {
-  const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
-  for (const name of readdirSync(directory)
+  for (const name of readdirSync(migrationsDirectory)
     .filter((value) => /^\d+.*\.sql$/u.test(value))
     .sort()) {
-    database.exec(readFileSync(`${directory}/${name}`, 'utf8'));
+    database.exec(readFileSync(`${migrationsDirectory}/${name}`, 'utf8'));
   }
+}
+
+function workerSource(filename) {
+  return readFileSync(`${workerDirectory}/${filename}`, 'utf8');
 }
 
 test('modern schema removes rollout-only routing tables', () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
 
-  const tables = new Set(
-    database
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-      .all()
-      .map((row) => row.name),
-  );
+  const rows = database
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all();
+  const tables = new Set(rows.map((row) => row.name));
 
   for (const removed of [
     'support_groups',
@@ -40,32 +50,14 @@ test('modern schema removes rollout-only routing tables', () => {
 });
 
 test('runtime source no longer references legacy routing services', () => {
-  const clientApi = readFileSync(
-    fileURLToPath(new URL('../src/worker/client-api.ts', import.meta.url)),
-    'utf8',
-  );
-  const integrationApi = readFileSync(
-    fileURLToPath(new URL('../src/worker/integration-api.ts', import.meta.url)),
-    'utf8',
-  );
-  const routing = readFileSync(
-    fileURLToPath(new URL('../src/worker/routing.ts', import.meta.url)),
-    'utf8',
-  );
-  const waiting = readFileSync(
-    fileURLToPath(new URL('../src/worker/waiting-assignment.ts', import.meta.url)),
-    'utf8',
-  );
-  const entry = readFileSync(
-    fileURLToPath(new URL('../src/worker/entry.ts', import.meta.url)),
-    'utf8',
-  );
+  const clientApi = workerSource('client-api.ts');
+  const integrationApi = workerSource('integration-api.ts');
+  const routing = workerSource('routing.ts');
+  const waiting = workerSource('waiting-assignment.ts');
+  const entry = workerSource('entry.ts');
 
   for (const source of [clientApi, integrationApi, routing, waiting]) {
-    assert.doesNotMatch(
-      source,
-      /support_groups|group_agents|group_routing_rules/u,
-    );
+    assert.doesNotMatch(source, legacyRoutingPattern);
   }
   assert.doesNotMatch(clientApi, /management\/v1\/groups|MANAGEMENT_TOKEN/u);
   assert.doesNotMatch(integrationApi, /\bgroups\s*:/u);
