@@ -1,7 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
-import { resolveConversationGroup } from './context-routing';
 import { assignConversationAgent } from './routing';
 import {
   consumeConversationCreationQuota,
@@ -13,7 +12,6 @@ type ClientBindings = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
   CONVERSATION_BURST_LIMITER?: RateLimit;
-  MANAGEMENT_TOKEN?: string;
 };
 
 type ClientEnv = { Bindings: ClientBindings };
@@ -111,34 +109,6 @@ clientApi.use(
   }),
 );
 
-clientApi.get('/management/v1/groups', async (c) => {
-  if (!managementAuthorized(c.env, c.req.header('Authorization'))) {
-    return error(c, 401, 'UNAUTHORIZED', 'Management token is invalid.');
-  }
-
-  const projectId = normalizeProjectId(c.req.header('X-Project-Id'));
-  const site = await findSite(c.env.DB, projectId);
-  if (!site)
-    return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
-
-  const result = await c.env.DB.prepare(
-    `SELECT id, name, is_enabled
-     FROM support_groups
-     WHERE site_id = ?1
-     ORDER BY name ASC, id ASC`,
-  )
-    .bind(site.id)
-    .all<{ id: string; name: string; is_enabled: number }>();
-
-  return c.json({
-    groups: (result.results ?? []).map((group) => ({
-      id: group.id,
-      name: group.name,
-      isEnabled: group.is_enabled === 1,
-    })),
-  });
-});
-
 clientApi.get('/client/v1/conversations', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
   if (!visitorId)
@@ -221,7 +191,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const body = await readJson<{
     visitorId?: string;
     projectId?: string | null;
-    groupId?: string;
     sourceHandoffId?: string;
     clientMessageId?: string;
     message?: string;
@@ -229,7 +198,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }>(c.req.raw);
 
   const visitorId = normalizeVisitorId(body?.visitorId);
-  const legacyGroupId = normalizeId(body?.groupId, 100);
   const sourceHandoffId = normalizeHandoffId(body?.sourceHandoffId);
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
   const message = body?.message?.trim();
@@ -237,12 +205,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   if (!visitorId)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
-  if (body?.sourceHandoffId !== undefined && !sourceHandoffId) {
+  if (!sourceHandoffId) {
     return error(
       c,
       400,
       'INVALID_SOURCE_HANDOFF_ID',
-      'Source handoff ID is invalid.',
+      'Source handoff ID is required and must be a UUID v4.',
     );
   }
   if (!clientMessageId) {
@@ -291,41 +259,39 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
-  if (sourceHandoffId) {
-    const existingHandoff = await c.env.DB.prepare(
-      `SELECT c.id, v.external_id
-       FROM conversations c
-       JOIN visitors v ON v.id = c.visitor_id
-       WHERE c.site_id = ?1 AND c.source_handoff_id = ?2
-       LIMIT 1`,
-    )
-      .bind(site.id, sourceHandoffId)
-      .first<{ id: string; external_id: string }>();
-    if (existingHandoff?.external_id !== undefined) {
-      if (existingHandoff.external_id !== visitorId) {
-        return error(
-          c,
-          409,
-          'SOURCE_HANDOFF_ALREADY_USED',
-          'Source handoff ID was already used.',
-        );
-      }
-      const conversation = await ownedConversation(
-        c.env.DB,
-        existingHandoff.id,
-        site.id,
-        visitorId,
+  const existingHandoff = await c.env.DB.prepare(
+    `SELECT c.id, v.external_id
+     FROM conversations c
+     JOIN visitors v ON v.id = c.visitor_id
+     WHERE c.site_id = ?1 AND c.source_handoff_id = ?2
+     LIMIT 1`,
+  )
+    .bind(site.id, sourceHandoffId)
+    .first<{ id: string; external_id: string }>();
+  if (existingHandoff?.external_id !== undefined) {
+    if (existingHandoff.external_id !== visitorId) {
+      return error(
+        c,
+        409,
+        'SOURCE_HANDOFF_ALREADY_USED',
+        'Source handoff ID was already used.',
       );
-      if (conversation) {
-        return c.json({
-          conversation: await conversationDetail(
-            c.env.DB,
-            conversation,
-            30,
-            null,
-          ),
-        });
-      }
+    }
+    const conversation = await ownedConversation(
+      c.env.DB,
+      existingHandoff.id,
+      site.id,
+      visitorId,
+    );
+    if (conversation) {
+      return c.json({
+        conversation: await conversationDetail(
+          c.env.DB,
+          conversation,
+          30,
+          null,
+        ),
+      });
     }
   }
 
@@ -356,15 +322,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   await rememberProductRoutingContext(c.env.DB, site.id, product);
 
-  // Group routing is retained only as a rollout fallback for products that do
-  // not yet have Product -> Agent assignments. New routing never requires it.
-  const legacyResolvedGroupId = await resolveConversationGroup(
-    c.env.DB,
-    site.id,
-    { sectionId: product.sectionId, categoryId: product.categoryId },
-    legacyGroupId,
-  );
-
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -372,15 +329,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   await c.env.DB.prepare(
     `INSERT INTO conversations (
-       id, site_id, visitor_id, status, subject, group_id,
+       id, site_id, visitor_id, status, subject,
        product_id, section_id, section_name, category_id, category_name,
        product_title, product_cover_url, product_href,
        source_handoff_id, expires_at, last_message_at, created_at, updated_at
      ) VALUES (
-       ?1, ?2, ?3, 'open', ?4, ?5,
-       ?6, ?7, ?8, ?9, ?10,
-       ?11, ?12, ?13,
-       ?14, ?15, ?16, ?16, ?16
+       ?1, ?2, ?3, 'open', ?4,
+       ?5, ?6, ?7, ?8, ?9,
+       ?10, ?11, ?12,
+       ?13, ?14, ?15, ?15, ?15
      )`,
   )
     .bind(
@@ -388,7 +345,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       visitor.id,
       product.title.slice(0, 120),
-      legacyResolvedGroupId,
       product.id,
       product.sectionId,
       product.sectionName,
@@ -753,14 +709,6 @@ function agentConversationSummary(
     visitor_name: conversation.visitor_name ?? null,
     last_message: conversation.last_message,
   };
-}
-
-function managementAuthorized(
-  env: ClientBindings,
-  authorization?: string,
-): boolean {
-  if (!env.MANAGEMENT_TOKEN) return true;
-  return authorization === `Bearer ${env.MANAGEMENT_TOKEN}`;
 }
 
 function normalizeProjectId(value?: string | null): string {

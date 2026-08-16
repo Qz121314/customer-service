@@ -8,12 +8,6 @@ type IntegrationBindings = {
 
 type IntegrationEnv = { Bindings: IntegrationBindings };
 
-type SupportGroupRow = {
-  id: string;
-  name: string;
-  is_enabled: number;
-};
-
 type ProductCatalogItem = {
   id: string;
   title: string;
@@ -108,18 +102,6 @@ integrationApi.post('/integration/v1/verify', async (c) => {
     productCount = await syncProductCatalog(c.env.DB, site.id, catalog);
   }
 
-  // Kept in the verification envelope during migration so an older Site admin
-  // can still validate this installation. Runtime product routing does not use
-  // these groups once a product has agent assignments.
-  const groups = await c.env.DB.prepare(
-    `SELECT id, name, is_enabled
-     FROM support_groups
-     WHERE site_id = ?1
-     ORDER BY name COLLATE NOCASE ASC, id ASC`,
-  )
-    .bind(site.id)
-    .all<SupportGroupRow>();
-
   const requestUrl = new URL(c.req.url);
   const origin = requestUrl.origin;
   const realtimeUrl = new URL('/client/v1/realtime', origin);
@@ -131,11 +113,6 @@ integrationApi.post('/integration/v1/verify', async (c) => {
     clientApiUrl: new URL('/client/v1', origin).toString().replace(/\/$/u, ''),
     realtimeUrl: realtimeUrl.toString(),
     productCatalog: { productCount },
-    groups: (groups.results ?? []).map((group) => ({
-      id: group.id,
-      name: group.name,
-      isEnabled: group.is_enabled === 1,
-    })),
   });
 });
 

@@ -61,25 +61,12 @@ function createDatabase() {
       is_enabled INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (site_id, id)
     );
-    CREATE TABLE support_groups (
-      site_id TEXT NOT NULL,
-      id TEXT NOT NULL,
-      is_enabled INTEGER NOT NULL,
-      PRIMARY KEY (site_id, id)
-    );
-    CREATE TABLE group_agents (
-      site_id TEXT NOT NULL,
-      group_id TEXT NOT NULL,
-      agent_id TEXT NOT NULL,
-      is_enabled INTEGER NOT NULL
-    );
     CREATE TABLE conversations (
       id TEXT PRIMARY KEY,
       site_id TEXT NOT NULL,
       product_id TEXT,
       section_id TEXT,
       category_id TEXT,
-      group_id TEXT,
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
@@ -110,8 +97,6 @@ function createDatabase() {
       ON CONFLICT(site_id, agent_id, business_date) DO UPDATE SET
         conversation_count = conversation_count + 1;
     END;
-
-    INSERT INTO support_groups VALUES ('default', 'legacy', 1);
   `);
   return database;
 }
@@ -164,17 +149,17 @@ function addConversation(
   database,
   id,
   productId,
-  { groupId = 'legacy', sectionId = 'west', categoryId = 'escorts' } = {},
+  { sectionId = 'west', categoryId = 'escorts' } = {},
 ) {
   database
     .prepare(
       `INSERT INTO conversations (
-         id, site_id, product_id, section_id, category_id, group_id,
+         id, site_id, product_id, section_id, category_id,
          assigned_agent, status, expires_at, created_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, NULL, 'open',
+       ) VALUES (?, 'default', ?, ?, ?, NULL, 'open',
          '2099-01-01T00:00:00.000Z', CURRENT_TIMESTAMP)`,
     )
-    .run(id, productId, sectionId, categoryId, groupId);
+    .run(id, productId, sectionId, categoryId);
 }
 
 test('agents covering the same section receive conversations round-robin', async () => {
@@ -237,19 +222,14 @@ test('one agent can cover multiple whole sections', async () => {
   database.close();
 });
 
-test('configured category never falls back to a legacy group when its agent is unavailable', async () => {
+test('configured category remains waiting when its scoped agent is unavailable', async () => {
   const database = createDatabase();
   addAgent(database, { id: 'category-agent', status: 'offline' });
-  addAgent(database, { id: 'legacy-agent' });
   addScope(database, 'category-agent', {
     type: 'category',
     sectionId: 'west',
     categoryId: 'escorts',
   });
-  database.exec(`
-    INSERT INTO group_agents VALUES
-      ('default', 'legacy', 'legacy-agent', 1);
-  `);
   addConversation(database, 'conversation-1', 'product-a');
 
   const assignment = await assignConversationAgent(
@@ -272,7 +252,6 @@ test('section scope automatically covers a newly introduced product', async () =
   addAgent(database, { id: 'section-agent' });
   addScope(database, 'section-agent', { type: 'section', sectionId: 'west' });
 
-  // No product-specific assignment and no product_catalog row are required.
   addConversation(database, 'conversation-1', 'future-product', {
     sectionId: 'west',
     categoryId: 'new-category',
@@ -290,15 +269,10 @@ test('section scope automatically covers a newly introduced product', async () =
 test('explicit product scope matches only the selected product', async () => {
   const database = createDatabase();
   addAgent(database, { id: 'product-agent' });
-  addAgent(database, { id: 'legacy-agent' });
   addScope(database, 'product-agent', {
     type: 'product',
     productId: 'product-a',
   });
-  database.exec(`
-    INSERT INTO group_agents VALUES
-      ('default', 'legacy', 'legacy-agent', 1);
-  `);
   addConversation(database, 'conversation-1', 'product-b');
 
   const assignment = await assignConversationAgent(
@@ -306,17 +280,17 @@ test('explicit product scope matches only the selected product', async () => {
     'conversation-1',
   );
 
-  assert.equal(assignment?.id, 'legacy-agent');
+  assert.equal(assignment, null);
   database.close();
 });
 
-test('legacy group is used only when no routing scope matches', async () => {
+test('conversation without a routing scope remains waiting', async () => {
   const database = createDatabase();
-  addAgent(database, { id: 'legacy-agent' });
-  database.exec(`
-    INSERT INTO group_agents VALUES
-      ('default', 'legacy', 'legacy-agent', 1);
-  `);
+  addAgent(database, { id: 'unrelated-agent' });
+  addScope(database, 'unrelated-agent', {
+    type: 'section',
+    sectionId: 'east',
+  });
   addConversation(database, 'conversation-1', 'product-without-scope');
 
   const assignment = await assignConversationAgent(
@@ -324,7 +298,7 @@ test('legacy group is used only when no routing scope matches', async () => {
     'conversation-1',
   );
 
-  assert.equal(assignment?.id, 'legacy-agent');
+  assert.equal(assignment, null);
   database.close();
 });
 

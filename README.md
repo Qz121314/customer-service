@@ -120,13 +120,15 @@ Content-Type: application/json
 
 验证时可以一次提交当前产品目录。客服系统将产品、分区和分类上下文批量同步到 D1，供管理员配置动态负责范围；实际访客会话仍由前端直接调用客服系统，Site 后台不做代理。
 
-验证成功返回协议版本、客户端 API、实时地址、项目标识和兼容分组信息。客服系统只要求公网 HTTPS / WebSocket，不依赖与 Site 位于同一个 Cloudflare Account，也不依赖固定 Worker 名称或 Service Binding。
+验证成功返回协议版本、客户端 API、实时地址和产品目录同步结果。客服系统只要求公网 HTTPS / WebSocket，不依赖与 Site 位于同一个 Cloudflare Account，也不依赖固定 Worker 名称或 Service Binding。
+
+产品目录同步使用固定大小的 JSON 批次在 D1 内通过 `json_each` 展开。即使产品数量增长，也不会变成“一件产品一次 D1 查询”的线性请求模型。
 
 ## 4. 流量分配规则
 
 ### 4.1 负责范围
 
-新路由使用 `agent_routing_scopes`，规则不展开成大量产品 ID：
+路由统一使用 `agent_routing_scopes`，规则不展开成大量产品 ID：
 
 | 范围     | 行为                                       |
 | -------- | ------------------------------------------ |
@@ -134,7 +136,9 @@ Content-Type: application/json
 | 指定分类 | 覆盖选中分区/分类中的产品                  |
 | 指定产品 | 只覆盖明确选择的单个产品                   |
 
-只有没有任何分区、分类或产品范围命中时，才使用旧 `support_groups` / `group_agents` 关系作为兼容回退。旧分组不是当前主路由模型。
+如果当前产品没有任何启用的分区、分类或产品范围命中，会话保持等待状态，不再回退到旧客服分组模型。等待会话在匹配坐席恢复在线、释放容量、补充额度或管理员补充负责范围后再次尝试分配。
+
+历史 `agent_products` 配置已在早期 migration 中转换为明确的产品级 `agent_routing_scopes`；旧客服分组和旧路由目录表已从最终 schema 删除。
 
 ### 4.2 候选坐席
 
@@ -144,7 +148,7 @@ Content-Type: application/json
 账号已启用
 状态为 online
 最近 2 分钟内存在有效在线记录
-负责范围命中当前产品，或进入兼容分组回退
+负责范围命中当前产品
 未超过最大同时会话数
 未达到当天新会话接待上限
 未耗尽坐席总接待额度（未启用时跳过）
@@ -158,13 +162,14 @@ Content-Type: application/json
 
 ```text
 进行中会话最少
+→ 当日累计接待最少
 → 最久未分配
 → 客服 ID
 ```
 
 候选选择、容量判断和会话写入由 D1 SQLite 的单条原子更新完成，避免并发请求依据同一份过期容量快照，把多个会话重复压给同一坐席。
 
-如果当前没有合格坐席，会话保持未分配。坐席登录、恢复在线、已有会话结束释放容量，或额度耗尽后完成补额，系统会再次尝试分配。补额触发的即时重试每次最多处理 10 个等待会话，避免无界 D1 扫描。
+如果当前没有合格坐席，会话保持未分配。坐席登录、恢复在线、已有会话结束释放容量，或额度耗尽后完成补额，系统会再次尝试分配。等待队列恢复不是逐会话重跑完整路由，而是针对当前坐席按剩余容量、每日上限和剩余额度一次批量认领；每次最多处理 10 个等待会话，避免无界 D1 扫描。
 
 ## 5. 会话生命周期与计数规则
 
@@ -188,6 +193,7 @@ Content-Type: application/json
 - 未分配会话不计入任何坐席；
 - 被频率限制、重复分发编号或额度限制拦截的请求不计数；
 - `sourceHandoffId` 在会话和首次接待凭证中保持唯一；
+- 新建 v1 会话必须提供合法 UUID v4 `sourceHandoffId`；
 - 相同 `sourceHandoffId` 重试只返回原结果，不创建第二个会话或第二笔流量；
 - 坐席流量凭证独立于 24 小时聊天记录保存 400 天。
 
@@ -219,7 +225,7 @@ Content-Type: application/json
 - 额度用完只影响新分流，已分配会话仍可继续处理；
 - 在线坐席补额恢复资格后，立即对最早等待的会话执行一次最多 10 条的有界分配重试；
 - 转接、重新排队、关闭后重新打开，以及相同 `sourceHandoffId` 的重试不重复扣减；
-- 额度检查位于原子路由 SQL，扣减与首次接待凭证在同一 D1 事务完成。
+- 额度检查位于原子路由 SQL，扣减与首次接待凭证由 D1 的首次分配规则保证只发生一次。
 
 计算口径：`剩余额度 = max(总额度 - 已消耗, 0)`。
 
@@ -232,9 +238,13 @@ Content-Type: application/json
 | 层级                     | 规则                                              | 资源影响                               |
 | ------------------------ | ------------------------------------------------- | -------------------------------------- |
 | Cloudflare Rate Limiting | 同一来源 60 秒最多 1 次新会话                     | 在进入主要 D1 写入和路由前拦截突发请求 |
-| D1 访客额度              | 同一访客滚动 24 小时最多 10 次                    | 主键固定键原子 UPSERT，不扫描会话表    |
+| D1 访客额度              | 同一访客滚动 24 小时最多 10 次                    | 固定键计数，不扫描历史会话             |
 | D1 来源额度              | 同一 `IP + User-Agent` 哈希滚动 24 小时最多 20 次 | 更换本地访客编号仍不能无限创建         |
 | 分发编号                 | 同一站点的 `sourceHandoffId` 唯一                 | 网络重试不产生重复流量                 |
+| 幂等消息                 | `clientMessageId` 必填                            | 重试不会重复创建第一条消息             |
+| 产品上下文               | 新会话必须携带有效产品上下文                      | 分流不依赖额外回查旧客服组或旧路由目录 |
+
+Visitor 与 Source 两个 D1 额度在同一条 SQLite 语句中先判断、再一起消费。只有两边都仍有额度时才同时增加计数；任意一边已经达到上限时，本次创建不会误扣另一边。正常允许路径因此只需要一次额度 SQL，拒绝路径仅额外读取当前计数用于确定错误类型和 `Retry-After`。
 
 系统只存储来源哈希，不把原始 IP 或完整 User-Agent 写入 D1。超限响应包含 `Retry-After`；被拦截请求不进入坐席分配、不产生有效流量凭证，也不占用坐席容量。
 
@@ -264,16 +274,20 @@ Content-Type: application/json
 - 单个会话的消息与媒体合并读取；
 - 状态筛选、关键词搜索和未读优先在前端本地完成；
 - 分区负责范围保存为动态规则，不逐个读取或写入产品；
+- 产品目录同步按固定 JSON 批次使用 `json_each` 在 D1 内展开，不逐产品执行 SQL；
+- 等待会话恢复按坐席剩余容量一次批量认领，不逐会话重跑全局路由；
+- Visitor + Source 创建额度用单条 SQL 原子判断和消费；
 - WebSocket 负责实时消息和在线心跳，不使用固定 30 秒 HTTP 轮询；
 - 浏览器恢复时只执行一次 REST heartbeat 对账；
 - 重连后只补取最后一条消息之后的增量；
 - 新建会话防滥用使用固定键索引，不随历史会话数量增长；
 - 坐席额度直接读取 `agents` 行上的计数器，并随既有启动数据返回，不增加轮询或逐会话扫描；
-- 额度变更历史只在打开坐席编辑弹窗时读取最近 10 笔；补额后的等待会话重试固定上限为 10；
+- 额度变更历史只在打开坐席编辑弹窗时读取最近 10 笔；
 - Cron 清理全部按批次执行，避免单次大查询和大删除。
 
 ## 8. 接待稳定性
 
+- 新建会话使用 `sourceHandoffId` 唯一约束，上游重试可安全对账；
 - 客户端消息使用 `clientMessageId` 唯一约束，发送失败可安全重试；
 - 图片使用 `clientUploadId` 唯一约束，初始化和完成可重复调用；
 - 文字草稿只保存在当前浏览器，按会话保存 24 小时；
@@ -305,9 +319,9 @@ Content-Type: application/json
 ## 10. Cloudflare 资源
 
 ```text
-Worker        customer-service-app
-D1            customer-service-db
-R2            customer-service-media
+Worker         customer-service-app
+D1             customer-service-db
+R2             customer-service-media
 Durable Object ConversationRoom
 Rate Limit     CONVERSATION_BURST_LIMITER
 Rate Limit     MEDIA_BURST_LIMITER
@@ -338,6 +352,8 @@ product_catalog
 agent_quick_replies
 ```
 
+路由只依赖 `agent_routing_scopes + product_catalog`。早期 rollout 使用的 `support_groups`、`group_agents`、`group_routing_rules`、`routing_catalog_sections`、`routing_catalog_categories` 和 `agent_products` 已在 migration 0025 删除，不再属于最终运行时数据模型。
+
 ### 流量统计与防滥用
 
 ```text
@@ -355,17 +371,6 @@ conversation_creation_limits
 visitor_push_vapid
 visitor_push_subscriptions
 agent_push_subscriptions
-```
-
-### 兼容数据
-
-```text
-support_groups
-group_agents
-routing_catalog_sections
-routing_catalog_categories
-group_routing_rules
-agent_products
 ```
 
 管理员账号和客服账号不是同一身份体系。管理员只负责配置；只有客服 Session 可以进入坐席工作台和处理分配给自己的会话。
@@ -403,6 +408,13 @@ GET   /api/admin/products
 ```text
 /api/admin/conversations*
 /api/admin/realtime/*
+```
+
+旧 Public API 和旧 Management API 也已移除并在 Worker 最外层固定返回 404：
+
+```text
+/api/public/*
+/management/v1/*
 ```
 
 ### 客服坐席
@@ -461,6 +473,18 @@ POST /client/v1/push/subscriptions
 POST /client/v1/push/subscriptions/remove
 ```
 
+新建 `POST /client/v1/conversations` 必须包含：
+
+```text
+visitorId
+sourceHandoffId   # UUID v4
+clientMessageId
+message
+product           # id / section / category / title / href / cover 等上下文
+```
+
+`sourceHandoffId` 用于上游 Site 与客服系统之间的逐笔流量对账和幂等重试；`clientMessageId` 用于第一条消息的发送幂等。
+
 ## 13. 环境变量与 Secret
 
 生产必需：
@@ -474,6 +498,8 @@ INTEGRATION_VERIFY_TOKEN
 | -------------------------- | ---------------------- |
 | `ADMIN_PASSWORD`           | 管理中心管理员登录     |
 | `INTEGRATION_VERIFY_TOKEN` | 外部 Site 验证接入协议 |
+
+旧 `MANAGEMENT_TOKEN` 已删除，不再属于运行时配置。
 
 可选的 R2 浏览器直传配置：
 
@@ -543,6 +569,8 @@ Pull Request：
 → 生产协议 Smoke Test
 ```
 
+生产 Smoke Test 会验证健康检查、Integration v1、废弃协议 404、Client CORS、Client REST 和 Client WebSocket，避免 SPA fallback 或路由调整把已删除协议重新暴露出来。
+
 GitHub Repository Secrets：
 
 ```text
@@ -559,13 +587,13 @@ CLOUDFLARE_API_TOKEN
 个人和小团队优先，简单稳定
 管理员配置与客服接待分离
 访客会话临时化，不做长期 CRM
-按分区 / 分类 / 产品动态负责范围
-客服分组只保留兼容回退
+路由只使用分区 / 分类 / 产品动态负责范围
 有效流量只计首次坐席接待
 坐席总额度只正向追加，用唯一请求编号防止重复加额
 上下游使用 sourceHandoffId 幂等对账
+Visitor + Source 防滥用计数必须同时成功才消费
 优先批量读取、一次返回和前端本地筛选
-优先减少 Workers 请求、D1 扫描和无界 R2 写入
+优先使用有界批处理，减少 Workers 请求、D1 查询和无界 R2 写入
 不依赖 Site 数据库或同一 Cloudflare Account
 不在没有真实需求时增加大型企业功能
 ```

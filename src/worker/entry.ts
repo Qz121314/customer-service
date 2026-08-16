@@ -23,7 +23,6 @@ interface Bindings {
   CONVERSATION_BURST_LIMITER: RateLimit;
   MEDIA_BURST_LIMITER: RateLimit;
   ADMIN_PASSWORD?: string;
-  MANAGEMENT_TOKEN?: string;
   INTEGRATION_VERIFY_TOKEN?: string;
   R2_ACCOUNT_ID?: string;
   R2_ACCESS_KEY_ID?: string;
