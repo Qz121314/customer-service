@@ -6,12 +6,17 @@ type WaitingAssignmentEnv = {
   CONVERSATION_ROOMS: DurableObjectNamespace;
 };
 
+const MAX_RECOVERY_ASSIGNMENTS = 5;
+
 export async function assignWaitingConversations(
   env: WaitingAssignmentEnv,
   agentId: string,
-  requestedLimit = 20,
+  requestedLimit = MAX_RECOVERY_ASSIGNMENTS,
 ): Promise<string[]> {
-  const limit = Math.max(1, Math.min(20, Math.trunc(requestedLimit)));
+  const limit = Math.max(
+    1,
+    Math.min(MAX_RECOVERY_ASSIGNMENTS, Math.trunc(requestedLimit)),
+  );
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
 
