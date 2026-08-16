@@ -30,6 +30,8 @@ type ProductCatalogInput = {
   products: ProductCatalogItem[];
 };
 
+const PRODUCT_SYNC_CHUNK_SIZE = 250;
+
 export const integrationApi = new Hono<IntegrationEnv>();
 
 integrationApi.use(
@@ -187,22 +189,27 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
   return { products };
 }
 
-async function syncProductCatalog(
+/**
+ * Synchronize the catalog with a bounded number of D1 queries.
+ *
+ * D1 exposes SQLite JSON functions, so each chunk is expanded inside SQLite
+ * instead of generating one prepared statement per product. At the protocol
+ * maximum of 5,000 products this is 20 upserts plus one disable pass, keeping
+ * the operation below the Workers Free per-invocation D1 query ceiling.
+ */
+export async function syncProductCatalog(
   db: D1Database,
   siteId: string,
   catalog: ProductCatalogInput,
 ): Promise<number> {
-  const statements: D1PreparedStatement[] = [
-    db
-      .prepare(
-        `UPDATE product_catalog
-         SET is_enabled = 0, updated_at = CURRENT_TIMESTAMP
-         WHERE site_id = ?1`,
-      )
-      .bind(siteId),
-  ];
+  const statements: D1PreparedStatement[] = [];
 
-  for (const product of catalog.products) {
+  for (
+    let offset = 0;
+    offset < catalog.products.length;
+    offset += PRODUCT_SYNC_CHUNK_SIZE
+  ) {
+    const chunk = catalog.products.slice(offset, offset + PRODUCT_SYNC_CHUNK_SIZE);
     statements.push(
       db
         .prepare(
@@ -210,7 +217,21 @@ async function syncProductCatalog(
              site_id, id, title, href, cover_url,
              section_id, section_name, category_id, category_name,
              is_enabled, updated_at
-           ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, CURRENT_TIMESTAMP)
+           )
+           SELECT
+             ?1,
+             json_extract(value, '$.id'),
+             json_extract(value, '$.title'),
+             json_extract(value, '$.href'),
+             json_extract(value, '$.coverUrl'),
+             json_extract(value, '$.sectionId'),
+             json_extract(value, '$.sectionName'),
+             json_extract(value, '$.categoryId'),
+             json_extract(value, '$.categoryName'),
+             CASE WHEN json_extract(value, '$.isEnabled') THEN 1 ELSE 0 END,
+             CURRENT_TIMESTAMP
+           FROM json_each(?2)
+           WHERE json_type(value) = 'object'
            ON CONFLICT(site_id, id) DO UPDATE SET
              title = excluded.title,
              href = excluded.href,
@@ -222,20 +243,24 @@ async function syncProductCatalog(
              is_enabled = excluded.is_enabled,
              updated_at = CURRENT_TIMESTAMP`,
         )
-        .bind(
-          siteId,
-          product.id,
-          product.title,
-          product.href,
-          product.coverUrl,
-          product.sectionId,
-          product.sectionName,
-          product.categoryId,
-          product.categoryName,
-          product.isEnabled ? 1 : 0,
-        ),
+        .bind(siteId, JSON.stringify(chunk)),
     );
   }
+
+  const activeIds = catalog.products.map((product) => product.id);
+  statements.push(
+    db
+      .prepare(
+        `UPDATE product_catalog
+         SET is_enabled = 0, updated_at = CURRENT_TIMESTAMP
+         WHERE site_id = ?1
+           AND id NOT IN (
+             SELECT CAST(value AS TEXT)
+             FROM json_each(?2)
+           )`,
+      )
+      .bind(siteId, JSON.stringify(activeIds)),
+  );
 
   await db.batch(statements);
   return catalog.products.length;
