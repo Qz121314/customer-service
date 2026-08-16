@@ -10,8 +10,7 @@ const migrationsDirectory = fileURLToPath(
 const workerDirectory = fileURLToPath(
   new URL('../src/worker/', import.meta.url),
 );
-const legacyRoutingPattern =
-  /support_groups|group_agents|group_routing_rules/u;
+const legacyRoutingPattern = /support_groups|group_agents|group_routing_rules/u;
 
 function applyMigrations(database) {
   for (const name of readdirSync(migrationsDirectory)
