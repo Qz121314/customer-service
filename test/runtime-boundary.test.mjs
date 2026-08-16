@@ -8,7 +8,10 @@ const core = readFileSync('src/worker/core.ts', 'utf8');
 test('runtime does not mount the legacy chat application', () => {
   assert.doesNotMatch(entry, /from ['"]\.\/index['"]/u);
   assert.match(entry, /from ['"]\.\/core['"]/u);
-  assert.match(entry, /app\.all\('\/api\/public\/\*'/u);
+  assert.match(entry, /from ['"]\.\/protocol-boundary['"]/u);
+  assert.match(entry, /fetch\(request: Request, env: Bindings/u);
+  assert.match(entry, /isRemovedProtocolPath\(new URL\(request\.url\)\.pathname\)/u);
+  assert.match(entry, /return removedProtocolResponse\(\)/u);
 });
 
 test('core owns only auth, health and asset fallback API boundaries', () => {
