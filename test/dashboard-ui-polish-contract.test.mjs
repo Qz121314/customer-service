@@ -20,8 +20,7 @@ test('dashboard polish removes narrow chat constraints and agent workspace remai
       main.indexOf("'./cloud-service-ui.css'"),
   );
   assert.ok(
-    main.indexOf("'./agent-workspace.css'") >
-      main.indexOf("'./ui-polish.css'"),
+    main.indexOf("'./agent-workspace.css'") > main.indexOf("'./ui-polish.css'"),
   );
   assert.ok(
     polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
