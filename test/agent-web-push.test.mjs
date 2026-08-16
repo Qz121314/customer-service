@@ -17,7 +17,11 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   assert.match(api, /requireAgentSession/u);
   assert.match(api, /agent_push_subscriptions/u);
   assert.match(api, /agent_id = \?2/u);
-  assert.match(delivery, /WHERE agent_id = \?1/u);
+  assert.match(
+    delivery,
+    /subscription\.agent_id = conversation\.assigned_agent/u,
+  );
+  assert.match(delivery, /JOIN visitor_push_vapid vapid/u);
   assert.match(delivery, /sendDataLessPush/u);
   assert.match(entry, /sendAgentPushForConversation/u);
   assert.match(entry, /executionCtx\.waitUntil/u);

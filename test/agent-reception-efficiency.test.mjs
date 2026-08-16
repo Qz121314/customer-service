@@ -8,7 +8,7 @@ function source(path) {
 }
 
 test('typing signals stay ephemeral and use authenticated conversation sockets', () => {
-  const room = source('../src/worker/index.ts');
+  const room = source('../src/worker/core.ts');
   const agentApi = source('../src/worker/agent-api.ts');
   const clientApi = source('../src/worker/client-api.ts');
 
