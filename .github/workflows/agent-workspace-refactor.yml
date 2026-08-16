@@ -47,7 +47,6 @@ jobs:
           src/dashboard/api.ts
           src/worker/agent-api.ts
           src/dashboard/agent-workspace.css
-          migrations/0029_remove_server_quick_replies.sql
           test/agent-transfer-quick-replies.test.mjs
           test/agent-mobile-layout-contract.test.mjs
           test/agent-workspace-ui-contract.test.mjs
