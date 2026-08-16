@@ -60,6 +60,18 @@ function d1(database) {
   };
 }
 
+function acceptedCount(database, subjectKey) {
+  return (
+    database
+      .prepare(
+        `SELECT accepted_count
+         FROM conversation_creation_limits
+         WHERE site_id = 'default' AND subject_key = ?`,
+      )
+      .get(subjectKey)?.accepted_count ?? 0
+  );
+}
+
 test('visitor conversation quota has a fixed indexed 24-hour cost', async () => {
   const database = createDatabase();
   const db = d1(database);
@@ -85,6 +97,11 @@ test('visitor conversation quota has a fixed indexed 24-hour cost', async () => 
   assert.equal(blocked.allowed, false);
   assert.equal(blocked.code, 'VISITOR_CONVERSATION_LIMIT_REACHED');
   assert.equal(blocked.retryAfterSeconds, 24 * 60 * 60);
+  assert.equal(
+    acceptedCount(database, 'source:source-a'),
+    VISITOR_CONVERSATION_LIMIT,
+    'a visitor rejection must not consume the source counter',
+  );
 
   const reset = await consumeConversationCreationQuota(db, {
     siteId: 'default',
@@ -123,7 +140,9 @@ test('source quota survives visitor id changes without scanning conversations', 
       .prepare('SELECT COUNT(*) AS count FROM conversation_creation_limits')
       .get().count,
     SOURCE_CONVERSATION_LIMIT + 1,
+    'a source rejection must not create or consume the new visitor counter',
   );
+  assert.equal(acceptedCount(database, 'visitor:another-visitor'), 0);
   database.close();
 });
 
