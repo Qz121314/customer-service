@@ -40,7 +40,7 @@
 - 在线状态、容量、每日上限和坐席总额度约束下的流量分配；
 - 坐席接待、实时消息、图片和浏览器通知；
 - 每位坐席的自然月接待统计；
-- 坐席级总额度、已消耗、剩余量和正向追加；
+- 坐席级总额度、已消耗、剩余量、幂等追加和不可变额度变更记录；
 - `sourceHandoffId` 上下游逐笔对账。
 
 本仓库当前不负责：
@@ -66,7 +66,7 @@
 - 设置最大同时处理会话数；
 - 设置每日新会话接待上限；
 - 启用坐席按量额度，使用 100 / 500 / 1000 快捷套餐或自定义数量追加；
-- 查看每名坐席的总额度、已消耗和剩余量；
+- 查看每名坐席的总额度、已消耗、剩余量及最近 10 笔额度变更；
 - 设置分区、分类或指定产品负责范围；
 - 分区负责范围支持多选；
 - 查看所有坐席的完整自然月接待统计；
@@ -164,7 +164,7 @@ Content-Type: application/json
 
 候选选择、容量判断和会话写入由 D1 SQLite 的单条原子更新完成，避免并发请求依据同一份过期容量快照，把多个会话重复压给同一坐席。
 
-如果当前没有合格坐席，会话保持未分配。坐席登录、恢复在线，或已有会话结束释放容量后，系统会再次尝试分配。
+如果当前没有合格坐席，会话保持未分配。坐席登录、恢复在线、已有会话结束释放容量，或额度耗尽后完成补额，系统会再次尝试分配。补额触发的即时重试每次最多处理 10 个等待会话，避免无界 D1 扫描。
 
 ## 5. 会话生命周期与计数规则
 
@@ -213,8 +213,11 @@ Content-Type: application/json
 
 - 新坐席默认启用按量额度，初始快捷值为 100；旧坐席迁移后默认不限额，避免上线时意外停流；
 - 总额度只能正向追加，不允许覆盖或减少已消耗量；
+- 每次追加必须携带唯一 `trafficQuotaRequestId`，相同请求重试只生效一次，不同金额复用同一编号会被拒绝；
+- 每次成功追加写入不可变 `agent_quota_adjustments` 记录，坐席编辑弹窗按需读取最近 10 笔，不增加常驻轮询；
 - 关闭额度限制不会清空历史总额和消耗，再次启用继续沿用原余额；
 - 额度用完只影响新分流，已分配会话仍可继续处理；
+- 在线坐席补额恢复资格后，立即对最早等待的会话执行一次最多 10 条的有界分配重试；
 - 转接、重新排队、关闭后重新打开，以及相同 `sourceHandoffId` 的重试不重复扣减；
 - 额度检查位于原子路由 SQL，扣减与首次接待凭证在同一 D1 事务完成。
 
@@ -266,6 +269,7 @@ Content-Type: application/json
 - 重连后只补取最后一条消息之后的增量；
 - 新建会话防滥用使用固定键索引，不随历史会话数量增长；
 - 坐席额度直接读取 `agents` 行上的计数器，并随既有启动数据返回，不增加轮询或逐会话扫描；
+- 额度变更历史只在打开坐席编辑弹窗时读取最近 10 笔；补额后的等待会话重试固定上限为 10；
 - Cron 清理全部按批次执行，避免单次大查询和大删除。
 
 ## 8. 接待稳定性
@@ -339,10 +343,11 @@ agent_quick_replies
 ```text
 agent_daily_stats
 agent_traffic_receipts
+agent_quota_adjustments
 conversation_creation_limits
 ```
 
-`agents` 同时保存坐席总额度、已消耗和是否启用额度限制；`agent_traffic_receipts.quota_consumed` 标记每个会话是否已经完成唯一扣量。
+`agents` 同时保存坐席总额度、已消耗和是否启用额度限制；`agent_traffic_receipts.quota_consumed` 标记每个会话是否已经完成唯一扣量；`agent_quota_adjustments` 以坐席和请求编号唯一约束保存每次正向追加，确保网络重试不会重复加额。
 
 ### 通知
 
@@ -386,11 +391,12 @@ GET   /api/admin/bootstrap
 GET   /api/admin/agents
 POST  /api/admin/agents
 PATCH /api/admin/agents/:id
+GET   /api/admin/agents/:id/quota-adjustments
 GET   /api/admin/agent-stats?month=YYYY-MM
 GET   /api/admin/products
 ```
 
-创建或更新坐席可提交 `trafficQuotaEnabled` 和 `trafficQuotaTopUp`。`trafficQuotaTopUp` 只做正向追加；支付和订单信息不进入本 API。
+创建或更新坐席可提交 `trafficQuotaEnabled`、`trafficQuotaTopUp` 和 `trafficQuotaRequestId`。追加数量大于 0 时请求编号必填并作为幂等键；`trafficQuotaTopUp` 只做正向追加，支付和订单信息不进入本 API。
 
 管理员聊天接口已明确禁用：
 
@@ -556,7 +562,7 @@ CLOUDFLARE_API_TOKEN
 按分区 / 分类 / 产品动态负责范围
 客服分组只保留兼容回退
 有效流量只计首次坐席接待
-坐席总额度只正向追加，用完停止新分流
+坐席总额度只正向追加，用唯一请求编号防止重复加额
 上下游使用 sourceHandoffId 幂等对账
 优先批量读取、一次返回和前端本地筛选
 优先减少 Workers 请求、D1 扫描和无界 R2 写入
