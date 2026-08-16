@@ -23,30 +23,37 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          path = Path('src/worker/agent-api.ts')
-          text = path.read_text()
+
+          worker = Path('src/worker/agent-api.ts')
+          text = worker.read_text()
           stale = '    quickRepliesRequest,\n'
           if stale not in text:
               raise SystemExit('expected stale quickRepliesRequest reference not found')
           text = text.replace(stale, '', 1)
           helper = """function normalizeText(value: unknown, maxLength: number): string | null {
-            if (typeof value !== 'string') return null;
-            const text = value.trim();
-            return text && text.length <= maxLength ? text : null;
+          if (typeof value !== 'string') return null;
+          const text = value.trim();
+          return text && text.length <= maxLength ? text : null;
           }
 
           """
-          # Source indentation is normalized below to avoid coupling this cleanup to Prettier.
-          helper = helper.replace('            ', '')
           if helper not in text:
               raise SystemExit('expected unused normalizeText helper not found')
-          path.write_text(text.replace(helper, '', 1))
+          worker.write_text(text.replace(helper, '', 1))
+
+          portal = Path('src/dashboard/AgentPortal.tsx')
+          portal_text = portal.read_text()
+          stale_import = '  AgentQuickReply,\n'
+          if stale_import not in portal_text:
+              raise SystemExit('expected AgentQuickReply import not found')
+          portal.write_text(portal_text.replace(stale_import, '  type AgentQuickReply,\n', 1))
           PY
           rm -f .github/workflows/agent-workspace-fix.yml
           if grep -R -n -E 'quickRepliesRequest|agent_quick_replies|api/agent/quick-replies' src/dashboard src/worker; then
             echo 'stale server quick reply reference remains'
             exit 1
           fi
+          grep -n 'type AgentQuickReply' src/dashboard/AgentPortal.tsx
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
