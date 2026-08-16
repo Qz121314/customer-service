@@ -32,6 +32,15 @@ jobs:
         run: |
           node scripts/optimize-media-hot-path.mjs
           sed -i "3i import { URL } from 'node:url';" test/media-hot-path-cost.test.mjs
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('test/media-hot-path-cost.test.mjs')
+          source = path.read_text()
+          old = r"media\.sender_type === 'agent' && context\.conversationStatus === 'open'"
+          new = r"media\.sender_type === 'agent' &&\s*context\.conversationStatus === 'open'"
+          assert old in source
+          path.write_text(source.replace(old, new))
+          PY
 
       - name: Format targeted files
         run: pnpm exec prettier --write src/worker/media-store.ts src/worker/media-api.ts test/media-hot-path-cost.test.mjs
