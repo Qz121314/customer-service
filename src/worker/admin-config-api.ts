@@ -804,20 +804,7 @@ async function normalizeRoutingScope(
       legacySectionId,
     ]);
     if (!sectionIds.length) return null;
-    const result = await db
-      .prepare(
-        `SELECT DISTINCT section_id
-         FROM product_catalog
-         WHERE site_id = 'default'
-           AND is_enabled = 1
-           AND section_id IS NOT NULL
-           AND section_id <> ''`,
-      )
-      .all<{ section_id: string }>();
-    const allowed = new Set(
-      (result.results ?? []).map((row) => row.section_id),
-    );
-    return sectionIds.every((id) => allowed.has(id))
+    return (await allEnabledSectionsExist(db, sectionIds))
       ? { type: 'section', sectionIds }
       : null;
   }
@@ -827,22 +814,7 @@ async function normalizeRoutingScope(
     if (!sectionId || !Array.isArray(raw.categoryIds)) return null;
     const categoryIds = normalizedIdentifiers(raw.categoryIds);
     if (!categoryIds.length) return null;
-    const result = await db
-      .prepare(
-        `SELECT DISTINCT category_id
-         FROM product_catalog
-         WHERE site_id = 'default'
-           AND is_enabled = 1
-           AND section_id = ?1
-           AND category_id IS NOT NULL
-           AND category_id <> ''`,
-      )
-      .bind(sectionId)
-      .all<{ category_id: string }>();
-    const allowed = new Set(
-      (result.results ?? []).map((row) => row.category_id),
-    );
-    return categoryIds.every((id) => allowed.has(id))
+    return (await allEnabledCategoriesExist(db, sectionId, categoryIds))
       ? { type: 'category', sectionId, categoryIds }
       : null;
   }
@@ -867,40 +839,93 @@ function routingScopeStatements(
   if (scope.type === 'none') return [];
 
   if (scope.type === 'section') {
-    return scope.sectionIds.map((sectionId) =>
+    return [
       db
         .prepare(
           `INSERT INTO agent_routing_scopes (
              site_id, agent_id, scope_type, section_id,
              category_id, product_id, is_enabled
-           ) VALUES ('default', ?1, 'section', ?2, '', '', 1)`,
+           )
+           SELECT 'default', ?1, 'section', CAST(requested.value AS TEXT),
+             '', '', 1
+           FROM json_each(?2) requested`,
         )
-        .bind(agentId, sectionId),
-    );
+        .bind(agentId, JSON.stringify(scope.sectionIds)),
+    ];
   }
 
   if (scope.type === 'category') {
-    return scope.categoryIds.map((categoryId) =>
+    return [
       db
         .prepare(
           `INSERT INTO agent_routing_scopes (
              site_id, agent_id, scope_type, section_id,
              category_id, product_id, is_enabled
-           ) VALUES ('default', ?1, 'category', ?2, ?3, '', 1)`,
+           )
+           SELECT 'default', ?1, 'category', ?2,
+             CAST(requested.value AS TEXT), '', 1
+           FROM json_each(?3) requested`,
         )
-        .bind(agentId, scope.sectionId, categoryId),
-    );
+        .bind(agentId, scope.sectionId, JSON.stringify(scope.categoryIds)),
+    ];
   }
 
-  return scope.productIds.map((productId) =>
+  return [
     db
       .prepare(
         `INSERT INTO agent_routing_scopes (
            site_id, agent_id, scope_type, section_id,
            category_id, product_id, is_enabled
-         ) VALUES ('default', ?1, 'product', '', '', ?2, 1)`,
+         )
+         SELECT 'default', ?1, 'product', '', '',
+           CAST(requested.value AS TEXT), 1
+         FROM json_each(?2) requested`,
       )
-      .bind(agentId, productId),
+      .bind(agentId, JSON.stringify(scope.productIds)),
+  ];
+}
+
+async function allEnabledSectionsExist(
+  db: D1Database,
+  sectionIds: string[],
+): Promise<boolean> {
+  return allRequestedScopeValuesExist(
+    db,
+    `SELECT COUNT(*) AS count
+     FROM json_each(?1) requested
+     WHERE EXISTS (
+       SELECT 1
+       FROM product_catalog product
+       WHERE product.site_id = 'default'
+         AND product.is_enabled = 1
+         AND product.section_id = CAST(requested.value AS TEXT)
+       LIMIT 1
+     )`,
+    [JSON.stringify(sectionIds)],
+    sectionIds.length,
+  );
+}
+
+async function allEnabledCategoriesExist(
+  db: D1Database,
+  sectionId: string,
+  categoryIds: string[],
+): Promise<boolean> {
+  return allRequestedScopeValuesExist(
+    db,
+    `SELECT COUNT(*) AS count
+     FROM json_each(?1) requested
+     WHERE EXISTS (
+       SELECT 1
+       FROM product_catalog product
+       WHERE product.site_id = 'default'
+         AND product.is_enabled = 1
+         AND product.section_id = ?2
+         AND product.category_id = CAST(requested.value AS TEXT)
+       LIMIT 1
+     )`,
+    [JSON.stringify(categoryIds), sectionId],
+    categoryIds.length,
   );
 }
 
@@ -909,15 +934,32 @@ async function allEnabledProductsExist(
   productIds: string[],
 ): Promise<boolean> {
   if (!productIds.length) return true;
-  const result = await db
-    .prepare(
-      `SELECT id
-       FROM product_catalog
-       WHERE site_id = 'default' AND is_enabled = 1`,
-    )
-    .all<{ id: string }>();
-  const allowed = new Set((result.results ?? []).map((item) => item.id));
-  return productIds.every((id) => allowed.has(id));
+  return allRequestedScopeValuesExist(
+    db,
+    `SELECT COUNT(*) AS count
+     FROM json_each(?1) requested
+     WHERE EXISTS (
+       SELECT 1
+       FROM product_catalog product
+       WHERE product.site_id = 'default'
+         AND product.id = CAST(requested.value AS TEXT)
+         AND product.is_enabled = 1
+       LIMIT 1
+     )`,
+    [JSON.stringify(productIds)],
+    productIds.length,
+  );
+}
+
+async function allRequestedScopeValuesExist(
+  db: D1Database,
+  sql: string,
+  bindings: string[],
+  expectedCount: number,
+): Promise<boolean> {
+  const statement = db.prepare(sql).bind(...bindings);
+  const row = await statement.first<{ count: number }>();
+  return Number(row?.count ?? 0) === expectedCount;
 }
 
 function normalizedIdentifiers(values: unknown[]): string[] {
