@@ -372,3 +372,726 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- Round 2: density and control refinement ---------- */
+.primary-button,
+.secondary-button,
+.table-action,
+.filter,
+.unread-first-toggle,
+.availability-pill,
+.thread-head select,
+.transfer-menu summary,
+.quick-replies-trigger,
+.media-picker {
+  line-height: 1;
+}
+
+.admin-content-head h1 {
+  font-size: 24px;
+  line-height: 1.16;
+}
+
+.admin-content-head p {
+  max-width: 840px;
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-content-head .primary-button {
+  min-height: 38px;
+  padding-inline: 16px;
+}
+
+.admin-agent-layout .admin-stats > div {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.admin-table-title {
+  gap: 4px;
+}
+
+.admin-table-title strong {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.admin-table-title span {
+  font-size: 12px;
+  line-height: 1.42;
+}
+
+.admin-table th,
+.admin-table td {
+  padding-inline: 14px;
+}
+
+.admin-table th {
+  height: 40px;
+}
+
+.admin-table td {
+  height: 56px;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-agent-cell,
+.agent-scope-summary {
+  line-height: 1.35;
+}
+
+.table-action {
+  min-height: 32px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+.agent-modal > header h2 {
+  font-size: 19px;
+  letter-spacing: -0.025em;
+}
+
+.agent-modal > header p {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.agent-editor-account-pane,
+.agent-editor-routing-pane {
+  padding: 18px 20px 22px;
+}
+
+.agent-editor-pane-heading {
+  min-height: 36px;
+  margin-bottom: 12px;
+}
+
+.agent-editor-pane-heading > span {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+}
+
+.agent-editor-pane-heading strong {
+  font-size: 14px;
+}
+
+.agent-editor-pane-heading small {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.agent-editor-identity-preview {
+  min-height: 60px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 11px;
+}
+
+.agent-editor-account-pane > label {
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.agent-editor-account-pane > label input,
+.agent-editor-limits input {
+  min-height: 42px;
+  border-radius: 9px;
+}
+
+.agent-editor-limits {
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.agent-editor-limits label {
+  gap: 6px;
+}
+
+.agent-editor-limits small {
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.traffic-quota-editor {
+  margin-top: 2px;
+  border-radius: 12px;
+}
+
+.traffic-quota-editor-head,
+.traffic-quota-topup,
+.traffic-quota-history {
+  padding-inline: 14px;
+}
+
+.traffic-quota-summary {
+  gap: 6px;
+  padding-inline: 14px;
+}
+
+.traffic-quota-summary > div {
+  min-height: 58px;
+}
+
+.traffic-quota-presets {
+  gap: 6px;
+}
+
+.traffic-quota-presets > button {
+  min-height: 34px;
+  padding-inline: 10px;
+  border-radius: 8px;
+}
+
+.account-enable-line {
+  min-height: 54px;
+  margin-top: 14px;
+  padding: 9px 11px;
+  border-radius: 10px;
+}
+
+.agent-editor-form footer .primary-button,
+.agent-editor-form footer .secondary-button {
+  min-width: 92px;
+  min-height: 38px;
+  border-radius: 8px;
+}
+
+@media (min-width: 761px) {
+  .workspace-shell {
+    border: 1px solid #dfe2e7;
+    box-shadow: 0 16px 46px rgba(25, 29, 37, 0.09);
+  }
+
+  .conversation-head {
+    min-height: 76px;
+    padding: 13px 14px;
+  }
+
+  .conversation-head h1 {
+    font-size: 19px;
+  }
+
+  .conversation-head .eyebrow {
+    margin-bottom: 4px;
+  }
+
+  .availability-pill {
+    min-height: 32px;
+    padding-inline: 9px;
+  }
+
+  .connection-status {
+    font-size: 9px;
+  }
+
+  .inbox-overview {
+    min-height: 58px;
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--cs-line);
+    background: #fff;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .inbox-overview .metric {
+    min-height: 44px;
+    padding: 5px 3px;
+    border: 0;
+    border-radius: 7px;
+    background: #f7f8fa;
+    box-shadow: none;
+    gap: 2px;
+  }
+
+  .inbox-overview .metric strong {
+    color: #22262d;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .inbox-overview .metric span {
+    color: #858b95;
+    font-size: 9px;
+  }
+
+  .filters {
+    min-height: 43px;
+    padding: 6px 9px;
+  }
+
+  .filter {
+    min-height: 29px;
+    padding-inline: 9px;
+  }
+
+  .inbox-tools {
+    padding: 7px 9px;
+  }
+
+  .inbox-search,
+  .unread-first-toggle {
+    min-height: 34px;
+  }
+
+  .conversation-row {
+    min-height: 74px;
+    padding: 10px 12px 9px;
+    gap: 9px;
+  }
+
+  .conversation-row .avatar.small {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+
+  .conversation-copy {
+    gap: 2px;
+  }
+
+  .conversation-copy > span strong {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .conversation-copy time,
+  .conversation-copy small,
+  .conversation-copy p {
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .thread-head {
+    min-height: 72px;
+    padding: 10px 14px;
+  }
+
+  .thread-head h2 {
+    font-size: 18px;
+  }
+
+  .thread-head .conversation-expiry {
+    margin-top: 5px;
+    padding: 3px 7px;
+    font-size: 10px;
+  }
+
+  .thread-head select,
+  .transfer-menu summary {
+    min-height: 36px;
+  }
+
+  .conversation-context-card {
+    min-height: 62px;
+    padding: 7px 9px;
+  }
+
+  .conversation-context-card > img,
+  .conversation-context-placeholder {
+    width: 42px;
+    height: 42px;
+  }
+
+  .conversation-context-card > a {
+    min-height: 30px;
+  }
+
+  .messages {
+    gap: 8px;
+    padding-top: 16px;
+    padding-bottom: 18px;
+    background: #f6f7f8;
+  }
+
+  .message {
+    width: min(100%, 920px);
+  }
+
+  .message > div {
+    max-width: min(64%, 620px);
+  }
+
+  .message p {
+    padding: 9px 11px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.48;
+  }
+
+  .message time,
+  .message-meta {
+    margin-top: 3px;
+    font-size: 9px;
+  }
+
+  .composer {
+    min-height: 66px;
+    padding: 8px 14px 9px;
+    gap: 7px;
+    box-shadow: 0 -1px 0 rgba(229, 231, 235, 0.7);
+  }
+
+  .composer textarea {
+    min-height: 46px;
+    max-height: 116px;
+    padding: 11px 13px;
+    border-radius: 11px;
+    background: #fafafa;
+  }
+
+  .media-picker,
+  .quick-replies-trigger {
+    min-height: 36px;
+  }
+
+  .composer-foot .primary-button {
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+    border-radius: 50%;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-shell {
+    min-height: 100dvh;
+  }
+
+  .conversation-head {
+    min-height: 72px;
+    padding: 11px 12px;
+  }
+
+  .conversation-head h1 {
+    font-size: 18px;
+  }
+
+  .conversation-head .eyebrow {
+    margin-bottom: 3px;
+  }
+
+  .availability-pill {
+    min-height: 30px;
+    padding-inline: 8px;
+    font-size: 10px;
+  }
+
+  .connection-status {
+    font-size: 8px;
+  }
+
+  .inbox-overview {
+    min-height: 54px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--cs-line);
+    background: #fff;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .inbox-overview .metric {
+    min-height: 42px;
+    padding: 4px 2px;
+    border: 0;
+    border-radius: 7px;
+    background: #f7f8fa;
+    box-shadow: none;
+    gap: 2px;
+  }
+
+  .inbox-overview .metric strong {
+    color: #252931;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  .inbox-overview .metric span {
+    color: #8a9099;
+    font-size: 8px;
+  }
+
+  .filters {
+    min-height: 42px;
+    padding: 6px 8px;
+  }
+
+  .filter {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .inbox-tools {
+    padding: 6px 8px;
+  }
+
+  .inbox-search,
+  .unread-first-toggle {
+    min-height: 34px;
+  }
+
+  .conversation-row {
+    min-height: 70px;
+    padding: 9px 10px;
+    gap: 9px;
+  }
+
+  .conversation-row .avatar.small {
+    width: 33px;
+    height: 33px;
+  }
+
+  .conversation-copy {
+    gap: 2px;
+  }
+
+  .conversation-copy > span strong {
+    font-size: 13px;
+  }
+
+  .conversation-copy time,
+  .conversation-copy small,
+  .conversation-copy p {
+    font-size: 10px;
+  }
+
+  .thread-head {
+    min-height: 68px;
+  }
+
+  .thread-back-button {
+    height: 34px;
+  }
+
+  .conversation-context-card {
+    min-height: 50px;
+  }
+
+  .messages {
+    padding-inline: 10px;
+    gap: 6px;
+    background: #f6f7f8;
+  }
+
+  .message > div {
+    max-width: 82%;
+    padding: 0;
+  }
+
+  .message p,
+  .message.mine p,
+  .message.visitor p {
+    padding: 8px 10px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.44;
+  }
+
+  .message time,
+  .message-meta {
+    margin-top: 2px;
+    font-size: 9px;
+  }
+
+  .composer {
+    min-height: 54px;
+    padding-top: 5px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .composer textarea {
+    height: 38px;
+    min-height: 38px;
+    padding-block: 8px;
+  }
+
+  .media-picker,
+  .quick-replies-trigger {
+    width: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    height: 34px;
+  }
+
+  .composer-foot .primary-button {
+    width: 38px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .quick-replies-panel {
+    max-height: min(460px, 62dvh);
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-content {
+    padding: 18px 14px 30px;
+  }
+
+  .admin-content-head {
+    gap: 12px;
+  }
+
+  .admin-agent-layout .admin-stats > div {
+    min-height: 68px;
+    padding: 10px 12px;
+  }
+
+  .admin-agent-layout .admin-stats strong {
+    font-size: 21px;
+  }
+
+  .agent-modal {
+    width: calc(100vw - 12px);
+    height: calc(100dvh - 12px);
+    max-height: calc(100dvh - 12px);
+    border-radius: 12px;
+  }
+
+  .agent-modal > header {
+    min-height: 60px;
+    padding: 11px 14px;
+  }
+
+  .agent-editor-account-pane,
+  .agent-editor-routing-pane {
+    padding: 15px 14px 18px;
+  }
+
+  .agent-editor-form footer {
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 360px) {
+  .conversation-head {
+    min-height: 68px;
+    padding-inline: 9px;
+  }
+
+  .conversation-head h1 {
+    font-size: 17px;
+  }
+
+  .availability-pill {
+    min-height: 28px;
+    padding-inline: 7px;
+  }
+
+  .connection-status {
+    max-width: 104px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .thread-head {
+    grid-template-columns: 30px minmax(0, 1fr) auto;
+    gap: 4px;
+    padding-inline: 6px;
+  }
+
+  .thread-back-button {
+    width: 30px;
+    height: 32px;
+    font-size: 24px;
+  }
+
+  .thread-head h2 {
+    font-size: 14px;
+  }
+
+  .thread-head .conversation-expiry {
+    max-width: 112px;
+    margin-top: 3px;
+    font-size: 8px;
+  }
+
+  .thread-head select {
+    width: 66px;
+    min-width: 66px;
+    min-height: 32px;
+    font-size: 10px;
+  }
+
+  .transfer-menu summary {
+    min-height: 32px;
+    padding-inline: 6px;
+    font-size: 10px;
+  }
+
+  .conversation-context-card {
+    grid-template-columns: 34px minmax(0, 1fr) 30px;
+    margin-inline: 6px;
+    padding: 5px 6px;
+    gap: 6px;
+  }
+
+  .conversation-context-card > img,
+  .conversation-context-placeholder {
+    width: 34px;
+    height: 34px;
+  }
+
+  .conversation-context-card > a {
+    width: 30px;
+    min-height: 28px;
+    padding: 0;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 0;
+  }
+
+  .conversation-context-card > a::after {
+    content: '↗';
+    font-size: 12px;
+  }
+
+  .messages {
+    padding-inline: 7px;
+  }
+
+  .message > div {
+    max-width: 86%;
+  }
+
+  .composer {
+    grid-template-columns: auto minmax(0, 1fr) 36px;
+    padding-inline: 6px;
+    gap: 4px;
+  }
+
+  .media-picker,
+  .quick-replies-trigger {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .composer textarea {
+    height: 36px;
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+
+  .composer-foot .primary-button {
+    width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+}
