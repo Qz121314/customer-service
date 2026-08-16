@@ -1,14 +1,10 @@
-import {
-  readVapidConfig,
-  sendDataLessPush,
-  type VapidRow,
-} from './visitor-push';
+import { sendDataLessPush, type VapidRow } from './visitor-push';
 
 type AgentPushBindings = {
   DB: D1Database;
 };
 
-type SubscriptionRow = {
+type AgentPushRow = VapidRow & {
   endpoint: string;
 };
 
@@ -16,21 +12,6 @@ export async function sendAgentPushForConversation(
   env: AgentPushBindings,
   conversationId: string,
 ): Promise<void> {
-  const conversation = await env.DB.prepare(
-    `SELECT assigned_agent
-     FROM conversations
-     WHERE id = ?1
-       AND assigned_agent IS NOT NULL
-       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-     LIMIT 1`,
-  )
-    .bind(conversationId)
-    .first<{ assigned_agent: string | null }>();
-  if (!conversation?.assigned_agent) return;
-
-  const config = await readVapidConfig(env.DB);
-  if (!config) return;
-
   const now = Date.now();
   await env.DB.prepare(
     `DELETE FROM agent_push_subscriptions
@@ -40,17 +21,34 @@ export async function sendAgentPushForConversation(
     .run();
 
   const subscriptions = await env.DB.prepare(
-    `SELECT endpoint
-     FROM agent_push_subscriptions
-     WHERE agent_id = ?1`,
+    `SELECT
+       subscription.endpoint,
+       vapid.public_key,
+       vapid.private_jwk,
+       vapid.subject
+     FROM conversations conversation
+     JOIN agent_push_subscriptions subscription
+       ON subscription.agent_id = conversation.assigned_agent
+     JOIN visitor_push_vapid vapid
+       ON vapid.id = 'default'
+     WHERE conversation.id = ?1
+       AND conversation.assigned_agent IS NOT NULL
+       AND COALESCE(
+         conversation.expires_at,
+         datetime(conversation.created_at, '+1 day')
+       ) > CURRENT_TIMESTAMP
+       AND (
+         subscription.expiration_time IS NULL
+         OR subscription.expiration_time > ?2
+       )`,
   )
-    .bind(conversation.assigned_agent)
-    .all<SubscriptionRow>();
+    .bind(conversationId, now)
+    .all<AgentPushRow>();
   if (!subscriptions.results?.length) return;
 
   await Promise.all(
     subscriptions.results.map((subscription) =>
-      deliverAgentPush(env, subscription.endpoint, config),
+      deliverAgentPush(env, subscription.endpoint, subscription),
     ),
   );
 }
