@@ -7,6 +7,7 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
+// Keep active-load aggregation candidate-scoped as the conversation table grows.
 test('agent active conversation reads use a dedicated partial index', () => {
   const migration = source(
     '../migrations/0028_conversation_agent_status_index.sql',
