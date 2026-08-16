@@ -32,6 +32,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Format agent editor sources for review
+        if: github.event_name == 'pull_request' && github.head_ref == 'ui/commercial-agent-editor'
+        run: >-
+          pnpm exec prettier --write
+          src/dashboard/AgentEditorModal.tsx
+          src/dashboard/agent-editor.css
+          test/agent-editor-ui-contract.test.mjs
+
+      - name: Upload formatted agent editor sources
+        if: github.event_name == 'pull_request' && github.head_ref == 'ui/commercial-agent-editor'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-editor-prettier
+          path: |
+            src/dashboard/AgentEditorModal.tsx
+            src/dashboard/agent-editor.css
+            test/agent-editor-ui-contract.test.mjs
+
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
