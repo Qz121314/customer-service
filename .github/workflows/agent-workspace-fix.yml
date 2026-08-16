@@ -1,0 +1,79 @@
+name: Validate Agent Workspace Refactor
+
+on:
+  push:
+    branches: [ui/agent-workspace-local]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ui/agent-workspace-local
+          fetch-depth: 0
+
+      - name: Remove stale server quick reply reference
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/worker/agent-api.ts')
+          text = path.read_text()
+          stale = '    quickRepliesRequest,\n'
+          if stale not in text:
+              raise SystemExit('expected stale quickRepliesRequest reference not found')
+          path.write_text(text.replace(stale, '', 1))
+          PY
+          rm -f .github/workflows/agent-workspace-fix.yml
+          if grep -R -n -E 'quickRepliesRequest|agent_quick_replies|api/agent/quick-replies' src/dashboard src/worker; then
+            echo 'stale server quick reply reference remains'
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
+
+      - name: Format
+        run: pnpm format
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+
+      - name: Commit validated workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Validate local-first agent workspace"
+          git push origin HEAD:ui/agent-workspace-local
