@@ -29,7 +29,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Apply targeted changes
-        run: node scripts/optimize-media-hot-path.mjs
+        run: |
+          node scripts/optimize-media-hot-path.mjs
+          sed -i "3i import { URL } from 'node:url';" test/media-hot-path-cost.test.mjs
 
       - name: Format targeted files
         run: pnpm exec prettier --write src/worker/media-store.ts src/worker/media-api.ts test/media-hot-path-cost.test.mjs
