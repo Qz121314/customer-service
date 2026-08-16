@@ -595,7 +595,10 @@ export async function broadcastClientConversationEvent(
     reader?: 'agent' | 'visitor';
     lastMessageId?: string | null;
   } = {},
-  options: { includeOverview?: boolean } = {},
+  options: {
+    includeOverview?: boolean;
+    previousAgentId?: string | null;
+  } = {},
 ): Promise<ConversationRow | null> {
   const conversation = await env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
@@ -635,20 +638,44 @@ export async function broadcastClientConversationEvent(
     );
   }
 
-  if (!conversation.assigned_agent) return conversation;
-
+  const previousAgentId =
+    options.previousAgentId &&
+    options.previousAgentId !== conversation.assigned_agent
+      ? options.previousAgentId
+      : null;
   const includeOverview =
     options.includeOverview ??
     (type === 'conversation.assigned' || type === 'conversation.closed');
-  const overview = includeOverview
-    ? await loadAgentOverview(env.DB, conversation.assigned_agent)
-    : null;
-  await broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {
-    type: 'conversation.changed',
-    conversationId,
-    conversation: agentConversationSummary(conversation),
-    ...(overview ? { overview } : {}),
-  });
+  const [overview, previousOverview] = await Promise.all([
+    conversation.assigned_agent && includeOverview
+      ? loadAgentOverview(env.DB, conversation.assigned_agent)
+      : Promise.resolve(null),
+    previousAgentId
+      ? loadAgentOverview(env.DB, previousAgentId)
+      : Promise.resolve(null),
+  ]);
+  const inboxUpdates: Promise<void>[] = [];
+  if (conversation.assigned_agent) {
+    inboxUpdates.push(
+      broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {
+        type: 'conversation.changed',
+        conversationId,
+        conversation: agentConversationSummary(conversation),
+        ...(overview ? { overview } : {}),
+      }),
+    );
+  }
+  if (previousAgentId) {
+    inboxUpdates.push(
+      broadcastRoom(env, agentInboxRoom(previousAgentId), {
+        type: 'conversation.changed',
+        conversationId,
+        conversation: agentConversationSummary(conversation),
+        ...(previousOverview ? { overview: previousOverview } : {}),
+      }),
+    );
+  }
+  await Promise.all(inboxUpdates);
   return conversation;
 }
 

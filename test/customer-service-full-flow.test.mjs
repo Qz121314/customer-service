@@ -926,7 +926,12 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   );
   assert.ok(
     (rooms.events.get('agent-inbox:agent-transfer') ?? []).some(
-      (event) => event.type === 'conversation.refresh',
+      (event) => event.type === 'conversation.changed',
+    ),
+  );
+  assert.ok(
+    (rooms.events.get('agent-inbox:agent-standby') ?? []).some(
+      (event) => event.type === 'conversation.changed',
     ),
   );
 

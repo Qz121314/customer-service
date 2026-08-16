@@ -60,6 +60,11 @@ type TransferTargetRow = {
   max_active_conversations: number;
 };
 
+type TransferConversationRow = {
+  site_id: string;
+  status: ConversationStatus;
+};
+
 type QuickReplyRow = {
   id: string;
   title: string;
@@ -826,7 +831,11 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const id = c.req.param('id');
-  const conversation = await assignedConversation(c.env.DB, id, agent.id);
+  const conversation = await assignedConversationForTransfer(
+    c.env.DB,
+    id,
+    agent.id,
+  );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   if (conversation.status === 'closed')
     return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
@@ -885,7 +894,9 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
                target.traffic_quota_enabled = 0
                OR target.traffic_quota_used < target.traffic_quota_total
              )
-         )`,
+         )
+       RETURNING assigned_agent AS id,
+         (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
     )
       .bind(
         targetAgentId,
@@ -893,11 +904,10 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
         businessDate,
         id,
         agent.id,
-        String(conversation.site_id),
+        conversation.site_id,
       )
-      .run();
-    if (!transfer.meta.changes)
-      return c.json({ error: 'TRANSFER_TARGET_UNAVAILABLE' }, 409);
+      .first<{ id: string; name: string }>();
+    if (!transfer) return c.json({ error: 'TRANSFER_TARGET_UNAVAILABLE' }, 409);
 
     await c.env.DB.prepare(
       `UPDATE agents
@@ -906,11 +916,7 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
     )
       .bind(now, targetAgentId, String(conversation.site_id))
       .run();
-    assignment = await c.env.DB.prepare(
-      'SELECT id, name FROM agents WHERE id = ?1 LIMIT 1',
-    )
-      .bind(targetAgentId)
-      .first<{ id: string; name: string }>();
+    assignment = { id: transfer.id, name: transfer.name };
   } else {
     const released = await c.env.DB.prepare(
       `UPDATE conversations
@@ -935,14 +941,14 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
       type: 'conversation.transferred',
       assignment,
     }),
-    broadcastAgentInboxRefresh(c.env, agent.id, id),
-    broadcastClientConversationEvent(c.env, id, 'conversation.assigned').then(
-      () => undefined,
-    ),
+    broadcastClientConversationEvent(
+      c.env,
+      id,
+      'conversation.assigned',
+      {},
+      { previousAgentId: agent.id },
+    ).then(() => undefined),
   ];
-  if (assignment) {
-    realtimeUpdates.push(broadcastAgentInboxRefresh(c.env, assignment.id, id));
-  }
   await Promise.all(realtimeUpdates);
   if (assignment) {
     c.executionCtx.waitUntil(
@@ -1018,6 +1024,23 @@ async function assignedConversationForMessageWrite(
     )
     .bind(id, agentId)
     .first<{ id: string; status: ConversationStatus }>();
+}
+
+async function assignedConversationForTransfer(
+  db: D1Database,
+  id: string,
+  agentId: string,
+): Promise<TransferConversationRow | null> {
+  return db
+    .prepare(
+      `SELECT site_id, status
+       FROM conversations
+       WHERE id = ?1 AND assigned_agent = ?2
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       LIMIT 1`,
+    )
+    .bind(id, agentId)
+    .first<TransferConversationRow>();
 }
 
 async function assignedConversation(
@@ -1179,21 +1202,6 @@ async function broadcastConversationRoom(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-}
-
-async function broadcastAgentInboxRefresh(
-  env: Bindings,
-  agentId: string,
-  conversationId: string,
-): Promise<void> {
-  await room(env, agentInboxRoom(agentId)).fetch(
-    'https://conversation-room/broadcast',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'conversation.refresh', conversationId }),
-    },
-  );
 }
 
 function unauthorized(c: Context<Env>) {
