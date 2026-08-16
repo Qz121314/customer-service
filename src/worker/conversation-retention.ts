@@ -19,14 +19,13 @@ type StaleMediaRow = MediaObjectRow & {
   id: string;
 };
 
-type OrphanVisitorRow = {
+type DeletedVisitorRow = {
   id: string;
-  site_id: string;
-  external_id: string | null;
 };
 
 const DELETE_BATCH_SIZE = 100;
-const MAX_DELETE_PASSES = 10;
+const MAX_CONVERSATION_DELETE_PASSES = 5;
+const MAX_ORPHAN_VISITOR_DELETE_PASSES = 2;
 
 export function conversationExpiresAt(createdAt: string | Date): string {
   const created = createdAt instanceof Date ? createdAt : new Date(createdAt);
@@ -49,7 +48,7 @@ export async function purgeExpiredConversations(
   let conversations = 0;
   let mediaObjects = 0;
 
-  for (let pass = 0; pass < MAX_DELETE_PASSES; pass += 1) {
+  for (let pass = 0; pass < MAX_CONVERSATION_DELETE_PASSES; pass += 1) {
     const expired = await env.DB.prepare(
       `SELECT id
        FROM conversations
@@ -78,17 +77,13 @@ export async function purgeExpiredConversations(
       if (chunk.length > 0) await env.MEDIA.delete(chunk);
     }
 
-    await env.DB.batch([
-      env.DB.prepare(
-        `DELETE FROM media_items WHERE conversation_id IN (${placeholders})`,
-      ).bind(...ids),
-      env.DB.prepare(
-        `DELETE FROM messages WHERE conversation_id IN (${placeholders})`,
-      ).bind(...ids),
-      env.DB.prepare(
-        `DELETE FROM conversations WHERE id IN (${placeholders})`,
-      ).bind(...ids),
-    ]);
+    // messages and media_items both reference conversations with ON DELETE
+    // CASCADE, so one D1 delete removes the full relational conversation tree.
+    await env.DB.prepare(
+      `DELETE FROM conversations WHERE id IN (${placeholders})`,
+    )
+      .bind(...ids)
+      .run();
 
     conversations += ids.length;
     mediaObjects += keys.length;
@@ -169,38 +164,54 @@ async function purgeOrphanVisitors(
   nowIso: string,
 ): Promise<number> {
   let removed = 0;
-  for (let pass = 0; pass < MAX_DELETE_PASSES; pass += 1) {
-    const result = await db
+  for (let pass = 0; pass < MAX_ORPHAN_VISITOR_DELETE_PASSES; pass += 1) {
+    // Push subscriptions are keyed by the public visitor identity rather than a
+    // visitor FK, so remove them for the same bounded orphan batch first.
+    await db
       .prepare(
-        `SELECT v.id, v.site_id, v.external_id
-         FROM visitors v
-         WHERE datetime(COALESCE(v.expires_at, v.created_at)) <= datetime(?1)
-           AND NOT EXISTS (SELECT 1 FROM conversations c WHERE c.visitor_id = v.id)
-         ORDER BY COALESCE(v.expires_at, v.created_at) ASC, v.id ASC
-         LIMIT ?2`,
+        `WITH orphan_batch AS (
+           SELECT v.site_id, v.external_id
+           FROM visitors v
+           WHERE datetime(COALESCE(v.expires_at, v.created_at)) <= datetime(?1)
+             AND NOT EXISTS (
+               SELECT 1 FROM conversations c WHERE c.visitor_id = v.id
+             )
+           ORDER BY COALESCE(v.expires_at, v.created_at) ASC, v.id ASC
+           LIMIT ?2
+         )
+         DELETE FROM visitor_push_subscriptions
+         WHERE EXISTS (
+           SELECT 1
+           FROM orphan_batch orphan
+           WHERE orphan.external_id IS NOT NULL
+             AND orphan.site_id = visitor_push_subscriptions.site_id
+             AND orphan.external_id = visitor_push_subscriptions.visitor_external_id
+         )`,
       )
       .bind(nowIso, DELETE_BATCH_SIZE)
-      .all<OrphanVisitorRow>();
-    const rows = result.results ?? [];
-    if (rows.length === 0) break;
+      .run();
 
-    const statements: D1PreparedStatement[] = [];
-    for (const visitor of rows) {
-      if (visitor.external_id) {
-        statements.push(
-          db
-            .prepare(
-              'DELETE FROM visitor_push_subscriptions WHERE site_id = ?1 AND visitor_external_id = ?2',
-            )
-            .bind(visitor.site_id, visitor.external_id),
-        );
-      }
-      statements.push(
-        db.prepare('DELETE FROM visitors WHERE id = ?1').bind(visitor.id),
-      );
-    }
-    if (statements.length > 0) await db.batch(statements);
-    removed += rows.length;
+    const result = await db
+      .prepare(
+        `WITH orphan_batch AS (
+           SELECT v.id
+           FROM visitors v
+           WHERE datetime(COALESCE(v.expires_at, v.created_at)) <= datetime(?1)
+             AND NOT EXISTS (
+               SELECT 1 FROM conversations c WHERE c.visitor_id = v.id
+             )
+           ORDER BY COALESCE(v.expires_at, v.created_at) ASC, v.id ASC
+           LIMIT ?2
+         )
+         DELETE FROM visitors
+         WHERE id IN (SELECT id FROM orphan_batch)
+         RETURNING id`,
+      )
+      .bind(nowIso, DELETE_BATCH_SIZE)
+      .all<DeletedVisitorRow>();
+    const count = result.results?.length ?? 0;
+    removed += count;
+    if (count < DELETE_BATCH_SIZE) break;
   }
   return removed;
 }
