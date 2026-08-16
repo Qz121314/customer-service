@@ -32,6 +32,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Diagnose Prettier output
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier README.md test/legacy-routing-removal.test.mjs --write
+          git diff -- README.md test/legacy-routing-removal.test.mjs || true
+          git checkout -- README.md test/legacy-routing-removal.test.mjs
+
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
