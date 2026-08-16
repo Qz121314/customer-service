@@ -10,14 +10,19 @@ test('runtime does not mount the legacy chat application', () => {
   assert.match(entry, /from ['"]\.\/core['"]/u);
   assert.match(entry, /from ['"]\.\/protocol-boundary['"]/u);
   assert.match(entry, /fetch\(request: Request, env: Bindings/u);
-  assert.match(entry, /isRemovedProtocolPath\(new URL\(request\.url\)\.pathname\)/u);
+  assert.match(
+    entry,
+    /isRemovedProtocolPath\(new URL\(request\.url\)\.pathname\)/u,
+  );
   assert.match(entry, /return removedProtocolResponse\(\)/u);
 });
 
-test('core owns only auth, health and asset fallback API boundaries', () => {
+test('core keeps unknown API paths out of the SPA asset fallback', () => {
   assert.match(core, /coreApp\.get\('\/api\/health'/u);
   assert.match(core, /coreApp\.post\('\/api\/auth\/login'/u);
-  assert.match(core, /coreApp\.all\('\/api\/\*'/u);
+  assert.match(core, /pathname\.startsWith\('\/api\/'\)/u);
+  assert.match(core, /return c\.json\(\{ error: 'NOT_FOUND' \}, 404\)/u);
+  assert.match(core, /return c\.env\.ASSETS\.fetch\(c\.req\.raw\)/u);
   assert.doesNotMatch(core, /\/api\/public\/conversations/u);
   assert.doesNotMatch(core, /\/api\/admin\/conversations/u);
 });
