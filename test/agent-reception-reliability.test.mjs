@@ -8,7 +8,7 @@ const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 test('busy seats stay connected without receiving new conversations', async () => {
   const [agentApi, room, routing, dashboardApi, dashboard] = await Promise.all([
     read('../src/worker/agent-api.ts'),
-    read('../src/worker/index.ts'),
+    read('../src/worker/core.ts'),
     read('../src/worker/routing.ts'),
     read('../src/dashboard/api.ts'),
     read('../src/dashboard/App.tsx'),
