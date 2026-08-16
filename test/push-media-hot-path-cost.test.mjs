@@ -3,8 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { URL } from 'node:url';
 
-const read = (path) =>
-  readFileSync(new URL(path, import.meta.url), 'utf8');
+const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const agentPush = read('../src/worker/agent-push.ts');
 const visitorPush = read('../src/worker/visitor-push.ts');
@@ -58,7 +57,7 @@ test('visitor media completion reuses assignment state from the update batch', (
   const source = mediaStore.slice(start, end);
 
   assert.match(source, /RETURNING assigned_agent/u);
-  assert.match(source, /results\[1\]\?\.results\?\.\[0\]/u);
+  assert.match(source, /const assignmentResult = results\[1\]/u);
   assert.doesNotMatch(
     source,
     /SELECT assigned_agent FROM conversations WHERE id = \?1/u,
