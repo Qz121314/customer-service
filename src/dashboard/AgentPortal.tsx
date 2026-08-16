@@ -41,7 +41,6 @@ import {
   PendingAgentText,
   InboxRealtimeEvent,
   ThreadRealtimeEvent,
-  filterLabels,
   AGENT_TYPING_IDLE_MS,
   REMOTE_TYPING_STALE_MS,
   loadAgentConversationDrafts,
@@ -52,19 +51,16 @@ import {
   parseRealtimeEvent,
   sortedConversationList,
   compareMessages,
-  initials,
-  relativeTime,
   message,
 } from './dashboard-runtime';
 import {
-  UiIcon,
   AgentLogin,
   Startup,
-  Metric,
   ConversationExpiryCountdown,
   Bubble,
 } from './dashboard-ui';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
+import { AgentInboxPane, AgentSidebar } from './AgentWorkspacePanels';
 import { sendAgentImage, type AgentMediaItem } from './agent-media';
 import {
   disableAgentNotifications,
@@ -1307,244 +1303,39 @@ function AgentWorkspace({
 
   return (
     <div className={`workspace-shell${selectedId ? ' is-thread-open' : ''}`}>
-      <aside className="workspace-sidebar">
-        <div className="workspace-brand-lockup">
-          <div className="workspace-brand">CS</div>
-          <span>坐席中心</span>
-        </div>
-        <div className="agent-profile">
-          <span className="avatar">{initials(identity.name)}</span>
-          <div>
-            <strong>{identity.name}</strong>
-            <small>@{identity.username}</small>
-          </div>
-          <i className={`presence ${availability}`} />
-        </div>
-        <div className="workspace-sidebar-actions">
-          <button
-            type="button"
-            className={`ghost-button full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
-            aria-label={
-              notificationState === 'enabled'
-                ? '关闭新消息通知'
-                : '开启新消息通知'
-            }
-            title={
-              notificationState === 'unsupported'
-                ? '当前浏览器不支持后台通知'
-                : notificationState === 'blocked'
-                  ? '通知已被浏览器阻止'
-                  : notificationState === 'enabled'
-                    ? '新消息通知已开启'
-                    : '开启新消息通知'
-            }
-            disabled={notificationBusy || notificationState === 'unsupported'}
-            onClick={() => void toggleNotifications()}
-          >
-            <UiIcon name="notification" />
-            <span>
-              {notificationBusy
-                ? '正在设置…'
-                : notificationState === 'enabled'
-                  ? '新消息通知已开启'
-                  : notificationState === 'blocked'
-                    ? '通知已被阻止'
-                    : '开启新消息通知'}
-            </span>
-          </button>
-          <button
-            type="button"
-            className={`ghost-button full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
-            aria-pressed={soundEnabled}
-            aria-label={
-              soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
-            }
-            title={
-              soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'
-            }
-            onClick={toggleSound}
-          >
-            <UiIcon name="sound" />
-            <span>
-              {soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}
-            </span>
-          </button>
-          <button
-            type="button"
-            className="ghost-button full workspace-statistics-button"
-            aria-label="打开接待流量"
-            title="接待流量"
-            onClick={() => setStatisticsOpen(true)}
-          >
-            <UiIcon name="statistics" />
-            <span>接待流量</span>
-          </button>
-          <button
-            type="button"
-            className="ghost-button full workspace-logout-button"
-            aria-label="退出客服账号"
-            title="退出客服账号"
-            onClick={() => void logoutFromWorkspace()}
-          >
-            <UiIcon name="logout" />
-            <span>退出客服账号</span>
-          </button>
-        </div>
-      </aside>
+      <AgentSidebar
+        identity={identity}
+        availability={availability}
+        notificationState={notificationState}
+        notificationBusy={notificationBusy}
+        soundEnabled={soundEnabled}
+        onToggleNotifications={() => void toggleNotifications()}
+        onToggleSound={toggleSound}
+        onOpenStatistics={() => setStatisticsOpen(true)}
+        onLogout={() => void logoutFromWorkspace()}
+      />
 
-      <section className="conversation-pane">
-        <header className="conversation-head">
-          <div>
-            <span className="eyebrow">坐席收件箱</span>
-            <h1>
-              我的会话
-              {totalUnread > 0 && (
-                <span className="unread-total">{totalUnread}</span>
-              )}
-            </h1>
-          </div>
-          <div className="conversation-head-status">
-            <button
-              type="button"
-              className={`availability-pill is-${availability}`}
-              aria-pressed={availability === 'busy'}
-              disabled={availabilitySaving || !networkOnline || !inboxConnected}
-              title={
-                availability === 'online'
-                  ? '点击暂停接收新会话'
-                  : '点击恢复接收新会话'
-              }
-              onClick={() => void toggleAvailability()}
-            >
-              <span aria-hidden="true" />
-              {availabilitySaving
-                ? '切换中…'
-                : availability === 'online'
-                  ? '在线接待'
-                  : '暂停接待'}
-            </button>
-            <span
-              className={`connection-status is-${connectionState}`}
-              aria-live="polite"
-            >
-              <i aria-hidden="true" />
-              {connectionState === 'connected'
-                ? '实时连接正常'
-                : connectionState === 'offline'
-                  ? '网络已断开 · 草稿已保存'
-                  : connectionState === 'connecting'
-                    ? '正在建立连接'
-                    : '连接中断 · 正在恢复'}
-            </span>
-          </div>
-        </header>
-        <div className="inbox-overview" aria-label="会话概览">
-          <Metric label="新会话" value={overview.open} />
-          <Metric label="处理中" value={overview.pending} />
-          <Metric label="已关闭" value={overview.closed} />
-          <Metric
-            label="剩余额度"
-            value={
-              overview.trafficQuotaEnabled
-                ? overview.trafficQuotaRemaining
-                : '不限'
-            }
-          />
-        </div>
-        <div className="filters">
-          {(Object.keys(filterLabels) as Filter[]).map((item) => (
-            <button
-              type="button"
-              key={item}
-              className={filter === item ? 'filter active' : 'filter'}
-              onClick={() => setFilter(item)}
-            >
-              {filterLabels[item]}
-            </button>
-          ))}
-        </div>
-        <div className="inbox-tools">
-          <label className="inbox-search">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" />
-              <path d="m20 20-4-4" />
-            </svg>
-            <input
-              type="search"
-              value={searchQuery}
-              placeholder="搜索访客、产品或消息"
-              aria-label="搜索会话"
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </label>
-          <button
-            type="button"
-            className={`unread-first-toggle${unreadFirst ? ' is-active' : ''}`}
-            aria-pressed={unreadFirst}
-            onClick={() => setUnreadFirst((current) => !current)}
-          >
-            未读优先
-          </button>
-        </div>
-        <div className="conversation-list">
-          {busy ? (
-            <div className="empty-state">正在加载…</div>
-          ) : visibleConversations.length === 0 ? (
-            <div className="empty-state">
-              <strong>
-                {conversations.length === 0
-                  ? '当前没有分配给你的会话'
-                  : '没有找到匹配的会话'}
-              </strong>
-              {conversations.length === 0 && (
-                <span>
-                  保持在线，负责产品的新会话会在对应在线客服之间自动轮询。
-                </span>
-              )}
-            </div>
-          ) : (
-            visibleConversations.map((conversation) => (
-              <button
-                type="button"
-                key={conversation.id}
-                className={[
-                  'conversation-row',
-                  conversation.id === selectedId ? 'selected' : '',
-                  conversation.agent_unread_count > 0 ? 'unread' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => setSelectedId(conversation.id)}
-              >
-                <span className="avatar small">
-                  {initials(conversation.visitor_name || '访客')}
-                </span>
-                <span className="conversation-copy">
-                  <span>
-                    <strong>
-                      {conversation.visitor_name || '访客'}
-                      {conversation.agent_unread_count > 0 && (
-                        <span className="unread-badge">
-                          {conversation.status === 'open'
-                            ? `新 · ${Math.min(conversation.agent_unread_count, 99)}`
-                            : Math.min(conversation.agent_unread_count, 99)}
-                        </span>
-                      )}
-                    </strong>
-                    <time>{relativeTime(conversation.last_message_at)}</time>
-                  </span>
-                  <small>
-                    {conversation.product_title ||
-                      conversation.subject ||
-                      '访客咨询'}
-                  </small>
-                  <p>{conversation.last_message || '会话已创建'}</p>
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      </section>
+      <AgentInboxPane
+        filter={filter}
+        searchQuery={searchQuery}
+        unreadFirst={unreadFirst}
+        availability={availability}
+        availabilitySaving={availabilitySaving}
+        networkOnline={networkOnline}
+        inboxConnected={inboxConnected}
+        connectionState={connectionState}
+        totalUnread={totalUnread}
+        overview={overview}
+        busy={busy}
+        visibleConversations={visibleConversations}
+        conversationCount={conversations.length}
+        selectedId={selectedId}
+        onFilterChange={setFilter}
+        onSearchChange={setSearchQuery}
+        onToggleUnreadFirst={() => setUnreadFirst((current) => !current)}
+        onToggleAvailability={() => void toggleAvailability()}
+        onSelectConversation={setSelectedId}
+      />
 
       <main className="thread-pane">
         {error && (

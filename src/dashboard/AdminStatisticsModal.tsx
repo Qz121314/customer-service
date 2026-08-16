@@ -51,7 +51,11 @@ export function AdminStatisticsModal({
         </header>
         <div className="admin-statistics-modal-body">
           {error && (
-            <button type="button" className="notice error" onClick={onClearError}>
+            <button
+              type="button"
+              className="notice error"
+              onClick={onClearError}
+            >
               {error}
             </button>
           )}

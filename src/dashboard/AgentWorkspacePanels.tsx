@@ -1,4 +1,9 @@
-import type { AgentAvailability, AgentIdentity, AgentInbox, Conversation } from './api';
+import type {
+  AgentAvailability,
+  AgentIdentity,
+  AgentInbox,
+  Conversation,
+} from './api';
 import type { AgentNotificationState } from './agent-push';
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
@@ -75,7 +80,9 @@ export function AgentSidebar({
           type="button"
           className={`ghost-button full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
           aria-pressed={soundEnabled}
-          aria-label={soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'}
+          aria-label={
+            soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
+          }
           title={soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'}
           onClick={onToggleSound}
         >
@@ -202,7 +209,9 @@ export function AgentInboxPane({
         <Metric
           label="剩余额度"
           value={
-            overview.trafficQuotaEnabled ? overview.trafficQuotaRemaining : '不限'
+            overview.trafficQuotaEnabled
+              ? overview.trafficQuotaRemaining
+              : '不限'
           }
         />
       </div>
@@ -289,7 +298,9 @@ export function AgentInboxPane({
                   <time>{relativeTime(conversation.last_message_at)}</time>
                 </span>
                 <small>
-                  {conversation.product_title || conversation.subject || '访客咨询'}
+                  {conversation.product_title ||
+                    conversation.subject ||
+                    '访客咨询'}
                 </small>
                 <p>{conversation.last_message || '会话已创建'}</p>
               </span>

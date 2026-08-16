@@ -24,10 +24,7 @@ export function AgentEditorModal({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={() => !saving && onClose()}
-    >
+    <div className="modal-backdrop" onMouseDown={() => !saving && onClose()}>
       <section
         className="agent-modal"
         role="dialog"
@@ -98,7 +95,9 @@ export function AgentEditorModal({
                   onChange={(event) =>
                     onDraftChange({ ...draft, password: event.target.value })
                   }
-                  placeholder={draft.id ? '留空表示不修改密码' : '至少 4 个字符'}
+                  placeholder={
+                    draft.id ? '留空表示不修改密码' : '至少 4 个字符'
+                  }
                   autoComplete="new-password"
                 />
               </label>
