@@ -644,7 +644,10 @@ function AgentWorkspace({
               for (const item of incomingMedia) media.set(item.id, item);
               return [...media.values()];
             });
-            if (document.visibilityState === 'visible') {
+            if (
+              document.visibilityState === 'visible' &&
+              Number(value.conversation.agent_unread_count ?? 0) > 0
+            ) {
               const lastVisitorMessageId =
                 value.messages
                   .slice()
