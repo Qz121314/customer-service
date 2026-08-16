@@ -3,6 +3,8 @@ import { hashAgentPassword } from './agent-password';
 import { broadcastClientConversationEvent } from './client-api';
 import { assignConversationAgent } from './routing';
 import { calendarMonthPeriod } from '../shared/calendar-month';
+import { sendAgentPushForConversation } from './agent-push';
+import { assignWaitingConversations } from './waiting-assignment';
 
 type Bindings = {
   DB: D1Database;
@@ -50,6 +52,16 @@ type ScopeRow = {
   section_id: string;
   category_id: string;
   product_id: string;
+};
+
+type QuotaAdjustmentRow = {
+  id: string;
+  request_id: string;
+  amount: number;
+  quota_total_before: number;
+  quota_total_after: number;
+  applied_at: string | null;
+  created_at: string;
 };
 
 type AgentRoutingScope =
@@ -139,6 +151,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     dailyConversationLimit?: number;
     trafficQuotaEnabled?: boolean;
     trafficQuotaTopUp?: number;
+    trafficQuotaRequestId?: string;
     isEnabled?: boolean;
   }>(c.req.raw);
 
@@ -167,6 +180,13 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   if (trafficQuotaTopUp === null) {
     return c.json({ error: 'INVALID_TRAFFIC_QUOTA' }, 400);
   }
+  const trafficQuotaRequestId =
+    trafficQuotaTopUp > 0
+      ? normalizeQuotaRequestId(body?.trafficQuotaRequestId)
+      : null;
+  if (trafficQuotaTopUp > 0 && !trafficQuotaRequestId) {
+    return c.json({ error: 'INVALID_QUOTA_REQUEST' }, 400);
+  }
   const trafficQuotaEnabled = body?.trafficQuotaEnabled === true ? 1 : 0;
   const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
@@ -194,8 +214,20 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       trafficQuotaEnabled,
       trafficQuotaTopUp,
     ),
-    ...routingScopeStatements(c.env.DB, id, routingScope),
   ];
+  if (trafficQuotaTopUp > 0 && trafficQuotaRequestId) {
+    statements.push(
+      c.env.DB.prepare(
+        `INSERT INTO agent_quota_adjustments (
+           id, site_id, agent_id, request_id, amount,
+           quota_total_before, quota_total_after, applied_at
+         ) VALUES (
+           ?1, 'default', ?2, ?3, ?4, 0, ?4, CURRENT_TIMESTAMP
+         )`,
+      ).bind(crypto.randomUUID(), id, trafficQuotaRequestId, trafficQuotaTopUp),
+    );
+  }
+  statements.push(...routingScopeStatements(c.env.DB, id, routingScope));
 
   try {
     await c.env.DB.batch(statements);
@@ -207,6 +239,34 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     return c.json({ error: 'AGENT_CREATE_FAILED' }, 500);
   }
   return c.json({ ok: true, id }, 201);
+});
+
+adminConfigApi.get('/api/admin/agents/:id/quota-adjustments', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const id = c.req.param('id');
+  const result = await c.env.DB.prepare(
+    `SELECT id, request_id, amount, quota_total_before, quota_total_after,
+       applied_at, created_at
+     FROM agent_quota_adjustments
+     WHERE site_id = 'default'
+       AND agent_id = ?1
+       AND applied_at IS NOT NULL
+     ORDER BY created_at DESC, id DESC
+     LIMIT 10`,
+  )
+    .bind(id)
+    .all<QuotaAdjustmentRow>();
+  return c.json({
+    adjustments: (result.results ?? []).map((adjustment) => ({
+      id: adjustment.id,
+      requestId: adjustment.request_id,
+      amount: Number(adjustment.amount),
+      quotaTotalBefore: Number(adjustment.quota_total_before),
+      quotaTotalAfter: Number(adjustment.quota_total_after),
+      appliedAt: adjustment.applied_at,
+      createdAt: adjustment.created_at,
+    })),
+  });
 });
 
 adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
@@ -235,6 +295,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     dailyConversationLimit?: number;
     trafficQuotaEnabled?: boolean;
     trafficQuotaTopUp?: number;
+    trafficQuotaRequestId?: string;
     isEnabled?: boolean;
   }>(c.req.raw);
   if (!body) return c.json({ error: 'INVALID_AGENT' }, 400);
@@ -286,10 +347,47 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
         ? 1
         : 0;
   const trafficQuotaTopUp = normalizeTrafficQuotaTopUp(body.trafficQuotaTopUp);
+  const trafficQuotaRequestId =
+    Number(trafficQuotaTopUp) > 0
+      ? normalizeQuotaRequestId(body.trafficQuotaRequestId)
+      : null;
   if (
     trafficQuotaTopUp === null ||
-    current.traffic_quota_total + trafficQuotaTopUp > 2_000_000_000
+    (trafficQuotaTopUp > 0 && !trafficQuotaRequestId)
   ) {
+    return c.json(
+      {
+        error:
+          trafficQuotaTopUp === null
+            ? 'INVALID_TRAFFIC_QUOTA'
+            : 'INVALID_QUOTA_REQUEST',
+      },
+      400,
+    );
+  }
+  const existingAdjustment = trafficQuotaRequestId
+    ? await c.env.DB.prepare(
+        `SELECT id, request_id, amount, quota_total_before,
+           quota_total_after, applied_at, created_at
+         FROM agent_quota_adjustments
+         WHERE site_id = 'default'
+           AND agent_id = ?1
+           AND request_id = ?2
+         LIMIT 1`,
+      )
+        .bind(id, trafficQuotaRequestId)
+        .first<QuotaAdjustmentRow>()
+    : null;
+  if (
+    existingAdjustment &&
+    Number(existingAdjustment.amount) !== trafficQuotaTopUp
+  ) {
+    return c.json({ error: 'QUOTA_REQUEST_CONFLICT' }, 409);
+  }
+  const pendingTrafficQuotaTopUp = existingAdjustment?.applied_at
+    ? 0
+    : trafficQuotaTopUp;
+  if (current.traffic_quota_total + pendingTrafficQuotaTopUp > 2_000_000_000) {
     return c.json({ error: 'INVALID_TRAFFIC_QUOTA' }, 400);
   }
 
@@ -317,11 +415,10 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            max_active_conversations = ?7,
            daily_conversation_limit = ?8,
            traffic_quota_enabled = ?9,
-           traffic_quota_total = traffic_quota_total + ?10,
            status = CASE WHEN ?6 = 0 THEN 'offline' ELSE status END,
            last_seen_at = CASE WHEN ?6 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?11 AND site_id = 'default'`,
+       WHERE id = ?10 AND site_id = 'default'`,
     ).bind(
       name,
       username,
@@ -332,15 +429,73 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       maxActive,
       dailyLimit,
       trafficQuotaEnabled,
-      trafficQuotaTopUp,
       id,
     ),
+  ];
+  let quotaUpdateIndex = -1;
+  if (
+    trafficQuotaTopUp > 0 &&
+    trafficQuotaRequestId &&
+    !existingAdjustment?.applied_at
+  ) {
+    statements.push(
+      c.env.DB.prepare(
+        `INSERT OR IGNORE INTO agent_quota_adjustments (
+           id, site_id, agent_id, request_id, amount,
+           quota_total_before, quota_total_after
+         )
+         SELECT ?1, 'default', id, ?2, ?3,
+           traffic_quota_total, traffic_quota_total + ?3
+         FROM agents
+         WHERE id = ?4
+           AND site_id = 'default'
+           AND traffic_quota_total <= 2000000000 - ?3`,
+      ).bind(crypto.randomUUID(), trafficQuotaRequestId, trafficQuotaTopUp, id),
+    );
+    quotaUpdateIndex = statements.length;
+    statements.push(
+      c.env.DB.prepare(
+        `UPDATE agents
+         SET traffic_quota_total = traffic_quota_total + ?1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?2
+           AND site_id = 'default'
+           AND traffic_quota_total <= 2000000000 - ?1
+           AND EXISTS (
+             SELECT 1
+             FROM agent_quota_adjustments adjustment
+             WHERE adjustment.site_id = 'default'
+               AND adjustment.agent_id = agents.id
+               AND adjustment.request_id = ?3
+               AND adjustment.amount = ?1
+               AND adjustment.applied_at IS NULL
+           )`,
+      ).bind(trafficQuotaTopUp, id, trafficQuotaRequestId),
+      c.env.DB.prepare(
+        `UPDATE agent_quota_adjustments
+         SET applied_at = CURRENT_TIMESTAMP
+         WHERE site_id = 'default'
+           AND agent_id = ?1
+           AND request_id = ?2
+           AND amount = ?3
+           AND applied_at IS NULL
+           AND EXISTS (
+             SELECT 1
+             FROM agents
+             WHERE agents.id = agent_quota_adjustments.agent_id
+               AND agents.site_id = agent_quota_adjustments.site_id
+               AND agents.traffic_quota_total = agent_quota_adjustments.quota_total_after
+           )`,
+      ).bind(id, trafficQuotaRequestId, trafficQuotaTopUp),
+    );
+  }
+  statements.push(
     c.env.DB.prepare(
       `DELETE FROM agent_routing_scopes
        WHERE site_id = 'default' AND agent_id = ?1`,
     ).bind(id),
     ...routingScopeStatements(c.env.DB, id, routingScope),
-  ];
+  );
   if (enabled === 0) {
     statements.push(
       c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
@@ -359,7 +514,43 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       ).bind(id),
     );
   }
-  await c.env.DB.batch(statements);
+  const results = await c.env.DB.batch(statements);
+  const quotaApplied =
+    quotaUpdateIndex >= 0 &&
+    Number(results[quotaUpdateIndex]?.meta?.changes ?? 0) === 1;
+  if (
+    trafficQuotaTopUp > 0 &&
+    trafficQuotaRequestId &&
+    !existingAdjustment?.applied_at &&
+    !quotaApplied
+  ) {
+    const resolvedAdjustment = await c.env.DB.prepare(
+      `SELECT id, request_id, amount, quota_total_before,
+         quota_total_after, applied_at, created_at
+       FROM agent_quota_adjustments
+       WHERE site_id = 'default'
+         AND agent_id = ?1
+         AND request_id = ?2
+       LIMIT 1`,
+    )
+      .bind(id, trafficQuotaRequestId)
+      .first<QuotaAdjustmentRow>();
+    if (
+      !resolvedAdjustment?.applied_at ||
+      Number(resolvedAdjustment.amount) !== trafficQuotaTopUp
+    ) {
+      return c.json(
+        {
+          error:
+            resolvedAdjustment &&
+            Number(resolvedAdjustment.amount) !== trafficQuotaTopUp
+              ? 'QUOTA_REQUEST_CONFLICT'
+              : 'QUOTA_TOP_UP_FAILED',
+        },
+        resolvedAdjustment ? 409 : 500,
+      );
+    }
+  }
   if (conversationsToReassign.length) {
     await disconnectAgentRealtime(c.env, id, conversationsToReassign);
     for (const conversationId of conversationsToReassign) {
@@ -371,7 +562,32 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       );
     }
   }
-  return c.json({ ok: true });
+  const quotaWasBlocking =
+    current.traffic_quota_enabled === 1 &&
+    current.traffic_quota_used >= current.traffic_quota_total;
+  const quotaEligibilityRestored =
+    quotaWasBlocking && (quotaApplied || trafficQuotaEnabled === 0);
+  let assignedWaitingCount = 0;
+  if (
+    enabled === 1 &&
+    current.status === 'online' &&
+    quotaEligibilityRestored
+  ) {
+    const assignedConversationIds = await assignWaitingConversations(
+      c.env,
+      id,
+      10,
+    );
+    assignedWaitingCount = assignedConversationIds.length;
+    for (const conversationId of assignedConversationIds) {
+      c.executionCtx.waitUntil(
+        sendAgentPushForConversation(c.env, conversationId).catch((error) => {
+          console.warn('Agent push dispatch failed after quota top-up.', error);
+        }),
+      );
+    }
+  }
+  return c.json({ ok: true, quotaApplied, assignedWaitingCount });
 });
 
 adminConfigApi.get('/api/admin/products', async (c) => {
@@ -800,6 +1016,11 @@ function normalizeTrafficQuotaTopUp(value?: number): number | null {
   if (value === undefined) return 0;
   if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
   return value >= 0 && value <= 1_000_000 ? value : null;
+}
+
+function normalizeQuotaRequestId(value?: string): string | null {
+  const requestId = value?.trim() ?? '';
+  return /^[A-Za-z0-9:_-]{8,120}$/u.test(requestId) ? requestId : null;
 }
 
 function normalizeMonth(value?: string): string | null {
