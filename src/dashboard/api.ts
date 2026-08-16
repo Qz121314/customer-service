@@ -30,6 +30,10 @@ export type AgentAccount = {
   maxActiveConversations: number;
   dailyConversationLimit: number;
   todayConversationCount: number;
+  trafficQuotaEnabled: boolean;
+  trafficQuotaTotal: number;
+  trafficQuotaUsed: number;
+  trafficQuotaRemaining: number;
   lastLoginAt: string | null;
   lastSeenAt: string | null;
   hasPassword: boolean;
@@ -57,6 +61,10 @@ export type Overview = {
   total: number;
   todayAccepted: number;
   dailyLimit: number;
+  trafficQuotaEnabled: boolean;
+  trafficQuotaTotal: number;
+  trafficQuotaUsed: number;
+  trafficQuotaRemaining: number;
 };
 
 export type AgentMonthlyStats = {
@@ -74,6 +82,10 @@ export type AgentSelfMonthlyStats = {
   total: number;
   todayCount: number;
   dailyLimit: number;
+  trafficQuotaEnabled: boolean;
+  trafficQuotaTotal: number;
+  trafficQuotaUsed: number;
+  trafficQuotaRemaining: number;
   retainedFrom: string;
 };
 
@@ -182,6 +194,7 @@ const errorMessages: Record<string, string> = {
   INVALID_GROUP: '客服分组名称无效',
   INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
   INVALID_ROUTING_SCOPE: '负责范围无效，请重新选择分区、分类或产品',
+  INVALID_TRAFFIC_QUOTA: '额度数量无效，单次最多追加 100 万次',
   INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
@@ -229,6 +242,8 @@ export async function createAgent(input: {
   routingScope: AgentRoutingScope;
   maxActiveConversations: number;
   dailyConversationLimit: number;
+  trafficQuotaEnabled: boolean;
+  trafficQuotaTopUp: number;
   isEnabled: boolean;
 }): Promise<void> {
   await request('/api/admin/agents', {
@@ -246,6 +261,8 @@ export async function updateAgent(
     routingScope: AgentRoutingScope;
     maxActiveConversations: number;
     dailyConversationLimit: number;
+    trafficQuotaEnabled: boolean;
+    trafficQuotaTopUp: number;
     isEnabled: boolean;
   },
 ): Promise<void> {
