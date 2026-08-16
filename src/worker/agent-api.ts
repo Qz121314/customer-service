@@ -239,47 +239,30 @@ agentApi.get('/api/agent/overview', async (c) => {
   return c.json(await loadAgentOverview(c.env.DB, agent.id));
 });
 
-async function loadAgentOverview(db: D1Database, agentId: string) {
+async function loadAgentQuotaOverview(db: D1Database, agentId: string) {
   const businessDate = routingBusinessDate();
-  const [statusResult, quotaRow] = await Promise.all([
-    db
-      .prepare(
-        `SELECT status, COUNT(*) AS count
-       FROM conversations
-       WHERE assigned_agent = ?1
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-       GROUP BY status`,
-      )
-      .bind(agentId)
-      .all<{ status: ConversationStatus; count: number }>(),
-    db
-      .prepare(
-        `SELECT a.daily_conversation_limit, a.traffic_quota_enabled,
-         a.traffic_quota_total, a.traffic_quota_used,
-         COALESCE(s.conversation_count, 0) AS today_count
-       FROM agents a
-       LEFT JOIN agent_daily_stats s
-         ON s.site_id = a.site_id
-        AND s.agent_id = a.id
-        AND s.business_date = ?2
-       WHERE a.id = ?1
-       LIMIT 1`,
-      )
-      .bind(agentId, businessDate)
-      .first<{
-        daily_conversation_limit: number;
-        today_count: number;
-        traffic_quota_enabled: number;
-        traffic_quota_total: number;
-        traffic_quota_used: number;
-      }>(),
-  ]);
-  const counts = { open: 0, pending: 0, closed: 0 };
-  for (const row of statusResult.results ?? [])
-    counts[row.status] = Number(row.count ?? 0);
+  const quotaRow = await db
+    .prepare(
+      `SELECT a.daily_conversation_limit, a.traffic_quota_enabled,
+       a.traffic_quota_total, a.traffic_quota_used,
+       COALESCE(s.conversation_count, 0) AS today_count
+     FROM agents a
+     LEFT JOIN agent_daily_stats s
+       ON s.site_id = a.site_id
+      AND s.agent_id = a.id
+      AND s.business_date = ?2
+     WHERE a.id = ?1
+     LIMIT 1`,
+    )
+    .bind(agentId, businessDate)
+    .first<{
+      daily_conversation_limit: number;
+      today_count: number;
+      traffic_quota_enabled: number;
+      traffic_quota_total: number;
+      traffic_quota_used: number;
+    }>();
   return {
-    ...counts,
-    total: counts.open + counts.pending + counts.closed,
     todayAccepted: Number(quotaRow?.today_count ?? 0),
     dailyLimit: Number(quotaRow?.daily_conversation_limit ?? 0),
     trafficQuotaEnabled: quotaRow?.traffic_quota_enabled === 1,
@@ -290,6 +273,30 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
       Number(quotaRow?.traffic_quota_total ?? 0) -
         Number(quotaRow?.traffic_quota_used ?? 0),
     ),
+  };
+}
+
+async function loadAgentOverview(db: D1Database, agentId: string) {
+  const [statusResult, quotaOverview] = await Promise.all([
+    db
+      .prepare(
+        `SELECT status, COUNT(*) AS count
+       FROM conversations
+       WHERE assigned_agent = ?1
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       GROUP BY status`,
+      )
+      .bind(agentId)
+      .all<{ status: ConversationStatus; count: number }>(),
+    loadAgentQuotaOverview(db, agentId),
+  ]);
+  const counts = { open: 0, pending: 0, closed: 0 };
+  for (const row of statusResult.results ?? [])
+    counts[row.status] = Number(row.count ?? 0);
+  return {
+    ...counts,
+    total: counts.open + counts.pending + counts.closed,
+    ...quotaOverview,
   };
 }
 
@@ -355,10 +362,22 @@ async function loadAgentInbox(
   agent: AgentSession,
   requestedStatus?: string,
 ) {
+  type InboxConversationRow = Record<string, unknown> & {
+    __overview_open?: number;
+    __overview_pending?: number;
+    __overview_closed?: number;
+  };
+
   const filtered =
     requestedStatus === 'open' ||
     requestedStatus === 'pending' ||
     requestedStatus === 'closed';
+  const overviewColumns = filtered
+    ? ''
+    : `       SUM(CASE WHEN c.status = 'open' THEN 1 ELSE 0 END) OVER () AS __overview_open,
+     SUM(CASE WHEN c.status = 'pending' THEN 1 ELSE 0 END) OVER () AS __overview_pending,
+     SUM(CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END) OVER () AS __overview_closed,
+`;
   let statement = db.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
        c.product_id, c.section_id, c.section_name, c.category_id,
@@ -366,7 +385,7 @@ async function loadAgentInbox(
        c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
        c.expires_at,
        v.display_name AS visitor_name,
-       (SELECT body FROM messages m WHERE m.conversation_id = c.id
+${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = c.id
         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
@@ -380,15 +399,53 @@ async function loadAgentInbox(
   statement = filtered
     ? statement.bind(agent.id, requestedStatus)
     : statement.bind(agent.id);
-  const [result, overview, transferTargets, quickReplies] = await Promise.all([
-    statement.all(),
-    loadAgentOverview(db, agent.id),
-    loadTransferTargets(db, agent.id),
-    loadQuickReplies(db, agent.id),
-  ]);
+  const transferTargetsRequest = loadTransferTargets(db, agent.id);
+  const quickRepliesRequest = loadQuickReplies(db, agent.id);
+
+  if (filtered) {
+    const [result, overview, transferTargets, quickReplies] = await Promise.all(
+      [
+        statement.all<InboxConversationRow>(),
+        loadAgentOverview(db, agent.id),
+        transferTargetsRequest,
+        quickRepliesRequest,
+      ],
+    );
+    return {
+      conversations: result.results ?? [],
+      overview,
+      transferTargets,
+      quickReplies,
+      availability: agent.status === 'busy' ? 'busy' : 'online',
+    };
+  }
+
+  const [result, quotaOverview, transferTargets, quickReplies] =
+    await Promise.all([
+      statement.all<InboxConversationRow>(),
+      loadAgentQuotaOverview(db, agent.id),
+      transferTargetsRequest,
+      quickRepliesRequest,
+    ]);
+  const conversations = result.results ?? [];
+  const firstConversation = conversations[0];
+  const counts = {
+    open: Number(firstConversation?.__overview_open ?? 0),
+    pending: Number(firstConversation?.__overview_pending ?? 0),
+    closed: Number(firstConversation?.__overview_closed ?? 0),
+  };
+  for (const conversation of conversations) {
+    delete conversation.__overview_open;
+    delete conversation.__overview_pending;
+    delete conversation.__overview_closed;
+  }
   return {
-    conversations: result.results ?? [],
-    overview,
+    conversations,
+    overview: {
+      ...counts,
+      total: counts.open + counts.pending + counts.closed,
+      ...quotaOverview,
+    },
     transferTargets,
     quickReplies,
     availability: agent.status === 'busy' ? 'busy' : 'online',

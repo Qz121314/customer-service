@@ -39,3 +39,34 @@ test('agent inbox filters, searches and prioritizes unread conversations locally
   assert.match(app, /未读优先/u);
   assert.match(app, /conversation\.agent_unread_count/u);
 });
+
+test('agent inbox folds unfiltered overview counts into the conversation scan', async () => {
+  const worker = await read('../src/worker/agent-api.ts');
+  const start = worker.indexOf('async function loadAgentInbox');
+  const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
+  assert.ok(start >= 0 && end > start);
+  const inbox = worker.slice(start, end);
+
+  assert.match(
+    inbox,
+    /SUM\(CASE WHEN c\.status = 'open' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_open/u,
+  );
+  assert.match(
+    inbox,
+    /SUM\(CASE WHEN c\.status = 'pending' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_pending/u,
+  );
+  assert.match(
+    inbox,
+    /SUM\(CASE WHEN c\.status = 'closed' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_closed/u,
+  );
+  assert.match(inbox, /loadAgentQuotaOverview\(db, agent\.id\)/u);
+  assert.match(
+    inbox,
+    /if \(filtered\) \{[\s\S]*loadAgentOverview\(db, agent\.id\)/u,
+  );
+  assert.equal(
+    (inbox.match(/loadAgentOverview\(db, agent\.id\)/gu) ?? []).length,
+    1,
+  );
+  assert.match(inbox, /delete conversation\.__overview_open/u);
+});
