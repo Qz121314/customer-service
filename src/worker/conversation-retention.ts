@@ -48,11 +48,7 @@ export async function purgeExpiredConversations(
   let conversations = 0;
   let mediaObjects = 0;
 
-  for (
-    let pass = 0;
-    pass < MAX_CONVERSATION_DELETE_PASSES;
-    pass += 1
-  ) {
+  for (let pass = 0; pass < MAX_CONVERSATION_DELETE_PASSES; pass += 1) {
     const expired = await env.DB.prepare(
       `SELECT id
        FROM conversations
@@ -168,11 +164,7 @@ async function purgeOrphanVisitors(
   nowIso: string,
 ): Promise<number> {
   let removed = 0;
-  for (
-    let pass = 0;
-    pass < MAX_ORPHAN_VISITOR_DELETE_PASSES;
-    pass += 1
-  ) {
+  for (let pass = 0; pass < MAX_ORPHAN_VISITOR_DELETE_PASSES; pass += 1) {
     // Push subscriptions are keyed by the public visitor identity rather than a
     // visitor FK, so remove them for the same bounded orphan batch first.
     await db
