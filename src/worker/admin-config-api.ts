@@ -20,6 +20,9 @@ type AgentRow = {
   is_enabled: number;
   max_active_conversations: number;
   daily_conversation_limit: number;
+  traffic_quota_enabled: number;
+  traffic_quota_total: number;
+  traffic_quota_used: number;
   last_login_at: string | null;
   last_seen_at: string | null;
   password_hash: string | null;
@@ -134,6 +137,8 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     routingScope?: unknown;
     maxActiveConversations?: number;
     dailyConversationLimit?: number;
+    trafficQuotaEnabled?: boolean;
+    trafficQuotaTopUp?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
 
@@ -158,6 +163,11 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
 
   const maxActive = normalizeCapacity(body?.maxActiveConversations);
   const dailyLimit = normalizeDailyLimit(body?.dailyConversationLimit);
+  const trafficQuotaTopUp = normalizeTrafficQuotaTopUp(body?.trafficQuotaTopUp);
+  if (trafficQuotaTopUp === null) {
+    return c.json({ error: 'INVALID_TRAFFIC_QUOTA' }, 400);
+  }
+  const trafficQuotaEnabled = body?.trafficQuotaEnabled === true ? 1 : 0;
   const credentials = await hashAgentPassword(password);
   const id = crypto.randomUUID();
   const enabled = body?.isEnabled === false ? 0 : 1;
@@ -166,8 +176,11 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
          password_iterations, status, is_enabled, max_active_conversations,
-         daily_conversation_limit
-       ) VALUES (?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8, ?9)`,
+         daily_conversation_limit, traffic_quota_enabled,
+         traffic_quota_total
+       ) VALUES (
+         ?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8, ?9, ?10, ?11
+       )`,
     ).bind(
       id,
       name,
@@ -178,6 +191,8 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       enabled,
       maxActive,
       dailyLimit,
+      trafficQuotaEnabled,
+      trafficQuotaTopUp,
     ),
     ...routingScopeStatements(c.env.DB, id, routingScope),
   ];
@@ -202,7 +217,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   const current = await c.env.DB.prepare(
     `SELECT id, name, username, status, is_enabled, max_active_conversations,
        daily_conversation_limit, last_login_at, last_seen_at, password_hash,
-       password_salt, password_iterations
+       password_salt, password_iterations, traffic_quota_enabled,
+       traffic_quota_total, traffic_quota_used
      FROM agents WHERE id = ?1 AND site_id = 'default'`,
   )
     .bind(id)
@@ -217,6 +233,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     routingScope?: unknown;
     maxActiveConversations?: number;
     dailyConversationLimit?: number;
+    trafficQuotaEnabled?: boolean;
+    trafficQuotaTopUp?: number;
     isEnabled?: boolean;
   }>(c.req.raw);
   if (!body) return c.json({ error: 'INVALID_AGENT' }, 400);
@@ -261,6 +279,19 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     body.dailyConversationLimit === undefined
       ? current.daily_conversation_limit
       : normalizeDailyLimit(body.dailyConversationLimit);
+  const trafficQuotaEnabled =
+    body.trafficQuotaEnabled === undefined
+      ? current.traffic_quota_enabled
+      : body.trafficQuotaEnabled
+        ? 1
+        : 0;
+  const trafficQuotaTopUp = normalizeTrafficQuotaTopUp(body.trafficQuotaTopUp);
+  if (
+    trafficQuotaTopUp === null ||
+    current.traffic_quota_total + trafficQuotaTopUp > 2_000_000_000
+  ) {
+    return c.json({ error: 'INVALID_TRAFFIC_QUOTA' }, 400);
+  }
 
   const routingScope =
     body.routingScope === undefined && body.productIds === undefined
@@ -285,10 +316,12 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            is_enabled = ?6,
            max_active_conversations = ?7,
            daily_conversation_limit = ?8,
+           traffic_quota_enabled = ?9,
+           traffic_quota_total = traffic_quota_total + ?10,
            status = CASE WHEN ?6 = 0 THEN 'offline' ELSE status END,
            last_seen_at = CASE WHEN ?6 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?9 AND site_id = 'default'`,
+       WHERE id = ?11 AND site_id = 'default'`,
     ).bind(
       name,
       username,
@@ -298,6 +331,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       enabled,
       maxActive,
       dailyLimit,
+      trafficQuotaEnabled,
+      trafficQuotaTopUp,
       id,
     ),
     c.env.DB.prepare(
@@ -351,7 +386,8 @@ async function loadAgents(db: D1Database) {
       .prepare(
         `SELECT id, name, username, status, is_enabled, max_active_conversations,
            daily_conversation_limit, last_login_at, last_seen_at, password_hash,
-           password_salt, password_iterations
+           password_salt, password_iterations, traffic_quota_enabled,
+           traffic_quota_total, traffic_quota_used
          FROM agents
          WHERE id <> 'admin'
          ORDER BY is_enabled DESC, name ASC, id ASC`,
@@ -399,6 +435,13 @@ async function loadAgents(db: D1Database) {
       maxActiveConversations: agent.max_active_conversations,
       dailyConversationLimit: agent.daily_conversation_limit,
       todayConversationCount: todayByAgent.get(agent.id) ?? 0,
+      trafficQuotaEnabled: agent.traffic_quota_enabled === 1,
+      trafficQuotaTotal: agent.traffic_quota_total,
+      trafficQuotaUsed: agent.traffic_quota_used,
+      trafficQuotaRemaining: Math.max(
+        0,
+        agent.traffic_quota_total - agent.traffic_quota_used,
+      ),
       lastLoginAt: agent.last_login_at,
       lastSeenAt: agent.last_seen_at,
       hasPassword: Boolean(agent.password_hash && agent.password_salt),
@@ -751,6 +794,12 @@ function normalizeCapacity(value?: number): number {
 function normalizeDailyLimit(value?: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(9999, Math.trunc(value ?? 0)));
+}
+
+function normalizeTrafficQuotaTopUp(value?: number): number | null {
+  if (value === undefined) return 0;
+  if (!Number.isFinite(value) || !Number.isInteger(value)) return null;
+  return value >= 0 && value <= 1_000_000 ? value : null;
 }
 
 function normalizeMonth(value?: string): string | null {
