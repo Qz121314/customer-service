@@ -26,6 +26,7 @@ type DeletedVisitorRow = {
 const DELETE_BATCH_SIZE = 100;
 const MAX_CONVERSATION_DELETE_PASSES = 5;
 const MAX_ORPHAN_VISITOR_DELETE_PASSES = 2;
+const REPORTING_HISTORY_CLEANUP_UTC_HOUR = 12;
 
 export function conversationExpiresAt(createdAt: string | Date): string {
   const created = createdAt instanceof Date ? createdAt : new Date(createdAt);
@@ -107,6 +108,12 @@ export async function purgeExpiredConversations(
     )
       .bind(nowIso)
       .run();
+  }
+  if (
+    now.getUTCHours() === REPORTING_HISTORY_CLEANUP_UTC_HOUR &&
+    now.getUTCMinutes() === 0
+  ) {
+    await purgeReportingHistory(env.DB, nowIso);
   }
   return { conversations, mediaObjects, staleMediaObjects, visitors };
 }
@@ -214,4 +221,28 @@ async function purgeOrphanVisitors(
     if (count < DELETE_BATCH_SIZE) break;
   }
   return removed;
+}
+
+async function purgeReportingHistory(
+  db: D1Database,
+  nowIso: string,
+): Promise<void> {
+  // 12:00 UTC is 04:00/05:00 in Los Angeles, so UTC and reporting-local dates
+  // are already aligned. Keep the current reporting day plus the prior 399.
+  await db
+    .prepare(
+      `DELETE FROM agent_daily_stats
+       WHERE site_id = 'default'
+         AND business_date < date(?1, '-399 days')`,
+    )
+    .bind(nowIso)
+    .run();
+  await db
+    .prepare(
+      `DELETE FROM agent_traffic_receipts
+       WHERE site_id = 'default'
+         AND business_date < date(?1, '-399 days')`,
+    )
+    .bind(nowIso)
+    .run();
 }

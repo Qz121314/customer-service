@@ -50,6 +50,23 @@ function createRetentionDatabase() {
       site_id TEXT NOT NULL,
       visitor_external_id TEXT NOT NULL
     );
+    CREATE TABLE agent_daily_stats (
+      site_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      business_date TEXT NOT NULL,
+      conversation_count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (site_id, agent_id, business_date)
+    );
+    CREATE INDEX idx_agent_daily_stats_business_date
+      ON agent_daily_stats(site_id, business_date, agent_id);
+    CREATE TABLE agent_traffic_receipts (
+      conversation_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      business_date TEXT NOT NULL
+    );
+    CREATE INDEX idx_agent_traffic_receipts_month
+      ON agent_traffic_receipts(site_id, business_date, agent_id);
 
     INSERT INTO sites (id) VALUES ('default');
   `);
@@ -176,5 +193,55 @@ test('cron cleanup removes conversation trees with bounded D1 work', async () =>
   assert.equal(db.counter.count, 3);
   assert.equal(rowCount(database, 'visitors'), 0);
   assert.equal(rowCount(database, 'visitor_push_subscriptions'), 0);
+  database.close();
+});
+
+test('reporting history cleanup runs once daily and preserves the 400-day window', async () => {
+  const database = createRetentionDatabase();
+  const db = d1(database);
+  const env = {
+    DB: db,
+    MEDIA: {
+      async delete() {},
+    },
+  };
+
+  database.exec(`
+    INSERT INTO agent_daily_stats (
+      site_id, agent_id, business_date, conversation_count
+    ) VALUES
+      ('default', 'old-agent', '2025-07-12', 1),
+      ('default', 'boundary-agent', '2025-07-13', 1);
+    INSERT INTO agent_traffic_receipts (
+      conversation_id, site_id, agent_id, business_date
+    ) VALUES
+      ('old-receipt', 'default', 'old-agent', '2025-07-12'),
+      ('boundary-receipt', 'default', 'boundary-agent', '2025-07-13');
+  `);
+
+  await purgeExpiredConversations(env, new Date('2026-08-16T12:00:00.000Z'));
+
+  assert.equal(rowCount(database, 'agent_daily_stats'), 1);
+  assert.equal(rowCount(database, 'agent_traffic_receipts'), 1);
+  assert.equal(
+    database
+      .prepare('SELECT business_date FROM agent_daily_stats LIMIT 1')
+      .get().business_date,
+    '2025-07-13',
+  );
+
+  database.exec(`
+    INSERT INTO agent_daily_stats (
+      site_id, agent_id, business_date, conversation_count
+    ) VALUES ('default', 'late-old-agent', '2025-07-12', 1);
+    INSERT INTO agent_traffic_receipts (
+      conversation_id, site_id, agent_id, business_date
+    ) VALUES ('late-old-receipt', 'default', 'late-old-agent', '2025-07-12');
+  `);
+
+  await purgeExpiredConversations(env, new Date('2026-08-16T12:01:00.000Z'));
+
+  assert.equal(rowCount(database, 'agent_daily_stats'), 2);
+  assert.equal(rowCount(database, 'agent_traffic_receipts'), 2);
   database.close();
 });
