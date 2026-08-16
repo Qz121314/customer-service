@@ -1,0 +1,32 @@
+name: One-time agent editor Prettier probe
+
+on:
+  push:
+    branches:
+      - ui/agent-editor-single-screen
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Print Prettier diff
+        run: |
+          pnpm exec prettier --write \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/agent-editor-single-screen.css \
+            test/agent-editor-single-screen-contract.test.mjs
+          git diff -- \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/agent-editor-single-screen.css \
+            test/agent-editor-single-screen-contract.test.mjs
