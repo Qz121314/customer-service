@@ -228,7 +228,7 @@ const testRewrites = new Map([
     return source;
   }],
   ['test/agent-reception-reliability.test.mjs', (source) => {
-    source = source.replace("read('../src/dashboard/App.tsx'),\n  ]);\n\n  assert.match(agentApi, /\\/api\\/agent\\/auth\\/status/u);", "read('../src/dashboard/AgentPortal.tsx'),\n  ]);\n\n  assert.match(agentApi, /\\/api\\/agent\\/auth\\/status/u);");
+    source = source.replace("read('../src/dashboard/App.tsx'),", "read('../src/dashboard/AgentPortal.tsx'),");
     source = replaceRequired(source, "  const [agentApi, dashboardApi, dashboard] = await Promise.all([\n    read('../src/worker/agent-api.ts'),\n    read('../src/dashboard/api.ts'),\n    read('../src/dashboard/App.tsx'),\n  ]);", "  const [agentApi, dashboardApi, dashboard, runtime] = await Promise.all([\n    read('../src/worker/agent-api.ts'),\n    read('../src/dashboard/api.ts'),\n    read('../src/dashboard/AgentPortal.tsx'),\n    read('../src/dashboard/dashboard-runtime.ts'),\n  ]);", 'reception reliability sources');
     source = source.replace('assert.match(dashboard, /cs-agent-drafts:/u);', 'assert.match(runtime, /cs-agent-drafts:/u);');
     source = source.replace('assert.match(dashboard, /AGENT_DRAFT_TTL_MS/u);', 'assert.match(runtime, /AGENT_DRAFT_TTL_MS/u);');
@@ -238,7 +238,7 @@ const testRewrites = new Map([
     .replace("const app = source('../src/dashboard/App.tsx');", "const app = source('../src/dashboard/AgentPortal.tsx');")
     .replace("const app = source('../src/dashboard/App.tsx');", "const app = source('../src/dashboard/AdminPortal.tsx');")],
   ['test/agent-transfer-quick-replies.test.mjs', (source) => source.replaceAll("read('../src/dashboard/App.tsx')", "read('../src/dashboard/AgentPortal.tsx')")],
-  ['test/realtime-contract.test.mjs', (source) => source.replace("new URL('../src/dashboard/App.tsx', import.meta.url)", "new URL('../src/dashboard/AgentPortal.tsx', import.meta.url)"))],
+  ['test/realtime-contract.test.mjs', (source) => source.replace("new URL('../src/dashboard/App.tsx', import.meta.url)", "new URL('../src/dashboard/AgentPortal.tsx', import.meta.url)")],
   ['test/scope-native-dashboard-contract.test.mjs', (source) => {
     source = replaceRequired(source, "  const app = source('../src/dashboard/App.tsx');", "  const admin = source('../src/dashboard/AdminPortal.tsx');\n  const runtime = source('../src/dashboard/dashboard-runtime.ts');", 'scope native sources');
     source = source.replace("assert.ok(app.includes('routingScope: AgentRoutingScope'));", "assert.ok(runtime.includes('routingScope: AgentRoutingScope'));");
