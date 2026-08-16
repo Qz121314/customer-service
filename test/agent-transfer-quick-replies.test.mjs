@@ -69,40 +69,32 @@ test('a conversation counts only for its first receiving seat', async () => {
       })),
     [{ conversation_id: 'conversation-1', agent_id: 'agent-a' }],
   );
-
-  database
-    .prepare(
-      `INSERT INTO agent_quick_replies (id, agent_id, title, body)
-       VALUES ('reply-1', 'agent-a', 'Welcome', 'Hello')`,
-    )
-    .run();
-  assert.equal(
-    database
-      .prepare(
-        `SELECT body FROM agent_quick_replies
-         WHERE agent_id = 'agent-a'`,
-      )
-      .get().body,
-    'Hello',
-  );
 });
 
-test('agent workspace exposes transfer, requeue, quick replies and product context', async () => {
-  const [worker, routing, dashboard, styles] = await Promise.all([
-    read('../src/worker/agent-api.ts'),
-    read('../src/worker/routing.ts'),
-    read('../src/dashboard/AgentPortal.tsx'),
-    read('../src/dashboard/cloud-service-ui.css'),
-  ]);
+test('transfer stays server-side while personal quick replies stay browser-local', async () => {
+  const [worker, routing, dashboard, runtime, api, styles, cleanup] =
+    await Promise.all([
+      read('../src/worker/agent-api.ts'),
+      read('../src/worker/routing.ts'),
+      read('../src/dashboard/AgentPortal.tsx'),
+      read('../src/dashboard/dashboard-runtime.ts'),
+      read('../src/dashboard/api.ts'),
+      read('../src/dashboard/agent-workspace.css'),
+      read('../migrations/0029_remove_server_quick_replies.sql'),
+    ]);
 
   assert.match(worker, /conversations\/:id\/transfer/u);
   assert.match(worker, /target\.status = 'online'/u);
   assert.match(worker, /loadTransferTargets/u);
-  assert.match(worker, /agent_quick_replies/u);
+  assert.doesNotMatch(worker, /agent_quick_replies|agent\/quick-replies/u);
+  assert.doesNotMatch(api, /createQuickReply|deleteQuickReply/u);
+  assert.match(runtime, /cs-agent-quick-replies:/u);
+  assert.match(runtime, /window\.localStorage/u);
   assert.match(routing, /excludedAgentId/u);
   assert.match(dashboard, /重新排队/u);
-  assert.match(dashboard, /快捷回复/u);
+  assert.match(dashboard, /保存到本机/u);
   assert.match(dashboard, /conversation-context-card/u);
   assert.match(styles, /\.transfer-menu-panel/u);
   assert.match(styles, /\.quick-replies-panel/u);
+  assert.match(cleanup, /DROP TABLE IF EXISTS agent_quick_replies/u);
 });

@@ -70,6 +70,71 @@ type PendingAgentText = {
   status: 'sending' | 'failed';
 };
 
+type AgentQuickReply = {
+  id: string;
+  title: string;
+  body: string;
+  updatedAt: number;
+};
+
+const AGENT_QUICK_REPLY_LIMIT = 100;
+
+function loadAgentQuickReplies(agentId: string): AgentQuickReply[] {
+  try {
+    const raw = window.localStorage.getItem(
+      `cs-agent-quick-replies:${agentId}`,
+    );
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .flatMap((value) => {
+        if (!value || typeof value !== 'object') return [];
+        const candidate = value as Record<string, unknown>;
+        if (
+          typeof candidate.id !== 'string' ||
+          typeof candidate.title !== 'string' ||
+          typeof candidate.body !== 'string' ||
+          typeof candidate.updatedAt !== 'number'
+        ) {
+          return [];
+        }
+        const title = candidate.title.trim().slice(0, 40);
+        const body = candidate.body.trim().slice(0, 1000);
+        if (!title || !body) return [];
+        return [
+          {
+            id: candidate.id,
+            title,
+            body,
+            updatedAt: candidate.updatedAt,
+          },
+        ];
+      })
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, AGENT_QUICK_REPLY_LIMIT);
+  } catch {
+    return [];
+  }
+}
+
+function saveAgentQuickReplies(
+  agentId: string,
+  replies: AgentQuickReply[],
+): void {
+  try {
+    const key = `cs-agent-quick-replies:${agentId}`;
+    const normalized = replies.slice(0, AGENT_QUICK_REPLY_LIMIT);
+    if (normalized.length === 0) {
+      window.localStorage.removeItem(key);
+      return;
+    }
+    window.localStorage.setItem(key, JSON.stringify(normalized));
+  } catch {
+    // Personal quick replies are local-only and must never interrupt chat work.
+  }
+}
+
 function loadAgentConversationDrafts(agentId: string): AgentConversationDrafts {
   try {
     const raw = window.localStorage.getItem(`cs-agent-drafts:${agentId}`);
@@ -353,6 +418,7 @@ export type {
   AgentDraft,
   AgentConversationDrafts,
   PendingAgentText,
+  AgentQuickReply,
   InboxRealtimeEvent,
   ThreadRealtimeEvent,
 };
@@ -367,6 +433,8 @@ export {
   saveAgentConversationDrafts,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
+  loadAgentQuickReplies,
+  saveAgentQuickReplies,
   emitAgentMessageTone,
   parseRealtimeEvent,
   sortedConversationList,

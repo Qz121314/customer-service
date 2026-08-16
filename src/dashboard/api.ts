@@ -160,7 +160,6 @@ export type AgentInbox = {
   conversations: Conversation[];
   overview: Overview;
   transferTargets: TransferTarget[];
-  quickReplies: QuickReply[];
   availability: AgentAvailability;
 };
 
@@ -170,12 +169,6 @@ export type TransferTarget = {
   status: 'online' | 'busy' | 'offline';
   active_count: number;
   max_active_conversations: number;
-};
-
-export type QuickReply = {
-  id: string;
-  title: string;
-  body: string;
 };
 
 type AdminBootstrapAgent = Omit<AgentAccount, 'routingScope'> & {
@@ -213,8 +206,6 @@ const errorMessages: Record<string, string> = {
   CONVERSATION_CLOSED: '会话已关闭',
   INVALID_TRANSFER_TARGET: '请选择有效的转接客服',
   TRANSFER_TARGET_UNAVAILABLE: '该客服当前无法接收新会话',
-  INVALID_QUICK_REPLY: '快捷回复名称或内容无效',
-  QUICK_REPLY_LIMIT_REACHED: '每个客服最多保存 30 条快捷回复',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
   MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
   INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
@@ -424,23 +415,6 @@ export async function transferConversation(
       body: JSON.stringify({ targetAgentId }),
     },
   );
-}
-
-export async function createQuickReply(input: {
-  title: string;
-  body: string;
-}): Promise<QuickReply> {
-  const response = await request<{ reply: QuickReply }>(
-    '/api/agent/quick-replies',
-    { method: 'POST', body: JSON.stringify(input) },
-  );
-  return response.reply;
-}
-
-export async function deleteQuickReply(id: string): Promise<void> {
-  await request(`/api/agent/quick-replies/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
 }
 
 export function openAgentInboxSocket(): WebSocket {

@@ -9,7 +9,7 @@ function source(path) {
 
 test('agent mobile workspace uses separate inbox and thread surfaces', () => {
   const app = source('../src/dashboard/AgentPortal.tsx');
-  const css = source('../src/dashboard/agent-mobile-layout.css');
+  const css = source('../src/dashboard/agent-workspace.css');
 
   assert.ok(
     app.includes("workspace-shell${selectedId ? ' is-thread-open' : ''}"),

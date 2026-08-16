@@ -15,12 +15,9 @@ import {
   Conversation,
   ConversationDetail,
   Message,
-  QuickReply,
   TransferTarget,
   agentLogin,
   agentLogout,
-  createQuickReply,
-  deleteQuickReply,
   getAgentInbox,
   getAgentSession,
   getConversation,
@@ -38,6 +35,7 @@ import {
   LoadState,
   Filter,
   AgentConversationDrafts,
+  AgentQuickReply,
   PendingAgentText,
   InboxRealtimeEvent,
   ThreadRealtimeEvent,
@@ -47,6 +45,8 @@ import {
   saveAgentConversationDrafts,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
+  loadAgentQuickReplies,
+  saveAgentQuickReplies,
   emitAgentMessageTone,
   parseRealtimeEvent,
   sortedConversationList,
@@ -156,13 +156,14 @@ function AgentWorkspace({
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
-  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
+  const [quickReplies, setQuickReplies] = useState<AgentQuickReply[]>(() =>
+    loadAgentQuickReplies(identity.id),
+  );
   const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
   const [quickReplySearch, setQuickReplySearch] = useState('');
   const [quickReplyActiveIndex, setQuickReplyActiveIndex] = useState(0);
   const [quickReplyTitle, setQuickReplyTitle] = useState('');
   const [quickReplyBody, setQuickReplyBody] = useState('');
-  const [quickReplySaving, setQuickReplySaving] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -384,7 +385,6 @@ function AgentWorkspace({
       ]),
     );
     setTransferTargets(inbox.transferTargets);
-    setQuickReplies(inbox.quickReplies);
     setAvailability(inbox.availability);
   }, []);
 
@@ -1254,35 +1254,34 @@ function AgentWorkspace({
     }
   }
 
-  async function saveQuickReply() {
-    if (!quickReplyTitle.trim() || !quickReplyBody.trim() || quickReplySaving)
-      return;
-    setQuickReplySaving(true);
-    try {
-      const reply = await createQuickReply({
-        title: quickReplyTitle,
-        body: quickReplyBody,
-      });
-      setQuickReplies((current) => [reply, ...current]);
-      setQuickReplyTitle('');
-      setQuickReplyBody('');
-    } catch (reason) {
-      setError(message(reason, '保存快捷回复失败'));
-    } finally {
-      setQuickReplySaving(false);
-    }
+  function saveQuickReply() {
+    const title = quickReplyTitle.trim().slice(0, 40);
+    const body = quickReplyBody.trim().slice(0, 1000);
+    if (!title || !body) return;
+    const reply: AgentQuickReply = {
+      id: crypto.randomUUID(),
+      title,
+      body,
+      updatedAt: Date.now(),
+    };
+    setQuickReplies((current) => {
+      const next = [reply, ...current].slice(0, 100);
+      saveAgentQuickReplies(identity.id, next);
+      return next;
+    });
+    setQuickReplyTitle('');
+    setQuickReplyBody('');
   }
 
-  async function removeQuickReply(id: string) {
-    try {
-      await deleteQuickReply(id);
-      setQuickReplies((current) => current.filter((reply) => reply.id !== id));
-    } catch (reason) {
-      setError(message(reason, '删除快捷回复失败'));
-    }
+  function removeQuickReply(id: string) {
+    setQuickReplies((current) => {
+      const next = current.filter((reply) => reply.id !== id);
+      saveAgentQuickReplies(identity.id, next);
+      return next;
+    });
   }
 
-  function applyQuickReply(reply: QuickReply) {
+  function applyQuickReply(reply: AgentQuickReply) {
     updateDraft((current) =>
       current.trim() ? `${current.trimEnd()}\n${reply.body}` : reply.body,
     );
@@ -1611,7 +1610,9 @@ function AgentWorkspace({
                     <div className="quick-replies-panel">
                       <header>
                         <strong>快捷回复</strong>
-                        <span>搜索名称或内容，选择后仍可编辑再发送。</span>
+                        <span>
+                          仅保存在当前浏览器，搜索后点选即可填入输入框。
+                        </span>
                       </header>
                       <label className="quick-reply-search">
                         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1718,13 +1719,11 @@ function AgentWorkspace({
                         <button
                           type="button"
                           disabled={
-                            quickReplySaving ||
-                            !quickReplyTitle.trim() ||
-                            !quickReplyBody.trim()
+                            !quickReplyTitle.trim() || !quickReplyBody.trim()
                           }
                           onClick={() => void saveQuickReply()}
                         >
-                          {quickReplySaving ? '保存中…' : '保存快捷回复'}
+                          保存到本机
                         </button>
                       </div>
                     </div>
