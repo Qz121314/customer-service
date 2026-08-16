@@ -6,7 +6,7 @@ type WaitingAssignmentEnv = {
   CONVERSATION_ROOMS: DurableObjectNamespace;
 };
 
-const MAX_RECOVERY_ASSIGNMENTS = 5;
+const MAX_RECOVERY_ASSIGNMENTS = 10;
 
 export async function assignWaitingConversations(
   env: WaitingAssignmentEnv,
