@@ -201,6 +201,7 @@ test('admin can save multiple whole-section routing rules in one request', async
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 100,
+        trafficQuotaRequestId: 'quota-create-request-001',
         isEnabled: true,
       }),
     },
@@ -233,7 +234,10 @@ test('admin can save multiple whole-section routing rules in one request', async
         cookie: adminCookie(adminPassword),
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ trafficQuotaTopUp: 50 }),
+      body: JSON.stringify({
+        trafficQuotaTopUp: 50,
+        trafficQuotaRequestId: 'quota-topup-request-001',
+      }),
     },
     {
       DB: d1(database),
@@ -252,6 +256,133 @@ test('admin can save multiple whole-section routing rules in one request', async
   assert.equal(quota.enabled, 1);
   assert.equal(quota.total, 150);
   assert.equal(quota.used, 0);
+
+  const duplicateTopUpResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        trafficQuotaTopUp: 50,
+        trafficQuotaRequestId: 'quota-topup-request-001',
+      }),
+    },
+    {
+      DB: d1(database),
+      CONVERSATION_ROOMS: fakeRooms().namespace,
+      ADMIN_PASSWORD: adminPassword,
+    },
+  );
+  assert.equal(duplicateTopUpResponse.status, 200);
+  assert.equal(
+    database
+      .prepare('SELECT traffic_quota_total FROM agents WHERE id = ?')
+      .get(created.id).traffic_quota_total,
+    150,
+  );
+
+  const conflictingTopUpResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        trafficQuotaTopUp: 60,
+        trafficQuotaRequestId: 'quota-topup-request-001',
+      }),
+    },
+    {
+      DB: d1(database),
+      CONVERSATION_ROOMS: fakeRooms().namespace,
+      ADMIN_PASSWORD: adminPassword,
+    },
+  );
+  assert.equal(conflictingTopUpResponse.status, 409);
+  assert.equal(
+    (await conflictingTopUpResponse.json()).error,
+    'QUOTA_REQUEST_CONFLICT',
+  );
+
+  const historyResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}/quota-adjustments`,
+    {
+      headers: { cookie: adminCookie(adminPassword) },
+    },
+    {
+      DB: d1(database),
+      CONVERSATION_ROOMS: fakeRooms().namespace,
+      ADMIN_PASSWORD: adminPassword,
+    },
+  );
+  const history = await json(historyResponse);
+  assert.deepEqual(
+    history.adjustments
+      .map((adjustment) => adjustment.amount)
+      .sort((a, b) => a - b),
+    [50, 100],
+  );
+
+  database.exec(`
+    UPDATE agents
+    SET status = 'online',
+        last_seen_at = CURRENT_TIMESTAMP,
+        traffic_quota_used = traffic_quota_total
+    WHERE id = '${created.id}';
+    INSERT INTO visitors (id, site_id, token_hash)
+    VALUES ('quota-waiting-visitor', 'default', 'quota-waiting-token');
+    INSERT INTO conversations (
+      id, site_id, visitor_id, status, product_id, section_id
+    ) VALUES (
+      'quota-waiting-conversation', 'default', 'quota-waiting-visitor',
+      'open', 'product-west', 'west'
+    );
+  `);
+  const retryRooms = fakeRooms();
+  const restoredQuotaResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        trafficQuotaTopUp: 1,
+        trafficQuotaRequestId: 'quota-restore-request-001',
+      }),
+    },
+    {
+      DB: d1(database),
+      CONVERSATION_ROOMS: retryRooms.namespace,
+      ADMIN_PASSWORD: adminPassword,
+    },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  const restoredQuota = await json(restoredQuotaResponse);
+  assert.equal(restoredQuota.quotaApplied, true);
+  assert.equal(restoredQuota.assignedWaitingCount, 1);
+  const assignedConversation = database
+    .prepare(
+      `SELECT assigned_agent, status
+       FROM conversations WHERE id = 'quota-waiting-conversation'`,
+    )
+    .get();
+  assert.equal(assignedConversation.assigned_agent, created.id);
+  assert.equal(assignedConversation.status, 'pending');
+  const restoredAgentQuota = database
+    .prepare(
+      `SELECT traffic_quota_total AS total, traffic_quota_used AS used
+       FROM agents WHERE id = ?`,
+    )
+    .get(created.id);
+  assert.equal(restoredAgentQuota.total, 151);
+  assert.equal(restoredAgentQuota.used, 151);
   database.close();
 });
 
