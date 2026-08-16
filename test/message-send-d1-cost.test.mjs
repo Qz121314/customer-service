@@ -90,12 +90,22 @@ test('realtime overview scans run only when assignment or status counts can chan
     "agentApi.post('/api/agent/conversations/:id/status'",
   );
 
-  assert.match(broadcaster, /options: \{ includeOverview\?: boolean \}/u);
+  assert.match(
+    broadcaster,
+    /options: \{[\s\S]*includeOverview\?: boolean;[\s\S]*previousAgentId\?: string \| null;[\s\S]*\} = \{\}/u,
+  );
   assert.match(
     broadcaster,
     /type === 'conversation\.assigned' \|\| type === 'conversation\.closed'/u,
   );
-  assert.match(broadcaster, /includeOverview\s*\? await loadAgentOverview/u);
+  assert.match(
+    broadcaster,
+    /conversation\.assigned_agent && includeOverview[\s\S]*loadAgentOverview\(env\.DB, conversation\.assigned_agent\)/u,
+  );
+  assert.match(
+    broadcaster,
+    /previousAgentId[\s\S]*loadAgentOverview\(env\.DB, previousAgentId\)/u,
+  );
   assert.match(clientRoute, /includeOverview: assignmentChanged/u);
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);
   assert.doesNotMatch(mediaSource, /\{ includeOverview: true \}/u);
