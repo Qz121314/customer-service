@@ -91,7 +91,7 @@ test('agent workspace exposes transfer, requeue, quick replies and product conte
   const [worker, routing, dashboard, styles] = await Promise.all([
     read('../src/worker/agent-api.ts'),
     read('../src/worker/routing.ts'),
-    read('../src/dashboard/App.tsx'),
+    read('../src/dashboard/AgentPortal.tsx'),
     read('../src/dashboard/cloud-service-ui.css'),
   ]);
 

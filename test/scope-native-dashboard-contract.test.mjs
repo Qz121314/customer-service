@@ -10,7 +10,8 @@ function source(path) {
 test('admin dashboard stores and submits routing scopes without expanded product arrays', () => {
   const api = source('../src/dashboard/api.ts');
   const picker = source('../src/dashboard/ProductAssignmentPicker.tsx');
-  const app = source('../src/dashboard/App.tsx');
+  const admin = source('../src/dashboard/AdminPortal.tsx');
+  const runtime = source('../src/dashboard/dashboard-runtime.ts');
 
   assert.ok(!api.includes('attachProductSelectionScope'));
   assert.ok(!api.includes('getProductSelectionScope'));
@@ -28,8 +29,8 @@ test('admin dashboard stores and submits routing scopes without expanded product
   assert.ok(!picker.includes('attachProductSelectionScope'));
   assert.ok(!picker.includes('.map((product) => product.id)'));
 
-  assert.ok(app.includes('routingScope: AgentRoutingScope'));
-  assert.ok(app.includes('routingScope: agent.routingScope'));
-  assert.ok(app.includes('scope={draft.routingScope}'));
-  assert.ok(!app.includes('productIds: draft.productIds'));
+  assert.ok(runtime.includes('routingScope: AgentRoutingScope'));
+  assert.ok(admin.includes('routingScope: agent.routingScope'));
+  assert.ok(admin.includes('scope={draft.routingScope}'));
+  assert.ok(!admin.includes('productIds: draft.productIds'));
 });
