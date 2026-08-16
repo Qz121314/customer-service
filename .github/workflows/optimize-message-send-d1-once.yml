@@ -1,0 +1,339 @@
+name: Optimize message send D1 once
+
+on:
+  push:
+    branches: [agent/bound-message-send-d1]
+
+permissions:
+  contents: write
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply targeted message-send optimization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          def replace_in_section(text: str, start: str, end: str, old: str, new: str, label: str) -> str:
+              start_index = text.index(start)
+              end_index = text.index(end, start_index)
+              section = text[start_index:end_index]
+              count = section.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one section match, found {count}")
+              section = section.replace(old, new, 1)
+              return text[:start_index] + section + text[end_index:]
+
+          client_path = Path('src/worker/client-api.ts')
+          client = client_path.read_text()
+
+          client = replace_once(
+              client,
+              """  const createdMessage = await persistClientMessage(c.env.DB, {\n    conversationId,\n    senderType: 'visitor',\n    senderId: visitor.id,\n    body: message!,\n    clientMessageId,\n  });\n\n  await assignConversationAgent(c.env.DB, conversationId);\n""",
+              """  const { message: createdMessage } = await persistClientMessage(c.env.DB, {\n    conversationId,\n    senderType: 'visitor',\n    senderId: visitor.id,\n    body: message!,\n    clientMessageId,\n  });\n\n  const assignment = await assignConversationAgent(c.env.DB, conversationId);\n""",
+              'initial client message persistence',
+          )
+
+          client = replace_once(
+              client,
+              """  await broadcastClientConversationEvent(\n    c.env,\n    conversationId,\n    'message.created',\n    {\n      message: clientMessage(createdMessage),\n    },\n  );\n""",
+              """  await broadcastClientConversationEvent(\n    c.env,\n    conversationId,\n    'message.created',\n    {\n      message: clientMessage(createdMessage),\n    },\n    { includeOverview: Boolean(assignment) },\n  );\n""",
+              'initial message realtime overview',
+          )
+
+          client = replace_in_section(
+              client,
+              "clientApi.post('/client/v1/conversations/:id/messages'",
+              "clientApi.post('/client/v1/conversations/:id/read'",
+              """  const conversation = await ownedConversation(\n    c.env.DB,\n    c.req.param('id'),\n    site.id,\n    visitorId,\n  );\n""",
+              """  const conversation = await ownedConversationForMessageWrite(\n    c.env.DB,\n    c.req.param('id'),\n    site.id,\n    visitorId,\n  );\n""",
+              'visitor message slim ownership read',
+          )
+
+          client = replace_in_section(
+              client,
+              "clientApi.post('/client/v1/conversations/:id/messages'",
+              "clientApi.post('/client/v1/conversations/:id/read'",
+              """  const existingMessage = await c.env.DB.prepare(\n    `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,\n       read_by_visitor_at, read_by_agent_at, created_at\n     FROM messages WHERE conversation_id = ?1 AND client_message_id = ?2`,\n  )\n    .bind(conversation.id, clientMessageId)\n    .first<MessageRow>();\n  if (existingMessage)\n    return c.json({ message: clientMessage(existingMessage) });\n\n  const createdMessage = await persistClientMessage(c.env.DB, {\n    conversationId: conversation.id,\n    senderType: 'visitor',\n    senderId: conversation.visitor_id,\n    body: messageBody!,\n    clientMessageId,\n  });\n""",
+              """  const persistedMessage = await persistClientMessage(c.env.DB, {\n    conversationId: conversation.id,\n    senderType: 'visitor',\n    senderId: conversation.visitor_id,\n    body: messageBody!,\n    clientMessageId,\n  });\n  if (persistedMessage.duplicate) {\n    return c.json({ message: clientMessage(persistedMessage.message) });\n  }\n  const createdMessage = persistedMessage.message;\n""",
+              'visitor message idempotency fast path',
+          )
+
+          client = replace_in_section(
+              client,
+              "clientApi.post('/client/v1/conversations/:id/messages'",
+              "clientApi.post('/client/v1/conversations/:id/read'",
+              """  if (!conversation.assigned_agent) {\n    await assignConversationAgent(c.env.DB, conversation.id);\n  }\n""",
+              """  let assignmentChanged = false;\n  if (!conversation.assigned_agent) {\n    assignmentChanged = Boolean(\n      await assignConversationAgent(c.env.DB, conversation.id),\n    );\n  }\n""",
+              'visitor assignment change tracking',
+          )
+
+          client = replace_in_section(
+              client,
+              "clientApi.post('/client/v1/conversations/:id/messages'",
+              "clientApi.post('/client/v1/conversations/:id/read'",
+              """  await broadcastClientConversationEvent(\n    c.env,\n    conversation.id,\n    'message.created',\n    { message: clientMessage(createdMessage) },\n  );\n""",
+              """  await broadcastClientConversationEvent(\n    c.env,\n    conversation.id,\n    'message.created',\n    { message: clientMessage(createdMessage) },\n    { includeOverview: assignmentChanged },\n  );\n""",
+              'visitor message overview gating',
+          )
+
+          client = replace_once(
+              client,
+              """export async function broadcastClientConversationEvent(\n  env: ClientBindings,\n  conversationId: string,\n  type:\n    | 'message.created'\n    | 'message.read'\n    | 'conversation.assigned'\n    | 'conversation.closed',\n  details: {\n    message?: Record<string, unknown>;\n    media?: Record<string, unknown>;\n    reader?: 'agent' | 'visitor';\n    lastMessageId?: string | null;\n  } = {},\n): Promise<void> {\n""",
+              """export async function broadcastClientConversationEvent(\n  env: ClientBindings,\n  conversationId: string,\n  type:\n    | 'message.created'\n    | 'message.read'\n    | 'conversation.assigned'\n    | 'conversation.closed',\n  details: {\n    message?: Record<string, unknown>;\n    media?: Record<string, unknown>;\n    reader?: 'agent' | 'visitor';\n    lastMessageId?: string | null;\n  } = {},\n  options: { includeOverview?: boolean } = {},\n): Promise<void> {\n""",
+              'realtime broadcast options',
+          )
+
+          client = replace_once(
+              client,
+              """  if (!conversation.assigned_agent) return;\n\n  const overview = await loadAgentOverview(env.DB, conversation.assigned_agent);\n  await broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {\n    type: 'conversation.changed',\n    conversationId,\n    conversation: agentConversationSummary(conversation),\n    overview,\n  });\n""",
+              """  if (!conversation.assigned_agent) return;\n\n  const includeOverview =\n    options.includeOverview ??\n    (type === 'conversation.assigned' || type === 'conversation.closed');\n  const overview = includeOverview\n    ? await loadAgentOverview(env.DB, conversation.assigned_agent)\n    : null;\n  await broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {\n    type: 'conversation.changed',\n    conversationId,\n    conversation: agentConversationSummary(conversation),\n    ...(overview ? { overview } : {}),\n  });\n""",
+              'realtime overview gating',
+          )
+
+          client = replace_once(
+              client,
+              """async function ownedConversation(\n  db: D1Database,\n  conversationId: string,\n  siteId: string,\n  visitorId: string,\n): Promise<ConversationRow | null> {\n""",
+              """async function ownedConversationForMessageWrite(\n  db: D1Database,\n  conversationId: string,\n  siteId: string,\n  visitorId: string,\n): Promise<\n  Pick<ConversationRow, 'id' | 'visitor_id' | 'status' | 'assigned_agent'> | null\n> {\n  return db\n    .prepare(\n      `SELECT c.id, c.visitor_id, c.status, c.assigned_agent\n       FROM conversations c\n       JOIN visitors v ON v.id = c.visitor_id\n       WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3\n         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP\n       LIMIT 1`,\n    )\n    .bind(conversationId, siteId, visitorId)\n    .first<\n      Pick<\n        ConversationRow,\n        'id' | 'visitor_id' | 'status' | 'assigned_agent'\n      >\n    >();\n}\n\nasync function ownedConversation(\n  db: D1Database,\n  conversationId: string,\n  siteId: string,\n  visitorId: string,\n): Promise<ConversationRow | null> {\n""",
+              'visitor slim ownership helper',
+          )
+
+          old_persist = """async function persistClientMessage(\n  db: D1Database,\n  input: {\n    conversationId: string;\n    senderType: SenderType;\n    senderId: string;\n    body: string;\n    clientMessageId: string;\n  },\n): Promise<MessageRow> {\n  const id = crypto.randomUUID();\n  const createdAt = new Date().toISOString();\n  await db.batch([\n    db\n      .prepare(\n        `INSERT INTO messages (\n         id, conversation_id, sender_type, sender_id, body, client_message_id, created_at\n       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,\n      )\n      .bind(\n        id,\n        input.conversationId,\n        input.senderType,\n        input.senderId,\n        input.body,\n        input.clientMessageId,\n        createdAt,\n      ),\n    db\n      .prepare(\n        `UPDATE conversations\n       SET agent_unread_count = agent_unread_count + 1,\n           last_message_at = ?1, updated_at = ?1\n       WHERE id = ?2`,\n      )\n      .bind(createdAt, input.conversationId),\n  ]);\n  const message = await db\n    .prepare(\n      `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,\n       read_by_visitor_at, read_by_agent_at, created_at\n     FROM messages WHERE id = ?1`,\n    )\n    .bind(id)\n    .first<MessageRow>();\n  if (!message) throw new Error('Message persistence failed');\n  return message;\n}\n"""
+          new_persist = """async function persistClientMessage(\n  db: D1Database,\n  input: {\n    conversationId: string;\n    senderType: SenderType;\n    senderId: string;\n    body: string;\n    clientMessageId: string;\n  },\n): Promise<{ message: MessageRow; duplicate: boolean }> {\n  const id = crypto.randomUUID();\n  const createdAt = new Date().toISOString();\n  const [inserted] = await db.batch([\n    db\n      .prepare(\n        `INSERT OR IGNORE INTO messages (\n         id, conversation_id, sender_type, sender_id, body, client_message_id, created_at\n       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,\n      )\n      .bind(\n        id,\n        input.conversationId,\n        input.senderType,\n        input.senderId,\n        input.body,\n        input.clientMessageId,\n        createdAt,\n      ),\n    db\n      .prepare(\n        `UPDATE conversations\n       SET agent_unread_count = agent_unread_count + 1,\n           last_message_at = ?1, updated_at = ?1\n       WHERE id = ?2\n         AND EXISTS (SELECT 1 FROM messages WHERE id = ?3)`,\n      )\n      .bind(createdAt, input.conversationId, id),\n  ]);\n\n  if (!inserted?.meta.changes) {\n    const existing = await db\n      .prepare(\n        `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,\n         read_by_visitor_at, read_by_agent_at, created_at\n       FROM messages\n       WHERE conversation_id = ?1 AND client_message_id = ?2\n       LIMIT 1`,\n      )\n      .bind(input.conversationId, input.clientMessageId)\n      .first<MessageRow>();\n    if (!existing) throw new Error('Message persistence conflict');\n    return { message: existing, duplicate: true };\n  }\n\n  const message: MessageRow = {\n    id,\n    conversation_id: input.conversationId,\n    sender_type: input.senderType,\n    sender_id: input.senderId,\n    body: input.body,\n    client_message_id: input.clientMessageId,\n    read_by_visitor_at: null,\n    read_by_agent_at: null,\n    created_at: createdAt,\n  };\n  return { message, duplicate: false };\n}\n"""
+          client = replace_once(client, old_persist, new_persist, 'client message persistence helper')
+          client_path.write_text(client)
+
+          agent_path = Path('src/worker/agent-api.ts')
+          agent = agent_path.read_text()
+
+          agent = replace_in_section(
+              agent,
+              "agentApi.post('/api/agent/conversations/:id/messages'",
+              "agentApi.post('/api/agent/conversations/:id/status'",
+              """  const conversation = await assignedConversation(c.env.DB, id, agent.id);\n""",
+              """  const conversation = await assignedConversationForMessageWrite(\n    c.env.DB,\n    id,\n    agent.id,\n  );\n""",
+              'agent message slim ownership read',
+          )
+
+          agent = replace_in_section(
+              agent,
+              "agentApi.post('/api/agent/conversations/:id/messages'",
+              "agentApi.post('/api/agent/conversations/:id/status'",
+              """    `INSERT OR IGNORE INTO messages\n       (id, conversation_id, sender_type, sender_id, body, client_message_id)\n     VALUES (?1, ?2, 'agent', ?3, ?4, ?5)`,\n  )\n    .bind(messageId, id, agent.id, text, clientMessageId)\n""",
+              """    `INSERT OR IGNORE INTO messages\n       (id, conversation_id, sender_type, sender_id, body, client_message_id, created_at)\n     VALUES (?1, ?2, 'agent', ?3, ?4, ?5, ?6)`,\n  )\n    .bind(messageId, id, agent.id, text, clientMessageId, now)\n""",
+              'agent message explicit timestamp',
+          )
+
+          agent = replace_in_section(
+              agent,
+              "agentApi.post('/api/agent/conversations/:id/messages'",
+              "agentApi.post('/api/agent/conversations/:id/status'",
+              """  const message = await c.env.DB.prepare(\n    `SELECT id, conversation_id, sender_type, sender_id, body,\n       client_message_id, read_by_visitor_at, read_by_agent_at, created_at\n     FROM messages WHERE id = ?1`,\n  )\n    .bind(messageId)\n    .first<MessageRow>();\n""",
+              """  const message: MessageRow = {\n    id: messageId,\n    conversation_id: id,\n    sender_type: 'agent',\n    sender_id: agent.id,\n    body: text,\n    client_message_id: clientMessageId,\n    read_by_visitor_at: null,\n    read_by_agent_at: null,\n    created_at: now,\n  };\n""",
+              'agent message local return row',
+          )
+
+          agent = replace_in_section(
+              agent,
+              "agentApi.post('/api/agent/conversations/:id/messages'",
+              "agentApi.post('/api/agent/conversations/:id/status'",
+              """  await broadcastClientConversationEvent(c.env, id, 'message.created', {\n    message: message ? clientRealtimeMessage(message) : undefined,\n  });\n""",
+              """  await broadcastClientConversationEvent(\n    c.env,\n    id,\n    'message.created',\n    { message: clientRealtimeMessage(message) },\n    { includeOverview: conversation.status === 'open' },\n  );\n""",
+              'agent message overview gating',
+          )
+
+          agent = replace_once(
+              agent,
+              """async function assignedConversation(\n  db: D1Database,\n  id: string,\n  agentId: string,\n) {\n""",
+              """async function assignedConversationForMessageWrite(\n  db: D1Database,\n  id: string,\n  agentId: string,\n) {\n  return db\n    .prepare(\n      `SELECT id, status\n       FROM conversations\n       WHERE id = ?1 AND assigned_agent = ?2\n         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP\n       LIMIT 1`,\n    )\n    .bind(id, agentId)\n    .first<{ id: string; status: ConversationStatus }>();\n}\n\nasync function assignedConversation(\n  db: D1Database,\n  id: string,\n  agentId: string,\n) {\n""",
+              'agent slim ownership helper',
+          )
+          agent_path.write_text(agent)
+
+          media_path = Path('src/worker/media-store.ts')
+          media = media_path.read_text()
+          media = replace_once(
+              media,
+              """      },\n    ),\n  ]);\n\n  if (media.sender_type === 'visitor') {\n""",
+              """      },\n      { includeOverview: true },\n    ),\n  ]);\n\n  if (media.sender_type === 'visitor') {\n""",
+              'media message overview compatibility',
+          )
+          media_path.write_text(media)
+
+          test_path = Path('test/message-send-d1-cost.test.mjs')
+          test_path.write_text(r'''import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import test from 'node:test';
+
+          const agentSource = readFileSync('src/worker/agent-api.ts', 'utf8');
+          const clientSource = readFileSync('src/worker/client-api.ts', 'utf8');
+          const mediaSource = readFileSync('src/worker/media-store.ts', 'utf8');
+
+          function section(source, start, end) {
+            const from = source.indexOf(start);
+            assert.notEqual(from, -1, `missing start marker: ${start}`);
+            const to = source.indexOf(end, from);
+            assert.notEqual(to, -1, `missing end marker: ${end}`);
+            return source.slice(from, to);
+          }
+
+          test('agent text sends use a slim ownership read and do not reread inserted messages', () => {
+            const route = section(
+              agentSource,
+              "agentApi.post('/api/agent/conversations/:id/messages'",
+              "agentApi.post('/api/agent/conversations/:id/status'",
+            );
+            const helper = section(
+              agentSource,
+              'async function assignedConversationForMessageWrite(',
+              'async function assignedConversation(',
+            );
+
+            assert.match(route, /assignedConversationForMessageWrite\(/u);
+            assert.doesNotMatch(route, /assignedConversation\(c\.env\.DB/u);
+            assert.match(route, /client_message_id, created_at/u);
+            assert.match(route, /const message: MessageRow = \{/u);
+            assert.doesNotMatch(route, /FROM messages WHERE id = \?1/u);
+            assert.match(helper, /SELECT id, status\s+FROM conversations/u);
+            assert.doesNotMatch(helper, /JOIN visitors/u);
+            assert.doesNotMatch(helper, /SELECT c\.\*/u);
+          });
+
+          test('visitor text sends keep duplicate reads off the normal write path', () => {
+            const route = section(
+              clientSource,
+              "clientApi.post('/client/v1/conversations/:id/messages'",
+              "clientApi.post('/client/v1/conversations/:id/read'",
+            );
+            const helper = section(
+              clientSource,
+              'async function persistClientMessage(',
+              'function clientMessage(',
+            );
+            const ownership = section(
+              clientSource,
+              'async function ownedConversationForMessageWrite(',
+              'async function ownedConversation(',
+            );
+
+            assert.match(route, /ownedConversationForMessageWrite\(/u);
+            assert.doesNotMatch(route, /const existingMessage =/u);
+            assert.match(route, /persistedMessage\.duplicate/u);
+            assert.match(helper, /INSERT OR IGNORE INTO messages/u);
+            assert.match(
+              helper,
+              /AND EXISTS \(SELECT 1 FROM messages WHERE id = \?3\)/u,
+            );
+            assert.match(helper, /if \(!inserted\?\.meta\.changes\)/u);
+            assert.match(helper, /const message: MessageRow = \{/u);
+            assert.ok(
+              helper.indexOf('if (!inserted?.meta.changes)') <
+                helper.indexOf('WHERE conversation_id = ?1 AND client_message_id = ?2'),
+              'duplicate SELECT must only run after an ignored insert',
+            );
+            assert.match(
+              ownership,
+              /SELECT c\.id, c\.visitor_id, c\.status, c\.assigned_agent/u,
+            );
+            assert.doesNotMatch(ownership, /last_message/u);
+            assert.doesNotMatch(ownership, /LEFT JOIN agents/u);
+          });
+
+          test('realtime overview scans run only when assignment or status counts can change', () => {
+            const broadcaster = section(
+              clientSource,
+              'export async function broadcastClientConversationEvent(',
+              'async function loadAgentOverview(',
+            );
+            const clientRoute = section(
+              clientSource,
+              "clientApi.post('/client/v1/conversations/:id/messages'",
+              "clientApi.post('/client/v1/conversations/:id/read'",
+            );
+            const agentRoute = section(
+              agentSource,
+              "agentApi.post('/api/agent/conversations/:id/messages'",
+              "agentApi.post('/api/agent/conversations/:id/status'",
+            );
+
+            assert.match(broadcaster, /options: \{ includeOverview\?: boolean \}/u);
+            assert.match(
+              broadcaster,
+              /type === 'conversation\.assigned' \|\| type === 'conversation\.closed'/u,
+            );
+            assert.match(
+              broadcaster,
+              /includeOverview\s*\? await loadAgentOverview/u,
+            );
+            assert.match(clientRoute, /includeOverview: assignmentChanged/u);
+            assert.match(
+              agentRoute,
+              /includeOverview: conversation\.status === 'open'/u,
+            );
+            assert.match(mediaSource, /\{ includeOverview: true \}/u);
+          });
+          ''')
+          PY
+
+      - name: Format changed files
+        run: pnpm exec prettier --write src/worker/agent-api.ts src/worker/client-api.ts src/worker/media-store.ts test/message-send-d1-cost.test.mjs
+
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
+
+      - name: Format
+        run: pnpm format
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+
+      - name: Commit validated changes and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/optimize-message-send-d1-once.yml
+          git add src/worker/agent-api.ts src/worker/client-api.ts src/worker/media-store.ts test/message-send-d1-cost.test.mjs
+          git diff --cached --check
+          git commit -m "Bound message send D1 work"
+          git push origin HEAD:agent/bound-message-send-d1
