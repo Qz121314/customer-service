@@ -21,8 +21,7 @@
   --ae-success: #067647;
   --ae-success-soft: #ecfdf3;
   --ae-radius: 13px;
-  --ae-shadow-card: 0 1px 2px rgb(16 24 40 / 3%),
-    0 8px 24px rgb(16 24 40 / 4%);
+  --ae-shadow-card: 0 1px 2px rgb(16 24 40 / 3%), 0 8px 24px rgb(16 24 40 / 4%);
   color: var(--ae-text);
 }
 
@@ -206,10 +205,9 @@
 
   .agent-editor-account-grid {
     display: grid;
-    grid-template-columns: minmax(180px, 0.78fr) minmax(180px, 0.95fr) minmax(
-        160px,
-        0.82fr
-      ) minmax(220px, 1.18fr);
+    grid-template-columns:
+      minmax(180px, 0.78fr) minmax(180px, 0.95fr) minmax(160px, 0.82fr)
+      minmax(220px, 1.18fr);
     align-items: end;
     gap: 10px;
   }
@@ -720,7 +718,9 @@
     text-align: left;
   }
 
-  .agent-editor-routing-pane .product-assignment-modes button:hover:not(:disabled) {
+  .agent-editor-routing-pane
+    .product-assignment-modes
+    button:hover:not(:disabled) {
     border: 0;
     background: rgb(255 255 255 / 76%);
   }

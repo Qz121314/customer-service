@@ -76,7 +76,9 @@ export function AgentEditorModal({
                     <strong>{identityName}</strong>
                     <small>@{identityUsername}</small>
                   </div>
-                  <em className={draft.isEnabled ? 'is-enabled' : 'is-disabled'}>
+                  <em
+                    className={draft.isEnabled ? 'is-enabled' : 'is-disabled'}
+                  >
                     {draft.isEnabled ? '启用' : '停用'}
                   </em>
                 </div>
@@ -352,7 +354,9 @@ export function AgentEditorModal({
               </button>
               <button
                 className="primary-button"
-                disabled={saving || !draft.name.trim() || !draft.username.trim()}
+                disabled={
+                  saving || !draft.name.trim() || !draft.username.trim()
+                }
               >
                 {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
               </button>
