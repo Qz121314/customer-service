@@ -6,13 +6,16 @@ import { URL } from 'node:url';
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('busy seats stay connected without receiving new conversations', async () => {
-  const [agentApi, room, routing, dashboardApi, dashboard] = await Promise.all([
-    read('../src/worker/agent-api.ts'),
-    read('../src/worker/core.ts'),
-    read('../src/worker/routing.ts'),
-    read('../src/dashboard/api.ts'),
-    read('../src/dashboard/AgentPortal.tsx'),
-  ]);
+  const [agentApi, room, routing, dashboardApi, portal, panels] =
+    await Promise.all([
+      read('../src/worker/agent-api.ts'),
+      read('../src/worker/core.ts'),
+      read('../src/worker/routing.ts'),
+      read('../src/dashboard/api.ts'),
+      read('../src/dashboard/AgentPortal.tsx'),
+      read('../src/dashboard/AgentWorkspacePanels.tsx'),
+    ]);
+  const dashboard = `${portal}\n${panels}`;
 
   assert.match(agentApi, /\/api\/agent\/auth\/status/u);
   assert.match(agentApi, /status === 'busy' \? 'busy' : 'online'/u);
