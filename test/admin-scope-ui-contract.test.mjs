@@ -20,9 +20,9 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
   assert.ok(!app.includes('<th>负责产品</th>'));
   assert.ok(api.includes('routingScope: normalizeRoutingScope('));
   assert.ok(styles.includes('width: min(780px, 100%)'));
-  assert.ok(visualStyles.includes('width: min(1120px, 100%)'));
+  assert.ok(visualStyles.includes('width: min(1200px, 100%)'));
   assert.ok(
-    visualStyles.includes('grid-template-columns: 320px minmax(0, 1fr)'),
+    visualStyles.includes('grid-template-columns: 410px minmax(0, 1fr)'),
   );
   assert.ok(
     styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'),
