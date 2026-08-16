@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import legacyApp, { ConversationRoom } from './index';
+import { coreApp, ConversationRoom } from './core';
 import { clientApi } from './client-api';
 import { integrationApi } from './integration-api';
 import { adminConfigApi } from './admin-config-api';
@@ -76,18 +76,14 @@ app.use('/client/v1/*', async (c, next) => {
   );
 });
 
-// The old management-group protocol is no longer part of the integration
-// contract. External site admins use /integration/v1/verify instead.
+// Removed protocols stay explicitly unavailable while older clients phase out.
 app.all('/management/v1/*', (c) =>
   c.json({ error: { code: 'NOT_FOUND', message: 'Not found.' } }, 404),
 );
+app.all('/api/public/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
 
-// Storefront conversations are created, routed, and broadcast inside clientApi.
-// Keeping the whole transaction there avoids a second assignment/read pass.
-
-// Agent replies are persisted by the existing APIs first. A successful text or
-// image reply then wakes subscribed visitor devices. Push delivery never owns
-// the chat transaction, so a push-service failure cannot make a sent message fail.
+// Agent replies are persisted first. A successful text or image reply then
+// wakes subscribed visitor devices without owning the chat transaction.
 app.use('/api/agent/*', async (c, next) => {
   await next();
   if (c.req.method !== 'POST' || !c.res.ok) return;
@@ -127,18 +123,16 @@ app.route('/', agentPushApi);
 app.route('/', pushApi);
 app.route('/', clientApi);
 
-// Management-center administrators must not use the legacy conversation API.
-// Chat traffic belongs exclusively to authenticated seat accounts under
-// /api/agent/*.
+// Management administrators configure the service but never participate in chat.
 app.all('/api/admin/conversations', (c) => c.json({ error: 'NOT_FOUND' }, 404));
 app.all('/api/admin/conversations/*', (c) =>
   c.json({ error: 'NOT_FOUND' }, 404),
 );
 app.all('/api/admin/realtime/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
 
-// Keep the existing admin-password login endpoints and static asset handling
-// while the management UI uses the new configuration APIs above.
-app.route('/', legacyApp);
+// Core owns only health, admin authentication, Durable Object implementation,
+// unknown API rejection, and static asset fallback.
+app.route('/', coreApp);
 
 export default {
   fetch: app.fetch,
