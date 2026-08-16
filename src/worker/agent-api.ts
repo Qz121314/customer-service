@@ -298,17 +298,13 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
   const result = await db
     .prepare(
       `SELECT a.id, a.name, a.status, a.max_active_conversations,
-         COALESCE(load.active_count, 0) AS active_count
+         COUNT(load.id) AS active_count
        FROM agents current
        JOIN agents a ON a.site_id = current.site_id AND a.id <> current.id
-       LEFT JOIN (
-         SELECT assigned_agent, COUNT(*) AS active_count
-         FROM conversations
-         WHERE status IN ('open', 'pending')
-           AND assigned_agent IS NOT NULL
-           AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-         GROUP BY assigned_agent
-       ) load ON load.assigned_agent = a.id
+       LEFT JOIN conversations load
+         ON load.assigned_agent = a.id
+        AND load.status IN ('open', 'pending')
+        AND COALESCE(load.expires_at, datetime(load.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LEFT JOIN agent_daily_stats daily
          ON daily.site_id = a.site_id
         AND daily.agent_id = a.id
@@ -321,10 +317,6 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
          AND a.last_seen_at IS NOT NULL
          AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
          AND (
-           a.max_active_conversations = 0
-           OR COALESCE(load.active_count, 0) < a.max_active_conversations
-         )
-         AND (
            a.daily_conversation_limit = 0
            OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
          )
@@ -332,7 +324,12 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
            a.traffic_quota_enabled = 0
            OR a.traffic_quota_used < a.traffic_quota_total
          )
-       ORDER BY COALESCE(load.active_count, 0) ASC, a.name ASC, a.id ASC`,
+       GROUP BY a.id, a.name, a.status, a.max_active_conversations
+       HAVING (
+         a.max_active_conversations = 0
+         OR COUNT(load.id) < a.max_active_conversations
+       )
+       ORDER BY COUNT(load.id) ASC, a.name ASC, a.id ASC`,
     )
     .bind(agentId, businessDate)
     .all<TransferTargetRow>();
@@ -777,14 +774,6 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
          AND EXISTS (
            SELECT 1
            FROM agents target
-           LEFT JOIN (
-             SELECT assigned_agent, COUNT(*) AS active_count
-             FROM conversations
-             WHERE status IN ('open', 'pending')
-               AND assigned_agent IS NOT NULL
-               AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-             GROUP BY assigned_agent
-           ) load ON load.assigned_agent = target.id
            LEFT JOIN agent_daily_stats daily
              ON daily.site_id = target.site_id
             AND daily.agent_id = target.id
@@ -799,7 +788,13 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
              AND datetime(target.last_seen_at) >= datetime('now', '-2 minutes')
              AND (
                target.max_active_conversations = 0
-               OR COALESCE(load.active_count, 0) < target.max_active_conversations
+               OR (
+                 SELECT COUNT(*)
+                 FROM conversations load
+                 WHERE load.assigned_agent = target.id
+                   AND load.status IN ('open', 'pending')
+                   AND COALESCE(load.expires_at, datetime(load.created_at, '+1 day')) > CURRENT_TIMESTAMP
+               ) < target.max_active_conversations
              )
              AND (
                target.daily_conversation_limit = 0
