@@ -27,23 +27,41 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Split dashboard source
+      - name: Finalize dashboard modules
         run: node scripts/refactor-dashboard-app.mjs
 
-      - name: Format generated source
-        run: pnpm exec prettier --write src/dashboard/App.tsx src/dashboard/AdminPortal.tsx src/dashboard/AgentPortal.tsx src/dashboard/dashboard-shared.tsx
-
-      - name: Validate generated source
+      - name: Format finalized source
         run: |
+          pnpm exec prettier --write \
+            src/dashboard/App.tsx \
+            src/dashboard/AdminPortal.tsx \
+            src/dashboard/AgentPortal.tsx \
+            src/dashboard/dashboard-runtime.ts \
+            src/dashboard/dashboard-ui.tsx \
+            test/admin-scope-ui-contract.test.mjs \
+            test/agent-connection-reliability.test.mjs \
+            test/agent-inbox-optimization.test.mjs \
+            test/agent-mobile-layout-contract.test.mjs \
+            test/agent-reception-efficiency.test.mjs \
+            test/agent-reception-reliability.test.mjs \
+            test/agent-statistics-modal.test.mjs \
+            test/agent-transfer-quick-replies.test.mjs \
+            test/realtime-contract.test.mjs \
+            test/scope-native-dashboard-contract.test.mjs
+
+      - name: Validate finalized source
+        run: |
+          pnpm format
           pnpm lint
           pnpm typecheck
+          pnpm test
           pnpm build
 
-      - name: Commit generated split
+      - name: Commit finalized split
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/dashboard/App.tsx src/dashboard/AdminPortal.tsx src/dashboard/AgentPortal.tsx src/dashboard/dashboard-shared.tsx
+          git add -A
           git diff --cached --quiet && exit 0
-          git commit -m "Split dashboard application modules"
+          git commit -m "Finalize modular dashboard split"
           git push origin HEAD:agent/split-dashboard-app
