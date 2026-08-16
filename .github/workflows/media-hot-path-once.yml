@@ -34,16 +34,24 @@ jobs:
           sed -i "3i import { URL } from 'node:url';" test/media-hot-path-cost.test.mjs
           python - <<'PY'
           from pathlib import Path
-          path = Path('test/media-hot-path-cost.test.mjs')
-          source = path.read_text()
+
+          cost_path = Path('test/media-hot-path-cost.test.mjs')
+          cost_source = cost_path.read_text()
           old = r"media\.sender_type === 'agent' && context\.conversationStatus === 'open'"
           new = r"media\.sender_type === 'agent' &&\s*context\.conversationStatus === 'open'"
-          assert old in source
-          path.write_text(source.replace(old, new))
+          assert old in cost_source
+          cost_path.write_text(cost_source.replace(old, new))
+
+          message_path = Path('test/message-send-d1-cost.test.mjs')
+          message_source = message_path.read_text()
+          old_assertion = "  assert.match(mediaSource, /\\{ includeOverview: true \\}/u);"
+          new_assertion = """  assert.doesNotMatch(mediaSource, /\\{ includeOverview: true \\}/u);\n  assert.match(\n    mediaSource,\n    /media\\.sender_type === 'agent' &&\\s*context\\.conversationStatus === 'open'/u,\n  );"""
+          assert old_assertion in message_source
+          message_path.write_text(message_source.replace(old_assertion, new_assertion))
           PY
 
       - name: Format targeted files
-        run: pnpm exec prettier --write src/worker/media-store.ts src/worker/media-api.ts test/media-hot-path-cost.test.mjs
+        run: pnpm exec prettier --write src/worker/media-store.ts src/worker/media-api.ts test/media-hot-path-cost.test.mjs test/message-send-d1-cost.test.mjs
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
@@ -67,7 +75,7 @@ jobs:
         run: node --experimental-strip-types --test --test-name-pattern="media completion" test/media-hot-path-cost.test.mjs
 
       - name: Test existing media and realtime contracts
-        run: node --experimental-strip-types --test test/customer-service-full-flow.test.mjs test/realtime-contract.test.mjs test/agent-conversation-detail-cost.test.mjs
+        run: node --experimental-strip-types --test test/customer-service-full-flow.test.mjs test/realtime-contract.test.mjs test/agent-conversation-detail-cost.test.mjs test/message-send-d1-cost.test.mjs
 
       - name: Test full suite
         run: pnpm test
