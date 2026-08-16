@@ -75,6 +75,16 @@ export type AgentMonthlyStats = {
   retainedFrom: string;
 };
 
+export type AgentQuotaAdjustment = {
+  id: string;
+  requestId: string;
+  amount: number;
+  quotaTotalBefore: number;
+  quotaTotalAfter: number;
+  appliedAt: string | null;
+  createdAt: string;
+};
+
 export type AgentSelfMonthlyStats = {
   month: string;
   days: number[];
@@ -195,6 +205,9 @@ const errorMessages: Record<string, string> = {
   INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
   INVALID_ROUTING_SCOPE: '负责范围无效，请重新选择分区、分类或产品',
   INVALID_TRAFFIC_QUOTA: '额度数量无效，单次最多追加 100 万次',
+  INVALID_QUOTA_REQUEST: '额度追加请求无效，请重新打开编辑窗口',
+  QUOTA_REQUEST_CONFLICT: '同一额度请求不能使用不同数量',
+  QUOTA_TOP_UP_FAILED: '额度追加失败，请重试',
   INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
@@ -244,6 +257,7 @@ export async function createAgent(input: {
   dailyConversationLimit: number;
   trafficQuotaEnabled: boolean;
   trafficQuotaTopUp: number;
+  trafficQuotaRequestId: string;
   isEnabled: boolean;
 }): Promise<void> {
   await request('/api/admin/agents', {
@@ -263,6 +277,7 @@ export async function updateAgent(
     dailyConversationLimit: number;
     trafficQuotaEnabled: boolean;
     trafficQuotaTopUp: number;
+    trafficQuotaRequestId: string;
     isEnabled: boolean;
   },
 ): Promise<void> {
@@ -270,6 +285,15 @@ export async function updateAgent(
     method: 'PATCH',
     body: JSON.stringify(input),
   });
+}
+
+export async function getAgentQuotaAdjustments(
+  id: string,
+): Promise<AgentQuotaAdjustment[]> {
+  const response = await request<{ adjustments: AgentQuotaAdjustment[] }>(
+    `/api/admin/agents/${encodeURIComponent(id)}/quota-adjustments`,
+  );
+  return response.adjustments;
 }
 
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
