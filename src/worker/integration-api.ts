@@ -209,7 +209,10 @@ export async function syncProductCatalog(
     offset < catalog.products.length;
     offset += PRODUCT_SYNC_CHUNK_SIZE
   ) {
-    const chunk = catalog.products.slice(offset, offset + PRODUCT_SYNC_CHUNK_SIZE);
+    const chunk = catalog.products.slice(
+      offset,
+      offset + PRODUCT_SYNC_CHUNK_SIZE,
+    );
     statements.push(
       db
         .prepare(
