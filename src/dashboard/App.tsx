@@ -148,6 +148,10 @@ type AgentDraft = {
   routingScope: AgentRoutingScope;
   maxActiveConversations: number;
   dailyConversationLimit: number;
+  trafficQuotaEnabled: boolean;
+  trafficQuotaTotal: number;
+  trafficQuotaUsed: number;
+  trafficQuotaTopUp: number;
   isEnabled: boolean;
 };
 
@@ -159,6 +163,10 @@ const emptyAgentDraft: AgentDraft = {
   routingScope: { type: 'none' },
   maxActiveConversations: 0,
   dailyConversationLimit: 0,
+  trafficQuotaEnabled: true,
+  trafficQuotaTotal: 0,
+  trafficQuotaUsed: 0,
+  trafficQuotaTopUp: 100,
   isEnabled: true,
 };
 
@@ -574,6 +582,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       routingScope: agent.routingScope,
       maxActiveConversations: agent.maxActiveConversations,
       dailyConversationLimit: agent.dailyConversationLimit,
+      trafficQuotaEnabled: agent.trafficQuotaEnabled,
+      trafficQuotaTotal: agent.trafficQuotaTotal,
+      trafficQuotaUsed: agent.trafficQuotaUsed,
+      trafficQuotaTopUp: 0,
       isEnabled: agent.isEnabled,
     });
     setEditorOpen(true);
@@ -598,6 +610,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           routingScope: draft.routingScope,
           maxActiveConversations: draft.maxActiveConversations,
           dailyConversationLimit: draft.dailyConversationLimit,
+          trafficQuotaEnabled: draft.trafficQuotaEnabled,
+          trafficQuotaTopUp: draft.trafficQuotaTopUp,
           isEnabled: draft.isEnabled,
         });
       } else {
@@ -608,6 +622,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           routingScope: draft.routingScope,
           maxActiveConversations: draft.maxActiveConversations,
           dailyConversationLimit: draft.dailyConversationLimit,
+          trafficQuotaEnabled: draft.trafficQuotaEnabled,
+          trafficQuotaTopUp: draft.trafficQuotaTopUp,
           isEnabled: draft.isEnabled,
         });
       }
@@ -784,6 +800,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                         <th>状态</th>
                         <th>同时会话</th>
                         <th>今日接待</th>
+                        <th>额度余额</th>
                         <th>最后在线</th>
                         <th aria-label="操作" />
                       </tr>
@@ -853,6 +870,36 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                 </span>
                               ) : (
                                 <span className="quota-state">不限</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <div className="traffic-quota-cell">
+                              {agent.trafficQuotaEnabled ? (
+                                <>
+                                  <strong>
+                                    {agent.trafficQuotaRemaining}
+                                    <span> / {agent.trafficQuotaTotal}</span>
+                                  </strong>
+                                  <span
+                                    className={`quota-state ${
+                                      agent.trafficQuotaRemaining === 0
+                                        ? 'full'
+                                        : ''
+                                    }`}
+                                  >
+                                    {agent.trafficQuotaRemaining === 0
+                                      ? '额度已用完'
+                                      : `已用 ${agent.trafficQuotaUsed}`}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <strong>不限</strong>
+                                  <span className="quota-state">
+                                    未启用额度
+                                  </span>
+                                </>
                               )}
                             </div>
                           </td>
@@ -1003,8 +1050,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                   <div className="agent-editor-pane-heading">
                     <span>01</span>
                     <div>
-                      <strong>账号与接待能力</strong>
-                      <small>登录身份、并发与每日配额</small>
+                      <strong>账号、接待与流量额度</strong>
+                      <small>登录身份、并发、每日上限与总额度</small>
                     </div>
                   </div>
                   <div className="agent-editor-identity-preview">
@@ -1086,6 +1133,99 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                       <small>次日自动恢复，0 表示不限</small>
                     </label>
                   </div>
+                  <section className="traffic-quota-editor">
+                    <div className="traffic-quota-editor-head">
+                      <div>
+                        <strong>接待额度套餐</strong>
+                        <small>按有效咨询扣减，用完停止新分流</small>
+                      </div>
+                      <label className="switch-control">
+                        <input
+                          type="checkbox"
+                          checked={draft.trafficQuotaEnabled}
+                          onChange={(event) =>
+                            setDraft({
+                              ...draft,
+                              trafficQuotaEnabled: event.target.checked,
+                            })
+                          }
+                        />
+                        <span aria-hidden="true" />
+                      </label>
+                    </div>
+                    <div className="traffic-quota-summary">
+                      <div>
+                        <span>保存后总额度</span>
+                        <strong>
+                          {draft.trafficQuotaTotal + draft.trafficQuotaTopUp}
+                        </strong>
+                      </div>
+                      <div>
+                        <span>已消耗</span>
+                        <strong>{draft.trafficQuotaUsed}</strong>
+                      </div>
+                      <div>
+                        <span>保存后剩余</span>
+                        <strong>
+                          {Math.max(
+                            0,
+                            draft.trafficQuotaTotal +
+                              draft.trafficQuotaTopUp -
+                              draft.trafficQuotaUsed,
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+                    <div className="traffic-quota-topup">
+                      <span>{draft.id ? '本次追加' : '初始额度'}</span>
+                      <div className="traffic-quota-presets">
+                        {[100, 500, 1000].map((amount) => (
+                          <button
+                            type="button"
+                            key={amount}
+                            className={
+                              draft.trafficQuotaTopUp === amount
+                                ? 'is-active'
+                                : ''
+                            }
+                            onClick={() =>
+                              setDraft({
+                                ...draft,
+                                trafficQuotaTopUp: amount,
+                              })
+                            }
+                          >
+                            +{amount}
+                          </button>
+                        ))}
+                        <label>
+                          <span>自定义</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max="1000000"
+                            step="1"
+                            value={draft.trafficQuotaTopUp}
+                            onChange={(event) =>
+                              setDraft({
+                                ...draft,
+                                trafficQuotaTopUp: Math.max(
+                                  0,
+                                  Math.min(
+                                    1_000_000,
+                                    Math.trunc(Number(event.target.value) || 0),
+                                  ),
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <p>
+                      追加额度只累加，不清零已消耗；转接、重新排队和重新打开不重复扣减。
+                    </p>
+                  </section>
                   <label className="account-enable-line">
                     <input
                       type="checkbox"
@@ -1415,6 +1555,10 @@ function AgentWorkspace({
     total: 0,
     todayAccepted: 0,
     dailyLimit: 0,
+    trafficQuotaEnabled: false,
+    trafficQuotaTotal: 0,
+    trafficQuotaUsed: 0,
+    trafficQuotaRemaining: 0,
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
@@ -1744,7 +1888,9 @@ function AgentWorkspace({
           if (!belongsToAgent) return withoutCurrent;
           return sortedConversationList([next, ...withoutCurrent]);
         });
-        if (belongsToAgent && payload.overview) setOverview(payload.overview);
+        if (belongsToAgent && payload.overview) {
+          setOverview((current) => ({ ...current, ...payload.overview }));
+        }
       });
       socket.addEventListener('close', () => {
         if (!active) return;
@@ -2698,6 +2844,14 @@ function AgentWorkspace({
           <Metric label="新会话" value={overview.open} />
           <Metric label="处理中" value={overview.pending} />
           <Metric label="已关闭" value={overview.closed} />
+          <Metric
+            label="剩余额度"
+            value={
+              overview.trafficQuotaEnabled
+                ? overview.trafficQuotaRemaining
+                : '不限'
+            }
+          />
         </div>
         <div className="filters">
           {(Object.keys(filterLabels) as Filter[]).map((item) => (
@@ -3403,7 +3557,7 @@ function Startup({ label }: { label: string }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="metric">
       <strong>{value}</strong>
