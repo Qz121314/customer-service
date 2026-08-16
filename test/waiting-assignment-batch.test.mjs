@@ -100,7 +100,7 @@ function fakeRooms() {
               name,
               payload: JSON.parse(String(init?.body ?? '{}')),
             });
-            return new Response(null, { status: 204 });
+            return { status: 204 };
           },
         };
       },
