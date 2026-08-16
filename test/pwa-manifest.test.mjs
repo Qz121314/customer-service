@@ -34,7 +34,7 @@ test('agent shell exposes mobile standalone metadata and registers its service w
   assert.match(index, /apple-mobile-web-app-capable/u);
   assert.match(index, /apple-mobile-web-app-title/u);
   assert.match(index, /viewport-fit=cover/u);
-  assert.match(main, /serviceWorker\.register\('\/agent-sw\.js'/u);
+  assert.ok(main.includes(".register('/agent-sw.js', { scope: '/' })"));
 });
 
 test('agent service worker caches the app shell, shows background messages and focuses workspace', async () => {
