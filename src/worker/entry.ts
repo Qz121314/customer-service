@@ -10,6 +10,10 @@ import { sendVisitorPushForConversation } from './visitor-push';
 import { sendAgentPushForConversation } from './agent-push';
 import { agentPushApi } from './agent-push-api';
 import { purgeExpiredConversations } from './conversation-retention';
+import {
+  isRemovedProtocolPath,
+  removedProtocolResponse,
+} from './protocol-boundary';
 
 interface Bindings {
   DB: D1Database;
@@ -76,12 +80,6 @@ app.use('/client/v1/*', async (c, next) => {
   );
 });
 
-// Removed protocols stay explicitly unavailable while older clients phase out.
-app.all('/management/v1/*', (c) =>
-  c.json({ error: { code: 'NOT_FOUND', message: 'Not found.' } }, 404),
-);
-app.all('/api/public/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
-
 // Agent replies are persisted first. A successful text or image reply then
 // wakes subscribed visitor devices without owning the chat transaction.
 app.use('/api/agent/*', async (c, next) => {
@@ -123,19 +121,19 @@ app.route('/', agentPushApi);
 app.route('/', pushApi);
 app.route('/', clientApi);
 
-// Management administrators configure the service but never participate in chat.
-app.all('/api/admin/conversations', (c) => c.json({ error: 'NOT_FOUND' }, 404));
-app.all('/api/admin/conversations/*', (c) =>
-  c.json({ error: 'NOT_FOUND' }, 404),
-);
-app.all('/api/admin/realtime/*', (c) => c.json({ error: 'NOT_FOUND' }, 404));
-
 // Core owns only health, admin authentication, Durable Object implementation,
 // unknown API rejection, and static asset fallback.
 app.route('/', coreApp);
 
 export default {
-  fetch: app.fetch,
+  fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    // This check runs before Hono and the Assets binding. Removed API paths can
+    // therefore never be rewritten to the SPA's index.html with HTTP 200.
+    if (isRemovedProtocolPath(new URL(request.url).pathname)) {
+      return removedProtocolResponse();
+    }
+    return app.fetch(request, env, ctx);
+  },
   scheduled(
     _controller: ScheduledController,
     env: Bindings,
