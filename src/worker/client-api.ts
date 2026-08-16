@@ -359,7 +359,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     )
     .run();
 
-  const createdMessage = await persistClientMessage(c.env.DB, {
+  const { message: createdMessage } = await persistClientMessage(c.env.DB, {
     conversationId,
     senderType: 'visitor',
     senderId: visitor.id,
@@ -367,7 +367,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     clientMessageId,
   });
 
-  await assignConversationAgent(c.env.DB, conversationId);
+  const assignment = await assignConversationAgent(c.env.DB, conversationId);
 
   await broadcastRoom(c.env, conversationId, {
     type: 'message',
@@ -380,6 +380,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     {
       message: clientMessage(createdMessage),
     },
+    { includeOverview: Boolean(assignment) },
   );
 
   const conversation = await ownedConversation(
@@ -424,7 +425,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
-  const conversation = await ownedConversation(
+  const conversation = await ownedConversationForMessageWrite(
     c.env.DB,
     c.req.param('id'),
     site.id,
@@ -441,31 +442,28 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
   }
 
-  const existingMessage = await c.env.DB.prepare(
-    `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
-       read_by_visitor_at, read_by_agent_at, created_at
-     FROM messages WHERE conversation_id = ?1 AND client_message_id = ?2`,
-  )
-    .bind(conversation.id, clientMessageId)
-    .first<MessageRow>();
-  if (existingMessage)
-    return c.json({ message: clientMessage(existingMessage) });
-
-  const createdMessage = await persistClientMessage(c.env.DB, {
+  const persistedMessage = await persistClientMessage(c.env.DB, {
     conversationId: conversation.id,
     senderType: 'visitor',
     senderId: conversation.visitor_id,
     body: messageBody!,
     clientMessageId,
   });
+  if (persistedMessage.duplicate) {
+    return c.json({ message: clientMessage(persistedMessage.message) });
+  }
+  const createdMessage = persistedMessage.message;
   await c.env.DB.prepare(
     'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
   )
     .bind(conversation.visitor_id)
     .run();
 
+  let assignmentChanged = false;
   if (!conversation.assigned_agent) {
-    await assignConversationAgent(c.env.DB, conversation.id);
+    assignmentChanged = Boolean(
+      await assignConversationAgent(c.env.DB, conversation.id),
+    );
   }
   await broadcastRoom(c.env, conversation.id, {
     type: 'message',
@@ -476,6 +474,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     conversation.id,
     'message.created',
     { message: clientMessage(createdMessage) },
+    { includeOverview: assignmentChanged },
   );
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
@@ -592,6 +591,7 @@ export async function broadcastClientConversationEvent(
     reader?: 'agent' | 'visitor';
     lastMessageId?: string | null;
   } = {},
+  options: { includeOverview?: boolean } = {},
 ): Promise<void> {
   const conversation = await env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
@@ -633,12 +633,17 @@ export async function broadcastClientConversationEvent(
 
   if (!conversation.assigned_agent) return;
 
-  const overview = await loadAgentOverview(env.DB, conversation.assigned_agent);
+  const includeOverview =
+    options.includeOverview ??
+    (type === 'conversation.assigned' || type === 'conversation.closed');
+  const overview = includeOverview
+    ? await loadAgentOverview(env.DB, conversation.assigned_agent)
+    : null;
   await broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {
     type: 'conversation.changed',
     conversationId,
     conversation: agentConversationSummary(conversation),
-    overview,
+    ...(overview ? { overview } : {}),
   });
 }
 
@@ -945,6 +950,30 @@ async function resolveIdentity(
   return { ok: true, site, visitorId, conversation };
 }
 
+async function ownedConversationForMessageWrite(
+  db: D1Database,
+  conversationId: string,
+  siteId: string,
+  visitorId: string,
+): Promise<Pick<
+  ConversationRow,
+  'id' | 'visitor_id' | 'status' | 'assigned_agent'
+> | null> {
+  return db
+    .prepare(
+      `SELECT c.id, c.visitor_id, c.status, c.assigned_agent
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
+         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+       LIMIT 1`,
+    )
+    .bind(conversationId, siteId, visitorId)
+    .first<
+      Pick<ConversationRow, 'id' | 'visitor_id' | 'status' | 'assigned_agent'>
+    >();
+}
+
 async function ownedConversation(
   db: D1Database,
   conversationId: string,
@@ -1031,13 +1060,13 @@ async function persistClientMessage(
     body: string;
     clientMessageId: string;
   },
-): Promise<MessageRow> {
+): Promise<{ message: MessageRow; duplicate: boolean }> {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  await db.batch([
+  const [inserted] = await db.batch([
     db
       .prepare(
-        `INSERT INTO messages (
+        `INSERT OR IGNORE INTO messages (
          id, conversation_id, sender_type, sender_id, body, client_message_id, created_at
        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
       )
@@ -1055,20 +1084,39 @@ async function persistClientMessage(
         `UPDATE conversations
        SET agent_unread_count = agent_unread_count + 1,
            last_message_at = ?1, updated_at = ?1
-       WHERE id = ?2`,
+       WHERE id = ?2
+         AND EXISTS (SELECT 1 FROM messages WHERE id = ?3)`,
       )
-      .bind(createdAt, input.conversationId),
+      .bind(createdAt, input.conversationId, id),
   ]);
-  const message = await db
-    .prepare(
-      `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
-       read_by_visitor_at, read_by_agent_at, created_at
-     FROM messages WHERE id = ?1`,
-    )
-    .bind(id)
-    .first<MessageRow>();
-  if (!message) throw new Error('Message persistence failed');
-  return message;
+
+  if (!inserted?.meta.changes) {
+    const existing = await db
+      .prepare(
+        `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
+         read_by_visitor_at, read_by_agent_at, created_at
+       FROM messages
+       WHERE conversation_id = ?1 AND client_message_id = ?2
+       LIMIT 1`,
+      )
+      .bind(input.conversationId, input.clientMessageId)
+      .first<MessageRow>();
+    if (!existing) throw new Error('Message persistence conflict');
+    return { message: existing, duplicate: true };
+  }
+
+  const message: MessageRow = {
+    id,
+    conversation_id: input.conversationId,
+    sender_type: input.senderType,
+    sender_id: input.senderId,
+    body: input.body,
+    client_message_id: input.clientMessageId,
+    read_by_visitor_at: null,
+    read_by_agent_at: null,
+    created_at: createdAt,
+  };
+  return { message, duplicate: false };
 }
 
 function clientMessage(message: MessageRow) {
