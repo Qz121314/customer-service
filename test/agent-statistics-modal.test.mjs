@@ -8,7 +8,9 @@ function source(path) {
 }
 
 test('agent statistics opens inside the workspace instead of navigating away', () => {
-  const app = source('../src/dashboard/AgentPortal.tsx');
+  const portal = source('../src/dashboard/AgentPortal.tsx');
+  const panels = source('../src/dashboard/AgentWorkspacePanels.tsx');
+  const app = `${portal}\n${panels}`;
   const statistics = source('../src/dashboard/AgentStatisticsWorkspace.tsx');
   const styles = source('../src/dashboard/cloud-service-ui.css');
 
@@ -26,7 +28,9 @@ test('agent statistics opens inside the workspace instead of navigating away', (
 });
 
 test('admin statistics opens as a modal with a wrapped day grid', () => {
-  const app = source('../src/dashboard/AdminPortal.tsx');
+  const portal = source('../src/dashboard/AdminPortal.tsx');
+  const statistics = source('../src/dashboard/AdminStatisticsModal.tsx');
+  const app = `${portal}\n${statistics}`;
   const styles = source('../src/dashboard/cloud-service-ui.css');
 
   assert.ok(app.includes('setStatisticsOpen(true)'));

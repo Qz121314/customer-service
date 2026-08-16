@@ -28,7 +28,12 @@ test('agent inbox returns overview, conversations, messages and media in two req
 });
 
 test('agent inbox filters, searches and prioritizes unread conversations locally', async () => {
-  const app = await read('../src/dashboard/AgentPortal.tsx');
+  const [portal, panels] = await Promise.all([
+    read('../src/dashboard/AgentPortal.tsx'),
+    read('../src/dashboard/AgentWorkspacePanels.tsx'),
+  ]);
+  const app = `${portal}\n${panels}`;
+
   assert.match(app, /visibleConversations = useMemo/u);
   assert.match(app, /搜索访客、产品或消息/u);
   assert.match(app, /未读优先/u);

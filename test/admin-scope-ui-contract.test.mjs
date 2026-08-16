@@ -9,6 +9,8 @@ function source(path) {
 
 test('admin UI presents dynamic routing scopes instead of expanded product lists', () => {
   const admin = source('../src/dashboard/AdminPortal.tsx');
+  const editor = source('../src/dashboard/AgentEditorModal.tsx');
+  const adminUi = `${admin}\n${editor}`;
   const runtime = source('../src/dashboard/dashboard-runtime.ts');
   const api = source('../src/dashboard/api.ts');
   const styles = source('../src/dashboard/styles.css');
@@ -28,7 +30,7 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
   assert.ok(
     styles.includes('grid-template-columns: repeat(2, minmax(0, 1fr))'),
   );
-  assert.ok(admin.includes('aria-modal="true"'));
-  assert.ok(admin.includes('再配置它的分流负责范围'));
-  assert.ok(!admin.includes('分配负责产品'));
+  assert.ok(adminUi.includes('aria-modal="true"'));
+  assert.ok(adminUi.includes('再配置它的分流负责范围'));
+  assert.ok(!adminUi.includes('分配负责产品'));
 });

@@ -16,12 +16,14 @@ test('realtime reconnect uses capped exponential backoff with jitter', () => {
 });
 
 test('agent workspace exposes explicit connection states and delta recovery', async () => {
-  const [app, api, worker, media] = await Promise.all([
+  const [portal, panels, api, worker, media] = await Promise.all([
     read('../src/dashboard/AgentPortal.tsx'),
+    read('../src/dashboard/AgentWorkspacePanels.tsx'),
     read('../src/dashboard/api.ts'),
     read('../src/worker/agent-api.ts'),
     read('../src/dashboard/agent-media.ts'),
   ]);
+  const app = `${portal}\n${panels}`;
 
   assert.match(app, /网络已断开 · 草稿已保存/u);
   assert.match(app, /连接中断 · 正在恢复/u);

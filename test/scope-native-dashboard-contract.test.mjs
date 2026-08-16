@@ -10,7 +10,9 @@ function source(path) {
 test('admin dashboard stores and submits routing scopes without expanded product arrays', () => {
   const api = source('../src/dashboard/api.ts');
   const picker = source('../src/dashboard/ProductAssignmentPicker.tsx');
-  const admin = source('../src/dashboard/AdminPortal.tsx');
+  const portal = source('../src/dashboard/AdminPortal.tsx');
+  const editor = source('../src/dashboard/AgentEditorModal.tsx');
+  const admin = `${portal}\n${editor}`;
   const runtime = source('../src/dashboard/dashboard-runtime.ts');
 
   assert.ok(!api.includes('attachProductSelectionScope'));
