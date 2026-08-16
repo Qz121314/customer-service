@@ -13,13 +13,6 @@ export async function sendAgentPushForConversation(
   conversationId: string,
 ): Promise<void> {
   const now = Date.now();
-  await env.DB.prepare(
-    `DELETE FROM agent_push_subscriptions
-     WHERE expiration_time IS NOT NULL AND expiration_time <= ?1`,
-  )
-    .bind(now)
-    .run();
-
   const subscriptions = await env.DB.prepare(
     `SELECT
        subscription.endpoint,
