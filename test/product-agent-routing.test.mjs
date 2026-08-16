@@ -37,6 +37,9 @@ function createDatabase() {
       is_enabled INTEGER NOT NULL,
       max_active_conversations INTEGER NOT NULL DEFAULT 0,
       daily_conversation_limit INTEGER NOT NULL DEFAULT 0,
+      traffic_quota_enabled INTEGER NOT NULL DEFAULT 0,
+      traffic_quota_total INTEGER NOT NULL DEFAULT 0,
+      traffic_quota_used INTEGER NOT NULL DEFAULT 0,
       last_seen_at TEXT,
       last_assigned_at TEXT,
       updated_at TEXT
