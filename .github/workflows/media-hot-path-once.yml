@@ -48,7 +48,19 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Test media reservation cost
+        run: node --experimental-strip-types --test --test-name-pattern="new media reservations" test/media-hot-path-cost.test.mjs
+
+      - name: Test visitor media ownership cost
+        run: node --experimental-strip-types --test --test-name-pattern="visitor media ownership" test/media-hot-path-cost.test.mjs
+
+      - name: Test media completion cost
+        run: node --experimental-strip-types --test --test-name-pattern="media completion" test/media-hot-path-cost.test.mjs
+
+      - name: Test existing media and realtime contracts
+        run: node --experimental-strip-types --test test/customer-service-full-flow.test.mjs test/realtime-contract.test.mjs test/agent-conversation-detail-cost.test.mjs
+
+      - name: Test full suite
         run: pnpm test
 
       - name: Build
