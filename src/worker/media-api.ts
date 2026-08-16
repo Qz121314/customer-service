@@ -252,10 +252,10 @@ export async function listConversationMedia(
          AND mi.message_id IS NOT NULL
          AND (
            ?2 IS NULL
-           OR julianday(m.created_at) > julianday(?2)
-           OR (julianday(m.created_at) = julianday(?2) AND m.id > ?3)
+           OR m.created_at > ?2
+           OR (m.created_at = ?2 AND m.id > ?3)
          )
-       ORDER BY julianday(m.created_at) ASC, m.id ASC`,
+       ORDER BY m.created_at ASC, m.id ASC`,
     )
     .bind(conversationId, after?.createdAt ?? null, after?.id ?? null)
     .all<ReadyMediaRow>();
