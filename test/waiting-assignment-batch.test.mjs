@@ -25,7 +25,7 @@ for (const name of ['assignment-broadcast.ts', 'routing.ts']) {
 let assignWaitingConversations;
 try {
   ({ assignWaitingConversations } = await import(
-    '../src/worker/waiting-assignment.ts'
+    '../src/worker/waiting-assignment.ts',
   ));
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
