@@ -113,6 +113,21 @@ export function AgentStatisticsModal({
               </strong>
               <small>达到后停止新分流</small>
             </div>
+            <div>
+              <span>剩余额度</span>
+              <strong>
+                {busy
+                  ? '—'
+                  : stats?.trafficQuotaEnabled
+                    ? (stats?.trafficQuotaRemaining ?? 0)
+                    : '不限'}
+              </strong>
+              <small>
+                {stats?.trafficQuotaEnabled
+                  ? `总 ${stats.trafficQuotaTotal} · 已用 ${stats.trafficQuotaUsed}`
+                  : '未启用总额度限制'}
+              </small>
+            </div>
           </section>
 
           <section className="agent-statistics-card">
