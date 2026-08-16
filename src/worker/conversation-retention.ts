@@ -26,6 +26,7 @@ type DeletedVisitorRow = {
 const DELETE_BATCH_SIZE = 100;
 const MAX_CONVERSATION_DELETE_PASSES = 5;
 const MAX_ORPHAN_VISITOR_DELETE_PASSES = 2;
+const PUSH_SUBSCRIPTION_DELETE_BATCH_SIZE = 1000;
 const REPORTING_HISTORY_CLEANUP_UTC_HOUR = 12;
 
 export function conversationExpiresAt(createdAt: string | Date): string {
@@ -96,6 +97,7 @@ export async function purgeExpiredConversations(
       : 0;
   const visitors = await purgeOrphanVisitors(env.DB, nowIso);
   if (now.getUTCHours() === 0 && now.getUTCMinutes() === 0) {
+    await purgeExpiredPushSubscriptions(env.DB, now.getTime());
     await env.DB.prepare(
       `DELETE FROM conversation_creation_limits
        WHERE rowid IN (
@@ -116,6 +118,38 @@ export async function purgeExpiredConversations(
     await purgeReportingHistory(env.DB, nowIso);
   }
   return { conversations, mediaObjects, staleMediaObjects, visitors };
+}
+
+async function purgeExpiredPushSubscriptions(
+  db: D1Database,
+  nowMs: number,
+): Promise<void> {
+  await db
+    .prepare(
+      `DELETE FROM visitor_push_subscriptions
+       WHERE endpoint IN (
+         SELECT endpoint
+         FROM visitor_push_subscriptions
+         WHERE expiration_time IS NOT NULL AND expiration_time <= ?1
+         ORDER BY expiration_time ASC, endpoint ASC
+         LIMIT ?2
+       )`,
+    )
+    .bind(nowMs, PUSH_SUBSCRIPTION_DELETE_BATCH_SIZE)
+    .run();
+  await db
+    .prepare(
+      `DELETE FROM agent_push_subscriptions
+       WHERE endpoint IN (
+         SELECT endpoint
+         FROM agent_push_subscriptions
+         WHERE expiration_time IS NOT NULL AND expiration_time <= ?1
+         ORDER BY expiration_time ASC, endpoint ASC
+         LIMIT ?2
+       )`,
+    )
+    .bind(nowMs, PUSH_SUBSCRIPTION_DELETE_BATCH_SIZE)
+    .run();
 }
 
 async function purgeStaleMediaUploads(
