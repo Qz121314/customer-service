@@ -32,9 +32,10 @@ type ConversationRoutingRow = {
  *
  * The candidate selection and conversation write happen in the same SQLite
  * UPDATE statement, so concurrent requests cannot both pass a stale capacity
- * check before writing. Active load is balanced first; last_assigned_at and id
- * provide deterministic round-robin ordering for equal loads. Legacy groups
- * are considered only when no hierarchical routing scope matches at all.
+ * check before writing. Active load is balanced first; today's accepted count
+ * is a secondary fairness signal; last_assigned_at and id provide deterministic
+ * ordering for equal loads. Legacy groups are considered only when no
+ * hierarchical routing scope matches at all.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -126,8 +127,8 @@ export async function assignConversationAgent(
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
-           COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
+           COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC
          LIMIT 1
@@ -180,8 +181,8 @@ export async function assignConversationAgent(
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
-           COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(load.active_count, 0) ASC,
+           COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
            a.id ASC
          LIMIT 1
