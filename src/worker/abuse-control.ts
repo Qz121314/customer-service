@@ -133,7 +133,9 @@ export async function consumeConversationCreationQuota(
     )
     .bind(input.siteId, visitorKey, sourceKey)
     .all<SubjectLimitRow>();
-  const byKey = new Map((limits.results ?? []).map((row) => [row.subject_key, row]));
+  const byKey = new Map(
+    (limits.results ?? []).map((row) => [row.subject_key, row]),
+  );
   const source = byKey.get(sourceKey);
   if (subjectBlocked(source, SOURCE_CONVERSATION_LIMIT, now)) {
     return {
