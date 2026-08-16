@@ -11,6 +11,7 @@ import './cloud-service-ui.css';
 import './ui-polish.css';
 import './agent-editor.css';
 import './agent-workspace.css';
+import './agent-desktop-compact.css';
 
 if (
   window.location.pathname.startsWith('/agent') &&
