@@ -1,0 +1,60 @@
+name: Optimize conversation detail once
+
+on:
+  push:
+    branches:
+      - agent/bound-conversation-detail-reads
+
+permissions:
+  contents: write
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply targeted optimization
+        run: node scripts/optimize-conversation-detail-once.mjs
+      - name: Remove one-time tooling
+        run: |
+          rm scripts/optimize-conversation-detail-once.mjs
+          rm .github/workflows/optimize-conversation-detail-once.yml
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Format changed source
+        run: pnpm exec prettier --write src/worker/agent-api.ts src/worker/media-api.ts src/dashboard/AgentPortal.tsx test/agent-conversation-detail-cost.test.mjs
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
+      - name: Format check
+        run: pnpm format
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+      - name: Verify final scope
+        run: |
+          test ! -e scripts/optimize-conversation-detail-once.mjs
+          test ! -e .github/workflows/optimize-conversation-detail-once.yml
+          git status --short
+          git diff --check
+      - name: Commit validated change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/worker/agent-api.ts src/worker/media-api.ts src/dashboard/AgentPortal.tsx test/agent-conversation-detail-cost.test.mjs
+          git add -u scripts/optimize-conversation-detail-once.mjs .github/workflows/optimize-conversation-detail-once.yml
+          git commit -m "Bound conversation detail D1 reads"
+          git push origin HEAD:${GITHUB_REF_NAME}
