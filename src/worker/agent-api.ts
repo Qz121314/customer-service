@@ -936,7 +936,9 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
       assignment,
     }),
     broadcastAgentInboxRefresh(c.env, agent.id, id),
-    broadcastClientConversationEvent(c.env, id, 'conversation.assigned'),
+    broadcastClientConversationEvent(c.env, id, 'conversation.assigned').then(
+      () => undefined,
+    ),
   ];
   if (assignment) {
     realtimeUpdates.push(broadcastAgentInboxRefresh(c.env, assignment.id, id));

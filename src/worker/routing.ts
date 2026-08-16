@@ -3,6 +3,10 @@ export type AgentAssignment = {
   name: string;
 };
 
+type AgentAssignmentRow = AgentAssignment & {
+  site_id: string;
+};
+
 const ROUTING_TIME_ZONE = 'America/Los_Angeles';
 
 export function routingBusinessDate(now = new Date()): string {
@@ -17,14 +21,6 @@ export function routingBusinessDate(now = new Date()): string {
   );
   return `${values.year}-${values.month}-${values.day}`;
 }
-
-type ConversationRoutingRow = {
-  site_id: string;
-  product_id: string | null;
-  section_id: string | null;
-  category_id: string | null;
-  assigned_agent: string | null;
-};
 
 /**
  * Assign one conversation to one currently-eligible agent.
@@ -41,72 +37,71 @@ export async function assignConversationAgent(
   conversationId: string,
   excludedAgentId: string | null = null,
 ): Promise<AgentAssignment | null> {
-  const conversation = await db
-    .prepare(
-      `SELECT
-         c.site_id,
-         c.product_id,
-         COALESCE(c.section_id, p.section_id) AS section_id,
-         COALESCE(c.category_id, p.category_id) AS category_id,
-         c.assigned_agent
-       FROM conversations c
-       LEFT JOIN product_catalog p
-         ON p.site_id = c.site_id
-        AND p.id = c.product_id
-       WHERE c.id = ?1
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
-       LIMIT 1`,
-    )
-    .bind(conversationId)
-    .first<ConversationRoutingRow>();
-
-  if (!conversation) return null;
-  if (conversation.assigned_agent) {
-    return assignedAgent(db, conversationId);
-  }
-
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
-  const result = await db
+  const assignment = await db
     .prepare(
-      `WITH matching AS (
+      `WITH context AS (
+         SELECT
+           c.site_id,
+           c.product_id,
+           COALESCE(c.section_id, p.section_id) AS section_id,
+           COALESCE(c.category_id, p.category_id) AS category_id
+         FROM conversations c
+         LEFT JOIN product_catalog p
+           ON p.site_id = c.site_id
+          AND p.id = c.product_id
+         WHERE c.id = ?1
+           AND c.assigned_agent IS NULL
+           AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         LIMIT 1
+       ),
+       matching AS (
          SELECT DISTINCT ars.agent_id
          FROM agent_routing_scopes ars
-         WHERE ars.site_id = ?1
-           AND ars.is_enabled = 1
+         JOIN context ctx ON ctx.site_id = ars.site_id
+         WHERE ars.is_enabled = 1
            AND (
-             (?2 <> '' AND ars.scope_type = 'product' AND ars.product_id = ?2)
-             OR (?3 <> '' AND ars.scope_type = 'section' AND ars.section_id = ?3)
+             (
+               COALESCE(ctx.product_id, '') <> ''
+               AND ars.scope_type = 'product'
+               AND ars.product_id = ctx.product_id
+             )
              OR (
-               ?3 <> ''
-               AND ?4 <> ''
+               COALESCE(ctx.section_id, '') <> ''
+               AND ars.scope_type = 'section'
+               AND ars.section_id = ctx.section_id
+             )
+             OR (
+               COALESCE(ctx.section_id, '') <> ''
+               AND COALESCE(ctx.category_id, '') <> ''
                AND ars.scope_type = 'category'
-               AND ars.section_id = ?3
-               AND ars.category_id = ?4
+               AND ars.section_id = ctx.section_id
+               AND ars.category_id = ctx.category_id
              )
            )
+       ),
+       load AS (
+         SELECT c.assigned_agent, COUNT(*) AS active_count
+         FROM conversations c
+         JOIN matching m ON m.agent_id = c.assigned_agent
+         JOIN context ctx ON ctx.site_id = c.site_id
+         WHERE c.status IN ('open', 'pending')
+           AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         GROUP BY c.assigned_agent
        ),
        candidate AS (
          SELECT a.id
          FROM matching m
-         JOIN agents a
-           ON a.id = m.agent_id
-          AND a.site_id = ?1
-         LEFT JOIN (
-           SELECT assigned_agent, COUNT(*) AS active_count
-           FROM conversations
-           WHERE site_id = ?1
-             AND status IN ('open', 'pending')
-             AND assigned_agent IS NOT NULL
-             AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-           GROUP BY assigned_agent
-         ) load ON load.assigned_agent = a.id
+         JOIN agents a ON a.id = m.agent_id
+         JOIN context ctx ON ctx.site_id = a.site_id
+         LEFT JOIN load ON load.assigned_agent = a.id
          LEFT JOIN agent_daily_stats daily
            ON daily.site_id = a.site_id
           AND daily.agent_id = a.id
-          AND daily.business_date = ?7
+          AND daily.business_date = ?3
          WHERE a.is_enabled = 1
-           AND (?8 = '' OR a.id <> ?8)
+           AND (?4 = '' OR a.id <> ?4)
            AND a.status = 'online'
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
@@ -133,42 +128,32 @@ export async function assignConversationAgent(
        )
        UPDATE conversations
        SET assigned_agent = (SELECT id FROM candidate),
-           assigned_at = ?6,
-           assigned_business_date = ?7,
+           assigned_at = ?2,
+           assigned_business_date = ?3,
            status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-           updated_at = ?6
-       WHERE id = ?5
+           updated_at = ?2
+       WHERE id = ?1
          AND assigned_agent IS NULL
          AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
-         AND EXISTS (SELECT 1 FROM candidate)`,
+         AND EXISTS (SELECT 1 FROM candidate)
+       RETURNING assigned_agent AS id,
+         (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name,
+         site_id`,
     )
-    .bind(
-      conversation.site_id,
-      conversation.product_id ?? '',
-      conversation.section_id ?? '',
-      conversation.category_id ?? '',
-      conversationId,
-      now,
-      businessDate,
-      excludedAgentId ?? '',
+    .bind(conversationId, now, businessDate, excludedAgentId ?? '')
+    .first<AgentAssignmentRow>();
+  if (!assignment) return assignedAgent(db, conversationId);
+
+  await db
+    .prepare(
+      `UPDATE agents
+       SET last_assigned_at = ?1, updated_at = ?1
+       WHERE id = ?2 AND site_id = ?3`,
     )
+    .bind(now, assignment.id, assignment.site_id)
     .run();
 
-  const assignment = await assignedAgent(db, conversationId);
-  if (!assignment) return null;
-
-  if (result.meta.changes) {
-    await db
-      .prepare(
-        `UPDATE agents
-         SET last_assigned_at = ?1, updated_at = ?1
-         WHERE id = ?2 AND site_id = ?3`,
-      )
-      .bind(now, assignment.id, conversation.site_id)
-      .run();
-  }
-
-  return assignment;
+  return { id: assignment.id, name: assignment.name };
 }
 
 async function assignedAgent(

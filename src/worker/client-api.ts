@@ -230,20 +230,40 @@ clientApi.post('/client/v1/conversations', async (c) => {
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
-  const existing = await c.env.DB.prepare(
-    `SELECT m.conversation_id
-     FROM messages m
-     JOIN conversations c ON c.id = m.conversation_id
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.site_id = ?1 AND v.external_id = ?2 AND m.client_message_id = ?3
-     LIMIT 1`,
+  const replay = await c.env.DB.prepare(
+    `WITH message_match AS (
+       SELECT m.conversation_id
+       FROM messages m
+       JOIN conversations c ON c.id = m.conversation_id
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.site_id = ?1
+         AND v.external_id = ?2
+         AND m.client_message_id = ?3
+       LIMIT 1
+     ),
+     handoff_match AS (
+       SELECT c.id AS conversation_id, v.external_id
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.site_id = ?1 AND c.source_handoff_id = ?4
+       LIMIT 1
+     )
+     SELECT
+       (SELECT conversation_id FROM message_match) AS message_conversation_id,
+       (SELECT conversation_id FROM handoff_match) AS handoff_conversation_id,
+       (SELECT external_id FROM handoff_match) AS handoff_external_id`,
   )
-    .bind(site.id, visitorId, clientMessageId)
-    .first<{ conversation_id: string }>();
-  if (existing) {
+    .bind(site.id, visitorId, clientMessageId, sourceHandoffId)
+    .first<{
+      message_conversation_id: string | null;
+      handoff_conversation_id: string | null;
+      handoff_external_id: string | null;
+    }>();
+
+  if (replay?.message_conversation_id) {
     const conversation = await ownedConversation(
       c.env.DB,
-      existing.conversation_id,
+      replay.message_conversation_id,
       site.id,
       visitorId,
     );
@@ -259,17 +279,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
-  const existingHandoff = await c.env.DB.prepare(
-    `SELECT c.id, v.external_id
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.site_id = ?1 AND c.source_handoff_id = ?2
-     LIMIT 1`,
-  )
-    .bind(site.id, sourceHandoffId)
-    .first<{ id: string; external_id: string }>();
-  if (existingHandoff?.external_id !== undefined) {
-    if (existingHandoff.external_id !== visitorId) {
+  if (replay?.handoff_conversation_id) {
+    if (replay.handoff_external_id !== visitorId) {
       return error(
         c,
         409,
@@ -279,7 +290,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
     const conversation = await ownedConversation(
       c.env.DB,
-      existingHandoff.id,
+      replay.handoff_conversation_id,
       site.id,
       visitorId,
     );
@@ -373,7 +384,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     type: 'message',
     message: adminMessage(createdMessage),
   });
-  await broadcastClientConversationEvent(
+  const conversation = await broadcastClientConversationEvent(
     c.env,
     conversationId,
     'message.created',
@@ -381,13 +392,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       message: clientMessage(createdMessage),
     },
     { includeOverview: Boolean(assignment) },
-  );
-
-  const conversation = await ownedConversation(
-    c.env.DB,
-    conversationId,
-    site.id,
-    visitorId,
   );
   if (!conversation) throw new Error('Conversation persistence failed');
 
@@ -592,7 +596,7 @@ export async function broadcastClientConversationEvent(
     lastMessageId?: string | null;
   } = {},
   options: { includeOverview?: boolean } = {},
-): Promise<void> {
+): Promise<ConversationRow | null> {
   const conversation = await env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
        a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
@@ -615,7 +619,7 @@ export async function broadcastClientConversationEvent(
         visitor_name: string | null;
       }
     >();
-  if (!conversation) return;
+  if (!conversation) return null;
 
   if (conversation.external_id) {
     await broadcastVisitorEvent(
@@ -631,7 +635,7 @@ export async function broadcastClientConversationEvent(
     );
   }
 
-  if (!conversation.assigned_agent) return;
+  if (!conversation.assigned_agent) return conversation;
 
   const includeOverview =
     options.includeOverview ??
@@ -645,6 +649,7 @@ export async function broadcastClientConversationEvent(
     conversation: agentConversationSummary(conversation),
     ...(overview ? { overview } : {}),
   });
+  return conversation;
 }
 
 async function loadAgentOverview(db: D1Database, agentId: string) {
@@ -838,7 +843,15 @@ async function rememberProductRoutingContext(
          category_id = excluded.category_id,
          category_name = excluded.category_name,
          is_enabled = 1,
-         updated_at = CURRENT_TIMESTAMP`,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE title IS NOT excluded.title
+          OR href IS NOT excluded.href
+          OR cover_url IS NOT excluded.cover_url
+          OR section_id IS NOT excluded.section_id
+          OR section_name IS NOT excluded.section_name
+          OR category_id IS NOT excluded.category_id
+          OR category_name IS NOT excluded.category_name
+          OR is_enabled <> 1`,
     )
     .bind(
       siteId,
@@ -859,47 +872,27 @@ async function ensureVisitor(
   siteId: string,
   externalId: string,
 ): Promise<VisitorRow> {
-  const existing = await db
-    .prepare(
-      `SELECT id, site_id, external_id, expires_at
-     FROM visitors WHERE site_id = ?1 AND external_id = ?2`,
-    )
-    .bind(siteId, externalId)
-    .first<VisitorRow>();
-
-  if (existing) {
-    const expiresAt = conversationExpiresAt(new Date());
-    await db
-      .prepare(
-        `UPDATE visitors
-         SET last_seen_at = CURRENT_TIMESTAMP, expires_at = ?2
-         WHERE id = ?1`,
-      )
-      .bind(existing.id, expiresAt)
-      .run();
-    return { ...existing, expires_at: expiresAt };
-  }
-
   const id = crypto.randomUUID();
   const tokenHash = await sha256(
     `client-v1:${siteId}:${externalId}:${crypto.randomUUID()}`,
   );
   const expiresAt = conversationExpiresAt(new Date());
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO visitors (
        id, site_id, token_hash, display_name, external_id, expires_at
-     ) VALUES (?1, ?2, ?3, ?4, ?4, ?5)`,
+     ) VALUES (?1, ?2, ?3, ?4, ?4, ?5)
+     ON CONFLICT(site_id, external_id) DO UPDATE SET
+       last_seen_at = CURRENT_TIMESTAMP,
+       expires_at = excluded.expires_at
+     RETURNING id, site_id, external_id, expires_at`,
     )
     .bind(id, siteId, tokenHash, externalId, expiresAt)
-    .run();
+    .all<VisitorRow>();
 
-  return {
-    id,
-    site_id: siteId,
-    external_id: externalId,
-    expires_at: expiresAt,
-  };
+  const visitor = result.results?.[0];
+  if (!visitor) throw new Error('Visitor persistence failed');
+  return visitor;
 }
 
 async function resolveIdentity(
