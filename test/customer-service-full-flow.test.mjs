@@ -199,6 +199,8 @@ test('admin can save multiple whole-section routing rules in one request', async
         routingScope: { type: 'section', sectionIds: ['west', 'east'] },
         maxActiveConversations: 0,
         dailyConversationLimit: 0,
+        trafficQuotaEnabled: true,
+        trafficQuotaTopUp: 100,
         isEnabled: true,
       }),
     },
@@ -223,6 +225,33 @@ test('admin can save multiple whole-section routing rules in one request', async
       .map((row) => row.section_id),
     ['east', 'west'],
   );
+  const topUpResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ trafficQuotaTopUp: 50 }),
+    },
+    {
+      DB: d1(database),
+      CONVERSATION_ROOMS: fakeRooms().namespace,
+      ADMIN_PASSWORD: adminPassword,
+    },
+  );
+  assert.equal(topUpResponse.status, 200);
+  const quota = database
+    .prepare(
+      `SELECT traffic_quota_enabled AS enabled,
+         traffic_quota_total AS total, traffic_quota_used AS used
+       FROM agents WHERE id = ?`,
+    )
+    .get(created.id);
+  assert.equal(quota.enabled, 1);
+  assert.equal(quota.total, 150);
+  assert.equal(quota.used, 0);
   database.close();
 });
 
