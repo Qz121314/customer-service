@@ -1,4 +1,4 @@
-name: One-time agent editor Prettier probe
+name: One-time agent editor Prettier apply
 
 on:
   push:
@@ -6,13 +6,15 @@ on:
       - ui/agent-editor-single-screen
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prettier-probe:
+  prettier-apply:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ui/agent-editor-single-screen
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -20,13 +22,21 @@ jobs:
         run: npm install --global pnpm@11.19.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Print Prettier diff
+      - name: Apply Prettier and push
         run: |
           pnpm exec prettier --write \
             src/dashboard/AgentEditorModal.tsx \
             src/dashboard/agent-editor-single-screen.css \
             test/agent-editor-single-screen-contract.test.mjs
-          git diff -- \
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
             src/dashboard/AgentEditorModal.tsx \
             src/dashboard/agent-editor-single-screen.css \
             test/agent-editor-single-screen-contract.test.mjs
+          if git diff --cached --quiet; then
+            echo "No formatting changes needed."
+          else
+            git commit -m "Format single-screen agent editor"
+            git push origin HEAD:ui/agent-editor-single-screen
+          fi
