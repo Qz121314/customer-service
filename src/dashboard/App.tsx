@@ -11,6 +11,7 @@ import {
   AgentAccount,
   AgentAvailability,
   AgentInbox,
+  AgentQuotaAdjustment,
   AgentRoutingScope,
   AgentMonthlyStats,
   ProductCatalogItem,
@@ -30,6 +31,7 @@ import {
   deleteQuickReply,
   getAdminSession,
   getAgentMonthlyStats,
+  getAgentQuotaAdjustments,
   getAgentInbox,
   getAgentSession,
   getAgents,
@@ -152,6 +154,7 @@ type AgentDraft = {
   trafficQuotaTotal: number;
   trafficQuotaUsed: number;
   trafficQuotaTopUp: number;
+  trafficQuotaRequestId: string;
   isEnabled: boolean;
 };
 
@@ -167,6 +170,7 @@ const emptyAgentDraft: AgentDraft = {
   trafficQuotaTotal: 0,
   trafficQuotaUsed: 0,
   trafficQuotaTopUp: 100,
+  trafficQuotaRequestId: '',
   isEnabled: true,
 };
 
@@ -500,6 +504,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   );
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState('');
+  const [quotaAdjustments, setQuotaAdjustments] = useState<
+    AgentQuotaAdjustment[]
+  >([]);
+  const [quotaHistoryBusy, setQuotaHistoryBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     const [nextAgents, nextProducts] = await Promise.all([
@@ -554,6 +562,29 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [editorOpen, saving]);
 
+  useEffect(() => {
+    if (!editorOpen || !draft.id) {
+      setQuotaAdjustments([]);
+      setQuotaHistoryBusy(false);
+      return;
+    }
+    let active = true;
+    setQuotaHistoryBusy(true);
+    getAgentQuotaAdjustments(draft.id)
+      .then((adjustments) => {
+        if (active) setQuotaAdjustments(adjustments);
+      })
+      .catch((reason) => {
+        if (active) setError(message(reason, '无法读取额度变更'));
+      })
+      .finally(() => {
+        if (active) setQuotaHistoryBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [editorOpen, draft.id]);
+
   const workspaceUrl = `${window.location.origin}/agent`;
   const onlineCount = agents.filter(
     (agent) => agent.isEnabled && agent.status === 'online',
@@ -568,7 +599,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   ).size;
 
   function createNewAgent() {
-    setDraft(emptyAgentDraft);
+    setDraft({
+      ...emptyAgentDraft,
+      trafficQuotaRequestId: crypto.randomUUID(),
+    });
+    setQuotaAdjustments([]);
     setEditorOpen(true);
     setError('');
   }
@@ -586,6 +621,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       trafficQuotaTotal: agent.trafficQuotaTotal,
       trafficQuotaUsed: agent.trafficQuotaUsed,
       trafficQuotaTopUp: 0,
+      trafficQuotaRequestId: crypto.randomUUID(),
       isEnabled: agent.isEnabled,
     });
     setEditorOpen(true);
@@ -612,6 +648,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           dailyConversationLimit: draft.dailyConversationLimit,
           trafficQuotaEnabled: draft.trafficQuotaEnabled,
           trafficQuotaTopUp: draft.trafficQuotaTopUp,
+          trafficQuotaRequestId: draft.trafficQuotaRequestId,
           isEnabled: draft.isEnabled,
         });
       } else {
@@ -624,6 +661,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           dailyConversationLimit: draft.dailyConversationLimit,
           trafficQuotaEnabled: draft.trafficQuotaEnabled,
           trafficQuotaTopUp: draft.trafficQuotaTopUp,
+          trafficQuotaRequestId: draft.trafficQuotaRequestId,
           isEnabled: draft.isEnabled,
         });
       }
@@ -1223,8 +1261,42 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                       </div>
                     </div>
                     <p>
-                      追加额度只累加，不清零已消耗；转接、重新排队和重新打开不重复扣减。
+                      追加额度只累加，不清零已消耗；保存失败后重试不会重复增加额度。
                     </p>
+                    {draft.id ? (
+                      <div className="traffic-quota-history">
+                        <div className="traffic-quota-history-head">
+                          <strong>最近额度变更</strong>
+                          <span>打开编辑时读取</span>
+                        </div>
+                        {quotaHistoryBusy ? (
+                          <p>正在读取…</p>
+                        ) : quotaAdjustments.length ? (
+                          <div className="traffic-quota-history-list">
+                            {quotaAdjustments.map((adjustment) => (
+                              <div
+                                className="traffic-quota-history-row"
+                                key={adjustment.id}
+                              >
+                                <strong>+{adjustment.amount}</strong>
+                                <span>
+                                  {adjustment.quotaTotalBefore} →{' '}
+                                  {adjustment.quotaTotalAfter}
+                                </span>
+                                <time>
+                                  {relativeTime(
+                                    adjustment.appliedAt ??
+                                      adjustment.createdAt,
+                                  )}
+                                </time>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p>暂无追加记录</p>
+                        )}
+                      </div>
+                    ) : null}
                   </section>
                   <label className="account-enable-line">
                     <input
