@@ -20,10 +20,7 @@ test('agent editor uses a desktop single-screen workspace instead of form scroll
   assert.ok(editor.includes('agent-editor-policy-grid'));
   assert.ok(editor.includes('agent-editor-quota-workspace'));
   assert.ok(layout.includes('@media (min-width: 821px)'));
-  assert.match(
-    layout,
-    /\.agent-editor-form\s*\{[\s\S]*?overflow:\s*hidden;/,
-  );
+  assert.match(layout, /\.agent-editor-form\s*\{[\s\S]*?overflow:\s*hidden;/);
   assert.match(
     layout,
     /\.agent-editor-layout\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0, 1fr\);[\s\S]*?overflow:\s*hidden;/,
@@ -34,9 +31,9 @@ test('agent editor uses a desktop single-screen workspace instead of form scroll
     ),
   );
   assert.ok(
-    layout.includes(
-      'grid-template-columns: repeat(4, minmax(0, 1fr));',
-    ),
+    layout.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
   );
-  assert.ok(layout.includes('@media (min-width: 821px) and (max-height: 760px)'));
+  assert.ok(
+    layout.includes('@media (min-width: 821px) and (max-height: 760px)'),
+  );
 });

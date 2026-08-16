@@ -120,7 +120,8 @@ export function AgentEditorModal({
                       onChange={(event) =>
                         onDraftChange({
                           ...draft,
-                          maxActiveConversations: Number(event.target.value) || 0,
+                          maxActiveConversations:
+                            Number(event.target.value) || 0,
                         })
                       }
                     />
@@ -139,7 +140,8 @@ export function AgentEditorModal({
                       onChange={(event) =>
                         onDraftChange({
                           ...draft,
-                          dailyConversationLimit: Number(event.target.value) || 0,
+                          dailyConversationLimit:
+                            Number(event.target.value) || 0,
                         })
                       }
                     />
@@ -152,7 +154,10 @@ export function AgentEditorModal({
                     type="checkbox"
                     checked={draft.isEnabled}
                     onChange={(event) =>
-                      onDraftChange({ ...draft, isEnabled: event.target.checked })
+                      onDraftChange({
+                        ...draft,
+                        isEnabled: event.target.checked,
+                      })
                     }
                   />
                   <span>
