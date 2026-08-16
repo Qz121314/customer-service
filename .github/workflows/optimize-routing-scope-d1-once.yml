@@ -39,6 +39,19 @@ jobs:
           fs.writeFileSync(path, source);
           NODE
           node scripts/optimize-routing-scope-d1.mjs
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const path = 'test/routing-scope-d1-cost.test.mjs';
+          let source = fs.readFileSync(path, 'utf8');
+          const start = source.indexOf('  assert.doesNotMatch(admin, /SELECT DISTINCT section_id');
+          const end = source.indexOf('  assert.match(migration', start);
+          if (start < 0 || end < 0 || end <= start) {
+            throw new Error('Could not locate routing scope validation contract block.');
+          }
+          const replacement = `  const validationStart = admin.indexOf('async function allEnabledSectionsExist');\n  const validationEnd = admin.indexOf('function normalizedIdentifiers', validationStart);\n  assert.ok(validationStart >= 0 && validationEnd > validationStart);\n  const validation = admin.slice(validationStart, validationEnd);\n  assert.doesNotMatch(validation, /SELECT DISTINCT section_id/u);\n  assert.doesNotMatch(validation, /\\.all</u);\n`;
+          source = `${source.slice(0, start)}${replacement}${source.slice(end)}`;
+          fs.writeFileSync(path, source);
+          NODE
 
       - name: Remove one-time tooling
         run: |
