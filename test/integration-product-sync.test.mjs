@@ -117,7 +117,7 @@ test('large product catalogs sync with bounded D1 query count', async () => {
     ),
     1200,
   );
-  assert.equal(db.counter.count, 8);
+  assert.equal(db.counter.count, 7);
   assert.ok(db.counter.count < 50);
 
   db.counter.count = 0;
@@ -144,7 +144,7 @@ test('large product catalogs sync with bounded D1 query count', async () => {
     ),
     0,
   );
-  assert.equal(db.counter.count, 4);
+  assert.equal(db.counter.count, 3);
 
   database.close();
 });
