@@ -15,11 +15,7 @@ type AgentAvatarSession = {
 const COOKIE = 'cs_agent_session';
 const MAX_AVATAR_BYTES = 320 * 1024;
 const AVATAR_KEY_PREFIX = 'agent-avatars';
-const AVATAR_CONTENT_TYPES = new Set([
-  'image/webp',
-  'image/jpeg',
-  'image/png',
-]);
+const AVATAR_CONTENT_TYPES = new Set(['image/webp', 'image/jpeg', 'image/png']);
 
 export const agentAvatarApi = new Hono<Env>();
 
@@ -52,7 +48,12 @@ agentAvatarApi.put('/api/agent/avatar', async (c) => {
     !matchesImageSignature(new Uint8Array(bytes), contentType)
   ) {
     return c.json(
-      { error: bytes.byteLength > MAX_AVATAR_BYTES ? 'AVATAR_TOO_LARGE' : 'INVALID_AVATAR_IMAGE' },
+      {
+        error:
+          bytes.byteLength > MAX_AVATAR_BYTES
+            ? 'AVATAR_TOO_LARGE'
+            : 'INVALID_AVATAR_IMAGE',
+      },
       bytes.byteLength > MAX_AVATAR_BYTES ? 413 : 400,
     );
   }
@@ -149,9 +150,17 @@ function normalizeAgentId(value: string): string | null {
   return /^[a-zA-Z0-9-]{1,100}$/u.test(id) ? id : null;
 }
 
-function matchesImageSignature(bytes: Uint8Array, contentType: string): boolean {
+function matchesImageSignature(
+  bytes: Uint8Array,
+  contentType: string,
+): boolean {
   if (contentType === 'image/jpeg') {
-    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    return (
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff
+    );
   }
   if (contentType === 'image/png') {
     return (

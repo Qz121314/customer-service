@@ -173,7 +173,8 @@ export function AgentAvatarControl({
               {processing ? <small>正在本地处理图片…</small> : null}
               {prepared && !processing ? (
                 <small>
-                  {prepared.width} × {prepared.height} · {formatBytes(prepared.byteSize)}
+                  {prepared.width} × {prepared.height} ·{' '}
+                  {formatBytes(prepared.byteSize)}
                 </small>
               ) : null}
             </div>

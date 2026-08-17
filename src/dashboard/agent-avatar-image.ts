@@ -11,7 +11,9 @@ const MAX_AVATAR_EDGE = 512;
 const TARGET_BYTES = 220 * 1024;
 const SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-export async function prepareAgentAvatar(file: File): Promise<PreparedAgentAvatar> {
+export async function prepareAgentAvatar(
+  file: File,
+): Promise<PreparedAgentAvatar> {
   if (!SUPPORTED_TYPES.has(file.type)) {
     throw new Error('请选择 JPG、PNG 或 WebP 图片');
   }
@@ -104,7 +106,9 @@ type DecodedImage = {
 
 async function decodeImage(file: File): Promise<DecodedImage> {
   if ('createImageBitmap' in window) {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const bitmap = await createImageBitmap(file, {
+      imageOrientation: 'from-image',
+    });
     return {
       image: bitmap,
       width: bitmap.width,

@@ -76,10 +76,8 @@
   inset: 0;
   display: grid;
   place-items: center;
-  padding:
-    max(18px, env(safe-area-inset-top))
-    max(14px, env(safe-area-inset-right))
-    max(18px, env(safe-area-inset-bottom))
+  padding: max(18px, env(safe-area-inset-top))
+    max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
     max(14px, env(safe-area-inset-left));
   background: rgba(15, 23, 42, 0.52);
   backdrop-filter: blur(8px);

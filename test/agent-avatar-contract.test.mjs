@@ -21,11 +21,15 @@ test('agent avatar is locally prepared, explicitly confirmed and stored as one R
   assert.ok(api.includes("agentAvatarApi.put('/api/agent/avatar'"));
   assert.ok(api.includes("agentAvatarApi.delete('/api/agent/avatar'"));
   assert.ok(api.includes("agentAvatarApi.get('/client/v1/avatars/:agentId'"));
-  assert.ok(api.includes("`${AVATAR_KEY_PREFIX}/${agentId}/current`"));
+  assert.ok(api.includes('`${AVATAR_KEY_PREFIX}/${agentId}/current`'));
   assert.ok(api.includes('c.env.MEDIA.put(key, bytes'));
   assert.ok(api.includes('c.env.MEDIA.delete(avatarObjectKey(agent.id))'));
   assert.ok(clientApi.includes('a.avatar_version AS agent_avatar_version'));
-  assert.ok(clientApi.includes('/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}'));
+  assert.ok(
+    clientApi.includes(
+      '/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}',
+    ),
+  );
   assert.ok(control.includes('prepareAgentAvatar(file)'));
   assert.ok(control.includes('confirmAvatar'));
   assert.ok(control.includes('确认使用'));
@@ -33,6 +37,8 @@ test('agent avatar is locally prepared, explicitly confirmed and stored as one R
   assert.ok(image.includes("compressCanvas(canvas, 'image/webp')"));
   assert.ok(styles.includes('min-height: 44px'));
   assert.ok(styles.includes('env(safe-area-inset-bottom)'));
-  assert.ok(entry.includes("import { agentAvatarApi } from './agent-avatar-api';"));
+  assert.ok(
+    entry.includes("import { agentAvatarApi } from './agent-avatar-api';"),
+  );
   assert.ok(main.includes("import './agent-avatar.css';"));
 });
