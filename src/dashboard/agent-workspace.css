@@ -99,7 +99,7 @@
   gap: 3px;
 }
 
-.workspace-shell .media-picker{
+.workspace-shell .media-picker {
   display: inline-grid;
   width: 40px;
   min-width: 40px;
@@ -118,12 +118,12 @@
     transform 0.14s ease;
 }
 
-.workspace-shell .media-picker:hover{
+.workspace-shell .media-picker:hover {
   background: rgba(34, 39, 47, 0.07);
   color: #20242b;
 }
 
-.workspace-shell .media-picker:active{
+.workspace-shell .media-picker:active {
   transform: scale(0.94);
 }
 
@@ -691,7 +691,7 @@
     gap: 0;
   }
 
-  .workspace-shell .media-picker{
+  .workspace-shell .media-picker {
     width: 36px;
     min-width: 36px;
     height: 42px;
@@ -749,7 +749,7 @@
     gap: 3px;
   }
 
-  .workspace-shell .media-picker{
+  .workspace-shell .media-picker {
     width: 33px;
     min-width: 33px;
   }

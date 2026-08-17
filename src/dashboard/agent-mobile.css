@@ -837,7 +837,7 @@
     box-shadow: none;
   }
 
-  .workspace-shell .media-picker{
+  .workspace-shell .media-picker {
     display: grid;
     width: 40px;
     min-width: 40px;
@@ -856,7 +856,7 @@
     touch-action: manipulation;
   }
 
-  .workspace-shell .media-picker::before{
+  .workspace-shell .media-picker::before {
     display: block;
     margin: 0;
     transform: none;
@@ -869,12 +869,12 @@
   }
 
   .workspace-shell .media-picker:hover,
-.workspace-shell .media-picker:active{
+  .workspace-shell .media-picker:active {
     border-color: #d7dae0;
     background: #f3f4f6;
   }
 
-  .workspace-shell .media-picker:active{
+  .workspace-shell .media-picker:active {
     transform: scale(0.94);
   }
 
@@ -1091,7 +1091,7 @@
     gap: 3px;
   }
 
-  .workspace-shell .media-picker{
+  .workspace-shell .media-picker {
     width: 38px;
     min-width: 38px;
     height: 38px;
