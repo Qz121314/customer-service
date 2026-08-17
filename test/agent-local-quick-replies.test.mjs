@@ -14,10 +14,7 @@ test('agent quick replies migrate once to local storage and leave the D1 hot pat
 
   assert.match(main, /import '\.\/agent-local-quick-replies';/u);
   assert.match(localReplies, /cs-agent-quick-replies:\$\{agentId\}/u);
-  assert.match(
-    localReplies,
-    /cs-agent-quick-replies-migrated:\$\{agentId\}/u,
-  );
+  assert.match(localReplies, /cs-agent-quick-replies-migrated:\$\{agentId\}/u);
   assert.match(localReplies, /X-CS-Quick-Replies-Local/u);
   assert.match(
     localReplies,
