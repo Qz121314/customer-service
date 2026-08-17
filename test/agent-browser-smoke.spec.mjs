@@ -16,7 +16,7 @@ async function seedConversationAndAgent(page) {
     url('/client/v1/conversations'),
     {
       data: {
-        visitorId: 'UI001',
+        visitorId: 'UIT001',
         sourceHandoffId: '11111111-1111-4111-8111-111111111111',
         clientMessageId: 'ui-smoke-message-1',
         message: '你好，这是 UI smoke 会话',
