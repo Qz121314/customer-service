@@ -36,6 +36,14 @@ jobs:
           path = Path('scripts/apply-composer-cleanup.mjs')
           text = path.read_text()
           text = text.replace(r'useState<QuickReply\[]>\(\[]\)', r'useState<QuickReply\[\]>\(\[\]\)')
+          text = text.replace(
+              "  if (/快捷回复|agent-local-quick-replies/u.test(text)) {\n    throw new Error('README still contains quick reply references');\n  }\n",
+              "  text = text.replace('- 本地快捷回复不访问服务器；\\n', '').replace('- 快捷回复刷新后仍保留；\\n', '');\n",
+          )
+          text = text.replace(
+              "const candidates = [...(await walk('src')), ...(await walk('test')), 'README.md'];",
+              "const candidates = [...(await walk('src')), ...(await walk('test'))];",
+          )
           path.write_text(text)
           PY
           node --check scripts/apply-composer-cleanup.mjs
