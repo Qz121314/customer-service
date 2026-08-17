@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,8 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -33,19 +31,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Format composer CSS cleanup
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm exec prettier --write src/dashboard/cloud-service-ui.css
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/dashboard/cloud-service-ui.css
-          if ! git diff --cached --quiet; then
-            git commit -m "style: format composer send fix"
-            git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
-          fi
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
