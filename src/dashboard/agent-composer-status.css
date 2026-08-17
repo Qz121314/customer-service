@@ -1,4 +1,12 @@
-/* Connection feedback must not participate in the compact send-button grid. */
+/* Keep the compact composer footer to one slot so the hidden connection status
+ * cannot create an implicit second grid column and push the send button outside
+ * the viewport. */
+.workspace-shell .composer-foot {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Connection feedback floats above the compact composer instead of taking
+ * horizontal space from the send button. */
 .workspace-shell .composer-foot .media-upload-progress.is-connection-warning {
   position: absolute;
   left: 50%;
