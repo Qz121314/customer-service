@@ -108,7 +108,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(
     page.getByText('图片只在本机压缩和预览，确认后才上传。'),
   ).toBeVisible();
-  await page.getByRole('button', { name: '关闭' }).click();
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(avatarButton).toBeVisible();
@@ -117,7 +117,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   expect(mobileAvatarBox?.height ?? 0).toBeGreaterThanOrEqual(34);
   await avatarButton.click();
   await expectCenteredDialog(page);
-  await page.getByRole('button', { name: '关闭' }).click();
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
 
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.getByRole('button', { name: /UI Smoke Product/u }).click();
