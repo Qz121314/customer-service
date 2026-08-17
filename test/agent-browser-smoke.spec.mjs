@@ -88,11 +88,12 @@ async function expectCenteredDialog(page) {
 
 async function mobileComposerGeometry(page) {
   return page.evaluate(() => {
+    const browser = globalThis;
     const snapshot = (selector) => {
-      const element = document.querySelector(selector);
-      if (!(element instanceof HTMLElement)) return null;
+      const element = browser.document.querySelector(selector);
+      if (!(element instanceof browser.HTMLElement)) return null;
       const rect = element.getBoundingClientRect();
-      const style = getComputedStyle(element);
+      const style = browser.getComputedStyle(element);
       return {
         x: rect.x,
         width: rect.width,
@@ -104,11 +105,11 @@ async function mobileComposerGeometry(page) {
       };
     };
     return {
-      innerWidth: window.innerWidth,
-      documentClientWidth: document.documentElement.clientWidth,
-      documentScrollWidth: document.documentElement.scrollWidth,
-      bodyClientWidth: document.body.clientWidth,
-      bodyScrollWidth: document.body.scrollWidth,
+      innerWidth: browser.innerWidth,
+      documentClientWidth: browser.document.documentElement.clientWidth,
+      documentScrollWidth: browser.document.documentElement.scrollWidth,
+      bodyClientWidth: browser.document.body.clientWidth,
+      bodyScrollWidth: browser.document.body.scrollWidth,
       workspace: snapshot('.workspace-shell'),
       thread: snapshot('.thread-pane'),
       composer: snapshot('.composer'),
