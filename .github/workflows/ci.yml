@@ -36,9 +36,7 @@ jobs:
         run: pnpm db:migrate:local
 
       - name: Format
-        run: |
-          pnpm exec prettier --write src/dashboard/agent-local-quick-replies.ts test/agent-local-quick-replies.test.mjs
-          git diff --exit-code -- src/dashboard/agent-local-quick-replies.ts test/agent-local-quick-replies.test.mjs
+        run: pnpm format
 
       - name: Lint
         run: pnpm lint
