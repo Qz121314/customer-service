@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import './agent-local-quick-replies';
 import './styles.css';
 import './product-assignment.css';
 import './chat-dialogue.css';
