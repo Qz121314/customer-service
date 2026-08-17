@@ -1225,7 +1225,6 @@ select:focus-visible {
   gap: 6px;
 }
 
-
 .visitor-typing {
   width: fit-content;
   margin: 2px 0 4px;
@@ -2819,5 +2818,4 @@ select:focus-visible {
   .composer textarea {
     grid-column: 2;
   }
-
 }
