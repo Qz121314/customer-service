@@ -68,8 +68,8 @@ export function AgentStatisticsModal({
       >
         <header className="agent-statistics-dialog-head">
           <div>
-            <span className="eyebrow">接待数据</span>
-            <h2 id="agent-statistics-title">{identity.name} 的接待流量</h2>
+            <span className="eyebrow">坐席统计</span>
+            <h2 id="agent-statistics-title">{identity.name} · 接待数据</h2>
             <p>访客首次进入坐席时计 1 次，转接和重新排队不重复计数。</p>
           </div>
           <div className="agent-statistics-head-actions">
@@ -144,8 +144,13 @@ export function AgentStatisticsModal({
               {days.map((day) => {
                 const value = countMap.get(day) ?? 0;
                 return (
-                  <div key={day} className={value ? 'has-value' : ''}>
-                    <span>{day}</span>
+                  <div
+                    key={day}
+                    className={value ? 'has-value' : ''}
+                    aria-label={`${day} 接待 ${busy ? '加载中' : `${value} 次`}`}
+                    title={day}
+                  >
+                    <span>{Number(day.slice(-2))}</span>
                     <strong>{busy ? '·' : value}</strong>
                   </div>
                 );
