@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,39 +20,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Remove stale send grid placement
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('src/dashboard/cloud-service-ui.css')
-          text = path.read_text()
-          block = ".composer-foot .primary-button {\n  grid-column: 3;\n}\n"
-          count = text.count(block)
-          if count != 1:
-              raise SystemExit(f'expected one global send grid placement, found {count}')
-          text = text.replace(block, '', 1)
-          mobile = "  .composer-foot .primary-button {\n    grid-column: 3;\n  }\n"
-          count = text.count(mobile)
-          if count != 1:
-              raise SystemExit(f'expected one mobile send grid placement, found {count}')
-          text = text.replace(mobile, '', 1)
-          path.write_text(text)
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/dashboard/cloud-service-ui.css
-          git commit -m "fix: keep mobile send button inside composer"
-          git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
 
       - name: Set up pnpm
         run: npm install --global pnpm@11.19.0
