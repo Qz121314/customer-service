@@ -26,7 +26,9 @@ test(
         'height: calc(100dvh - 54px - env(safe-area-inset-top));',
       ),
     );
-    assert.ok(css.includes('.workspace-shell .conversation-row.unread::before'));
+    assert.ok(
+      css.includes('.workspace-shell .conversation-row.unread::before'),
+    );
     assert.ok(css.includes('.workspace-shell .message.visitor > .avatar.tiny'));
     assert.ok(css.includes('max-width: 82%;'));
     assert.ok(css.includes('.workspace-shell .composer-tools'));
