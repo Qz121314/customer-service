@@ -264,6 +264,11 @@
 }
 
 @media (max-width: 760px) {
+  .workspace-shell .agent-profile {
+    grid-template-columns: 44px minmax(0, 1fr) 8px;
+    gap: 5px;
+  }
+
   .agent-avatar-backdrop {
     align-items: end;
     padding: 0;
