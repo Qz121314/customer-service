@@ -86,6 +86,40 @@ async function expectCenteredDialog(page) {
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 }
 
+async function mobileComposerGeometry(page) {
+  return page.evaluate(() => {
+    const snapshot = (selector) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) return null;
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return {
+        x: rect.x,
+        width: rect.width,
+        right: rect.right,
+        minWidth: style.minWidth,
+        maxWidth: style.maxWidth,
+        overflowX: style.overflowX,
+        gridTemplateColumns: style.gridTemplateColumns,
+      };
+    };
+    return {
+      innerWidth: window.innerWidth,
+      documentClientWidth: document.documentElement.clientWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      bodyClientWidth: document.body.clientWidth,
+      bodyScrollWidth: document.body.scrollWidth,
+      workspace: snapshot('.workspace-shell'),
+      thread: snapshot('.thread-pane'),
+      composer: snapshot('.composer'),
+      tools: snapshot('.composer-tools'),
+      textarea: snapshot('.composer textarea'),
+      foot: snapshot('.composer-foot'),
+      send: snapshot('.composer-foot .primary-button'),
+    };
+  });
+}
+
 test('agent desktop and mobile interaction surfaces remain usable', async ({
   page,
 }) => {
@@ -137,10 +171,11 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const sendButtonBox = await sendButton.boundingBox();
   expect(sendButtonBox).not.toBeNull();
   if (sendButtonBox && viewport) {
-    expect(sendButtonBox.x).toBeGreaterThanOrEqual(0);
-    expect(sendButtonBox.x + sendButtonBox.width).toBeLessThanOrEqual(
-      viewport.width + 1,
-    );
+    const geometry = await mobileComposerGeometry(page);
+    expect(
+      sendButtonBox.x + sendButtonBox.width,
+      `Mobile composer geometry: ${JSON.stringify(geometry)}`,
+    ).toBeLessThanOrEqual(viewport.width + 1);
   }
 
   const backButton = page.getByRole('button', { name: '返回会话列表' });
