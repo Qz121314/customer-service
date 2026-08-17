@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,47 +20,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Move composer connection warning out of grid flow
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('src/dashboard/cloud-service-ui.css')
-          text = path.read_text()
-          old = """.composer-foot .media-upload-progress.is-connection-warning {
-  grid-column: 1 / -1;
-  grid-row: 2;
-  display: block;
-  padding: 2px 8px 0;
-"""
-          new = """.composer-foot .media-upload-progress.is-connection-warning {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 4px);
-  display: block;
-  width: max-content;
-  max-width: calc(100% - 24px);
-  padding: 2px 8px;
-  transform: translateX(-50%);
-"""
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one connection warning grid rule, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/dashboard/cloud-service-ui.css
-          git commit -m "fix: keep composer warning out of send button layout"
-          git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
 
       - name: Set up pnpm
         run: npm install --global pnpm@11.19.0
