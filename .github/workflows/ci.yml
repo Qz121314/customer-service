@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -31,26 +31,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Upgrade Wrangler lockfile
-        if: github.event_name == 'pull_request' && github.head_ref == 'cleanup/final-project-hardening'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin "$GITHUB_HEAD_REF"
-          git checkout -B "$GITHUB_HEAD_REF" "origin/$GITHUB_HEAD_REF"
-          pnpm add -Dw --save-exact wrangler@4.123.0
-
-          if git diff --quiet -- package.json pnpm-lock.yaml; then
-            exit 0
-          fi
-
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json pnpm-lock.yaml
-          git commit -m "chore: upgrade Wrangler for compatibility date"
-          git push origin "HEAD:$GITHUB_HEAD_REF"
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
