@@ -213,9 +213,20 @@ jobs:
             exit 1
           fi
 
-          if ! pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=line; then
-            cat /tmp/ui-smoke-worker.log
-            exit 1
+          set +e
+          pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=line 2>&1 | tee /tmp/ui-smoke.log
+          smoke_status=${PIPESTATUS[0]}
+          set -e
+          if [ "$smoke_status" -ne 0 ]; then
+            node <<'NODE'
+          const fs = require('node:fs');
+          const smoke = fs.readFileSync('/tmp/ui-smoke.log', 'utf8').split(/\r?\n/).slice(-140).join('\n');
+          const worker = fs.readFileSync('/tmp/ui-smoke-worker.log', 'utf8').split(/\r?\n/).slice(-80).join('\n');
+          const text = `Playwright:\n${smoke}\n\nWorker:\n${worker}`;
+          const escaped = text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+          console.log(`::error title=Chromium smoke failed::${escaped}`);
+          NODE
+            exit "$smoke_status"
           fi
 
       - name: Deploy production to Cloudflare
