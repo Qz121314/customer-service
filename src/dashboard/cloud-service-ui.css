@@ -1225,9 +1225,6 @@ select:focus-visible {
   gap: 6px;
 }
 
-.composer-foot .primary-button {
-  grid-column: 3;
-}
 
 .visitor-typing {
   width: fit-content;
@@ -2823,7 +2820,4 @@ select:focus-visible {
     grid-column: 2;
   }
 
-  .composer-foot .primary-button {
-    grid-column: 3;
-  }
 }
