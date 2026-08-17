@@ -1,0 +1,281 @@
+/*
+ * Desktop conversation-surface refinement.
+ *
+ * Keep this layer desktop-only. Mobile/PWA interaction stays in
+ * agent-workspace.css so the phone layout remains app-like and independent.
+ */
+
+@media (min-width: 761px) {
+  /* The desktop workbench already has a persistent inbox, so a back button is
+   * redundant chrome and makes the header feel like a stretched mobile view. */
+  .workspace-shell .thread-back-button {
+    display: none;
+  }
+
+  .workspace-shell .thread-head {
+    min-height: 70px;
+    padding: 10px 14px 10px 16px;
+    gap: 14px;
+    background: #fbfcfd;
+  }
+
+  .workspace-shell .thread-head-copy {
+    padding-left: 46px;
+  }
+
+  .workspace-shell .thread-head-copy::before {
+    width: 38px;
+    height: 38px;
+    border: 1px solid #d9dfe7;
+    background-color: #eef1f5;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  }
+
+  .workspace-shell .thread-head h2 {
+    color: #171b22;
+    font-size: 16px;
+    font-weight: 760;
+    letter-spacing: -0.015em;
+  }
+
+  .workspace-shell .thread-head p {
+    margin-top: 2px;
+    color: #596473;
+    font-size: 11px;
+  }
+
+  .workspace-shell .conversation-expiry {
+    margin-top: 3px;
+    color: #6c7684;
+    font-size: 9px;
+  }
+
+  .workspace-shell .thread-actions {
+    gap: 6px;
+  }
+
+  .workspace-shell .thread-head select,
+  .workspace-shell .transfer-menu > summary {
+    min-height: 34px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+
+  .workspace-shell .thread-head select {
+    min-width: 92px;
+    padding-inline: 10px 30px;
+  }
+
+  .workspace-shell .transfer-menu > summary {
+    padding-inline: 11px;
+  }
+
+  /* Product context should be immediately available without occupying the full
+   * thread width. Align it to the same visual lane as the messages. */
+  .workspace-shell .conversation-context-card {
+    width: min(720px, calc(100% - 40px));
+    min-height: 58px;
+    margin: 10px auto 0;
+    padding: 7px 8px;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 9px;
+    border: 1px solid #dfe4ea;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(31, 41, 55, 0.045);
+  }
+
+  .workspace-shell .conversation-context-card > img,
+  .workspace-shell .conversation-context-placeholder {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+  }
+
+  .workspace-shell .conversation-context-card > div {
+    gap: 1px;
+  }
+
+  .workspace-shell .conversation-context-card > div > span {
+    color: #778190;
+    font-size: 9px;
+    font-weight: 650;
+  }
+
+  .workspace-shell .conversation-context-card > div > strong {
+    color: #252b34;
+    font-size: 12px;
+    font-weight: 760;
+  }
+
+  .workspace-shell .conversation-context-card > div > small {
+    color: #6e7886;
+    font-size: 9px;
+  }
+
+  .workspace-shell .conversation-context-card > a {
+    min-height: 30px;
+    padding-inline: 9px;
+    border: 1px solid #dedcff;
+    border-radius: 8px;
+    background: #f5f4ff;
+    color: #403bb6;
+    font-size: 10px;
+  }
+
+  .workspace-shell .conversation-context-card > a:hover {
+    border-color: #c8c4fb;
+    background: #eeedff;
+  }
+
+  /* Create one calm chat lane instead of letting bubbles drift across an
+   * ultrawide thread. */
+  .workspace-shell .messages {
+    padding: 18px 24px 22px;
+    gap: 7px;
+    background: #f4f6f8;
+  }
+
+  .workspace-shell .message {
+    width: min(100%, 820px);
+    margin-inline: auto;
+    gap: 0;
+  }
+
+  .workspace-shell .message.visitor > .avatar.tiny {
+    display: none;
+  }
+
+  .workspace-shell .message > div {
+    max-width: min(64%, 560px);
+    padding: 8px 10px 6px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(31, 41, 55, 0.055);
+  }
+
+  .workspace-shell .message.visitor > div {
+    border-color: #dde2e8;
+    border-bottom-left-radius: 4px;
+    background: #fff;
+  }
+
+  .workspace-shell .message.mine > div {
+    border-color: #d8d5ff;
+    border-bottom-right-radius: 4px;
+    background: #e9e7ff;
+  }
+
+  .workspace-shell .message p,
+  .workspace-shell .message.visitor p,
+  .workspace-shell .message.mine p {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #242a33;
+    box-shadow: none;
+    font-size: 13px;
+    line-height: 1.48;
+  }
+
+  .workspace-shell .message.mine p {
+    color: #27263d;
+  }
+
+  .workspace-shell .message-meta {
+    min-height: 12px;
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    color: #697482;
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .workspace-shell .message.visitor .message-meta {
+    justify-content: flex-end;
+  }
+
+  .workspace-shell .delivery-mark {
+    color: #747d8a;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: -0.12em;
+  }
+
+  .workspace-shell .delivery-mark.is-read {
+    color: #5755d9;
+  }
+
+  .workspace-shell .system-message {
+    width: fit-content;
+    max-width: 520px;
+    margin: 3px auto;
+    padding: 4px 9px;
+    border: 1px solid #e0e4e9;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #697381;
+    font-size: 9px;
+  }
+
+  /* Keep reply controls on the same visual axis as the message lane. */
+  .workspace-shell .composer {
+    min-height: 64px;
+    padding: 8px 14px 9px;
+    border-top-color: #dfe3e8;
+    background: #eef1f4;
+  }
+
+  .workspace-shell .composer > textarea {
+    min-height: 44px;
+    max-height: 116px;
+    padding: 10px 13px;
+    border-color: #d8dde4;
+    border-radius: 11px;
+    background: #fff;
+    color: #202630;
+    font-size: 13px;
+  }
+
+  .workspace-shell .composer > textarea::placeholder {
+    color: #75808e;
+  }
+
+  .workspace-shell .composer > textarea:focus {
+    border-color: #bfc4ec;
+    box-shadow: 0 0 0 3px rgba(91, 92, 226, 0.08);
+  }
+
+  .workspace-shell .media-picker,
+  .workspace-shell .quick-replies-trigger {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    color: #4f5a68;
+  }
+
+  .workspace-shell .media-picker:hover,
+  .workspace-shell .quick-replies-trigger:hover:not(:disabled) {
+    background: rgba(40, 49, 62, 0.08);
+    color: #202630;
+  }
+
+  .workspace-shell .composer-foot {
+    width: 42px;
+    min-width: 42px;
+  }
+
+  .workspace-shell .composer-foot .primary-button {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    box-shadow: 0 4px 10px rgba(91, 92, 226, 0.18);
+  }
+}
