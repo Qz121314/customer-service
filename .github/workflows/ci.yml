@@ -45,31 +45,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        shell: bash
-        run: |
-          set +e
-          pnpm test 2>&1 | tee /tmp/node-tests.log
-          status=${PIPESTATUS[0]}
-          set -e
-          if [ "$status" -ne 0 ]; then
-            summary="$(python3 - <<'PY'
-          from pathlib import Path
-          lines = Path('/tmp/node-tests.log').read_text(errors='replace').splitlines()
-          failure = next((i for i, line in enumerate(lines) if line.startswith('not ok ')), None)
-          if failure is None:
-              print('\n'.join(lines[-120:]))
-          else:
-              start = max(0, failure - 3)
-              end = min(len(lines), failure + 48)
-              print('\n'.join(lines[start:end]))
-          PY
-            )"
-            summary="${summary//'%'/'%25'}"
-            summary="${summary//$'\r'/'%0D'}"
-            summary="${summary//$'\n'/'%0A'}"
-            echo "::error title=Node test failure::$summary"
-            exit "$status"
-          fi
+        run: pnpm test
 
       - name: Build
         run: pnpm build
