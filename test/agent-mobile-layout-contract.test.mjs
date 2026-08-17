@@ -33,7 +33,11 @@ test('agent mobile workspace uses separate inbox and app-like thread surfaces', 
   assert.ok(css.includes('.workspace-shell .quick-replies-panel'));
   assert.ok(css.includes('@media (display-mode: standalone)'));
 
-  assert.ok(mobileControls.includes('grid-template-columns: 40px minmax(0, 1fr) auto;'));
+  assert.ok(
+    mobileControls.includes(
+      'grid-template-columns: 40px minmax(0, 1fr) auto;',
+    ),
+  );
   assert.ok(mobileControls.includes('border-radius: 50%;'));
   assert.ok(mobileControls.includes('appearance: none;'));
   assert.ok(mobileControls.includes('.workspace-shell .composer-tools'));
