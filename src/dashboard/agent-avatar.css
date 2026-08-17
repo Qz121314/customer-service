@@ -1,4 +1,4 @@
-/* Agent self-service avatar: app-like tap target, local preview and confirm sheet. */
+/* Agent self-service avatar: app-like tap target, local preview and confirm dialog. */
 .agent-avatar-button {
   position: relative;
   display: grid;
@@ -76,6 +76,7 @@
   inset: 0;
   display: grid;
   place-items: center;
+  box-sizing: border-box;
   padding: max(18px, env(safe-area-inset-top))
     max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom))
     max(14px, env(safe-area-inset-left));
@@ -268,23 +269,26 @@
   }
 
   .agent-avatar-backdrop {
-    align-items: end;
-    padding: 0;
-    background: rgba(15, 23, 42, 0.46);
+    place-items: center;
+    padding: max(16px, env(safe-area-inset-top))
+      max(16px, env(safe-area-inset-right))
+      max(16px, env(safe-area-inset-bottom))
+      max(16px, env(safe-area-inset-left));
+    background: rgba(15, 23, 42, 0.5);
   }
 
   .agent-avatar-dialog {
-    width: 100%;
-    max-height: min(78dvh, 620px);
-    border: 0;
-    border-radius: 22px 22px 0 0;
-    box-shadow: 0 -18px 50px rgba(15, 23, 42, 0.2);
+    width: min(392px, 100%);
+    max-height: min(620px, calc(100dvh - 32px));
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    border-radius: 20px;
+    box-shadow: 0 22px 60px rgba(15, 23, 42, 0.24);
   }
 
   .agent-avatar-dialog > header {
     padding-top: 16px;
-    padding-right: max(16px, env(safe-area-inset-right));
-    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: 16px;
+    padding-left: 16px;
   }
 
   .agent-avatar-preview-stage {
@@ -292,20 +296,23 @@
   }
 
   .agent-avatar-preview {
-    width: 164px;
-    height: 164px;
+    width: 156px;
+    height: 156px;
   }
 
   .agent-avatar-dialog footer {
-    padding-right: max(16px, env(safe-area-inset-right));
-    padding-bottom: max(14px, env(safe-area-inset-bottom));
-    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: 16px;
+    padding-bottom: 16px;
+    padding-left: 16px;
   }
 }
 
 @media (max-height: 560px) and (max-width: 760px) {
   .agent-avatar-dialog {
-    max-height: calc(100dvh - env(safe-area-inset-top));
+    max-height: calc(
+      100dvh - max(16px, env(safe-area-inset-top)) -
+        max(16px, env(safe-area-inset-bottom))
+    );
   }
 
   .agent-avatar-preview {

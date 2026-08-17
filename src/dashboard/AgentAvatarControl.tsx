@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   deleteAgentAvatar,
   getAgentAvatarProfile,
@@ -119,6 +120,114 @@ export function AgentAvatarControl({
     }
   }
 
+  const dialog = open ? (
+    <div
+      className="agent-avatar-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeDialog();
+      }}
+    >
+      <section
+        className="agent-avatar-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="agent-avatar-title"
+      >
+        <header>
+          <div>
+            <h2 id="agent-avatar-title">客服头像</h2>
+            <p>图片只在本机压缩和预览，确认后才上传。</p>
+          </div>
+          <button
+            type="button"
+            className="agent-avatar-close"
+            aria-label="关闭"
+            disabled={saving || processing}
+            onClick={closeDialog}
+          >
+            ×
+          </button>
+        </header>
+
+        <div className="agent-avatar-preview-stage">
+          <div className="agent-avatar-preview">
+            {displayUrl ? (
+              <img src={displayUrl} alt="头像预览" />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
+          {processing ? <small>正在本地处理图片…</small> : null}
+          {prepared && !processing ? (
+            <small>
+              {prepared.width} × {prepared.height} ·{' '}
+              {formatBytes(prepared.byteSize)}
+            </small>
+          ) : null}
+        </div>
+
+        {error ? (
+          <p className="agent-avatar-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+
+        <div className="agent-avatar-picker-row">
+          <button
+            type="button"
+            className="agent-avatar-select"
+            disabled={saving || processing}
+            onClick={() => inputRef.current?.click()}
+          >
+            {prepared || avatarUrl ? '更换照片' : '选择照片'}
+          </button>
+          <input
+            ref={inputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.currentTarget.value = '';
+              if (file) void selectFile(file);
+            }}
+          />
+        </div>
+
+        <footer>
+          {avatarUrl && !prepared ? (
+            <button
+              type="button"
+              className="agent-avatar-remove"
+              disabled={saving || processing}
+              onClick={() => void removeAvatar()}
+            >
+              删除头像
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="agent-avatar-cancel"
+              disabled={saving || processing}
+              onClick={closeDialog}
+            >
+              取消
+            </button>
+          )}
+          <button
+            type="button"
+            className="agent-avatar-confirm"
+            disabled={!prepared || saving || processing}
+            onClick={() => void confirmAvatar()}
+          >
+            {saving ? '上传中…' : '确认使用'}
+          </button>
+        </footer>
+      </section>
+    </div>
+  ) : null;
+
   return (
     <>
       <button
@@ -131,114 +240,7 @@ export function AgentAvatarControl({
         {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{initials}</span>}
         <i aria-hidden="true" />
       </button>
-
-      {open ? (
-        <div
-          className="agent-avatar-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeDialog();
-          }}
-        >
-          <section
-            className="agent-avatar-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="agent-avatar-title"
-          >
-            <header>
-              <div>
-                <h2 id="agent-avatar-title">客服头像</h2>
-                <p>图片只在本机压缩和预览，确认后才上传。</p>
-              </div>
-              <button
-                type="button"
-                className="agent-avatar-close"
-                aria-label="关闭"
-                disabled={saving || processing}
-                onClick={closeDialog}
-              >
-                ×
-              </button>
-            </header>
-
-            <div className="agent-avatar-preview-stage">
-              <div className="agent-avatar-preview">
-                {displayUrl ? (
-                  <img src={displayUrl} alt="头像预览" />
-                ) : (
-                  <span>{initials}</span>
-                )}
-              </div>
-              {processing ? <small>正在本地处理图片…</small> : null}
-              {prepared && !processing ? (
-                <small>
-                  {prepared.width} × {prepared.height} ·{' '}
-                  {formatBytes(prepared.byteSize)}
-                </small>
-              ) : null}
-            </div>
-
-            {error ? (
-              <p className="agent-avatar-error" role="alert">
-                {error}
-              </p>
-            ) : null}
-
-            <div className="agent-avatar-picker-row">
-              <button
-                type="button"
-                className="agent-avatar-select"
-                disabled={saving || processing}
-                onClick={() => inputRef.current?.click()}
-              >
-                {prepared || avatarUrl ? '更换照片' : '选择照片'}
-              </button>
-              <input
-                ref={inputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                hidden
-                onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  event.currentTarget.value = '';
-                  if (file) void selectFile(file);
-                }}
-              />
-            </div>
-
-            <footer>
-              {avatarUrl && !prepared ? (
-                <button
-                  type="button"
-                  className="agent-avatar-remove"
-                  disabled={saving || processing}
-                  onClick={() => void removeAvatar()}
-                >
-                  删除头像
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="agent-avatar-cancel"
-                  disabled={saving || processing}
-                  onClick={closeDialog}
-                >
-                  取消
-                </button>
-              )}
-              <button
-                type="button"
-                className="agent-avatar-confirm"
-                disabled={!prepared || saving || processing}
-                onClick={() => void confirmAvatar()}
-              >
-                {saving ? '上传中…' : '确认使用'}
-              </button>
-            </footer>
-          </section>
-        </div>
-      ) : null}
+      {dialog ? createPortal(dialog, document.body) : null}
     </>
   );
 }
