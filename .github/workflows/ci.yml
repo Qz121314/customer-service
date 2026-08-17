@@ -45,7 +45,14 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        run: pnpm test
+        shell: bash
+        run: |
+          set -o pipefail
+          if pnpm test 2>&1 | tee /tmp/pnpm-test.log; then
+            exit 0
+          fi
+          node -e "const fs=require('fs'); const text=fs.readFileSync('/tmp/pnpm-test.log','utf8').trim().split(/\\r?\\n/).slice(-120).join('\\n'); const escaped=text.replace(/%/g,'%25').replace(/\\r/g,'%0D').replace(/\\n/g,'%0A'); console.log('::error title=pnpm test failed::'+escaped)"
+          exit 1
 
       - name: Build
         run: pnpm build
