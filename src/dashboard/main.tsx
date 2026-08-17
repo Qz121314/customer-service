@@ -12,6 +12,7 @@ import './agent-editor.css';
 import './agent-workspace.css';
 import './agent-desktop.css';
 import './agent-mobile.css';
+import './agent-composer-status.css';
 import './agent-avatar.css';
 
 if (
