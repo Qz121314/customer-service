@@ -47,10 +47,14 @@ const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 const CLIENT_CONVERSATION_CREATE_PATH = /^\/client\/v1\/conversations$/u;
 const CLIENT_MESSAGE_PATH = /^\/client\/v1\/conversations\/([^/]+)\/messages$/u;
 const CLIENT_MEDIA_COMPLETE_PATH = /^\/client\/v1\/media\/[^/]+\/complete$/u;
-const LOCAL_QUICK_REPLY_HEADER = 'X-CS-Quick-Replies-Local';
 const LEGACY_QUICK_REPLY_WRITE_PATH =
   /^\/api\/agent\/quick-replies(?:\/[^/]+)?$/u;
 const LEGACY_QUICK_REPLY_SELECT = /\bFROM\s+agent_quick_replies\b/iu;
+const QUICK_REPLY_FREE_INBOX_PATHS = new Set([
+  '/api/agent/conversations',
+  '/api/agent/auth/heartbeat',
+  '/api/agent/auth/status',
+]);
 
 app.route('/', integrationApi);
 
@@ -130,12 +134,12 @@ app.route('/', coreApp);
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    const pathname = new URL(request.url).pathname;
     // This check runs before Hono and the Assets binding. Removed API paths can
     // therefore never be rewritten to the SPA's index.html with HTTP 200.
-    if (isRemovedProtocolPath(new URL(request.url).pathname)) {
+    if (isRemovedProtocolPath(pathname)) {
       return removedProtocolResponse();
     }
-    const pathname = new URL(request.url).pathname;
     if (
       LEGACY_QUICK_REPLY_WRITE_PATH.test(pathname) &&
       (request.method === 'POST' || request.method === 'DELETE')
@@ -148,10 +152,14 @@ export default {
         },
       );
     }
-    const requestEnv =
-      request.headers.get(LOCAL_QUICK_REPLY_HEADER) === '1'
-        ? { ...env, DB: withoutLegacyQuickReplyReads(env.DB) }
-        : env;
+
+    // Quick replies are browser-local only. The old inbox implementation still
+    // contains a compatibility SELECT, so these three responses receive a D1
+    // facade that turns that exact legacy SELECT into an empty in-memory result.
+    // No quick-reply read reaches D1, while every other statement is untouched.
+    const requestEnv = QUICK_REPLY_FREE_INBOX_PATHS.has(pathname)
+      ? { ...env, DB: withoutLegacyQuickReplyReads(env.DB) }
+      : env;
     return app.fetch(request, requestEnv, ctx);
   },
   scheduled(
