@@ -28,73 +28,34 @@ jobs:
         with:
           node-version: 22
 
-      - name: Apply one-time composer cleanup
-        if: ${{ hashFiles('src/dashboard/agent-local-quick-replies.ts') != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply-composer-cleanup.mjs')
-          text = path.read_text()
-          text = text.replace(r'useState<QuickReply\[]>\(\[]\)', r'useState<QuickReply\[\]>\(\[\]\)')
-          text = text.replace(
-              "    if (trimmed.startsWith('@')) {",
-              "    if (trimmed.replace(/^(?:\\/\\*[\\s\\S]*?\\*\\/\\s*)+/u, '').startsWith('@')) {",
-          )
-          text = text.replace(
-              "  if (/快捷回复|agent-local-quick-replies/u.test(text)) {\n    throw new Error('README still contains quick reply references');\n  }\n",
-              "  text = text.replace('- 本地快捷回复不访问服务器；\\n', '').replace('- 快捷回复刷新后仍保留；\\n', '');\n",
-          )
-          text = text.replace(
-              "const candidates = [...(await walk('src')), ...(await walk('test')), 'README.md'];",
-              "const candidates = [...(await walk('src'))];",
-          )
-          narrow_search = r"'  .workspace-shell .composer {\n    padding-inline: 6px;\n    gap: 3px;\n  }\n'"
-          narrow_search_next = r"'  .workspace-shell .composer {\n    grid-template-columns: auto minmax(0, 1fr) 42px;\n    gap: 5px;\n    padding: 5px 6px max(7px, env(safe-area-inset-bottom));\n  }\n'"
-          narrow_replace = r"'  .workspace-shell .composer {\n    grid-template-columns: 33px minmax(0, 1fr) 42px;\n    padding-inline: 6px;\n    gap: 3px;\n  }\n'"
-          narrow_replace_next = r"'  .workspace-shell .composer {\n    grid-template-columns: 40px minmax(0, 1fr) 42px;\n    gap: 5px;\n    padding: 5px 6px max(7px, env(safe-area-inset-bottom));\n  }\n'"
-          if narrow_search not in text or narrow_replace not in text:
-              raise SystemExit('narrow composer migration literals not found')
-          text = text.replace(narrow_search, narrow_search_next, 1)
-          text = text.replace(narrow_replace, narrow_replace_next, 1)
-          path.write_text(text)
-          PY
-          node --check scripts/apply-composer-cleanup.mjs
-          node scripts/apply-composer-cleanup.mjs
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path('test/agent-reception-efficiency.test.mjs')
-          text = path.read_text()
-          text = text.replace(
-              "test('agent workspace offers local sound, typing presence, and searchable slash replies', () => {",
-              "test('agent workspace offers local sound and typing presence', () => {",
-          )
-          for assertion in [
-              "  assert.ok(agent.includes('filteredQuickReplies'));\n",
-              "  assert.ok(agent.includes('placeholder=\"搜索快捷回复\"'));\n",
-              "  assert.ok(agent.includes(\"event.key === '/'\"));\n",
-              "  assert.ok(agent.includes('没有找到匹配的快捷回复'));\n",
-          ]:
-              if assertion not in text:
-                  raise SystemExit(f'obsolete efficiency assertion not found: {assertion.strip()}')
-              text = text.replace(assertion, '')
-          path.write_text(text)
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md src test
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "fix: simplify mobile composer and remove quick replies"
-          git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
-
       - name: Set up pnpm
         run: npm install --global pnpm@11.19.0
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Format generated composer CSS
+        if: ${{ hashFiles('scripts/apply-composer-cleanup.mjs') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write \
+            src/dashboard/agent-desktop.css \
+            src/dashboard/agent-mobile.css \
+            src/dashboard/agent-workspace.css \
+            src/dashboard/ui-polish.css
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/dashboard/agent-desktop.css \
+            src/dashboard/agent-mobile.css \
+            src/dashboard/agent-workspace.css \
+            src/dashboard/ui-polish.css
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "style: format simplified composer CSS"
+          git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
