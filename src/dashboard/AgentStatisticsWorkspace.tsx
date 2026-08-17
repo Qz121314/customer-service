@@ -143,14 +143,15 @@ export function AgentStatisticsModal({
             <div className="agent-statistics-days">
               {days.map((day) => {
                 const value = countMap.get(day) ?? 0;
+                const dateLabel = `${month}-${String(day).padStart(2, '0')}`;
                 return (
                   <div
                     key={day}
                     className={value ? 'has-value' : ''}
-                    aria-label={`${day} 接待 ${busy ? '加载中' : `${value} 次`}`}
-                    title={day}
+                    aria-label={`${dateLabel} 接待 ${busy ? '加载中' : `${value} 次`}`}
+                    title={dateLabel}
                   >
-                    <span>{Number(day.slice(-2))}</span>
+                    <span>{day}</span>
                     <strong>{busy ? '·' : value}</strong>
                   </div>
                 );
