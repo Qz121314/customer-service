@@ -194,57 +194,149 @@
 
 @media (max-width: 760px) {
   .agent-statistics-backdrop {
-    padding: 0;
-    place-items: end stretch;
+    padding: env(safe-area-inset-top) 0 0;
+    place-items: stretch;
+    background: #f4f5f7;
+    backdrop-filter: none;
   }
 
   .agent-statistics-dialog {
     width: 100%;
-    max-height: calc(100dvh - env(safe-area-inset-top));
-    border-radius: 16px 16px 0 0;
+    height: calc(100dvh - env(safe-area-inset-top));
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .agent-statistics-dialog-head {
-    padding: 15px 14px;
-    align-items: flex-start;
+    min-height: 58px;
+    flex: 0 0 auto;
+    padding: 7px 9px 7px 12px;
+    gap: 8px;
+    border-bottom-color: #e8eaee;
   }
 
+  .agent-statistics-dialog-head > div:first-child {
+    min-width: 0;
+  }
+
+  .agent-statistics-dialog-head .eyebrow,
   .agent-statistics-dialog-head p,
   .agent-statistics-head-actions label > span {
     display: none;
   }
 
+  .agent-statistics-dialog-head h2 {
+    overflow: hidden;
+    margin: 0;
+    color: #20232a;
+    font-size: 16px;
+    font-weight: 720;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .agent-statistics-head-actions {
-    align-items: flex-start;
+    flex: 0 0 auto;
+    gap: 5px;
   }
 
   .agent-statistics-head-actions label {
-    padding-inline: 8px;
+    min-height: 34px;
+    padding: 0 7px;
+    border-color: #e2e4e8;
+    border-radius: 9px;
+    background: #f7f8fa;
   }
 
   .agent-statistics-head-actions input {
-    min-width: 112px;
+    width: 104px;
+    min-width: 104px;
+    color: #505762;
+    font-size: 10px;
+  }
+
+  .agent-statistics-head-actions .modal-close {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 10px;
   }
 
   .agent-statistics-dialog-body {
-    padding: 12px;
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+    overflow: hidden;
+    background: #f4f5f7;
+  }
+
+  .agent-statistics-dialog-body > .notice {
+    position: absolute;
+    top: 64px;
+    right: 8px;
+    left: 8px;
+    z-index: 2;
+    margin: 0;
   }
 
   .agent-statistics-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid #e3e5e9;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025);
   }
 
   .agent-statistics-summary > div {
-    min-height: 88px;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: 1fr;
+    min-width: 0;
+    min-height: 66px;
+    padding: 8px 4px 7px;
+    border: 0;
+    border-right: 1px solid #eef0f3;
+    border-radius: 0;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-align: center;
+    box-shadow: none;
+  }
+
+  .agent-statistics-summary > div:last-child {
+    border-right: 0;
+  }
+
+  .agent-statistics-summary span {
+    overflow: hidden;
+    max-width: 100%;
+    color: #838994;
+    font-size: 9px;
+    font-weight: 650;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .agent-statistics-summary strong {
     grid-row: auto;
-    font-size: 22px;
+    color: #252932;
+    font-size: 20px;
+    font-weight: 740;
+    line-height: 1.05;
+    letter-spacing: -0.04em;
   }
 
   .agent-statistics-summary small {
@@ -252,15 +344,131 @@
   }
 
   .agent-statistics-card {
-    overflow-x: auto;
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border-color: #e1e4e8;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.02);
   }
 
   .agent-statistics-card-head {
-    min-width: 600px;
+    min-width: 0;
+    min-height: 44px;
+    flex: 0 0 auto;
+    padding: 8px 10px;
+    gap: 6px;
+  }
+
+  .agent-statistics-card-head > div {
+    min-width: 0;
+    gap: 0;
+  }
+
+  .agent-statistics-card-head strong {
+    overflow: hidden;
+    color: #343840;
+    font-size: 11px;
+    font-weight: 680;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agent-statistics-card-head span,
+  .agent-statistics-card-head small {
+    display: none;
   }
 
   .agent-statistics-days {
-    min-width: 600px;
-    grid-template-columns: repeat(10, minmax(52px, 1fr));
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    align-content: start;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-auto-rows: minmax(38px, 46px);
+    gap: 4px;
+    padding: 6px;
+    overflow: hidden;
+  }
+
+  .agent-statistics-days > div {
+    min-width: 0;
+    min-height: 0;
+    padding: 4px 3px;
+    border-color: #eceef1;
+    border-radius: 8px;
+    align-content: center;
+    justify-items: center;
+    gap: 1px;
+    background: #fafbfc;
+    text-align: center;
+  }
+
+  .agent-statistics-days > div.has-value {
+    border-color: #d7d5f7;
+    background: #f0efff;
+  }
+
+  .agent-statistics-days span {
+    color: #9298a2;
+    font-size: 8px;
+    font-weight: 620;
+    line-height: 1;
+  }
+
+  .agent-statistics-days strong {
+    color: #383c45;
+    font-size: 14px;
+    font-weight: 720;
+    line-height: 1.05;
+  }
+
+  .agent-statistics-days .has-value strong {
+    color: #4f4dc2;
+  }
+}
+
+@media (max-width: 390px) {
+  .agent-statistics-dialog-head {
+    padding-left: 10px;
+  }
+
+  .agent-statistics-dialog-head h2 {
+    font-size: 15px;
+  }
+
+  .agent-statistics-head-actions input {
+    width: 94px;
+    min-width: 94px;
+    font-size: 9px;
+  }
+
+  .agent-statistics-summary > div {
+    min-height: 62px;
+    padding-inline: 2px;
+  }
+
+  .agent-statistics-summary span {
+    font-size: 8px;
+  }
+
+  .agent-statistics-summary strong {
+    font-size: 18px;
+  }
+
+  .agent-statistics-days {
+    gap: 3px;
+    padding: 5px;
+  }
+
+  .agent-statistics-days > div {
+    border-radius: 7px;
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 760px) {
+  .agent-statistics-backdrop {
+    background: #f4f5f7;
   }
 }
