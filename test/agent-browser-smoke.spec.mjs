@@ -101,7 +101,15 @@ async function mobileComposerGeometry(page) {
         minWidth: style.minWidth,
         maxWidth: style.maxWidth,
         overflowX: style.overflowX,
+        position: style.position,
+        marginLeft: style.marginLeft,
+        marginRight: style.marginRight,
+        transform: style.transform,
         gridTemplateColumns: style.gridTemplateColumns,
+        gridColumnStart: style.gridColumnStart,
+        gridColumnEnd: style.gridColumnEnd,
+        gridRowStart: style.gridRowStart,
+        gridRowEnd: style.gridRowEnd,
       };
     };
     return {
@@ -116,6 +124,7 @@ async function mobileComposerGeometry(page) {
       tools: snapshot('.composer-tools'),
       textarea: snapshot('.composer textarea'),
       foot: snapshot('.composer-foot'),
+      warning: snapshot('.composer-foot .media-upload-progress'),
       send: snapshot('.composer-foot .primary-button'),
     };
   });
