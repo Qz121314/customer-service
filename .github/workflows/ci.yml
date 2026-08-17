@@ -31,6 +31,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-composer-cleanup.mjs')
+          text = path.read_text()
+          text = text.replace(r'useState<QuickReply\[]>\(\[]\)', r'useState<QuickReply\[\]>\(\[\]\)')
+          path.write_text(text)
+          PY
+          node --check scripts/apply-composer-cleanup.mjs
           node scripts/apply-composer-cleanup.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
