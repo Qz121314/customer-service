@@ -32,100 +32,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply cleanup CI fixes
+      - name: Upgrade Wrangler lockfile
         if: github.event_name == 'pull_request' && github.head_ref == 'cleanup/final-project-hardening'
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin "$GITHUB_HEAD_REF"
           git checkout -B "$GITHUB_HEAD_REF" "origin/$GITHUB_HEAD_REF"
+          pnpm add -Dw --save-exact wrangler@4.123.0
 
-          python <<'PY'
-          from pathlib import Path
-
-          def replace_once(path, old, new):
-              file = Path(path)
-              text = file.read_text()
-              if new and new in text:
-                  return
-              if old not in text:
-                  if not new:
-                      return
-                  raise SystemExit(f'Expected text not found in {path}: {old!r}')
-              file.write_text(text.replace(old, new, 1))
-
-          replace_once(
-              'package.json',
-              '    "test": "node --experimental-strip-types --test"',
-              '    "test": "node --experimental-strip-types --test \\"test/*.test.mjs\\""',
-          )
-          replace_once(
-              'tsconfig.app.json',
-              '    "moduleResolution": "Bundler",\n    "resolveJsonModule": true,',
-              '    "moduleResolution": "Bundler",\n    "allowImportingTsExtensions": true,\n    "resolveJsonModule": true,',
-          )
-          replace_once(
-              'src/dashboard/api.ts',
-              "} from './agent-local-quick-replies';",
-              "} from './agent-local-quick-replies.ts';",
-          )
-          replace_once(
-              'test/agent-active-load-cost.test.mjs',
-              "  const end = worker.indexOf('async function loadQuickReplies', start);",
-              "  const end = worker.indexOf('async function loadAgentInbox', start);",
-          )
-          replace_once(
-              'test/agent-inbox-optimization.test.mjs',
-              "  assert.match(api, /request\\('\\/api\\/agent\\/conversations'\\)/u);",
-              "  assert.match(\n    api,\n    /request<AgentInboxPayload>\\('\\/api\\/agent\\/conversations'\\)/u,\n  );",
-          )
-          replace_once(
-              'test/agent-inbox-optimization.test.mjs',
-              '  assert.match(worker, /transferTargets,[\\s\\S]*quickReplies/u);',
-              "  assert.match(worker, /transferTargets,[\\s\\S]*availability/u);\n  assert.doesNotMatch(worker, /quickReplies/u);\n  assert.match(api, /quickReplies: listLocalQuickReplies\\(\\)/u);",
-          )
-          replace_once(
-              'test/customer-service-full-flow.test.mjs',
-              '  assert.deepEqual(standbyInbox.quickReplies, []);\n',
-              '',
-          )
-          replace_once(
-              'test/dashboard-ui-polish-contract.test.mjs',
-              "  const dialogueFlow = source('../src/dashboard/dialogue-flow.css');\n",
-              '',
-          )
-          replace_once(
-              'test/dashboard-ui-polish-contract.test.mjs',
-              "  assert.ok(!dialogueFlow.includes('dialogue-width.css'));\n  assert.ok(!dialogueFlow.includes('max-width: 464px'));",
-              '  assert.ok(!main.includes("\'./dialogue-flow.css\'"));',
-          )
-          PY
-
-          pnpm exec prettier --write \
-            package.json \
-            tsconfig.app.json \
-            src/dashboard/api.ts \
-            test/agent-active-load-cost.test.mjs \
-            test/agent-inbox-optimization.test.mjs \
-            test/customer-service-full-flow.test.mjs \
-            test/dashboard-ui-polish-contract.test.mjs
-
-          if git diff --quiet; then
+          if git diff --quiet -- package.json pnpm-lock.yaml; then
             exit 0
           fi
 
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            package.json \
-            tsconfig.app.json \
-            src/dashboard/api.ts \
-            test/agent-active-load-cost.test.mjs \
-            test/agent-inbox-optimization.test.mjs \
-            test/customer-service-full-flow.test.mjs \
-            test/dashboard-ui-polish-contract.test.mjs
-          git commit -m "Fix cleanup test contracts"
+          git add package.json pnpm-lock.yaml
+          git commit -m "chore: upgrade Wrangler for compatibility date"
           git push origin "HEAD:$GITHUB_HEAD_REF"
 
       - name: Validate local D1 migrations
@@ -141,38 +65,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        shell: bash
-        run: |
-          set -o pipefail
-          if pnpm test 2>&1 | tee /tmp/pnpm-test.log; then
-            exit 0
-          fi
-          node <<'NODE'
-          const fs = require('node:fs');
-          const lines = fs.readFileSync('/tmp/pnpm-test.log', 'utf8').split(/\r?\n/);
-          const failures = [];
-          for (let i = 0; i < lines.length; i += 1) {
-            if (/^not ok \d+ - /.test(lines[i])) failures.push(i);
-          }
-          const escape = (text) =>
-            text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-          for (let n = 0; n < failures.length; n += 1) {
-            const start = failures[n];
-            let end = Math.min(lines.length, start + 80);
-            for (let i = start + 1; i < lines.length; i += 1) {
-              if (/^(?:ok|not ok) \d+ - /.test(lines[i])) {
-                end = i;
-                break;
-              }
-            }
-            const block = lines.slice(start, end).join('\n');
-            console.log(`::error title=failed test ${n + 1}::${escape(block)}`);
-          }
-          if (failures.length === 0) {
-            console.log('::error title=pnpm test failed::No top-level TAP failure block found');
-          }
-          NODE
-          exit 1
+        run: pnpm test
 
       - name: Build
         run: pnpm build
@@ -213,21 +106,7 @@ jobs:
             exit 1
           fi
 
-          set +e
-          pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=line 2>&1 | tee /tmp/ui-smoke.log
-          smoke_status=${PIPESTATUS[0]}
-          set -e
-          if [ "$smoke_status" -ne 0 ]; then
-            node <<'NODE'
-          const fs = require('node:fs');
-          const smoke = fs.readFileSync('/tmp/ui-smoke.log', 'utf8').split(/\r?\n/).slice(-140).join('\n');
-          const worker = fs.readFileSync('/tmp/ui-smoke-worker.log', 'utf8').split(/\r?\n/).slice(-80).join('\n');
-          const text = `Playwright:\n${smoke}\n\nWorker:\n${worker}`;
-          const escaped = text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-          console.log(`::error title=Chromium smoke failed::${escaped}`);
-          NODE
-            exit "$smoke_status"
-          fi
+          pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=line
 
       - name: Deploy production to Cloudflare
         id: deploy
