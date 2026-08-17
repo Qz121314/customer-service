@@ -806,6 +806,7 @@
   .workspace-shell .composer {
     box-sizing: border-box;
     width: 100%;
+    max-width: 100%;
     min-width: 0;
     grid-template-columns: 40px minmax(0, 1fr) 44px;
     align-items: end;
