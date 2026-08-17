@@ -19,9 +19,17 @@ test('agent mobile polish keeps app hierarchy compact and thread controls touch-
   assert.ok(css.includes('@media (max-width: 760px)'));
   assert.ok(css.includes('.workspace-shell .workspace-brand-lockup'));
   assert.ok(css.includes('grid-template-columns: repeat(4, 36px);'));
-  assert.ok(css.includes('height: calc(100dvh - 54px - env(safe-area-inset-top));'));
-  assert.ok(css.includes('.workspace-shell .conversation-row.unread::before'));
-  assert.ok(css.includes('.workspace-shell .message.visitor > .avatar.tiny'));
+  assert.ok(
+    css.includes(
+      'height: calc(100dvh - 54px - env(safe-area-inset-top));',
+    ),
+  );
+  assert.ok(
+    css.includes('.workspace-shell .conversation-row.unread::before'),
+  );
+  assert.ok(
+    css.includes('.workspace-shell .message.visitor > .avatar.tiny'),
+  );
   assert.ok(css.includes('max-width: 82%;'));
   assert.ok(css.includes('.workspace-shell .composer-tools'));
   assert.ok(css.includes('font-size: 16px;'));
