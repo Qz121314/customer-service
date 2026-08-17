@@ -47,6 +47,10 @@ const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 const CLIENT_CONVERSATION_CREATE_PATH = /^\/client\/v1\/conversations$/u;
 const CLIENT_MESSAGE_PATH = /^\/client\/v1\/conversations\/([^/]+)\/messages$/u;
 const CLIENT_MEDIA_COMPLETE_PATH = /^\/client\/v1\/media\/[^/]+\/complete$/u;
+const LOCAL_QUICK_REPLY_HEADER = 'X-CS-Quick-Replies-Local';
+const LEGACY_QUICK_REPLY_WRITE_PATH =
+  /^\/api\/agent\/quick-replies(?:\/[^/]+)?$/u;
+const LEGACY_QUICK_REPLY_SELECT = /\bFROM\s+agent_quick_replies\b/iu;
 
 app.route('/', integrationApi);
 
@@ -126,12 +130,26 @@ app.route('/', coreApp);
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    const pathname = new URL(request.url).pathname;
     // This check runs before Hono and the Assets binding. Removed API paths can
     // therefore never be rewritten to the SPA's index.html with HTTP 200.
-    if (isRemovedProtocolPath(new URL(request.url).pathname)) {
+    if (isRemovedProtocolPath(pathname)) {
       return removedProtocolResponse();
     }
-    return app.fetch(request, env, ctx);
+    if (
+      LEGACY_QUICK_REPLY_WRITE_PATH.test(pathname) &&
+      (request.method === 'POST' || request.method === 'DELETE')
+    ) {
+      return new Response(JSON.stringify({ error: 'LOCAL_QUICK_REPLIES_ONLY' }), {
+        status: 410,
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+      });
+    }
+    const requestEnv =
+      request.headers.get(LOCAL_QUICK_REPLY_HEADER) === '1'
+        ? { ...env, DB: withoutLegacyQuickReplyReads(env.DB) }
+        : env;
+    return app.fetch(request, requestEnv, ctx);
   },
   scheduled(
     _controller: ScheduledController,
@@ -146,6 +164,33 @@ export default {
   },
 };
 export { ConversationRoom };
+
+function withoutLegacyQuickReplyReads(db: D1Database): D1Database {
+  return new Proxy(db, {
+    get(target, property) {
+      if (property === 'prepare') {
+        return (query: string) =>
+          LEGACY_QUICK_REPLY_SELECT.test(query)
+            ? emptyQuickReplyStatement()
+            : target.prepare(query);
+      }
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+function emptyQuickReplyStatement(): D1PreparedStatement {
+  const emptyResult = { results: [], success: true, meta: {} };
+  const statement = {
+    bind: () => statement,
+    first: async () => null,
+    run: async () => emptyResult,
+    all: async () => emptyResult,
+    raw: async () => [],
+  } as unknown as D1PreparedStatement;
+  return statement;
+}
 
 async function responseConversationId(
   response: Response,
