@@ -140,10 +140,13 @@ export default {
       LEGACY_QUICK_REPLY_WRITE_PATH.test(pathname) &&
       (request.method === 'POST' || request.method === 'DELETE')
     ) {
-      return new Response(JSON.stringify({ error: 'LOCAL_QUICK_REPLIES_ONLY' }), {
-        status: 410,
-        headers: { 'content-type': 'application/json; charset=utf-8' },
-      });
+      return new Response(
+        JSON.stringify({ error: 'LOCAL_QUICK_REPLIES_ONLY' }),
+        {
+          status: 410,
+          headers: { 'content-type': 'application/json; charset=utf-8' },
+        },
+      );
     }
     const requestEnv =
       request.headers.get(LOCAL_QUICK_REPLY_HEADER) === '1'
