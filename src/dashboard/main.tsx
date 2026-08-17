@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './agent-local-quick-replies';
 import './styles.css';
 import './product-assignment.css';
 import './chat-dialogue.css';
@@ -26,7 +25,7 @@ if (
     'load',
     () => {
       void navigator.serviceWorker
-        .register('/agent-sw.js', { scope: '/' })
+        .register('/agent-sw.js', { scope: '/agent' })
         .catch(() => undefined);
     },
     { once: true },
