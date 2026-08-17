@@ -49,10 +49,7 @@ function installLocalQuickReplyTransport(): void {
       return createQuickReplyResponse(request);
     }
 
-    if (
-      pathname.startsWith(`${QUICK_REPLY_PATH}/`) &&
-      method === 'DELETE'
-    ) {
+    if (pathname.startsWith(`${QUICK_REPLY_PATH}/`) && method === 'DELETE') {
       return deleteQuickReplyResponse(pathname);
     }
 
