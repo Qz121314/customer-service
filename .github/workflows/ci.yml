@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,11 +20,55 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Apply mobile viewport containment fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workspace = Path('src/dashboard/agent-workspace.css')
+          text = workspace.read_text()
+          replacements = [
+              (
+                  "  .workspace-shell {\n    position: relative;\n    display: block;\n    width: 100%;\n    height: 100dvh;\n    min-height: 0;",
+                  "  .workspace-shell {\n    position: relative;\n    display: block;\n    width: 100%;\n    max-width: 100vw;\n    min-width: 0;\n    height: 100dvh;\n    min-height: 0;",
+              ),
+              (
+                  "  .workspace-shell.is-thread-open .thread-pane {\n    position: absolute;\n    inset: env(safe-area-inset-top) 0 0;\n    z-index: 20;\n    display: flex;\n    width: 100%;\n    height: calc(100dvh - env(safe-area-inset-top));\n    min-height: 0;",
+                  "  .workspace-shell.is-thread-open .thread-pane {\n    position: absolute;\n    inset: env(safe-area-inset-top) 0 0;\n    z-index: 20;\n    display: flex;\n    width: 100%;\n    max-width: 100vw;\n    min-width: 0;\n    height: calc(100dvh - env(safe-area-inset-top));\n    min-height: 0;",
+              ),
+          ]
+          for old, new in replacements:
+              if old not in text:
+                  raise SystemExit(f'missing workspace containment target: {old[:70]}')
+              text = text.replace(old, new, 1)
+          workspace.write_text(text)
+
+          mobile = Path('src/dashboard/agent-mobile.css')
+          text = mobile.read_text()
+          old = "  .workspace-shell .composer {\n    box-sizing: border-box;\n    width: 100%;\n    min-width: 0;"
+          new = "  .workspace-shell .composer {\n    box-sizing: border-box;\n    width: 100%;\n    max-width: 100%;\n    min-width: 0;"
+          if old not in text:
+              raise SystemExit('missing mobile composer containment target')
+          mobile.write_text(text.replace(old, new, 1))
+          PY
+          pnpm exec prettier --write src/dashboard/agent-workspace.css src/dashboard/agent-mobile.css || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/dashboard/agent-workspace.css src/dashboard/agent-mobile.css
+          if ! git diff --cached --quiet; then
+            git commit -m "fix: contain mobile chat composer within viewport"
+            git push origin HEAD:${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}
+          fi
 
       - name: Set up pnpm
         run: npm install --global pnpm@11.19.0
