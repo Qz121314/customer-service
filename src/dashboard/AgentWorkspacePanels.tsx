@@ -8,6 +8,7 @@ import type { AgentNotificationState } from './agent-push';
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { Metric, UiIcon } from './dashboard-ui';
+import { AgentAvatarControl } from './AgentAvatarControl';
 
 export function AgentSidebar({
   identity,
@@ -37,7 +38,7 @@ export function AgentSidebar({
         <span>坐席中心</span>
       </div>
       <div className="agent-profile">
-        <span className="avatar">{initials(identity.name)}</span>
+        <AgentAvatarControl agentId={identity.id} agentName={identity.name} />
         <div>
           <strong>{identity.name}</strong>
           <small>@{identity.username}</small>

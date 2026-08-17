@@ -37,6 +37,7 @@ type ConversationRow = {
   status: ConversationStatus;
   assigned_agent: string | null;
   agent_name: string | null;
+  agent_avatar_version: string | null;
   subject: string | null;
   group_id: string | null;
   product_id: string | null;
@@ -123,7 +124,7 @@ clientApi.get('/client/v1/conversations', async (c) => {
 
   const result = await c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject, c.group_id, c.product_id, c.section_id,
        c.section_name, c.category_id, c.category_name, c.product_title,
        c.product_cover_url, c.product_href, c.expires_at,
        c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
@@ -602,7 +603,7 @@ export async function broadcastClientConversationEvent(
 ): Promise<ConversationRow | null> {
   const conversation = await env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject, c.group_id, c.product_id, c.section_id,
        c.section_name, c.category_id, c.category_name, c.product_title,
        c.product_cover_url, c.product_href, c.expires_at,
        c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
@@ -1003,7 +1004,7 @@ async function ownedConversation(
   return db
     .prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject, c.group_id, c.product_id, c.section_id,
        c.section_name, c.category_id, c.category_name, c.product_title,
        c.product_cover_url, c.product_href, c.expires_at,
        c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
@@ -1025,7 +1026,10 @@ function conversationSummary(conversation: ConversationRow) {
   return {
     id: conversation.id,
     agentName: conversation.agent_name,
-    agentAvatarUrl: null,
+    agentAvatarUrl:
+      conversation.assigned_agent && conversation.agent_avatar_version
+        ? `/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}?v=${encodeURIComponent(conversation.agent_avatar_version)}`
+        : null,
     productId: conversation.product_id ?? '',
     sectionId: conversation.section_id ?? '',
     productTitle: conversation.product_title ?? conversation.subject ?? '',
