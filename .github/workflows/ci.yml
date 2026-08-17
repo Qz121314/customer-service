@@ -51,7 +51,31 @@ jobs:
           if pnpm test 2>&1 | tee /tmp/pnpm-test.log; then
             exit 0
           fi
-          node -e "const fs=require('fs'); const text=fs.readFileSync('/tmp/pnpm-test.log','utf8').trim().split(/\\r?\\n/).slice(-120).join('\\n'); const escaped=text.replace(/%/g,'%25').replace(/\\r/g,'%0D').replace(/\\n/g,'%0A'); console.log('::error title=pnpm test failed::'+escaped)"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const lines = fs.readFileSync('/tmp/pnpm-test.log', 'utf8').split(/\r?\n/);
+          const failures = [];
+          for (let i = 0; i < lines.length; i += 1) {
+            if (/^not ok \d+ - /.test(lines[i])) failures.push(i);
+          }
+          const escape = (text) =>
+            text.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+          for (let n = 0; n < failures.length; n += 1) {
+            const start = failures[n];
+            let end = Math.min(lines.length, start + 80);
+            for (let i = start + 1; i < lines.length; i += 1) {
+              if (/^(?:ok|not ok) \d+ - /.test(lines[i])) {
+                end = i;
+                break;
+              }
+            }
+            const block = lines.slice(start, end).join('\n');
+            console.log(`::error title=failed test ${n + 1}::${escape(block)}`);
+          }
+          if (failures.length === 0) {
+            console.log('::error title=pnpm test failed::No top-level TAP failure block found');
+          }
+          NODE
           exit 1
 
       - name: Build
