@@ -4,7 +4,6 @@ import { App } from './App';
 import './styles.css';
 import './product-assignment.css';
 import './chat-dialogue.css';
-import './dialogue-flow.css';
 import './media-view.css';
 import './agent-statistics.css';
 import './cloud-service-ui.css';
