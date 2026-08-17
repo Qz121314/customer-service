@@ -99,8 +99,7 @@
   gap: 3px;
 }
 
-.workspace-shell .media-picker,
-.workspace-shell .quick-replies-trigger {
+.workspace-shell .media-picker{
   display: inline-grid;
   width: 40px;
   min-width: 40px;
@@ -119,14 +118,12 @@
     transform 0.14s ease;
 }
 
-.workspace-shell .media-picker:hover,
-.workspace-shell .quick-replies-trigger:hover:not(:disabled) {
+.workspace-shell .media-picker:hover{
   background: rgba(34, 39, 47, 0.07);
   color: #20242b;
 }
 
-.workspace-shell .media-picker:active,
-.workspace-shell .quick-replies-trigger:active:not(:disabled) {
+.workspace-shell .media-picker:active{
   transform: scale(0.94);
 }
 
@@ -140,22 +137,6 @@
   height: 22px;
   background: center / 22px 22px no-repeat
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6670' stroke-width='1.9' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E");
-}
-
-.workspace-shell .quick-replies-trigger {
-  font-size: 0;
-}
-
-.workspace-shell .quick-replies-trigger > span {
-  display: none;
-}
-
-.workspace-shell .quick-replies-trigger::before {
-  content: '';
-  width: 21px;
-  height: 21px;
-  background: center / 21px 21px no-repeat
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235f6670' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13.3 2 5 13h6l-.3 9L19 11h-6l.3-9Z'/%3E%3C/svg%3E");
 }
 
 .workspace-shell .composer > textarea {
@@ -229,19 +210,6 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 4 17 8-17 8 3.7-8L4 4Z'/%3E%3Cpath d='M8 12h13'/%3E%3C/svg%3E");
   box-shadow: none;
   opacity: 1;
-}
-
-.workspace-shell .quick-replies-panel {
-  z-index: 40;
-  overflow: hidden;
-  border: 1px solid #dde1e6;
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 18px 48px rgba(20, 24, 31, 0.16);
-}
-
-.workspace-shell .quick-replies-list {
-  overscroll-behavior: contain;
 }
 
 /* Desktop: WhatsApp-like full-height workbench rather than a floating card. */
@@ -357,13 +325,6 @@
     border-radius: 12px;
     font-size: 14px;
     line-height: 1.55;
-  }
-
-  .workspace-shell .quick-replies-panel {
-    left: 0;
-    bottom: 48px;
-    width: min(430px, calc(100vw - 32px));
-    max-height: min(620px, calc(100dvh - 120px));
   }
 }
 
@@ -730,8 +691,7 @@
     gap: 0;
   }
 
-  .workspace-shell .media-picker,
-  .workspace-shell .quick-replies-trigger {
+  .workspace-shell .media-picker{
     width: 36px;
     min-width: 36px;
     height: 42px;
@@ -759,28 +719,6 @@
     height: 42px;
     min-height: 42px;
     background-size: 20px 20px;
-  }
-
-  .workspace-shell .quick-replies-panel {
-    position: fixed;
-    top: auto;
-    right: 8px;
-    bottom: calc(62px + env(safe-area-inset-bottom));
-    left: 8px;
-    width: auto;
-    max-height: min(62dvh, 470px);
-  }
-
-  .workspace-shell .quick-replies-panel > header {
-    padding: 12px 13px 8px;
-  }
-
-  .workspace-shell .quick-replies-panel > header span {
-    display: none;
-  }
-
-  .workspace-shell .quick-reply-create textarea {
-    font-size: 16px;
   }
 }
 
@@ -811,8 +749,7 @@
     gap: 3px;
   }
 
-  .workspace-shell .media-picker,
-  .workspace-shell .quick-replies-trigger {
+  .workspace-shell .media-picker{
     width: 33px;
     min-width: 33px;
   }
