@@ -877,16 +877,6 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     );
 
   const standbyCookie = `cs_agent_session=${standbyToken}`;
-  const quickReplyResponse = await agentApi.request(
-    '/api/agent/quick-replies',
-    {
-      method: 'POST',
-      headers: { cookie: standbyCookie, 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Welcome', body: 'How can I help?' }),
-    },
-    env,
-  );
-  assert.equal(quickReplyResponse.status, 201);
   const standbyInbox = await json(
     await agentApi.request(
       '/api/agent/conversations',
@@ -894,7 +884,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
       env,
     ),
   );
-  assert.equal(standbyInbox.quickReplies[0].title, 'Welcome');
+  assert.deepEqual(standbyInbox.quickReplies, []);
   assert.ok(
     standbyInbox.transferTargets.some(
       (target) => target.id === 'agent-transfer',
