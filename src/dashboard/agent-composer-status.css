@@ -5,6 +5,11 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.workspace-shell .composer-foot .primary-button {
+  grid-column: 1;
+  grid-row: 1;
+}
+
 /* Connection feedback floats above the compact composer instead of taking
  * horizontal space from the send button. */
 .workspace-shell .composer-foot .media-upload-progress.is-connection-warning {
@@ -14,8 +19,8 @@
   display: block;
   width: max-content;
   max-width: calc(100% - 24px);
-  grid-column: auto;
-  grid-row: auto;
+  grid-column: 1;
+  grid-row: 1;
   padding: 2px 8px;
   transform: translateX(-50%);
 }
