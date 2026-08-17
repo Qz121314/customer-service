@@ -48,21 +48,14 @@ jobs:
               "const candidates = [...(await walk('src')), ...(await walk('test')), 'README.md'];",
               "const candidates = [...(await walk('src')), ...(await walk('test'))];",
           )
-          old = """      text = requiredReplace(
-                text,
-                '  .workspace-shell .composer {\\n    padding-inline: 6px;\\n    gap: 3px;\\n  }\\n',
-                '  .workspace-shell .composer {\\n    grid-template-columns: 33px minmax(0, 1fr) 42px;\\n    padding-inline: 6px;\\n    gap: 3px;\\n  }\\n',
-                'narrow mobile composer grid',
-              );"""
-          new = """      text = requiredReplace(
-                text,
-                '  .workspace-shell .composer {\\n    grid-template-columns: auto minmax(0, 1fr) 42px;\\n    gap: 5px;\\n    padding: 5px 6px max(7px, env(safe-area-inset-bottom));\\n  }\\n',
-                '  .workspace-shell .composer {\\n    grid-template-columns: 40px minmax(0, 1fr) 42px;\\n    gap: 5px;\\n    padding: 5px 6px max(7px, env(safe-area-inset-bottom));\\n  }\\n',
-                'narrow mobile composer grid',
-              );"""
-          if old not in text:
-              raise SystemExit('narrow composer migration block not found')
-          text = text.replace(old, new)
+          narrow_search = r"'  .workspace-shell .composer {\n    padding-inline: 6px;\n    gap: 3px;\n  }\n'"
+          narrow_search_next = r"'  .workspace-shell .composer {\n    grid-template-columns: auto minmax(0, 1fr) 42px;\n    gap: 5px;\n    padding: 5px 6px max(7px, env(safe-area-inset-bottom));\n  }\n'"
+          narrow_replace = r"'  .workspace-shell .composer {\n    grid-template-columns: 33px minmax(0, 1fr) 42px;\n    padding-inline: 6px;\n    gap: 3px;\n  }\n'"
+          narrow_replace_next = r"'  .workspace-shell .composer {\n    grid-template-columns: 40px minmax(0, 1fr) 42px;\n    gap: 5px;\n    padding: 5px 6px max(7px, env(safe-area-inset-bottom));\n  }\n'"
+          if narrow_search not in text or narrow_replace not in text:
+              raise SystemExit('narrow composer migration literals not found')
+          text = text.replace(narrow_search, narrow_search_next, 1)
+          text = text.replace(narrow_replace, narrow_replace_next, 1)
           path.write_text(text)
           PY
           node --check scripts/apply-composer-cleanup.mjs
