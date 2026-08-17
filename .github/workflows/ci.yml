@@ -61,7 +61,6 @@ jobs:
               raise SystemExit('missing mobile composer containment target')
           mobile.write_text(text.replace(old, new, 1))
           PY
-          pnpm exec prettier --write src/dashboard/agent-workspace.css src/dashboard/agent-mobile.css || true
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/dashboard/agent-workspace.css src/dashboard/agent-mobile.css
