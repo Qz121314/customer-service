@@ -10,10 +10,8 @@ import './cloud-service-ui.css';
 import './ui-polish.css';
 import './agent-editor.css';
 import './agent-workspace.css';
-import './agent-desktop-compact.css';
-import './agent-desktop-thread-polish.css';
-import './agent-mobile-polish.css';
-import './agent-mobile-controls.css';
+import './agent-desktop.css';
+import './agent-mobile.css';
 import './agent-avatar.css';
 
 if (
