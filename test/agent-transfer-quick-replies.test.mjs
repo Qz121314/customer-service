@@ -31,7 +31,6 @@ test('a conversation counts only for its first receiving seat', async () => {
   database.exec(
     await read('../migrations/0017_agent_daily_stats_retention.sql'),
   );
-  database.exec(await read('../migrations/0018_agent_quick_replies.sql'));
   database.exec(await read('../migrations/0020_agent_traffic_receipts.sql'));
 
   const assign = database.prepare(`
@@ -69,40 +68,26 @@ test('a conversation counts only for its first receiving seat', async () => {
       })),
     [{ conversation_id: 'conversation-1', agent_id: 'agent-a' }],
   );
-
-  database
-    .prepare(
-      `INSERT INTO agent_quick_replies (id, agent_id, title, body)
-       VALUES ('reply-1', 'agent-a', 'Welcome', 'Hello')`,
-    )
-    .run();
-  assert.equal(
-    database
-      .prepare(
-        `SELECT body FROM agent_quick_replies
-         WHERE agent_id = 'agent-a'`,
-      )
-      .get().body,
-    'Hello',
-  );
 });
 
-test('agent workspace exposes transfer, requeue, quick replies and product context', async () => {
-  const [worker, routing, dashboard, styles] = await Promise.all([
+test('agent workspace exposes transfer, requeue, local quick replies and product context', async () => {
+  const [worker, routing, dashboard, localReplies, styles] = await Promise.all([
     read('../src/worker/agent-api.ts'),
     read('../src/worker/routing.ts'),
     read('../src/dashboard/AgentPortal.tsx'),
+    read('../src/dashboard/agent-local-quick-replies.ts'),
     read('../src/dashboard/cloud-service-ui.css'),
   ]);
 
   assert.match(worker, /conversations\/:id\/transfer/u);
   assert.match(worker, /target\.status = 'online'/u);
   assert.match(worker, /loadTransferTargets/u);
-  assert.match(worker, /agent_quick_replies/u);
+  assert.doesNotMatch(worker, /agent_quick_replies/u);
   assert.match(routing, /excludedAgentId/u);
   assert.match(dashboard, /重新排队/u);
   assert.match(dashboard, /快捷回复/u);
   assert.match(dashboard, /conversation-context-card/u);
+  assert.match(localReplies, /window\.localStorage/u);
   assert.match(styles, /\.transfer-menu-panel/u);
   assert.match(styles, /\.quick-replies-panel/u);
 });
