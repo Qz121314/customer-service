@@ -16,9 +16,15 @@ test('desktop agent thread keeps compact commercial chat styling', async () => {
   ]);
 
   assert.match(main, /import '\.\/agent-desktop-thread-polish\.css';/u);
-  assert.match(css, /\.workspace-shell \.thread-back-button \{\s*display: none;/u);
+  assert.match(
+    css,
+    /\.workspace-shell \.thread-back-button \{\s*display: none;/u,
+  );
   assert.match(css, /width: min\(720px, calc\(100% - 40px\)\);/u);
   assert.match(css, /width: min\(100%, 820px\);/u);
   assert.match(css, /max-width: min\(64%, 560px\);/u);
-  assert.match(css, /\.workspace-shell \.message\.visitor > \.avatar\.tiny \{\s*display: none;/u);
+  assert.match(
+    css,
+    /\.workspace-shell \.message\.visitor > \.avatar\.tiny \{\s*display: none;/u,
+  );
 });
