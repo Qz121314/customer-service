@@ -18,8 +18,6 @@ const QUICK_REPLY_LIMIT = 30;
 const QUICK_REPLY_TITLE_LIMIT = 40;
 const QUICK_REPLY_BODY_LIMIT = 1000;
 const ACTIVE_AGENT_KEY = 'cs-agent-active-id';
-const LOCAL_ONLY_HEADER = 'X-CS-Quick-Replies-Local';
-const LOCAL_ONLY_HEADER_VALUE = '1';
 const QUICK_REPLY_PATH = '/api/agent/quick-replies';
 const INBOX_PATH = '/api/agent/conversations';
 const HEARTBEAT_PATH = '/api/agent/auth/heartbeat';
@@ -53,15 +51,7 @@ function installLocalQuickReplyTransport(): void {
       return deleteQuickReplyResponse(pathname);
     }
 
-    const shouldHydrateInbox = isInboxResponse(pathname, method);
-    const shouldBypassRemoteQuickReplies =
-      shouldHydrateInbox &&
-      Boolean(activeAgentId) &&
-      hasCompletedMigration(activeAgentId as string);
-    const forwardedRequest = shouldBypassRemoteQuickReplies
-      ? withLocalOnlyHeader(request)
-      : request;
-    const response = await nativeFetch(forwardedRequest);
+    const response = await nativeFetch(request);
 
     if (pathname === SESSION_PATH && method === 'GET') {
       await captureSessionIdentity(response);
@@ -78,7 +68,9 @@ function installLocalQuickReplyTransport(): void {
       return response;
     }
 
-    if (!shouldHydrateInbox || !response.ok || !activeAgentId) return response;
+    if (!isInboxResponse(pathname, method) || !response.ok || !activeAgentId) {
+      return response;
+    }
     return hydrateInboxQuickReplies(response, activeAgentId);
   };
 }
@@ -89,12 +81,6 @@ function isInboxResponse(pathname: string, method: string): boolean {
     (pathname === HEARTBEAT_PATH && method === 'POST') ||
     (pathname === STATUS_PATH && method === 'POST')
   );
-}
-
-function withLocalOnlyHeader(request: Request): Request {
-  const headers = new Headers(request.headers);
-  headers.set(LOCAL_ONLY_HEADER, LOCAL_ONLY_HEADER_VALUE);
-  return new Request(request, { headers });
 }
 
 async function captureSessionIdentity(response: Response): Promise<void> {
@@ -148,15 +134,6 @@ async function hydrateInboxQuickReplies(
 ): Promise<Response> {
   const payload = await readJsonClone<AgentInboxPayload>(response);
   if (!payload) return response;
-
-  if (!hasCompletedMigration(agentId)) {
-    const legacyReplies = sanitizeQuickReplies(payload.quickReplies);
-    if (legacyReplies.length > 0 && loadQuickReplies(agentId).length === 0) {
-      storeQuickReplies(agentId, legacyReplies);
-    }
-    markMigrationComplete(agentId);
-  }
-
   payload.quickReplies = loadQuickReplies(agentId);
   return replaceJsonResponse(response, payload);
 }
@@ -177,7 +154,6 @@ async function createQuickReplyResponse(request: Request): Promise<Response> {
 
   const reply: QuickReply = { id: crypto.randomUUID(), title, body };
   storeQuickReplies(activeAgentId, [reply, ...current]);
-  markMigrationComplete(activeAgentId);
   return jsonResponse({ reply }, 201);
 }
 
@@ -196,7 +172,6 @@ function deleteQuickReplyResponse(pathname: string): Response {
   const next = current.filter((reply) => reply.id !== id);
   if (next.length === current.length) return errorResponse('NOT_FOUND', 404);
   storeQuickReplies(activeAgentId, next);
-  markMigrationComplete(activeAgentId);
   return jsonResponse({ ok: true });
 }
 
@@ -248,26 +223,6 @@ function normalizeText(value: unknown, limit: number): string {
 
 function storageKey(agentId: string): string {
   return `cs-agent-quick-replies:${agentId}`;
-}
-
-function migrationKey(agentId: string): string {
-  return `cs-agent-quick-replies-migrated:${agentId}`;
-}
-
-function hasCompletedMigration(agentId: string): boolean {
-  try {
-    return window.localStorage.getItem(migrationKey(agentId)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function markMigrationComplete(agentId: string): void {
-  try {
-    window.localStorage.setItem(migrationKey(agentId), '1');
-  } catch {
-    // A failed migration marker only causes another best-effort legacy read.
-  }
 }
 
 async function readJsonClone<T>(source: Response | Request): Promise<T | null> {
