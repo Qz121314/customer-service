@@ -106,7 +106,7 @@ export async function assignConversationAgent(
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
            AND a.last_seen_at IS NOT NULL
-           AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
+           AND datetime(a.last_seen_at) >= datetime('now', '-3 minutes')
            AND (
              a.max_active_conversations = 0
              OR COALESCE(load.active_count, 0) < a.max_active_conversations
