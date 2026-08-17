@@ -10,6 +10,36 @@
   grid-row: 1;
 }
 
+/* Draw the image attachment plus from two geometric center lines instead of a
+ * font glyph or SVG background box. This keeps the visual cross exactly centered
+ * in the circular tap target on every platform and font stack. */
+.workspace-shell .media-picker {
+  position: relative;
+  font-size: 0;
+}
+
+.workspace-shell .media-picker::before,
+.workspace-shell .media-picker::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: block;
+  border-radius: 999px;
+  background: currentColor;
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.workspace-shell .media-picker::before {
+  width: 18px;
+  height: 1.8px;
+}
+
+.workspace-shell .media-picker::after {
+  width: 1.8px;
+  height: 18px;
+}
+
 /* Connection feedback floats above the compact composer instead of taking
  * horizontal space from the send button. */
 .workspace-shell .composer-foot .media-upload-progress.is-connection-warning {
