@@ -1,0 +1,13 @@
+/* Connection feedback must not participate in the compact send-button grid. */
+.workspace-shell .composer-foot .media-upload-progress.is-connection-warning {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  display: block;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  grid-column: auto;
+  grid-row: auto;
+  padding: 2px 8px;
+  transform: translateX(-50%);
+}
