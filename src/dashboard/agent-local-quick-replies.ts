@@ -49,7 +49,10 @@ function installLocalQuickReplyTransport(): void {
       return createQuickReplyResponse(request);
     }
 
-    if (pathname.startsWith(`${QUICK_REPLY_PATH}/`) && method === 'DELETE') {
+    if (
+      pathname.startsWith(`${QUICK_REPLY_PATH}/`) &&
+      method === 'DELETE'
+    ) {
       return deleteQuickReplyResponse(pathname);
     }
 
@@ -163,7 +166,9 @@ async function hydrateInboxQuickReplies(
 
 async function createQuickReplyResponse(request: Request): Promise<Response> {
   if (!activeAgentId) return errorResponse('UNAUTHORIZED', 401);
-  const input = await readJsonClone<{ title?: unknown; body?: unknown }>(request);
+  const input = await readJsonClone<{ title?: unknown; body?: unknown }>(
+    request,
+  );
   const title = normalizeText(input?.title, QUICK_REPLY_TITLE_LIMIT);
   const body = normalizeText(input?.body, QUICK_REPLY_BODY_LIMIT);
   if (!title || !body) return errorResponse('INVALID_QUICK_REPLY', 400);
