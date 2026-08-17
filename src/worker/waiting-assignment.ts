@@ -56,7 +56,7 @@ export async function assignWaitingConversations(
          AND a.username IS NOT NULL
          AND a.password_hash IS NOT NULL
          AND a.last_seen_at IS NOT NULL
-         AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
+         AND datetime(a.last_seen_at) >= datetime('now', '-3 minutes')
        LIMIT 1
      ),
      capacity AS (
