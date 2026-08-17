@@ -130,12 +130,12 @@ app.route('/', coreApp);
 
 export default {
   fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
-    const pathname = new URL(request.url).pathname;
     // This check runs before Hono and the Assets binding. Removed API paths can
     // therefore never be rewritten to the SPA's index.html with HTTP 200.
-    if (isRemovedProtocolPath(pathname)) {
+    if (isRemovedProtocolPath(new URL(request.url).pathname)) {
       return removedProtocolResponse();
     }
+    const pathname = new URL(request.url).pathname;
     if (
       LEGACY_QUICK_REPLY_WRITE_PATH.test(pathname) &&
       (request.method === 'POST' || request.method === 'DELETE')
