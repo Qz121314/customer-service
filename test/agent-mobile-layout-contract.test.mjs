@@ -33,9 +33,10 @@ test('agent mobile workspace uses separate inbox and app-like thread surfaces', 
     baseCss.includes('height: calc(100dvh - env(safe-area-inset-top))'),
   );
   assert.ok(
-    mobileCss.includes('grid-template-columns: auto minmax(0, 1fr) 44px;'),
+    mobileCss.includes('grid-template-columns: 40px minmax(0, 1fr) 44px;'),
   );
-  assert.ok(mobileCss.includes('.workspace-shell .quick-replies-panel'));
+  assert.ok(!app.includes('quick-replies'));
+  assert.ok(!mobileCss.includes('quick-repl'));
   assert.ok(mobileCss.includes('env(safe-area-inset-bottom)'));
   assert.ok(mobileCss.includes('@media (display-mode: standalone)'));
 });

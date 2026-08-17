@@ -25,7 +25,7 @@ test('typing signals stay ephemeral and use authenticated conversation sockets',
   assert.ok(clientApi.includes('await resolveIdentity'));
 });
 
-test('agent workspace offers local sound, typing presence, and searchable slash replies', () => {
+test('agent workspace offers local sound and typing presence', () => {
   const agent = source('../src/dashboard/AgentPortal.tsx');
   const runtime = source('../src/dashboard/dashboard-runtime.ts');
 
@@ -36,8 +36,4 @@ test('agent workspace offers local sound, typing presence, and searchable slash 
     agent.includes("socket.send(JSON.stringify({ type: 'typing', active }))"),
   );
   assert.ok(agent.includes('访客正在输入'));
-  assert.ok(agent.includes('filteredQuickReplies'));
-  assert.ok(agent.includes('placeholder="搜索快捷回复"'));
-  assert.ok(agent.includes("event.key === '/'"));
-  assert.ok(agent.includes('没有找到匹配的快捷回复'));
 });

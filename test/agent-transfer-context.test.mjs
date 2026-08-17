@@ -70,12 +70,11 @@ test('a conversation counts only for its first receiving seat', async () => {
   );
 });
 
-test('agent workspace exposes transfer, requeue, local quick replies and product context', async () => {
-  const [worker, routing, dashboard, localReplies, styles] = await Promise.all([
+test('agent workspace exposes transfer, requeue and product context', async () => {
+  const [worker, routing, dashboard, styles] = await Promise.all([
     read('../src/worker/agent-api.ts'),
     read('../src/worker/routing.ts'),
     read('../src/dashboard/AgentPortal.tsx'),
-    read('../src/dashboard/agent-local-quick-replies.ts'),
     read('../src/dashboard/cloud-service-ui.css'),
   ]);
 
@@ -85,9 +84,8 @@ test('agent workspace exposes transfer, requeue, local quick replies and product
   assert.doesNotMatch(worker, /agent_quick_replies/u);
   assert.match(routing, /excludedAgentId/u);
   assert.match(dashboard, /重新排队/u);
-  assert.match(dashboard, /快捷回复/u);
+  assert.doesNotMatch(dashboard, /快捷回复/u);
   assert.match(dashboard, /conversation-context-card/u);
-  assert.match(localReplies, /window\.localStorage/u);
   assert.match(styles, /\.transfer-menu-panel/u);
-  assert.match(styles, /\.quick-replies-panel/u);
+  assert.doesNotMatch(styles, /\.quick-repl/u);
 });

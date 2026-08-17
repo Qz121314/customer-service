@@ -15,12 +15,9 @@ import {
   Conversation,
   ConversationDetail,
   Message,
-  QuickReply,
   TransferTarget,
   agentLogin,
   agentLogout,
-  createQuickReply,
-  deleteQuickReply,
   getAgentInbox,
   getAgentSession,
   getConversation,
@@ -156,13 +153,6 @@ function AgentWorkspace({
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
-  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([]);
-  const [quickRepliesOpen, setQuickRepliesOpen] = useState(false);
-  const [quickReplySearch, setQuickReplySearch] = useState('');
-  const [quickReplyActiveIndex, setQuickReplyActiveIndex] = useState(0);
-  const [quickReplyTitle, setQuickReplyTitle] = useState('');
-  const [quickReplyBody, setQuickReplyBody] = useState('');
-  const [quickReplySaving, setQuickReplySaving] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
@@ -187,7 +177,6 @@ function AgentWorkspace({
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
-  const quickReplySearchRef = useRef<HTMLInputElement | null>(null);
   const detailRef = useRef<ConversationDetail | null>(null);
   const threadSocketRef = useRef<WebSocket | null>(null);
   const agentTypingDesiredRef = useRef(false);
@@ -239,15 +228,6 @@ function AgentWorkspace({
       );
     });
   }, [conversations, filter, searchQuery, unreadFirst]);
-  const filteredQuickReplies = useMemo(() => {
-    const query = quickReplySearch.trim().toLocaleLowerCase('zh-CN');
-    if (!query) return quickReplies;
-    return quickReplies.filter((reply) =>
-      [reply.title, reply.body].some((value) =>
-        value.toLocaleLowerCase('zh-CN').includes(query),
-      ),
-    );
-  }, [quickReplies, quickReplySearch]);
   const lastVisibleVisitorMessageId = useMemo(
     () =>
       detail?.messages
@@ -384,7 +364,6 @@ function AgentWorkspace({
       ]),
     );
     setTransferTargets(inbox.transferTargets);
-    setQuickReplies(inbox.quickReplies);
     setAvailability(inbox.availability);
   }, []);
 
@@ -553,8 +532,6 @@ function AgentWorkspace({
   );
 
   useEffect(() => {
-    setQuickRepliesOpen(false);
-    setQuickReplySearch('');
     setVisitorTyping(false);
     if (visitorTypingTimerRef.current !== null) {
       window.clearTimeout(visitorTypingTimerRef.current);
@@ -1254,56 +1231,6 @@ function AgentWorkspace({
     }
   }
 
-  async function saveQuickReply() {
-    if (!quickReplyTitle.trim() || !quickReplyBody.trim() || quickReplySaving)
-      return;
-    setQuickReplySaving(true);
-    try {
-      const reply = await createQuickReply({
-        title: quickReplyTitle,
-        body: quickReplyBody,
-      });
-      setQuickReplies((current) => [reply, ...current]);
-      setQuickReplyTitle('');
-      setQuickReplyBody('');
-    } catch (reason) {
-      setError(message(reason, '保存快捷回复失败'));
-    } finally {
-      setQuickReplySaving(false);
-    }
-  }
-
-  async function removeQuickReply(id: string) {
-    try {
-      await deleteQuickReply(id);
-      setQuickReplies((current) => current.filter((reply) => reply.id !== id));
-    } catch (reason) {
-      setError(message(reason, '删除快捷回复失败'));
-    }
-  }
-
-  function applyQuickReply(reply: QuickReply) {
-    updateDraft((current) =>
-      current.trim() ? `${current.trimEnd()}\n${reply.body}` : reply.body,
-    );
-    setQuickRepliesOpen(false);
-    setQuickReplySearch('');
-    setQuickReplyActiveIndex(0);
-  }
-
-  function openQuickReplies() {
-    setQuickRepliesOpen(true);
-    setQuickReplySearch('');
-    setQuickReplyActiveIndex(0);
-    window.requestAnimationFrame(() => quickReplySearchRef.current?.focus());
-  }
-
-  function closeQuickReplies() {
-    setQuickRepliesOpen(false);
-    setQuickReplySearch('');
-    setQuickReplyActiveIndex(0);
-  }
-
   return (
     <div className={`workspace-shell${selectedId ? ' is-thread-open' : ''}`}>
       <AgentSidebar
@@ -1591,145 +1518,6 @@ function AgentWorkspace({
                     }}
                   />
                 </label>
-                <div className="quick-replies">
-                  <button
-                    type="button"
-                    className="quick-replies-trigger"
-                    aria-expanded={quickRepliesOpen}
-                    disabled={detail.conversation.status === 'closed'}
-                    title="快捷回复（输入 / 也可打开）"
-                    onClick={() =>
-                      quickRepliesOpen
-                        ? closeQuickReplies()
-                        : openQuickReplies()
-                    }
-                  >
-                    <span aria-hidden="true">⚡</span>
-                    <span>快捷回复</span>
-                  </button>
-                  {quickRepliesOpen && (
-                    <div className="quick-replies-panel">
-                      <header>
-                        <strong>快捷回复</strong>
-                        <span>搜索名称或内容，选择后仍可编辑再发送。</span>
-                      </header>
-                      <label className="quick-reply-search">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="m20 20-4-4" />
-                        </svg>
-                        <input
-                          ref={quickReplySearchRef}
-                          type="search"
-                          value={quickReplySearch}
-                          placeholder="搜索快捷回复"
-                          aria-label="搜索快捷回复"
-                          onChange={(event) => {
-                            setQuickReplySearch(event.target.value);
-                            setQuickReplyActiveIndex(0);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Escape') {
-                              event.preventDefault();
-                              closeQuickReplies();
-                              return;
-                            }
-                            if (filteredQuickReplies.length === 0) return;
-                            if (event.key === 'ArrowDown') {
-                              event.preventDefault();
-                              setQuickReplyActiveIndex((current) =>
-                                Math.min(
-                                  current + 1,
-                                  filteredQuickReplies.length - 1,
-                                ),
-                              );
-                            } else if (event.key === 'ArrowUp') {
-                              event.preventDefault();
-                              setQuickReplyActiveIndex((current) =>
-                                Math.max(0, current - 1),
-                              );
-                            } else if (event.key === 'Enter') {
-                              event.preventDefault();
-                              applyQuickReply(
-                                filteredQuickReplies[
-                                  Math.min(
-                                    quickReplyActiveIndex,
-                                    filteredQuickReplies.length - 1,
-                                  )
-                                ],
-                              );
-                            }
-                          }}
-                        />
-                      </label>
-                      {filteredQuickReplies.length > 0 && (
-                        <div className="quick-replies-list">
-                          {filteredQuickReplies.map((reply, index) => (
-                            <div
-                              key={reply.id}
-                              className={
-                                index === quickReplyActiveIndex
-                                  ? 'is-active'
-                                  : undefined
-                              }
-                            >
-                              <button
-                                type="button"
-                                onClick={() => applyQuickReply(reply)}
-                              >
-                                <strong>{reply.title}</strong>
-                                <span>{reply.body}</span>
-                              </button>
-                              <button
-                                type="button"
-                                aria-label={`删除快捷回复 ${reply.title}`}
-                                onClick={() => void removeQuickReply(reply.id)}
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {quickReplies.length > 0 &&
-                        filteredQuickReplies.length === 0 && (
-                          <div className="quick-reply-empty">
-                            没有找到匹配的快捷回复
-                          </div>
-                        )}
-                      <div className="quick-reply-create">
-                        <input
-                          value={quickReplyTitle}
-                          maxLength={40}
-                          placeholder="名称，例如：发货说明"
-                          onChange={(event) =>
-                            setQuickReplyTitle(event.target.value)
-                          }
-                        />
-                        <textarea
-                          value={quickReplyBody}
-                          maxLength={1000}
-                          rows={3}
-                          placeholder="输入常用回复内容"
-                          onChange={(event) =>
-                            setQuickReplyBody(event.target.value)
-                          }
-                        />
-                        <button
-                          type="button"
-                          disabled={
-                            quickReplySaving ||
-                            !quickReplyTitle.trim() ||
-                            !quickReplyBody.trim()
-                          }
-                          onClick={() => void saveQuickReply()}
-                        >
-                          {quickReplySaving ? '保存中…' : '保存快捷回复'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
               <textarea
                 value={draft}
@@ -1745,20 +1533,6 @@ function AgentWorkspace({
                     : '输入回复内容…'
                 }
                 onKeyDown={(event) => {
-                  if (
-                    event.key === '/' &&
-                    !draft &&
-                    !event.nativeEvent.isComposing
-                  ) {
-                    event.preventDefault();
-                    openQuickReplies();
-                    return;
-                  }
-                  if (event.key === 'Escape' && quickRepliesOpen) {
-                    event.preventDefault();
-                    closeQuickReplies();
-                    return;
-                  }
                   if (
                     event.key === 'Enter' &&
                     !event.shiftKey &&

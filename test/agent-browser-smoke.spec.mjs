@@ -86,18 +86,53 @@ async function expectCenteredDialog(page) {
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 }
 
+async function mobileComposerGeometry(page) {
+  return page.evaluate(() => {
+    const browser = globalThis;
+    const snapshot = (selector) => {
+      const element = browser.document.querySelector(selector);
+      if (!(element instanceof browser.HTMLElement)) return null;
+      const rect = element.getBoundingClientRect();
+      const style = browser.getComputedStyle(element);
+      return {
+        x: rect.x,
+        width: rect.width,
+        right: rect.right,
+        minWidth: style.minWidth,
+        maxWidth: style.maxWidth,
+        overflowX: style.overflowX,
+        position: style.position,
+        marginLeft: style.marginLeft,
+        marginRight: style.marginRight,
+        transform: style.transform,
+        gridTemplateColumns: style.gridTemplateColumns,
+        gridColumnStart: style.gridColumnStart,
+        gridColumnEnd: style.gridColumnEnd,
+        gridRowStart: style.gridRowStart,
+        gridRowEnd: style.gridRowEnd,
+      };
+    };
+    return {
+      innerWidth: browser.innerWidth,
+      documentClientWidth: browser.document.documentElement.clientWidth,
+      documentScrollWidth: browser.document.documentElement.scrollWidth,
+      bodyClientWidth: browser.document.body.clientWidth,
+      bodyScrollWidth: browser.document.body.scrollWidth,
+      workspace: snapshot('.workspace-shell'),
+      thread: snapshot('.thread-pane'),
+      composer: snapshot('.composer'),
+      tools: snapshot('.composer-tools'),
+      textarea: snapshot('.composer textarea'),
+      foot: snapshot('.composer-foot'),
+      warning: snapshot('.composer-foot .media-upload-progress'),
+      send: snapshot('.composer-foot .primary-button'),
+    };
+  });
+}
+
 test('agent desktop and mobile interaction surfaces remain usable', async ({
   page,
 }) => {
-  let quickReplyServerRequests = 0;
-  page.on('request', (request) => {
-    if (
-      new URL(request.url()).pathname.startsWith('/api/agent/quick-replies')
-    ) {
-      quickReplyServerRequests += 1;
-    }
-  });
-
   await seedConversationAndAgent(page);
   await loginAgent(page);
 
@@ -125,24 +160,6 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(composer).toBeVisible();
   await expect(page.getByLabel('会话状态')).toBeVisible();
 
-  const quickReplyTrigger = page.locator('.quick-replies-trigger');
-  await quickReplyTrigger.click();
-  await page.getByPlaceholder('名称，例如：发货说明').fill('UI Smoke Reply');
-  await page.getByPlaceholder('输入常用回复内容').fill('本地快捷回复内容');
-  await page.getByRole('button', { name: '保存快捷回复' }).click();
-  await expect(page.getByText('UI Smoke Reply')).toBeVisible();
-  await page.getByText('UI Smoke Reply').click();
-  await expect(composer).toHaveValue('本地快捷回复内容');
-  expect(quickReplyServerRequests).toBe(0);
-
-  await page.reload();
-  await expect(page.getByText('我的会话')).toBeVisible();
-  await page.getByRole('button', { name: /UI Smoke Product/u }).click();
-  await page.locator('.quick-replies-trigger').click();
-  await expect(page.getByText('UI Smoke Reply')).toBeVisible();
-  expect(quickReplyServerRequests).toBe(0);
-
-  await page.getByText('UI Smoke Reply').click();
   await page.setViewportSize({ width: 390, height: 700 });
   const mobileComposer = page.getByPlaceholder('输入回复内容…');
   await mobileComposer.focus();
@@ -160,13 +177,19 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     );
   }
 
+  const sendButton = page.getByRole('button', { name: '发送' });
+  const sendButtonBox = await sendButton.boundingBox();
+  expect(sendButtonBox).not.toBeNull();
+  if (sendButtonBox && viewport) {
+    const geometry = await mobileComposerGeometry(page);
+    expect(
+      sendButtonBox.x + sendButtonBox.width,
+      `Mobile composer geometry: ${JSON.stringify(geometry)}`,
+    ).toBeLessThanOrEqual(viewport.width + 1);
+  }
+
   const backButton = page.getByRole('button', { name: '返回会话列表' });
   const backBox = await backButton.boundingBox();
   expect(backBox?.width ?? 0).toBeGreaterThanOrEqual(38);
   expect(backBox?.height ?? 0).toBeGreaterThanOrEqual(38);
-  const quickReplyBox = await page
-    .locator('.quick-replies-trigger')
-    .boundingBox();
-  expect(quickReplyBox?.width ?? 0).toBeGreaterThanOrEqual(38);
-  expect(quickReplyBox?.height ?? 0).toBeGreaterThanOrEqual(38);
 });

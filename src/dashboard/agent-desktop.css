@@ -466,8 +466,7 @@
     box-shadow: 0 0 0 3px rgba(91, 92, 226, 0.08);
   }
 
-  .workspace-shell .media-picker,
-  .workspace-shell .quick-replies-trigger {
+  .workspace-shell .media-picker {
     width: 38px;
     min-width: 38px;
     height: 38px;
@@ -475,8 +474,7 @@
     color: #4f5a68;
   }
 
-  .workspace-shell .media-picker:hover,
-  .workspace-shell .quick-replies-trigger:hover:not(:disabled) {
+  .workspace-shell .media-picker:hover {
     background: rgba(40, 49, 62, 0.08);
     color: #202630;
   }

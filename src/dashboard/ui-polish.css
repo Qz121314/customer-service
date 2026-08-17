@@ -314,17 +314,12 @@
     gap: 5px;
   }
 
-  .media-picker,
-  .quick-replies-trigger {
+  .media-picker {
     width: 36px;
     min-width: 36px;
     min-height: 36px;
     padding: 0;
     justify-content: center;
-  }
-
-  .quick-replies-trigger > span:last-child {
-    display: none;
   }
 
   .composer textarea {
@@ -382,7 +377,6 @@
 .availability-pill,
 .thread-head select,
 .transfer-menu summary,
-.quick-replies-trigger,
 .media-picker {
   line-height: 1;
 }
@@ -749,8 +743,7 @@
     background: #fafafa;
   }
 
-  .media-picker,
-  .quick-replies-trigger {
+  .media-picker {
     min-height: 36px;
   }
 
@@ -917,8 +910,7 @@
     padding-block: 8px;
   }
 
-  .media-picker,
-  .quick-replies-trigger {
+  .media-picker {
     width: 34px;
     min-width: 34px;
     min-height: 34px;
@@ -931,10 +923,6 @@
     min-height: 38px;
     padding: 0;
     border-radius: 50%;
-  }
-
-  .quick-replies-panel {
-    max-height: min(460px, 62dvh);
   }
 }
 
@@ -1075,8 +1063,7 @@
     gap: 4px;
   }
 
-  .media-picker,
-  .quick-replies-trigger {
+  .media-picker {
     width: 32px;
     min-width: 32px;
     height: 32px;
