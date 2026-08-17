@@ -10,7 +10,10 @@ test('desktop agent thread keeps compact commercial chat styling', async () => {
       new URL('../src/dashboard/agent-desktop.css', import.meta.url),
       'utf8',
     ),
-    readFile(new URL('../src/dashboard/dashboard-ui.tsx', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/dashboard/dashboard-ui.tsx', import.meta.url),
+      'utf8',
+    ),
   ]);
 
   assert.match(main, /import '\.\/agent-desktop\.css';/u);

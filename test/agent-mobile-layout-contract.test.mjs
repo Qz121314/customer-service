@@ -22,11 +22,19 @@ test('agent mobile workspace uses separate inbox and app-like thread surfaces', 
   assert.ok(main.includes("'./agent-mobile.css'"));
   assert.ok(!main.includes('agent-mobile-polish.css'));
   assert.ok(!main.includes('agent-mobile-controls.css'));
-  assert.ok(baseCss.includes('.workspace-shell:not(.is-thread-open) .thread-pane'));
-  assert.ok(baseCss.includes('.workspace-shell.is-thread-open .conversation-pane'));
+  assert.ok(
+    baseCss.includes('.workspace-shell:not(.is-thread-open) .thread-pane'),
+  );
+  assert.ok(
+    baseCss.includes('.workspace-shell.is-thread-open .conversation-pane'),
+  );
   assert.ok(baseCss.includes('.workspace-shell.is-thread-open .thread-pane'));
-  assert.ok(baseCss.includes('height: calc(100dvh - env(safe-area-inset-top))'));
-  assert.ok(mobileCss.includes('grid-template-columns: auto minmax(0, 1fr) 44px;'));
+  assert.ok(
+    baseCss.includes('height: calc(100dvh - env(safe-area-inset-top))'),
+  );
+  assert.ok(
+    mobileCss.includes('grid-template-columns: auto minmax(0, 1fr) 44px;'),
+  );
   assert.ok(mobileCss.includes('.workspace-shell .quick-replies-panel'));
   assert.ok(mobileCss.includes('env(safe-area-inset-bottom)'));
   assert.ok(mobileCss.includes('@media (display-mode: standalone)'));

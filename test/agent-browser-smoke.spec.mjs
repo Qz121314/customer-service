@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
-const adminPassword = process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
+const adminPassword =
+  process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 const agentUsername = 'ui-smoke-agent';
 const agentPassword = 'ui-smoke-pass';
 const productId = 'ui-smoke-product';
@@ -11,24 +12,27 @@ function url(path) {
 }
 
 async function seedConversationAndAgent(page) {
-  const conversation = await page.request.post(url('/client/v1/conversations'), {
-    data: {
-      visitorId: 'UI001',
-      sourceHandoffId: '11111111-1111-4111-8111-111111111111',
-      clientMessageId: 'ui-smoke-message-1',
-      message: '你好，这是 UI smoke 会话',
-      product: {
-        id: productId,
-        sectionId: 'ui-smoke-section',
-        sectionName: 'Smoke Section',
-        categoryId: 'ui-smoke-category',
-        categoryName: 'Smoke Category',
-        title: 'UI Smoke Product',
-        href: 'https://example.com/ui-smoke-product',
-        coverUrl: null,
+  const conversation = await page.request.post(
+    url('/client/v1/conversations'),
+    {
+      data: {
+        visitorId: 'UI001',
+        sourceHandoffId: '11111111-1111-4111-8111-111111111111',
+        clientMessageId: 'ui-smoke-message-1',
+        message: '你好，这是 UI smoke 会话',
+        product: {
+          id: productId,
+          sectionId: 'ui-smoke-section',
+          sectionName: 'Smoke Section',
+          categoryId: 'ui-smoke-category',
+          categoryName: 'Smoke Category',
+          title: 'UI Smoke Product',
+          href: 'https://example.com/ui-smoke-product',
+          coverUrl: null,
+        },
       },
     },
-  });
+  );
   expect(conversation.ok()).toBeTruthy();
 
   const adminLogin = await page.request.post(url('/api/auth/login'), {
@@ -73,17 +77,23 @@ async function expectCenteredDialog(page) {
   expect(viewport).not.toBeNull();
   if (!box || !viewport) return;
   expect(Math.abs(box.x + box.width / 2 - viewport.width / 2)).toBeLessThan(48);
-  expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThan(72);
+  expect(Math.abs(box.y + box.height / 2 - viewport.height / 2)).toBeLessThan(
+    72,
+  );
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1);
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 }
 
-test('agent desktop and mobile interaction surfaces remain usable', async ({ page }) => {
+test('agent desktop and mobile interaction surfaces remain usable', async ({
+  page,
+}) => {
   let quickReplyServerRequests = 0;
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.startsWith('/api/agent/quick-replies')) {
+    if (
+      new URL(request.url()).pathname.startsWith('/api/agent/quick-replies')
+    ) {
       quickReplyServerRequests += 1;
     }
   });
@@ -95,7 +105,9 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({ pag
   await expect(avatarButton).toBeVisible();
   await avatarButton.click();
   await expectCenteredDialog(page);
-  await expect(page.getByText('图片只在本机压缩和预览，确认后才上传。')).toBeVisible();
+  await expect(
+    page.getByText('图片只在本机压缩和预览，确认后才上传。'),
+  ).toBeVisible();
   await page.getByRole('button', { name: '关闭' }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -152,7 +164,9 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({ pag
   const backBox = await backButton.boundingBox();
   expect(backBox?.width ?? 0).toBeGreaterThanOrEqual(38);
   expect(backBox?.height ?? 0).toBeGreaterThanOrEqual(38);
-  const quickReplyBox = await page.locator('.quick-replies-trigger').boundingBox();
+  const quickReplyBox = await page
+    .locator('.quick-replies-trigger')
+    .boundingBox();
   expect(quickReplyBox?.width ?? 0).toBeGreaterThanOrEqual(38);
   expect(quickReplyBox?.height ?? 0).toBeGreaterThanOrEqual(38);
 });
