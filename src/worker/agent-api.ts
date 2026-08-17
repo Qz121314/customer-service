@@ -65,12 +65,6 @@ type TransferConversationRow = {
   status: ConversationStatus;
 };
 
-type QuickReplyRow = {
-  id: string;
-  title: string;
-  body: string;
-};
-
 const COOKIE = 'cs_agent_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const MESSAGE_LIMIT = 8000;
@@ -348,20 +342,6 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
   return result.results ?? [];
 }
 
-async function loadQuickReplies(db: D1Database, agentId: string) {
-  const result = await db
-    .prepare(
-      `SELECT id, title, body
-       FROM agent_quick_replies
-       WHERE agent_id = ?1
-       ORDER BY updated_at DESC, id ASC
-       LIMIT 30`,
-    )
-    .bind(agentId)
-    .all<QuickReplyRow>();
-  return result.results ?? [];
-}
-
 async function loadAgentInbox(
   db: D1Database,
   agent: AgentSession,
@@ -405,33 +385,26 @@ ${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = 
     ? statement.bind(agent.id, requestedStatus)
     : statement.bind(agent.id);
   const transferTargetsRequest = loadTransferTargets(db, agent.id);
-  const quickRepliesRequest = loadQuickReplies(db, agent.id);
 
   if (filtered) {
-    const [result, overview, transferTargets, quickReplies] = await Promise.all(
-      [
-        statement.all<InboxConversationRow>(),
-        loadAgentOverview(db, agent.id),
-        transferTargetsRequest,
-        quickRepliesRequest,
-      ],
-    );
+    const [result, overview, transferTargets] = await Promise.all([
+      statement.all<InboxConversationRow>(),
+      loadAgentOverview(db, agent.id),
+      transferTargetsRequest,
+    ]);
     return {
       conversations: result.results ?? [],
       overview,
       transferTargets,
-      quickReplies,
       availability: agent.status === 'busy' ? 'busy' : 'online',
     };
   }
 
-  const [result, quotaOverview, transferTargets, quickReplies] =
-    await Promise.all([
-      statement.all<InboxConversationRow>(),
-      loadAgentQuotaOverview(db, agent.id),
-      transferTargetsRequest,
-      quickRepliesRequest,
-    ]);
+  const [result, quotaOverview, transferTargets] = await Promise.all([
+    statement.all<InboxConversationRow>(),
+    loadAgentQuotaOverview(db, agent.id),
+    transferTargetsRequest,
+  ]);
   const conversations = result.results ?? [];
   const firstConversation = conversations[0];
   const counts = {
@@ -452,7 +425,6 @@ ${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = 
       ...quotaOverview,
     },
     transferTargets,
-    quickReplies,
     availability: agent.status === 'busy' ? 'busy' : 'online',
   };
 }
@@ -527,44 +499,6 @@ agentApi.get('/api/agent/conversations', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   return c.json(await loadAgentInbox(c.env.DB, agent, c.req.query('status')));
-});
-
-agentApi.post('/api/agent/quick-replies', async (c) => {
-  const agent = await authenticateAgent(c);
-  if (!agent) return unauthorized(c);
-  const body = await readJson<{ title?: string; body?: string }>(c.req.raw);
-  const title = normalizeText(body?.title, 40);
-  const replyBody = normalizeText(body?.body, 1000);
-  if (!title || !replyBody)
-    return c.json({ error: 'INVALID_QUICK_REPLY' }, 400);
-  const count = await c.env.DB.prepare(
-    'SELECT COUNT(*) AS count FROM agent_quick_replies WHERE agent_id = ?1',
-  )
-    .bind(agent.id)
-    .first<{ count: number }>();
-  if (Number(count?.count ?? 0) >= 30)
-    return c.json({ error: 'QUICK_REPLY_LIMIT_REACHED' }, 409);
-
-  const reply = { id: crypto.randomUUID(), title, body: replyBody };
-  await c.env.DB.prepare(
-    `INSERT INTO agent_quick_replies (id, agent_id, title, body)
-     VALUES (?1, ?2, ?3, ?4)`,
-  )
-    .bind(reply.id, agent.id, reply.title, reply.body)
-    .run();
-  return c.json({ reply }, 201);
-});
-
-agentApi.delete('/api/agent/quick-replies/:id', async (c) => {
-  const agent = await authenticateAgent(c);
-  if (!agent) return unauthorized(c);
-  const result = await c.env.DB.prepare(
-    'DELETE FROM agent_quick_replies WHERE id = ?1 AND agent_id = ?2',
-  )
-    .bind(c.req.param('id'), agent.id)
-    .run();
-  if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-  return c.json({ ok: true });
 });
 
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
@@ -1133,12 +1067,6 @@ function normalizeCursorDateTime(value?: string | null): string | null {
     return null;
   }
   return text;
-}
-
-function normalizeText(value: unknown, maxLength: number): string | null {
-  if (typeof value !== 'string') return null;
-  const text = value.trim();
-  return text && text.length <= maxLength ? text : null;
 }
 
 function normalizeMonth(value?: string): string | null {
