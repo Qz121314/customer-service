@@ -1,9 +1,177 @@
-/* Mobile-only finishing layer for the agent message composer.
- * Keeps the message flow unchanged while making the controls read as a native
- * chat input bar instead of a compressed desktop toolbar.
+/* Mobile-only finishing layer for the agent conversation screen.
+ * Keeps messaging behavior unchanged while tightening the app bar and composer
+ * around native chat-app interaction patterns: centered tap targets, circular
+ * actions, a stable pill input and compact status controls.
  */
 
 @media (max-width: 760px) {
+  .workspace-shell .thread-head,
+  .workspace-shell .thread-head button,
+  .workspace-shell .thread-head select,
+  .workspace-shell .composer,
+  .workspace-shell .composer label,
+  .workspace-shell .composer button,
+  .workspace-shell .composer textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Conversation app bar: one visual center line for back, identity and actions. */
+  .workspace-shell .thread-head {
+    box-sizing: border-box;
+    min-height: 60px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 8px;
+    border-bottom: 1px solid #e7e9ed;
+    background: rgba(255, 255, 255, 0.985);
+    box-shadow: 0 1px 8px rgba(17, 24, 39, 0.03);
+    backdrop-filter: blur(18px);
+  }
+
+  .workspace-shell .thread-back-button {
+    display: grid;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    place-items: center;
+    align-self: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    touch-action: manipulation;
+  }
+
+  .workspace-shell .thread-back-button::before {
+    display: block;
+    width: 21px;
+    height: 21px;
+    background-size: 21px 21px;
+  }
+
+  .workspace-shell .thread-back-button:active {
+    background: #f0f1f3;
+    transform: scale(0.94);
+  }
+
+  .workspace-shell .thread-head-copy {
+    display: grid;
+    min-width: 0;
+    min-height: 42px;
+    align-content: center;
+    gap: 1px;
+    padding-left: 41px;
+  }
+
+  .workspace-shell .thread-head-copy::before {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background-color: #eceef2;
+    background-size: 16px 16px;
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.025);
+  }
+
+  .workspace-shell .thread-head h2 {
+    margin: 0;
+    color: #1d2027;
+    font-size: 14px;
+    font-weight: 720;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+  }
+
+  .workspace-shell .conversation-expiry {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    overflow: hidden;
+    color: #8a9099;
+    font-size: 9px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-shell .conversation-expiry > span {
+    display: none;
+  }
+
+  .workspace-shell .thread-actions {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    align-self: center;
+    gap: 2px;
+  }
+
+  .workspace-shell .thread-head select {
+    box-sizing: border-box;
+    width: 70px;
+    min-width: 70px;
+    height: 36px;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 25px 0 10px;
+    border: 1px solid #e1e4e8;
+    border-radius: 18px;
+    outline: 0;
+    background-color: #f7f8fa;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23656b75' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px 12px;
+    color: #4f5661;
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 36px;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+    touch-action: manipulation;
+  }
+
+  .workspace-shell .thread-head select:focus {
+    border-color: #cecdf1;
+    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.07);
+  }
+
+  .workspace-shell .transfer-menu {
+    align-self: center;
+  }
+
+  .workspace-shell .transfer-menu > summary {
+    display: grid;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    list-style: none;
+    touch-action: manipulation;
+  }
+
+  .workspace-shell .transfer-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .workspace-shell .transfer-menu[open] > summary,
+  .workspace-shell .transfer-menu > summary:active {
+    background: #f0f1f3;
+  }
+
+  /* Composer: each action has its own centered tap target and shares one baseline. */
   .workspace-shell .composer {
     box-sizing: border-box;
     width: 100%;
@@ -11,7 +179,8 @@
     grid-template-columns: auto minmax(0, 1fr) 44px;
     align-items: end;
     gap: 6px;
-    padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+    margin: 0;
+    padding: 6px 8px max(8px, env(safe-area-inset-bottom));
     overflow: visible;
     border-top: 1px solid #e7e9ed;
     background: rgba(250, 250, 251, 0.985);
@@ -24,8 +193,11 @@
     width: auto;
     min-width: 0;
     height: 44px;
+    min-height: 44px;
     align-items: center;
+    align-self: end;
     gap: 4px;
+    margin: 0;
     padding: 0;
     overflow: visible;
     border: 0;
@@ -42,19 +214,42 @@
     height: 40px;
     min-height: 40px;
     place-items: center;
+    align-self: center;
+    margin: 0;
     padding: 0;
-    border: 1px solid #e1e4e8;
+    border: 1px solid #e0e3e7;
     border-radius: 50%;
     background: #fff;
     color: #5f6671;
     box-shadow: 0 1px 2px rgba(17, 24, 39, 0.035);
+    line-height: 0;
+    touch-action: manipulation;
+  }
+
+  .workspace-shell .media-picker::before,
+  .workspace-shell .quick-replies-trigger::before {
+    display: block;
+    margin: 0;
+    transform: none;
+  }
+
+  .workspace-shell .media-picker::before {
+    width: 20px;
+    height: 20px;
+    background-size: 20px 20px;
+  }
+
+  .workspace-shell .quick-replies-trigger::before {
+    width: 19px;
+    height: 19px;
+    background-size: 19px 19px;
   }
 
   .workspace-shell .media-picker:hover,
   .workspace-shell .quick-replies-trigger:hover:not(:disabled),
   .workspace-shell .media-picker:active,
   .workspace-shell .quick-replies-trigger:active:not(:disabled) {
-    border-color: #d9dce1;
+    border-color: #d7dae0;
     background: #f3f4f6;
   }
 
@@ -64,7 +259,14 @@
   }
 
   .workspace-shell .quick-replies {
-    min-width: 0;
+    display: grid;
+    width: 40px;
+    min-width: 40px;
+    height: 44px;
+    min-height: 44px;
+    place-items: center;
+    align-self: center;
+    margin: 0;
   }
 
   .workspace-shell .composer > textarea {
@@ -74,18 +276,21 @@
     height: 44px;
     min-height: 44px;
     max-height: 108px;
+    align-self: end;
     margin: 0;
     padding: 10px 14px;
     overflow-y: auto;
-    border: 1px solid #e1e4e8;
+    border: 1px solid #dfe2e6;
     border-radius: 22px;
+    outline: 0;
     background: #fff;
     color: #252932;
     font-size: 16px;
     line-height: 1.4;
     resize: none;
-    box-shadow: none;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025);
     field-sizing: content;
+    scrollbar-width: none;
   }
 
   .workspace-shell .composer > textarea::placeholder {
@@ -93,17 +298,20 @@
   }
 
   .workspace-shell .composer > textarea:focus {
-    border-color: #cbc9f2;
+    border-color: #c9c8ef;
     outline: 0;
-    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.07);
+    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.065);
   }
 
   .workspace-shell .composer-foot {
-    display: block;
+    display: grid;
     width: 44px;
     min-width: 44px;
     height: 44px;
     min-height: 44px;
+    place-items: center;
+    align-self: end;
+    margin: 0;
   }
 
   .workspace-shell .composer-foot .media-upload-progress {
@@ -119,7 +327,10 @@
     padding: 0;
     border: 0;
     border-radius: 50%;
-    box-shadow: 0 4px 12px rgba(88, 86, 214, 0.2);
+    background-position: center;
+    background-size: 20px 20px;
+    box-shadow: 0 4px 12px rgba(88, 86, 214, 0.18);
+    touch-action: manipulation;
   }
 
   .workspace-shell .composer-foot .primary-button:not(:disabled):active {
@@ -128,7 +339,7 @@
 
   .workspace-shell .composer-foot .primary-button:disabled {
     opacity: 1;
-    background-color: #d5d8de;
+    background-color: #d3d6dc;
     box-shadow: none;
   }
 
@@ -140,23 +351,82 @@
 }
 
 @media (max-width: 390px) {
+  .workspace-shell .thread-head {
+    min-height: 58px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 4px;
+    padding-inline: 5px;
+  }
+
+  .workspace-shell .thread-back-button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .workspace-shell .thread-head-copy {
+    min-height: 40px;
+    padding-left: 37px;
+  }
+
+  .workspace-shell .thread-head-copy::before {
+    width: 31px;
+    height: 31px;
+  }
+
+  .workspace-shell .thread-head h2 {
+    font-size: 13px;
+  }
+
+  .workspace-shell .conversation-expiry {
+    font-size: 8px;
+  }
+
+  .workspace-shell .thread-head select {
+    width: 64px;
+    min-width: 64px;
+    height: 34px;
+    min-height: 34px;
+    padding-right: 22px;
+    padding-left: 8px;
+    background-position: right 7px center;
+    font-size: 9px;
+    line-height: 34px;
+  }
+
+  .workspace-shell .transfer-menu > summary {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+  }
+
   .workspace-shell .composer {
     grid-template-columns: auto minmax(0, 1fr) 42px;
     gap: 5px;
-    padding-inline: 6px;
+    padding: 5px 6px max(7px, env(safe-area-inset-bottom));
   }
 
   .workspace-shell .composer-tools {
     height: 42px;
+    min-height: 42px;
     gap: 3px;
   }
 
   .workspace-shell .media-picker,
   .workspace-shell .quick-replies-trigger {
-    width: 37px;
-    min-width: 37px;
-    height: 37px;
-    min-height: 37px;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .workspace-shell .quick-replies {
+    width: 38px;
+    min-width: 38px;
+    height: 42px;
+    min-height: 42px;
   }
 
   .workspace-shell .composer > textarea {
@@ -176,6 +446,7 @@
 }
 
 @media (display-mode: standalone) and (max-width: 760px) {
+  .workspace-shell .thread-head,
   .workspace-shell .composer {
     background: rgba(255, 255, 255, 0.99);
   }
