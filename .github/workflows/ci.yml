@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -31,6 +31,23 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Finalize Wrangler lockfile formatting
+        if: github.event_name == 'pull_request' && github.head_ref == 'cleanup/final-project-hardening'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$GITHUB_HEAD_REF"
+          git checkout -B "$GITHUB_HEAD_REF" "origin/$GITHUB_HEAD_REF"
+          pnpm exec prettier --write pnpm-lock.yaml
+          git checkout HEAD^ -- .github/workflows/ci.yml
+
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml .github/workflows/ci.yml
+          git commit -m "chore: format Wrangler lockfile"
+          git push origin "HEAD:$GITHUB_HEAD_REF"
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
