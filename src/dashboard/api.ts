@@ -3,7 +3,7 @@ import {
   deleteLocalQuickReply,
   listLocalQuickReplies,
   setLocalQuickReplyAgent,
-} from './agent-local-quick-replies';
+} from './agent-local-quick-replies.ts';
 
 export type AdminSessionState = {
   authenticated: boolean;

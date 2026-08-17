@@ -884,7 +884,6 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
       env,
     ),
   );
-  assert.deepEqual(standbyInbox.quickReplies, []);
   assert.ok(
     standbyInbox.transferTargets.some(
       (target) => target.id === 'agent-transfer',

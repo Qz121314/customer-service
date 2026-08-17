@@ -9,12 +9,10 @@ function source(path) {
 
 test('dashboard polish removes narrow chat constraints and agent workspace remains the final chat layer', () => {
   const main = source('../src/dashboard/main.tsx');
-  const dialogueFlow = source('../src/dashboard/dialogue-flow.css');
   const polish = source('../src/dashboard/ui-polish.css');
   const workspace = source('../src/dashboard/agent-workspace.css');
 
-  assert.ok(!dialogueFlow.includes('dialogue-width.css'));
-  assert.ok(!dialogueFlow.includes('max-width: 464px'));
+  assert.ok(!main.includes("'./dialogue-flow.css'"));
   assert.ok(
     main.indexOf("'./ui-polish.css'") >
       main.indexOf("'./cloud-service-ui.css'"),
