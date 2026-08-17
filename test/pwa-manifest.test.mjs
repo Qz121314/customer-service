@@ -13,6 +13,7 @@ const manifest = JSON.parse(
 test('agent PWA opens directly into the standalone workspace', () => {
   assert.equal(manifest.id, '/agent');
   assert.equal(manifest.start_url, '/agent');
+  assert.equal(manifest.scope, '/agent');
   assert.equal(manifest.display, 'standalone');
   assert.deepEqual(manifest.display_override, ['standalone', 'minimal-ui']);
   assert.deepEqual(
@@ -25,7 +26,7 @@ test('agent PWA opens directly into the standalone workspace', () => {
   );
 });
 
-test('agent shell exposes mobile standalone metadata and registers its service worker', async () => {
+test('agent shell exposes mobile standalone metadata and registers an agent-only service worker', async () => {
   const [index, main] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/dashboard/main.tsx', import.meta.url), 'utf8'),
@@ -34,17 +35,18 @@ test('agent shell exposes mobile standalone metadata and registers its service w
   assert.match(index, /apple-mobile-web-app-capable/u);
   assert.match(index, /apple-mobile-web-app-title/u);
   assert.match(index, /viewport-fit=cover/u);
-  assert.ok(main.includes(".register('/agent-sw.js', { scope: '/' })"));
+  assert.ok(main.includes(".register('/agent-sw.js', { scope: '/agent' })"));
 });
 
-test('agent service worker caches the app shell, shows background messages and focuses workspace', async () => {
+test('agent service worker stays inside agent navigation and handles background messages', async () => {
   const source = await readFile(
     new URL('../public/agent-sw.js', import.meta.url),
     'utf8',
   );
   assert.match(source, /addEventListener\('install'/u);
   assert.match(source, /addEventListener\('fetch'/u);
-  assert.match(source, /agent-workspace-v1/u);
+  assert.match(source, /agent-workspace-v2/u);
+  assert.match(source, /!url\.pathname\.startsWith\('\/agent'\)/u);
   assert.match(source, /addEventListener\('push'/u);
   assert.match(source, /visibilityState === 'visible'/u);
   assert.match(source, /showNotification\('客服坐席有新消息'/u);

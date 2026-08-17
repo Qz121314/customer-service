@@ -21,7 +21,7 @@ test('agent active conversation reads use a dedicated partial index', () => {
 test('transfer target load counts only candidate agents', () => {
   const worker = source('../src/worker/agent-api.ts');
   const start = worker.indexOf('async function loadTransferTargets');
-  const end = worker.indexOf('async function loadQuickReplies', start);
+  const end = worker.indexOf('async function loadAgentInbox', start);
   assert.ok(start >= 0 && end > start);
   const section = worker.slice(start, end);
 

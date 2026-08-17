@@ -1,21 +1,17 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './agent-local-quick-replies';
 import './styles.css';
 import './product-assignment.css';
 import './chat-dialogue.css';
-import './dialogue-flow.css';
 import './media-view.css';
 import './agent-statistics.css';
 import './cloud-service-ui.css';
 import './ui-polish.css';
 import './agent-editor.css';
 import './agent-workspace.css';
-import './agent-desktop-compact.css';
-import './agent-desktop-thread-polish.css';
-import './agent-mobile-polish.css';
-import './agent-mobile-controls.css';
+import './agent-desktop.css';
+import './agent-mobile.css';
 import './agent-avatar.css';
 
 if (
@@ -26,7 +22,7 @@ if (
     'load',
     () => {
       void navigator.serviceWorker
-        .register('/agent-sw.js', { scope: '/' })
+        .register('/agent-sw.js', { scope: '/agent' })
         .catch(() => undefined);
     },
     { once: true },

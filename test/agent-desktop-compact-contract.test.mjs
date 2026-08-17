@@ -7,12 +7,16 @@ test('agent desktop workspace stays compact and preserves readable contrast', as
   const [main, css] = await Promise.all([
     readFile(new URL('../src/dashboard/main.tsx', import.meta.url), 'utf8'),
     readFile(
-      new URL('../src/dashboard/agent-desktop-compact.css', import.meta.url),
+      new URL('../src/dashboard/agent-desktop.css', import.meta.url),
       'utf8',
     ),
   ]);
 
-  assert.match(main, /import '\.\/agent-desktop-compact\.css';/u);
+  assert.match(main, /import '\.\/agent-desktop\.css';/u);
+  assert.doesNotMatch(
+    main,
+    /agent-desktop-compact|agent-desktop-thread-polish/u,
+  );
   assert.match(css, /max-width: 1480px;/u);
   assert.match(css, /height: min\(900px, calc\(100dvh - 28px\)\);/u);
   assert.match(css, /background: #1d2026;/u);

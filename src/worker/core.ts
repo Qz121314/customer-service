@@ -194,7 +194,12 @@ export class ConversationRoom extends DurableObject<Bindings> {
        SET status = CASE WHEN status = 'busy' THEN 'busy' ELSE 'online' END,
            last_seen_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1 AND is_enabled = 1`,
+       WHERE id = ?1
+         AND is_enabled = 1
+         AND (
+           last_seen_at IS NULL
+           OR datetime(last_seen_at) <= datetime('now', '-90 seconds')
+         )`,
     )
       .bind(agentId)
       .run();

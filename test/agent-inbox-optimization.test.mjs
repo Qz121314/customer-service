@@ -13,12 +13,17 @@ test('agent inbox returns overview, conversations, messages and media in two req
   ]);
 
   assert.match(api, /getAgentInbox/u);
-  assert.match(api, /request\('\/api\/agent\/conversations'\)/u);
+  assert.match(
+    api,
+    /request<AgentInboxPayload>\('\/api\/agent\/conversations'\)/u,
+  );
   assert.match(
     worker,
     /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
   );
-  assert.match(worker, /transferTargets,[\s\S]*quickReplies/u);
+  assert.match(worker, /transferTargets,[\s\S]*availability/u);
+  assert.doesNotMatch(worker, /quickReplies/u);
+  assert.match(api, /quickReplies: listLocalQuickReplies\(\)/u);
   assert.match(
     worker,
     /messages: messages\.results \?\? \[\],[\s\S]*media,[\s\S]*readState/u,

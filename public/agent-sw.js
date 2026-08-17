@@ -1,7 +1,7 @@
 /* global self, URL, caches, fetch */
 
 const AGENT_WORKSPACE_URL = '/agent';
-const AGENT_CACHE = 'agent-workspace-v1';
+const AGENT_CACHE = 'agent-workspace-v2';
 const APP_SHELL = [
   AGENT_WORKSPACE_URL,
   '/agent.webmanifest',
@@ -46,6 +46,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (request.mode === 'navigate') {
+    if (!url.pathname.startsWith('/agent')) return;
     event.respondWith(
       fetch(request)
         .then((response) => {

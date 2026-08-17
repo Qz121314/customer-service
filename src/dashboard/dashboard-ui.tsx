@@ -285,7 +285,6 @@ function Bubble({
   const isRead = Boolean(item.read_by_visitor_at);
   return (
     <div className={isAgent ? 'message mine' : 'message visitor'}>
-      {!isAgent && <span className="avatar tiny">访</span>}
       <div>
         {media ? (
           <a href={media.url} target="_blank" rel="noreferrer">

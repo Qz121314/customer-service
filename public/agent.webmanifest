@@ -5,7 +5,7 @@
   "description": "客服员工用于处理访客实时会话的坐席工作台",
   "lang": "zh-CN",
   "start_url": "/agent",
-  "scope": "/",
+  "scope": "/agent",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
   "background_color": "#f4f1ec",

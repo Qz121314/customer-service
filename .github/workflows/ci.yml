@@ -16,7 +16,7 @@ concurrency:
 jobs:
   validate-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -52,6 +52,41 @@ jobs:
 
       - name: Validate Worker bundle
         run: pnpm cf:check
+
+      - name: Install browser smoke runtime
+        run: |
+          pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Smoke test agent UI in Chromium
+        env:
+          UI_SMOKE_BASE_URL: http://127.0.0.1:8787
+          UI_SMOKE_ADMIN_PASSWORD: ui-smoke-admin-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler dev --local --port 8787 \
+            --var ADMIN_PASSWORD:ui-smoke-admin-password \
+            --var ENVIRONMENT:ui-smoke \
+            --var APP_VERSION:ui-smoke \
+            > /tmp/ui-smoke-worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-worker.log
+            exit 1
+          fi
+
+          pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=github
 
       - name: Deploy production to Cloudflare
         id: deploy

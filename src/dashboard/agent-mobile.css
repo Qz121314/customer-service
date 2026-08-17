@@ -1,9 +1,9 @@
 /*
- * Mobile-only visual refinement for the agent workspace.
+ * Mobile agent workspace.
  *
- * This layer is intentionally imported last. It keeps the existing workspace
- * behavior and data flow intact while making the inbox and thread feel like a
- * purpose-built mobile messaging app rather than a compressed desktop panel.
+ * Keep phone/PWA layout and interaction overrides in one ordered layer. The
+ * conversation controls intentionally appear after the broader workspace rules
+ * so tap targets, keyboard behavior and safe-area geometry have one owner.
  */
 
 @media (max-width: 760px) {
@@ -23,7 +23,6 @@
     background: #f4f5f7;
   }
 
-  /* Top app bar: identity first, utilities reduced to clean icon actions. */
   .workspace-shell .workspace-sidebar {
     position: relative;
     z-index: 32;
@@ -137,7 +136,6 @@
     box-sizing: content-box;
   }
 
-  /* Inbox chrome: compact hierarchy with useful information above the fold. */
   .workspace-shell .conversation-pane {
     height: calc(100dvh - 54px - env(safe-area-inset-top));
     background: #f5f6f8;
@@ -476,57 +474,100 @@
     line-height: 1.5;
   }
 
-  /* Conversation screen: stable app bar, compact context, calmer dialogue. */
   .workspace-shell.is-thread-open .thread-pane {
     background: var(--agent-thread);
   }
 
+  .workspace-shell .thread-head,
+  .workspace-shell .thread-head button,
+  .workspace-shell .thread-head select,
+  .workspace-shell .composer,
+  .workspace-shell .composer label,
+  .workspace-shell .composer button,
+  .workspace-shell .composer textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   .workspace-shell .thread-head {
-    min-height: 58px;
+    box-sizing: border-box;
+    min-height: 60px;
     grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
     gap: 5px;
-    padding: 5px 7px;
-    border-bottom: 1px solid #e5e7eb;
-    background: rgba(255, 255, 255, 0.98);
-    box-shadow: 0 1px 8px rgba(17, 24, 39, 0.025);
+    padding: 6px 8px;
+    border-bottom: 1px solid #e7e9ed;
+    background: rgba(255, 255, 255, 0.985);
+    box-shadow: 0 1px 8px rgba(17, 24, 39, 0.03);
     backdrop-filter: blur(18px);
   }
 
   .workspace-shell .thread-back-button {
+    display: grid;
     width: 40px;
+    min-width: 40px;
     height: 40px;
-    border-radius: 12px;
+    min-height: 40px;
+    place-items: center;
+    align-self: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    touch-action: manipulation;
   }
 
   .workspace-shell .thread-back-button::before {
+    display: block;
     width: 21px;
     height: 21px;
     background-size: 21px 21px;
   }
 
+  .workspace-shell .thread-back-button:active {
+    background: #f0f1f3;
+    transform: scale(0.94);
+  }
+
   .workspace-shell .thread-head-copy {
-    min-height: 40px;
-    padding-left: 40px;
+    display: grid;
+    min-width: 0;
+    min-height: 42px;
+    align-content: center;
+    gap: 1px;
+    padding-left: 41px;
   }
 
   .workspace-shell .thread-head-copy::before {
     width: 34px;
     height: 34px;
+    border-radius: 50%;
     background-color: #eceef2;
     background-size: 16px 16px;
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.025);
   }
 
   .workspace-shell .thread-head h2 {
-    color: #1e2128;
+    margin: 0;
+    color: #1d2027;
     font-size: 14px;
-    font-weight: 700;
+    font-weight: 720;
+    line-height: 1.15;
     letter-spacing: -0.015em;
   }
 
   .workspace-shell .conversation-expiry {
-    margin-top: 1px;
-    color: #8c929c;
-    font-size: 8px;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    overflow: hidden;
+    color: #8a9099;
+    font-size: 9px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .workspace-shell .conversation-expiry > span {
@@ -534,33 +575,72 @@
   }
 
   .workspace-shell .thread-actions {
-    gap: 1px;
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    align-self: center;
+    gap: 2px;
   }
 
   .workspace-shell .thread-head select {
-    width: 72px;
-    min-width: 72px;
-    min-height: 34px;
-    padding: 0 5px;
-    border: 1px solid #e2e4e8;
-    border-radius: 10px;
-    background-color: #f8f9fa;
-    color: #505762;
-    box-shadow: none;
+    box-sizing: border-box;
+    width: 70px;
+    min-width: 70px;
+    height: 36px;
+    min-height: 36px;
+    margin: 0;
+    padding: 0 25px 0 10px;
+    border: 1px solid #e1e4e8;
+    border-radius: 18px;
+    outline: 0;
+    background-color: #f7f8fa;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23656b75' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px 12px;
+    color: #4f5661;
     font-size: 10px;
-    font-weight: 620;
+    font-weight: 650;
+    line-height: 36px;
+    box-shadow: none;
+    appearance: none;
+    -webkit-appearance: none;
+    touch-action: manipulation;
+  }
+
+  .workspace-shell .thread-head select:focus {
+    border-color: #cecdf1;
+    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.07);
+  }
+
+  .workspace-shell .transfer-menu {
+    align-self: center;
   }
 
   .workspace-shell .transfer-menu > summary {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
-    min-height: 34px;
-    border-radius: 10px;
+    display: grid;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: none;
+    list-style: none;
+    touch-action: manipulation;
   }
 
-  .workspace-shell .transfer-menu[open] > summary {
-    background: #f0f1f4;
+  .workspace-shell .transfer-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .workspace-shell .transfer-menu[open] > summary,
+  .workspace-shell .transfer-menu > summary:active {
+    background: #f0f1f3;
   }
 
   .workspace-shell .transfer-menu-panel {
@@ -647,10 +727,6 @@
     scrollbar-gutter: auto;
   }
 
-  .workspace-shell .message.visitor > .avatar.tiny {
-    display: none;
-  }
-
   .workspace-shell .message > div {
     max-width: 82%;
     padding: 8px 10px 6px;
@@ -727,40 +803,65 @@
     box-shadow: 0 1px 2px rgba(17, 24, 39, 0.035);
   }
 
-  /* Composer stays anchored to the visual viewport and keeps iOS inputs at 16px. */
   .workspace-shell .composer {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 4px;
-    padding: 6px 7px max(7px, env(safe-area-inset-bottom));
-    border-top: 1px solid #e5e7eb;
-    background: rgba(248, 249, 250, 0.98);
-    box-shadow: 0 -3px 14px rgba(17, 24, 39, 0.025);
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: auto minmax(0, 1fr) 44px;
+    align-items: end;
+    gap: 6px;
+    margin: 0;
+    padding: 6px 8px max(8px, env(safe-area-inset-bottom));
+    overflow: visible;
+    border-top: 1px solid #e7e9ed;
+    background: rgba(250, 250, 251, 0.985);
+    box-shadow: 0 -4px 16px rgba(17, 24, 39, 0.035);
     backdrop-filter: blur(18px);
   }
 
   .workspace-shell .composer-tools {
+    display: flex;
+    width: auto;
+    min-width: 0;
     height: 44px;
-    gap: 0;
-    padding: 0 1px;
-    border: 1px solid #e2e4e8;
-    border-radius: 15px;
-    background: #fff;
+    min-height: 44px;
+    align-items: center;
+    align-self: end;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .workspace-shell .media-picker,
   .workspace-shell .quick-replies-trigger {
-    width: 34px;
-    min-width: 34px;
-    height: 42px;
-    min-height: 42px;
-    border-radius: 13px;
+    display: grid;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    place-items: center;
+    align-self: center;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #e0e3e7;
+    border-radius: 50%;
+    background: #fff;
+    color: #5f6671;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.035);
+    line-height: 0;
+    touch-action: manipulation;
   }
 
-  .workspace-shell .media-picker:hover,
-  .workspace-shell .quick-replies-trigger:hover:not(:disabled),
-  .workspace-shell .media-picker:active,
-  .workspace-shell .quick-replies-trigger:active:not(:disabled) {
-    background: #f1f2f4;
+  .workspace-shell .media-picker::before,
+  .workspace-shell .quick-replies-trigger::before {
+    display: block;
+    margin: 0;
+    transform: none;
   }
 
   .workspace-shell .media-picker::before {
@@ -775,26 +876,77 @@
     background-size: 19px 19px;
   }
 
-  .workspace-shell .composer > textarea {
+  .workspace-shell .media-picker:hover,
+  .workspace-shell .quick-replies-trigger:hover:not(:disabled),
+  .workspace-shell .media-picker:active,
+  .workspace-shell .quick-replies-trigger:active:not(:disabled) {
+    border-color: #d7dae0;
+    background: #f3f4f6;
+  }
+
+  .workspace-shell .media-picker:active,
+  .workspace-shell .quick-replies-trigger:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+
+  .workspace-shell .quick-replies {
+    display: grid;
+    width: 40px;
+    min-width: 40px;
+    height: 44px;
     min-height: 44px;
-    max-height: 118px;
-    padding: 10px 12px;
-    border: 1px solid #e2e4e8;
-    border-radius: 15px;
+    place-items: center;
+    align-self: center;
+    margin: 0;
+  }
+
+  .workspace-shell .composer > textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    min-height: 44px;
+    max-height: 108px;
+    align-self: end;
+    margin: 0;
+    padding: 10px 14px;
+    overflow-y: auto;
+    border: 1px solid #dfe2e6;
+    border-radius: 22px;
+    outline: 0;
     background: #fff;
+    color: #252932;
     font-size: 16px;
-    line-height: 1.42;
-    box-shadow: none;
+    line-height: 1.4;
+    resize: none;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025);
+    field-sizing: content;
+    scrollbar-width: none;
+  }
+
+  .workspace-shell .composer > textarea::placeholder {
+    color: #969ca6;
   }
 
   .workspace-shell .composer > textarea:focus {
-    border-color: #d4d3f5;
-    box-shadow: 0 0 0 2px rgba(88, 86, 214, 0.08);
+    border-color: #c9c8ef;
+    outline: 0;
+    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.065);
   }
 
   .workspace-shell .composer-foot {
+    display: grid;
     width: 44px;
     min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    place-items: center;
+    align-self: end;
+    margin: 0;
+  }
+
+  .workspace-shell .composer-foot .media-upload-progress {
+    display: none;
   }
 
   .workspace-shell .composer-foot .primary-button {
@@ -802,20 +954,30 @@
     min-width: 44px;
     height: 44px;
     min-height: 44px;
-    border-radius: 15px;
-    background-size: 19px 19px;
-    box-shadow: 0 5px 14px rgba(88, 86, 214, 0.2);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background-position: center;
+    background-size: 20px 20px;
+    box-shadow: 0 4px 12px rgba(88, 86, 214, 0.18);
+    touch-action: manipulation;
+  }
+
+  .workspace-shell .composer-foot .primary-button:not(:disabled):active {
+    transform: scale(0.94);
   }
 
   .workspace-shell .composer-foot .primary-button:disabled {
-    background-color: #c8ccd2;
+    opacity: 1;
+    background-color: #d3d6dc;
+    box-shadow: none;
   }
 
-  /* Quick replies become a compact mobile tray above the composer. */
   .workspace-shell .quick-replies-panel {
-    right: 7px;
-    bottom: calc(64px + env(safe-area-inset-bottom));
-    left: 7px;
+    right: 8px;
+    bottom: calc(66px + env(safe-area-inset-bottom));
+    left: 8px;
     width: auto;
     max-height: min(68dvh, 520px);
     border: 1px solid #dfe2e7;
@@ -982,16 +1144,22 @@
   }
 
   .workspace-shell .thread-head {
+    min-height: 58px;
     grid-template-columns: 38px minmax(0, 1fr) auto;
-    padding-inline: 4px;
+    gap: 4px;
+    padding-inline: 5px;
   }
 
   .workspace-shell .thread-back-button {
     width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
   }
 
   .workspace-shell .thread-head-copy {
-    padding-left: 36px;
+    min-height: 40px;
+    padding-left: 37px;
   }
 
   .workspace-shell .thread-head-copy::before {
@@ -999,16 +1167,31 @@
     height: 31px;
   }
 
+  .workspace-shell .thread-head h2 {
+    font-size: 13px;
+  }
+
+  .workspace-shell .conversation-expiry {
+    font-size: 8px;
+  }
+
   .workspace-shell .thread-head select {
-    width: 66px;
-    min-width: 66px;
-    padding-inline: 3px;
+    width: 64px;
+    min-width: 64px;
+    height: 34px;
+    min-height: 34px;
+    padding-right: 22px;
+    padding-left: 8px;
+    background-position: right 7px center;
     font-size: 9px;
+    line-height: 34px;
   }
 
   .workspace-shell .transfer-menu > summary {
-    width: 31px;
-    min-width: 31px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
   }
 
   .workspace-shell .message > div {
@@ -1016,24 +1199,45 @@
   }
 
   .workspace-shell .composer {
-    gap: 3px;
-    padding-inline: 5px;
+    grid-template-columns: auto minmax(0, 1fr) 42px;
+    gap: 5px;
+    padding: 5px 6px max(7px, env(safe-area-inset-bottom));
   }
 
   .workspace-shell .composer-tools {
-    padding-inline: 0;
+    height: 42px;
+    min-height: 42px;
+    gap: 3px;
   }
 
   .workspace-shell .media-picker,
   .workspace-shell .quick-replies-trigger {
-    width: 32px;
-    min-width: 32px;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .workspace-shell .quick-replies {
+    width: 38px;
+    min-width: 38px;
+    height: 42px;
+    min-height: 42px;
+  }
+
+  .workspace-shell .composer > textarea {
+    height: 42px;
+    min-height: 42px;
+    padding: 9px 12px;
+    border-radius: 21px;
   }
 
   .workspace-shell .composer-foot,
   .workspace-shell .composer-foot .primary-button {
     width: 42px;
     min-width: 42px;
+    height: 42px;
+    min-height: 42px;
   }
 }
 
@@ -1041,6 +1245,6 @@
   .workspace-shell .workspace-sidebar,
   .workspace-shell .thread-head,
   .workspace-shell .composer {
-    background: rgba(255, 255, 255, 0.985);
+    background: rgba(255, 255, 255, 0.99);
   }
 }
