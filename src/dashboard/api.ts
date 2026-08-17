@@ -1,3 +1,10 @@
+import {
+  createLocalQuickReply,
+  deleteLocalQuickReply,
+  listLocalQuickReplies,
+  setLocalQuickReplyAgent,
+} from './agent-local-quick-replies';
+
 export type AdminSessionState = {
   authenticated: boolean;
   configured: boolean;
@@ -178,6 +185,10 @@ export type QuickReply = {
   body: string;
 };
 
+type AgentInboxPayload = Omit<AgentInbox, 'quickReplies'> & {
+  quickReplies?: QuickReply[];
+};
+
 type AdminBootstrapAgent = Omit<AgentAccount, 'routingScope'> & {
   productIds?: string[];
   routingScope?: AgentRoutingScope;
@@ -213,8 +224,6 @@ const errorMessages: Record<string, string> = {
   CONVERSATION_CLOSED: '会话已关闭',
   INVALID_TRANSFER_TARGET: '请选择有效的转接客服',
   TRANSFER_TARGET_UNAVAILABLE: '该客服当前无法接收新会话',
-  INVALID_QUICK_REPLY: '快捷回复名称或内容无效',
-  QUICK_REPLY_LIMIT_REACHED: '每个客服最多保存 30 条快捷回复',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
   MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
   INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
@@ -314,7 +323,11 @@ export async function getAgentSelfMonthlyStats(
 }
 
 export async function getAgentSession(): Promise<AgentSessionState> {
-  return request('/api/agent/auth/session');
+  const response = await request<AgentSessionState>('/api/agent/auth/session');
+  setLocalQuickReplyAgent(
+    response.authenticated && response.agent ? response.agent.id : null,
+  );
+  return response;
 }
 
 export async function agentLogin(
@@ -328,24 +341,32 @@ export async function agentLogin(
       body: JSON.stringify({ username, password }),
     },
   );
+  setLocalQuickReplyAgent(response.agent.id);
   return response.agent;
 }
 
 export async function agentLogout(): Promise<void> {
   await request('/api/agent/auth/logout', { method: 'POST' });
+  setLocalQuickReplyAgent(null);
 }
 
 export async function heartbeat(): Promise<AgentInbox> {
-  return request('/api/agent/auth/heartbeat', { method: 'POST' });
+  return withLocalQuickReplies(
+    await request<AgentInboxPayload>('/api/agent/auth/heartbeat', {
+      method: 'POST',
+    }),
+  );
 }
 
 export async function setAgentAvailability(
   status: AgentAvailability,
 ): Promise<AgentInbox> {
-  return request('/api/agent/auth/status', {
-    method: 'POST',
-    body: JSON.stringify({ status }),
-  });
+  return withLocalQuickReplies(
+    await request<AgentInboxPayload>('/api/agent/auth/status', {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
+  );
 }
 
 export async function getOverview(): Promise<Overview> {
@@ -363,7 +384,9 @@ export async function getConversations(
 }
 
 export async function getAgentInbox(): Promise<AgentInbox> {
-  return request('/api/agent/conversations');
+  return withLocalQuickReplies(
+    await request<AgentInboxPayload>('/api/agent/conversations'),
+  );
 }
 
 export async function getConversation(
@@ -430,17 +453,11 @@ export async function createQuickReply(input: {
   title: string;
   body: string;
 }): Promise<QuickReply> {
-  const response = await request<{ reply: QuickReply }>(
-    '/api/agent/quick-replies',
-    { method: 'POST', body: JSON.stringify(input) },
-  );
-  return response.reply;
+  return createLocalQuickReply(input);
 }
 
 export async function deleteQuickReply(id: string): Promise<void> {
-  await request(`/api/agent/quick-replies/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
+  deleteLocalQuickReply(id);
 }
 
 export function openAgentInboxSocket(): WebSocket {
@@ -480,6 +497,10 @@ async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
     if (adminBootstrapRequest === requestPromise) adminBootstrapRequest = null;
   });
   return requestPromise;
+}
+
+function withLocalQuickReplies(payload: AgentInboxPayload): AgentInbox {
+  return { ...payload, quickReplies: listLocalQuickReplies() };
 }
 
 function normalizeRoutingScope(
