@@ -1,0 +1,510 @@
+/*
+ * Desktop agent workspace.
+ *
+ * Keep all desktop-only containment, contrast, thread and composer refinements
+ * in one layer so later UI work does not depend on cross-file override order.
+ */
+
+@media (min-width: 761px) {
+  body:has(.workspace-shell) {
+    overflow: hidden;
+    background: #e9edf2;
+  }
+
+  #root:has(.workspace-shell) {
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 14px;
+    overflow: hidden;
+  }
+
+  .workspace-shell {
+    width: min(1480px, calc(100vw - 28px));
+    max-width: 1480px;
+    height: min(900px, calc(100dvh - 28px));
+    min-height: min(620px, calc(100dvh - 28px));
+    margin: 0;
+    grid-template-columns: 72px clamp(320px, 24vw, 360px) minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid #d8dee7;
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 18px 54px rgba(31, 41, 55, 0.12);
+  }
+
+  .workspace-shell .workspace-sidebar {
+    padding: 14px 10px;
+    border-right: 1px solid #2b3038;
+    background: #1d2026;
+    color: #fff;
+  }
+
+  .workspace-shell .workspace-brand-lockup {
+    min-height: 46px;
+    justify-content: center;
+    padding: 0;
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .workspace-shell .workspace-brand-lockup > span {
+    display: none;
+  }
+
+  .workspace-shell .workspace-brand {
+    margin-inline: auto;
+  }
+
+  .workspace-shell .agent-profile {
+    position: relative;
+    min-height: 66px;
+    grid-template-columns: 1fr;
+    place-items: center;
+    margin: 0;
+    padding: 11px 0 13px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .workspace-shell .agent-profile > div {
+    display: none;
+  }
+
+  .workspace-shell .agent-profile .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    background: #343942;
+    color: #fff;
+  }
+
+  .workspace-shell .agent-profile .presence {
+    position: absolute;
+    right: 9px;
+    bottom: 13px;
+  }
+
+  .workspace-shell .workspace-sidebar-actions {
+    display: grid;
+    gap: 7px;
+    margin-top: auto;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button,
+  .workspace-shell .workspace-sidebar .ghost-button.full {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0 auto;
+    padding: 0;
+    justify-content: center;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    opacity: 1;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button > span {
+    display: none;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button .ui-icon {
+    width: 20px;
+    height: 20px;
+    color: currentColor;
+    opacity: 1;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button:hover:not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.09);
+    color: #fff;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button:disabled {
+    color: rgba(255, 255, 255, 0.42);
+    opacity: 1;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button.is-enabled {
+    background: rgba(68, 201, 142, 0.12);
+    color: #7be0b2;
+  }
+
+  .workspace-shell .conversation-head .eyebrow {
+    color: #5f6876;
+  }
+
+  .workspace-shell .connection-status {
+    color: #596473;
+  }
+
+  .workspace-shell .inbox-overview .metric span {
+    color: #616b79;
+  }
+
+  .workspace-shell .filter {
+    color: #596372;
+    font-weight: 650;
+  }
+
+  .workspace-shell .filter:hover {
+    color: #252b35;
+  }
+
+  .workspace-shell .filter.active {
+    border-color: #d7d5ff;
+    background: #eeedff;
+    color: #403bb6;
+  }
+
+  .workspace-shell .inbox-search svg {
+    stroke: #687384;
+  }
+
+  .workspace-shell .inbox-search input::placeholder {
+    color: #737d8c;
+  }
+
+  .workspace-shell .unread-first-toggle {
+    color: #4f5968;
+  }
+
+  .workspace-shell .unread-first-toggle:hover,
+  .workspace-shell .unread-first-toggle.is-active {
+    color: #403bb6;
+  }
+
+  .workspace-shell .conversation-copy time {
+    color: #737d8b;
+  }
+
+  .workspace-shell .conversation-copy small {
+    color: #697382;
+  }
+
+  .workspace-shell .conversation-copy p {
+    color: #4e5866;
+  }
+
+  .workspace-shell .thread-head p,
+  .workspace-shell .conversation-expiry {
+    color: #626c7a;
+  }
+
+  .workspace-shell .thread-head select {
+    border-color: #cfd5de;
+    background: #fff;
+    color: #202733;
+    font-weight: 700;
+  }
+
+  .workspace-shell .transfer-menu > summary {
+    border-color: #cfd5de;
+    background: #fff;
+    color: #28313e;
+  }
+
+  .workspace-shell .transfer-menu > summary:hover,
+  .workspace-shell .transfer-menu[open] > summary {
+    border-color: #c9c7f7;
+    background: #f0efff;
+    color: #403bb6;
+  }
+
+  .workspace-shell .conversation-context-card > div > span,
+  .workspace-shell .conversation-context-card > div > small {
+    color: #667180;
+  }
+
+  .workspace-shell .conversation-context-card > a {
+    color: #403bb6;
+    font-weight: 750;
+  }
+
+  .workspace-shell .message time,
+  .workspace-shell .message-meta {
+    color: #626c79;
+  }
+
+  .workspace-shell .message.mine > div,
+  .workspace-shell .message.mine p {
+    color: #25243a;
+  }
+
+  .workspace-shell .thread-back-button {
+    display: none;
+  }
+
+  .workspace-shell .thread-head {
+    min-height: 70px;
+    padding: 10px 14px 10px 16px;
+    gap: 14px;
+    background: #fbfcfd;
+  }
+
+  .workspace-shell .thread-head-copy {
+    padding-left: 46px;
+  }
+
+  .workspace-shell .thread-head-copy::before {
+    width: 38px;
+    height: 38px;
+    border: 1px solid #d9dfe7;
+    background-color: #eef1f5;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  }
+
+  .workspace-shell .thread-head h2 {
+    color: #171b22;
+    font-size: 16px;
+    font-weight: 760;
+    letter-spacing: -0.015em;
+  }
+
+  .workspace-shell .thread-head p {
+    margin-top: 2px;
+    color: #596473;
+    font-size: 11px;
+  }
+
+  .workspace-shell .conversation-expiry {
+    margin-top: 3px;
+    color: #6c7684;
+    font-size: 9px;
+  }
+
+  .workspace-shell .thread-actions {
+    gap: 6px;
+  }
+
+  .workspace-shell .thread-head select,
+  .workspace-shell .transfer-menu > summary {
+    min-height: 34px;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+
+  .workspace-shell .thread-head select {
+    min-width: 92px;
+    padding-inline: 10px 30px;
+  }
+
+  .workspace-shell .transfer-menu > summary {
+    padding-inline: 11px;
+  }
+
+  .workspace-shell .conversation-context-card {
+    width: min(720px, calc(100% - 40px));
+    min-height: 58px;
+    margin: 10px auto 0;
+    padding: 7px 8px;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 9px;
+    border: 1px solid #dfe4ea;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(31, 41, 55, 0.045);
+  }
+
+  .workspace-shell .conversation-context-card > img,
+  .workspace-shell .conversation-context-placeholder {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+  }
+
+  .workspace-shell .conversation-context-card > div {
+    gap: 1px;
+  }
+
+  .workspace-shell .conversation-context-card > div > span {
+    color: #778190;
+    font-size: 9px;
+    font-weight: 650;
+  }
+
+  .workspace-shell .conversation-context-card > div > strong {
+    color: #252b34;
+    font-size: 12px;
+    font-weight: 760;
+  }
+
+  .workspace-shell .conversation-context-card > div > small {
+    color: #6e7886;
+    font-size: 9px;
+  }
+
+  .workspace-shell .conversation-context-card > a {
+    min-height: 30px;
+    padding-inline: 9px;
+    border: 1px solid #dedcff;
+    border-radius: 8px;
+    background: #f5f4ff;
+    color: #403bb6;
+    font-size: 10px;
+  }
+
+  .workspace-shell .conversation-context-card > a:hover {
+    border-color: #c8c4fb;
+    background: #eeedff;
+  }
+
+  .workspace-shell .messages {
+    padding: 18px 24px 22px;
+    gap: 7px;
+    background: #f4f6f8;
+  }
+
+  .workspace-shell .message {
+    width: min(100%, 820px);
+    margin-inline: auto;
+    gap: 0;
+  }
+
+  .workspace-shell .message > div {
+    max-width: min(64%, 560px);
+    padding: 8px 10px 6px;
+    border: 1px solid transparent;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(31, 41, 55, 0.055);
+  }
+
+  .workspace-shell .message.visitor > div {
+    border-color: #dde2e8;
+    border-bottom-left-radius: 4px;
+    background: #fff;
+  }
+
+  .workspace-shell .message.mine > div {
+    border-color: #d8d5ff;
+    border-bottom-right-radius: 4px;
+    background: #e9e7ff;
+  }
+
+  .workspace-shell .message p,
+  .workspace-shell .message.visitor p,
+  .workspace-shell .message.mine p {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: #242a33;
+    box-shadow: none;
+    font-size: 13px;
+    line-height: 1.48;
+  }
+
+  .workspace-shell .message.mine p {
+    color: #27263d;
+  }
+
+  .workspace-shell .message-meta {
+    min-height: 12px;
+    margin-top: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    color: #697482;
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .workspace-shell .message.visitor .message-meta {
+    justify-content: flex-end;
+  }
+
+  .workspace-shell .delivery-mark {
+    color: #747d8a;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: -0.12em;
+  }
+
+  .workspace-shell .delivery-mark.is-read {
+    color: #5755d9;
+  }
+
+  .workspace-shell .system-message {
+    width: fit-content;
+    max-width: 520px;
+    margin: 3px auto;
+    padding: 4px 9px;
+    border: 1px solid #e0e4e9;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    color: #697381;
+    font-size: 9px;
+  }
+
+  .workspace-shell .composer {
+    min-height: 64px;
+    padding: 8px 14px 9px;
+    border-top-color: #dfe3e8;
+    background: #eef1f4;
+  }
+
+  .workspace-shell .composer > textarea {
+    min-height: 44px;
+    max-height: 116px;
+    padding: 10px 13px;
+    border-color: #d8dde4;
+    border-radius: 11px;
+    background: #fff;
+    color: #202630;
+    font-size: 13px;
+  }
+
+  .workspace-shell .composer > textarea::placeholder {
+    color: #75808e;
+  }
+
+  .workspace-shell .composer > textarea:focus {
+    border-color: #bfc4ec;
+    box-shadow: 0 0 0 3px rgba(91, 92, 226, 0.08);
+  }
+
+  .workspace-shell .media-picker,
+  .workspace-shell .quick-replies-trigger {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    color: #4f5a68;
+  }
+
+  .workspace-shell .media-picker:hover,
+  .workspace-shell .quick-replies-trigger:hover:not(:disabled) {
+    background: rgba(40, 49, 62, 0.08);
+    color: #202630;
+  }
+
+  .workspace-shell .composer-foot {
+    width: 42px;
+    min-width: 42px;
+  }
+
+  .workspace-shell .composer-foot .primary-button {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+    box-shadow: 0 4px 10px rgba(91, 92, 226, 0.18);
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  #root:has(.workspace-shell) {
+    padding: 10px;
+  }
+
+  .workspace-shell {
+    width: calc(100vw - 20px);
+    height: calc(100dvh - 20px);
+    min-height: calc(100dvh - 20px);
+    grid-template-columns: 68px 310px minmax(0, 1fr);
+    border-radius: 13px;
+  }
+}
