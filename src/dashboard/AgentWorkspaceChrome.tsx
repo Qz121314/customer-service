@@ -7,6 +7,7 @@ export function AgentActionToolbar({
   soundEnabled,
   onToggleNotifications,
   onToggleSound,
+  onOpenAutoReply,
   onOpenStatistics,
   onLogout,
 }: {
@@ -15,6 +16,7 @@ export function AgentActionToolbar({
   soundEnabled: boolean;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
+  onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
   onLogout: () => void;
 }) {
@@ -62,6 +64,16 @@ export function AgentActionToolbar({
       </button>
       <button
         type="button"
+        className="ghost-button full workspace-auto-reply-button"
+        aria-label="打开自动回复设置"
+        title="自动回复"
+        onClick={onOpenAutoReply}
+      >
+        <AutoReplyIcon />
+        <span>自动回复</span>
+      </button>
+      <button
+        type="button"
         className="ghost-button full workspace-statistics-button"
         aria-label="打开接待流量"
         title="接待流量"
@@ -81,5 +93,24 @@ export function AgentActionToolbar({
         <span>退出客服账号</span>
       </button>
     </div>
+  );
+}
+
+function AutoReplyIcon() {
+  return (
+    <svg
+      className="ui-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 8h10a4 4 0 0 1 4 4v5" />
+      <path d="m7 4-4 4 4 4" />
+      <path d="M17 16h4v4" />
+    </svg>
   );
 }
