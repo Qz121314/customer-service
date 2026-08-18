@@ -35,6 +35,26 @@ jobs:
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
+      - name: Format migration diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check migrations/0032_conversation_last_message_preview.sql
+
+      - name: Format agent API diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check src/worker/agent-api.ts
+
+      - name: Format client API diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check src/worker/client-api.ts
+
+      - name: Format media store diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check src/worker/media-store.ts
+
+      - name: Format preview test diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check test/conversation-last-message-preview.test.mjs
+
       - name: Format
         run: pnpm format
 
