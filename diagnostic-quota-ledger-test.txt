@@ -1,0 +1,60 @@
+exit=1
+TAP version 13
+# Subtest: quota reconciliation is one on-demand D1 read and stays off admin bootstrap
+ok 1 - quota reconciliation is one on-demand D1 read and stays off admin bootstrap
+  ---
+  duration_ms: 1.494831
+  type: 'test'
+  ...
+# Subtest: admin copy separates daily reception limits from cumulative consultation quota
+not ok 2 - admin copy separates daily reception limits from cumulative consultation quota
+  ---
+  duration_ms: 3.101422
+  type: 'test'
+  location: '/home/runner/work/customer-service/customer-service/test/admin-quota-ledger-contract.test.mjs:32:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /quotaLedger\.total\/\{quotaLedger\.expectedTotal\}/u. Input:
+    
+    "import type { FormEvent } from 'react';\n" +
+      'import type {\n' +
+      '  AgentQuotaAdjustment,\n' +
+      '  AgentQuotaLedger,\n' +
+      '  ProductCatalogItem,\n' +
+      "} from './api';\n" +
+      "import type { AgentDraft } from './dashboard-runtime';\n" +
+      "import { initials, relativeTime } from './dashboard-runtime';\n" +
+      "import { ProductAssignmentPicker } from './ProductAssignmentPicker';\n" +
+      '\n' +
+      'export function AgentEditorModal({\n' +
+      '  draft,\n' +
+      '  products,\n' +
+--
+      '                        value={draft.trafficQuotaTopUp}\n' +
+      '                        onChange={(event) =>\n' +
+      '                          onDraftChange({\n' +
+      '                            ...draft,\n' +
+      '                            trafficQuotaTopUp: Math.max(\n' +
+      '                              0,\n' +
+      '                              Math.min(\n'... 4586 more characters
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    import type { FormEvent } from 'react';
+    import type {
+      AgentQuotaAdjustment,
+      AgentQuotaLedger,
+      ProductCatalogItem,
+    } from './api';
+    import type { AgentDraft } from './dashboard-runtime';
+    import { initials, relativeTime } from './dashboard-runtime';
+    import { ProductAssignmentPicker } from './ProductAssignmentPicker';
+    
+    export function AgentEditorModal({
+      draft,
+      products,
+      saving,
+      quotaAdjustments,
+      quotaLedger,
