@@ -1,0 +1,136 @@
+name: Apply agent workspace commercial closure
+
+on:
+  push:
+    branches: [ui/agent-commercial-closure]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ui/agent-commercial-closure
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Patch agent workspace
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: expected one match, found {count}')
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'src/dashboard/AgentWorkspacePanels.tsx',
+              """            {connectionState === 'connected'\n              ? '实时连接正常'\n              : connectionState === 'offline'\n                ? '网络已断开 · 草稿已保存'\n                : connectionState === 'connecting'\n                  ? '正在建立连接'\n                  : '连接中断 · 正在恢复'}""",
+              """            {connectionState === 'connected'\n              ? '连接正常'\n              : connectionState === 'offline'\n                ? '网络已断开 · 草稿已保存'\n                : connectionState === 'connecting'\n                  ? '正在连接'\n                  : '正在恢复连接'}""",
+          )
+          replace_once(
+              'src/dashboard/AgentWorkspacePanels.tsx',
+              """              <span>\n                保持在线，负责产品的新会话会在对应在线客服之间自动轮询。\n              </span>""",
+              """              <span>保持在线，新咨询分配给你后会自动出现在这里。</span>""",
+          )
+          replace_once(
+              'src/dashboard/AgentWorkspacePanels.tsx',
+              """                <small>\n                  {conversation.product_title ||\n                    conversation.subject ||\n                    '访客咨询'}\n                </small>\n                <p>{conversation.last_message || '会话已创建'}</p>""",
+              """                <span className=\"conversation-meta-row\">\n                  <small>\n                    {conversation.product_title ||\n                      conversation.subject ||\n                      '访客咨询'}\n                  </small>\n                  <span\n                    className={`conversation-status is-${conversation.status}`}\n                  >\n                    {conversation.status === 'open'\n                      ? '新会话'\n                      : conversation.status === 'pending'\n                        ? '处理中'\n                        : '已关闭'}\n                  </span>\n                </span>\n                <p>{conversation.last_message || '会话已创建'}</p>""",
+          )
+
+          replace_once(
+              'src/dashboard/AgentPortal.tsx',
+              """          <div className=\"thread-empty\">\n            <strong>选择一个会话</strong>\n            <span>这里只显示系统已经分配给当前客服账号的会话。</span>\n          </div>""",
+              """          <div className=\"thread-empty\">\n            <strong>选择一个会话开始处理</strong>\n            <span>新咨询分配给你后会出现在左侧列表。</span>\n          </div>""",
+          )
+          replace_once(
+              'src/dashboard/AgentPortal.tsx',
+              """                <select\n                  value={String(detail.conversation.status)}\n                  onChange={(event) =>\n                    void changeStatus(\n                      event.target.value as Conversation['status'],\n                    )\n                  }\n                  aria-label=\"会话状态\"\n                >\n                  <option value=\"open\">新会话</option>\n                  <option value=\"pending\">处理中</option>\n                  <option value=\"closed\">已关闭</option>\n                </select>""",
+              """                <span\n                  className={`thread-status is-${detail.conversation.status}`}\n                  aria-label=\"当前会话状态\"\n                >\n                  {detail.conversation.status === 'open'\n                    ? '新会话'\n                    : detail.conversation.status === 'pending'\n                      ? '处理中'\n                      : '已关闭'}\n                </span>\n                <button\n                  type=\"button\"\n                  className={`thread-status-action is-${detail.conversation.status}`}\n                  onClick={() =>\n                    void changeStatus(\n                      detail.conversation.status === 'open'\n                        ? 'pending'\n                        : detail.conversation.status === 'pending'\n                          ? 'closed'\n                          : 'pending',\n                    )\n                  }\n                >\n                  {detail.conversation.status === 'open'\n                    ? '开始处理'\n                    : detail.conversation.status === 'pending'\n                      ? '结束会话'\n                      : '重新处理'}\n                </button>""",
+          )
+          replace_once(
+              'src/dashboard/AgentPortal.tsx',
+              '<span>交给其他在线客服，或重新进入自动分流。</span>',
+              '<span>转给其他可接待客服，或重新交回分配队列。</span>',
+          )
+          replace_once(
+              'src/dashboard/AgentPortal.tsx',
+              """                        <span>重新排队</span>\n                        <small>排除当前客服后自动分流</small>""",
+              """                        <span>重新分配</span>\n                        <small>交给其他可接待客服</small>""",
+          )
+
+          replace_once(
+              'src/dashboard/agent-workspace.css',
+              """.conversation-copy small,\n.conversation-copy p {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.conversation-copy p {""",
+              """.conversation-copy small,\n.conversation-copy p {\n  overflow: hidden;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n}\n\n.conversation-meta-row {\n  display: flex;\n  min-width: 0;\n  align-items: center;\n  gap: 6px;\n}\n\n.conversation-meta-row small {\n  min-width: 0;\n  flex: 1;\n}\n\n.conversation-status,\n.thread-status {\n  display: inline-flex;\n  flex: 0 0 auto;\n  align-items: center;\n  justify-content: center;\n  border: 1px solid transparent;\n  border-radius: 999px;\n  font-weight: 720;\n  white-space: nowrap;\n}\n\n.conversation-status.is-open,\n.thread-status.is-open {\n  border-color: #ead9b5;\n  color: #8a641d;\n  background: #fff8e9;\n}\n\n.conversation-status.is-pending,\n.thread-status.is-pending {\n  border-color: #d8d6f7;\n  color: #4b48b8;\n  background: #f0efff;\n}\n\n.conversation-status.is-closed,\n.thread-status.is-closed {\n  border-color: #dde2e8;\n  color: #6d7581;\n  background: #f2f4f6;\n}\n\n.conversation-status {\n  min-height: 18px;\n  padding-inline: 6px;\n  font-size: 8px;\n}\n\n.conversation-copy p {""",
+          )
+          replace_once(
+              'src/dashboard/agent-workspace.css',
+              """.thread-head select,\n.thread-actions select {\n  outline: 0;\n  appearance: none;\n  -webkit-appearance: none;\n}\n\n.transfer-menu {""",
+              """.thread-status {\n  min-height: 34px;\n  padding-inline: 10px;\n  font-size: 10px;\n}\n\n.thread-status-action {\n  min-height: 34px;\n  padding-inline: 11px;\n  border: 1px solid #cfd5de;\n  border-radius: 8px;\n  color: #28313e;\n  background: #fff;\n  font-size: 11px;\n  font-weight: 720;\n  white-space: nowrap;\n}\n\n.thread-status-action:hover:not(:disabled) {\n  border-color: #c9c7f7;\n  color: #403bb6;\n  background: #f0efff;\n}\n\n.thread-status-action.is-pending {\n  border-color: #ead8d8;\n  color: #a34e4e;\n  background: #fff8f8;\n}\n\n.transfer-menu {""",
+          )
+
+          replace_once(
+              'src/dashboard/agent-desktop.css',
+              """  .workspace-shell .thread-head select {\n    border-color: #cfd5de;\n    background: #fff;\n    color: #202733;\n    font-weight: 700;\n  }\n\n""",
+              '',
+          )
+          replace_once(
+              'src/dashboard/agent-desktop.css',
+              """  .workspace-shell .thread-head select,\n  .workspace-shell .transfer-menu > summary {\n    min-height: 34px;\n    border-radius: 8px;\n    font-size: 11px;\n  }\n\n  .workspace-shell .thread-head select {\n    min-width: 92px;\n    padding-inline: 10px 30px;\n  }\n\n  .workspace-shell .transfer-menu > summary {""",
+              """  .workspace-shell .thread-status,\n  .workspace-shell .thread-status-action,\n  .workspace-shell .transfer-menu > summary {\n    min-height: 34px;\n    border-radius: 8px;\n    font-size: 11px;\n  }\n\n  .workspace-shell .thread-status {\n    min-width: 62px;\n  }\n\n  .workspace-shell .thread-status-action {\n    min-width: 76px;\n  }\n\n  .workspace-shell .transfer-menu > summary {""",
+          )
+
+          replace_once(
+              'src/dashboard/agent-mobile.css',
+              """    grid-template-columns: 70px 38px;\n    align-items: center;""",
+              """    grid-template-columns: auto auto 38px;\n    align-items: center;""",
+          )
+          replace_once(
+              'src/dashboard/agent-mobile.css',
+              """  .thread-head select {\n    width: 70px;\n    min-width: 70px;\n    height: 32px;\n    min-height: 32px;\n    margin: 0;\n    padding: 0 23px 0 9px;\n    border: 0;\n    border-radius: 9px;\n    outline: 0;\n    color: var(--mobile-accent-strong);\n    background-color: var(--mobile-accent-soft);\n    background-image: url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%235150c3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E\");\n    background-repeat: no-repeat;\n    background-position: right 7px center;\n    background-size: 11px 11px;\n    font-size: 10px;\n    font-weight: 710;\n    line-height: 32px;\n    box-shadow: none;\n  }\n\n""",
+              """  .thread-status,\n  .thread-status-action {\n    height: 32px;\n    min-height: 32px;\n    margin: 0;\n    padding: 0 8px;\n    border-radius: 9px;\n    font-size: 9px;\n    line-height: 32px;\n    box-shadow: none;\n  }\n\n  .thread-status {\n    min-width: 48px;\n  }\n\n  .thread-status-action {\n    min-width: 54px;\n    border: 0;\n    color: var(--mobile-accent-strong);\n    background: var(--mobile-accent-soft);\n  }\n\n  .thread-status-action.is-pending {\n    color: #a34e4e;\n    background: #fff0f0;\n  }\n\n""",
+          )
+          replace_once(
+              'src/dashboard/agent-mobile.css',
+              """  .conversation-copy small {\n    color: #717b88;\n    font-size: 10px;\n    font-weight: 560;\n  }\n\n""",
+              """  .conversation-copy small {\n    color: #717b88;\n    font-size: 10px;\n    font-weight: 560;\n  }\n\n  .conversation-meta-row {\n    gap: 5px;\n  }\n\n  .conversation-status {\n    min-width: 36px;\n    height: 17px;\n    min-height: 17px;\n    padding-inline: 5px;\n    font-size: 7px;\n  }\n\n""",
+          )
+
+          Path('test/agent-commercial-workspace.test.mjs').write_text("""import assert from 'node:assert/strict';\nimport { readFile } from 'node:fs/promises';\nimport test from 'node:test';\n\nconst read = (path) => readFile(path, 'utf8');\n\ntest('agent workspace exposes business actions instead of a raw status selector', async () => {\n  const portal = await read('src/dashboard/AgentPortal.tsx');\n  assert.doesNotMatch(portal, /aria-label=\\\"会话状态\\\"/u);\n  assert.match(portal, />开始处理</u);\n  assert.match(portal, />结束会话</u);\n  assert.match(portal, />重新处理</u);\n  assert.match(portal, />重新分配</u);\n  assert.doesNotMatch(portal, /重新进入自动分流|排除当前客服后自动分流/u);\n});\n\ntest('agent inbox shows per-conversation status without exposing routing implementation copy', async () => {\n  const panels = await read('src/dashboard/AgentWorkspacePanels.tsx');\n  assert.match(panels, /conversation-status is-\\$\\{conversation\\.status\\}/u);\n  assert.match(panels, /新咨询分配给你后会自动出现在这里/u);\n  assert.doesNotMatch(panels, /自动轮询/u);\n});\n\ntest('desktop and mobile workspace styles own the new status action controls', async () => {\n  const [shared, desktop, mobile] = await Promise.all([\n    read('src/dashboard/agent-workspace.css'),\n    read('src/dashboard/agent-desktop.css'),\n    read('src/dashboard/agent-mobile.css'),\n  ]);\n  assert.match(shared, /\\.thread-status-action/u);\n  assert.match(shared, /\\.conversation-status\\.is-pending/u);\n  assert.match(desktop, /\\.workspace-shell \\.thread-status-action/u);\n  assert.match(mobile, /grid-template-columns: auto auto 38px/u);\n  assert.doesNotMatch(mobile, /\\.thread-head select/u);\n});\n""")
+      - name: Format changed files
+        run: >-
+          pnpm exec prettier --write
+          src/dashboard/AgentPortal.tsx
+          src/dashboard/AgentWorkspacePanels.tsx
+          src/dashboard/agent-workspace.css
+          src/dashboard/agent-desktop.css
+          src/dashboard/agent-mobile.css
+          test/agent-commercial-workspace.test.mjs
+      - name: Validate focused contract
+        run: node --test test/agent-commercial-workspace.test.mjs
+      - name: Commit patch and remove helper
+        shell: bash
+        run: |
+          rm .github/workflows/patch-agent-commercial-closure.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Polish agent workspace conversation controls"
+          git push origin HEAD:ui/agent-commercial-closure
