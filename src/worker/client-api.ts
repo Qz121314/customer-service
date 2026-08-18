@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
 import { assignConversationAgent } from './routing';
-import { broadcastWaitingAssignments } from './assignment-broadcast';
+import { broadcastAssignmentEvents } from './assignment-events';
 import {
   consumeConversationCreationQuota,
   passesBurstLimit,
@@ -396,7 +396,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     });
   }
   if (assignment) {
-    await broadcastWaitingAssignments(c.env, assignment.id, [conversationId]);
+    await broadcastAssignmentEvents(c.env, assignment.id, [conversationId]);
   }
 
   const conversation = await ownedConversation(
@@ -491,7 +491,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     { includeOverview: Boolean(assignment) },
   );
   if (assignment) {
-    await broadcastWaitingAssignments(c.env, assignment.id, [conversation.id]);
+    await broadcastAssignmentEvents(c.env, assignment.id, [conversation.id]);
   }
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
