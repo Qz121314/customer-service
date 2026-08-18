@@ -30,6 +30,20 @@ test('new conversation replay checks share one D1 statement', () => {
   );
 });
 
+test('CTA conversation start does not require a synthetic visitor message', () => {
+  const route = section(
+    clientSource,
+    "clientApi.post('/client/v1/conversations'",
+    "clientApi.post('/client/v1/conversations/:id/messages'",
+  );
+
+  assert.match(route, /const messageFieldPresent = body\?\.message !== undefined/u);
+  assert.match(route, /const hasInitialMessage = Boolean\(initialMessage\)/u);
+  assert.match(route, /if \(messageFieldPresent \|\| clientMessageFieldPresent\)/u);
+  assert.doesNotMatch(route, /if \(!clientMessageId\)[\s\S]{0,160}INVALID_CLIENT_MESSAGE_ID/u);
+  assert.match(route, /if \(hasInitialMessage && clientMessageId && initialMessage\)/u);
+});
+
 test('visitor upsert keeps returning visitors to one D1 statement', () => {
   const helper = section(
     clientSource,
@@ -55,25 +69,23 @@ test('stable product routing context avoids unnecessary writes', () => {
   assert.match(helper, /OR is_enabled <> 1/u);
 });
 
-test('new conversation response reuses the broadcaster conversation read', () => {
+test('assigned conversation start reuses the assignment lifecycle snapshot', () => {
   const route = section(
     clientSource,
     'const assignment = await assignConversationAgent',
     "clientApi.post('/client/v1/conversations/:id/messages'",
   );
-  const broadcaster = section(
-    clientSource,
-    'export async function broadcastClientConversationEvent(',
-    'async function loadAgentOverview(',
-  );
 
-  assert.match(
+  assert.match(route, /const snapshots = await broadcastAssignments/u);
+  assert.match(route, /conversation = snapshots\.find/u);
+  assert.match(route, /assignment\.newlyAssigned && assignment\.assignedAt/u);
+  const assignedBranch = section(
     route,
-    /const conversation = await broadcastClientConversationEvent/u,
+    'if (assignment?.newlyAssigned && assignment.assignedAt)',
+    '} else if (createdMessage)',
   );
-  assert.doesNotMatch(route, /await ownedConversation\(/u);
-  assert.match(broadcaster, /Promise<ConversationRow \| null>/u);
-  assert.match(broadcaster, /return conversation;/u);
+  assert.doesNotMatch(assignedBranch, /ownedConversation\(/u);
+  assert.doesNotMatch(assignedBranch, /broadcastClientConversationEvent\(/u);
 });
 
 test('normal routing assignment keeps only the assignment and agent-touch statements', () => {
