@@ -37,7 +37,9 @@ test('message writes maintain cached previews', async () => {
   assert.ok(agentApi.includes('.bind(now, text, id, agent.id)'));
   assert.ok(clientApi.includes('last_message_preview = ?2,'));
   assert.ok(
-    clientApi.includes('.bind(createdAt, input.body, input.conversationId, id)'),
+    clientApi.includes(
+      '.bind(createdAt, input.body, input.conversationId, id)',
+    ),
   );
   const imagePreviewWrites = mediaStore.match(/last_message_preview = '',/gu);
   assert.ok((imagePreviewWrites ?? []).length >= 2);
