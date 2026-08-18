@@ -20,9 +20,10 @@ export async function assignWaitingConversations(
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
 
-  // Claim as many matching conversations as this seat can still receive in one
-  // atomic SQLite statement. D1 serializes the statement, so capacity, daily
-  // quota and paid traffic quota are evaluated against current database state.
+  // Claim matching conversations in one atomic SQLite statement. Already-counted
+  // conversations are recovered first because they must not require or consume
+  // another daily/new-traffic unit. Fresh traffic then fills only the remaining
+  // active capacity allowed by today's and the paid traffic quota.
   const assigned = await env.DB.prepare(
     `WITH agent_state AS (
        SELECT
@@ -60,25 +61,36 @@ export async function assignWaitingConversations(
        LIMIT 1
      ),
      capacity AS (
-       SELECT MIN(
-         ?2,
-         CASE
-           WHEN max_active_conversations = 0 THEN ?2
-           ELSE MAX(max_active_conversations - active_count, 0)
-         END,
-         CASE
-           WHEN daily_conversation_limit = 0 THEN ?2
-           ELSE MAX(daily_conversation_limit - daily_count, 0)
-         END,
-         CASE
-           WHEN traffic_quota_enabled = 0 THEN ?2
-           ELSE MAX(traffic_quota_total - traffic_quota_used, 0)
-         END
-       ) AS remaining
+       SELECT
+         MIN(
+           ?2,
+           CASE
+             WHEN max_active_conversations = 0 THEN ?2
+             ELSE MAX(max_active_conversations - active_count, 0)
+           END
+         ) AS overall_remaining,
+         MIN(
+           ?2,
+           CASE
+             WHEN daily_conversation_limit = 0 THEN ?2
+             ELSE MAX(daily_conversation_limit - daily_count, 0)
+           END,
+           CASE
+             WHEN traffic_quota_enabled = 0 THEN ?2
+             ELSE MAX(traffic_quota_total - traffic_quota_used, 0)
+           END
+         ) AS new_traffic_remaining
        FROM agent_state
      ),
-     waiting AS (
-       SELECT DISTINCT c.id
+     waiting_base AS (
+       SELECT
+         c.id,
+         c.last_message_at,
+         CASE WHEN EXISTS (
+           SELECT 1
+           FROM agent_traffic_receipts receipt
+           WHERE receipt.conversation_id = c.id
+         ) THEN 1 ELSE 0 END AS already_received
        FROM conversations c
        WHERE c.site_id = (SELECT site_id FROM agent_state)
          AND c.assigned_agent IS NULL
@@ -100,8 +112,28 @@ export async function assignWaitingConversations(
                )
              )
          )
-       ORDER BY c.last_message_at ASC, c.id ASC
-       LIMIT COALESCE((SELECT remaining FROM capacity), 0)
+     ),
+     waiting_ranked AS (
+       SELECT
+         id,
+         last_message_at,
+         already_received,
+         ROW_NUMBER() OVER (
+           PARTITION BY already_received
+           ORDER BY last_message_at ASC, id ASC
+         ) AS traffic_rank
+       FROM waiting_base
+     ),
+     waiting AS (
+       SELECT id
+       FROM waiting_ranked
+       WHERE already_received = 1
+         OR traffic_rank <= COALESCE(
+           (SELECT new_traffic_remaining FROM capacity),
+           0
+         )
+       ORDER BY already_received DESC, last_message_at ASC, id ASC
+       LIMIT COALESCE((SELECT overall_remaining FROM capacity), 0)
      )
      UPDATE conversations
      SET assigned_agent = ?1,

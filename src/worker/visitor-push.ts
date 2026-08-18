@@ -28,7 +28,6 @@ export async function sendVisitorPushForConversation(
   env: VisitorPushBindings,
   conversationId: string,
 ): Promise<void> {
-  const now = Date.now();
   const subscriptions = await env.DB.prepare(
     `SELECT
        subscription.endpoint,
@@ -45,47 +44,65 @@ export async function sendVisitorPushForConversation(
        ON vapid.id = 'default'
      WHERE conversation.id = ?1
        AND visitor.external_id IS NOT NULL
-       AND COALESCE(
-         conversation.expires_at,
-         datetime(conversation.created_at, '+1 day')
-       ) > CURRENT_TIMESTAMP
        AND (
          subscription.expiration_time IS NULL
          OR subscription.expiration_time > ?2
-       )`,
+       )
+       AND COALESCE(
+         conversation.expires_at,
+         datetime(conversation.created_at, '+1 day')
+       ) > CURRENT_TIMESTAMP`,
   )
-    .bind(conversationId, now)
+    .bind(conversationId, Date.now())
     .all<VisitorPushRow>();
   if (!subscriptions.results?.length) return;
 
-  await Promise.all(
-    subscriptions.results.map((subscription) =>
-      deliverVisitorPush(env, subscription.endpoint, subscription),
-    ),
+  const staleEndpoints = new Set<string>();
+  const deliveryResults = await Promise.all(
+    subscriptions.results.map(async (subscription) => ({
+      endpoint: subscription.endpoint,
+      gone: await deliverVisitorPush(subscription.endpoint, subscription),
+    })),
   );
+  for (const result of deliveryResults) {
+    if (result.gone) staleEndpoints.add(result.endpoint);
+  }
+
+  if (staleEndpoints.size > 0) {
+    await deleteVisitorPushSubscriptions(env.DB, [...staleEndpoints]);
+  }
 }
 
 async function deliverVisitorPush(
-  env: VisitorPushBindings,
   endpoint: string,
   config: VapidRow,
-): Promise<void> {
+): Promise<boolean> {
   try {
     const response = await sendDataLessPush(endpoint, config);
-    if (response.status === 404 || response.status === 410) {
-      await env.DB.prepare(
-        'DELETE FROM visitor_push_subscriptions WHERE endpoint = ?1',
-      )
-        .bind(endpoint)
-        .run();
-      return;
-    }
+    if (response.status === 404 || response.status === 410) return true;
     if (!response.ok) {
       console.warn('Visitor push delivery failed.', response.status);
     }
   } catch (error) {
     console.warn('Visitor push delivery failed.', error);
   }
+  return false;
+}
+
+async function deleteVisitorPushSubscriptions(
+  db: D1Database,
+  endpoints: string[],
+): Promise<void> {
+  if (endpoints.length === 0) return;
+  await db
+    .prepare(
+      `DELETE FROM visitor_push_subscriptions
+       WHERE endpoint IN (
+         SELECT CAST(value AS TEXT) FROM json_each(?1)
+       )`,
+    )
+    .bind(JSON.stringify(endpoints))
+    .run();
 }
 
 async function getOrCreateVapidConfig(

@@ -99,6 +99,9 @@ function databaseWithQuota(limit) {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (site_id, agent_id, business_date)
     );
+    CREATE TABLE agent_traffic_receipts (
+      conversation_id TEXT PRIMARY KEY
+    );
     CREATE TRIGGER test_assignment_daily_stats
     AFTER UPDATE OF assigned_agent ON conversations
     WHEN OLD.assigned_agent IS NULL
