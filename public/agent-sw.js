@@ -1,6 +1,7 @@
 /* global self, URL, caches, fetch */
 
 const AGENT_WORKSPACE_URL = '/agent';
+const AGENT_NOTIFICATION_URL = '/agent?notification=latest-unread';
 const AGENT_CACHE = 'agent-workspace-v2';
 const APP_SHELL = [
   AGENT_WORKSPACE_URL,
@@ -101,7 +102,7 @@ self.addEventListener('push', (event) => {
           badge: '/icons/customer-service-192.svg',
           tag: 'agent-new-message',
           renotify: true,
-          data: { url: AGENT_WORKSPACE_URL },
+          data: { url: AGENT_NOTIFICATION_URL },
         });
       }),
   );
@@ -110,19 +111,26 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const targetUrl = new URL(
-    event.notification.data?.url || AGENT_WORKSPACE_URL,
+    event.notification.data?.url || AGENT_NOTIFICATION_URL,
     self.location.origin,
   ).toString();
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then(async (clients) => {
-        const existing = clients.find(
-          (client) => new URL(client.url).origin === self.location.origin,
-        );
-        if (existing) {
-          await existing.focus();
-          if ('navigate' in existing) await existing.navigate(targetUrl);
+        const existingAgent = clients.find((client) => {
+          const clientUrl = new URL(client.url);
+          return (
+            clientUrl.origin === self.location.origin &&
+            clientUrl.pathname.startsWith(AGENT_WORKSPACE_URL)
+          );
+        });
+        if (existingAgent) {
+          existingAgent.postMessage({
+            type: 'agent.notification.open',
+            target: 'latest-unread',
+          });
+          await existingAgent.focus();
           return;
         }
         await self.clients.openWindow(targetUrl);
