@@ -19,7 +19,9 @@ test('admin polish stays on the admin route while agent styles are isolated', ()
   assert.ok(main.includes("import('./ui-polish.css')"));
   assert.ok(main.includes("import('./styles.css')"));
   assert.ok(!main.includes("'./dialogue-flow.css'"));
-  assert.ok(polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
+  assert.ok(
+    polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
+  );
   assert.ok(polish.includes('overflow-y: auto;'));
   assert.ok(polish.includes('max-width: none;'));
   assert.equal(workspace.includes('@media (max-width: 760px)'), false);
