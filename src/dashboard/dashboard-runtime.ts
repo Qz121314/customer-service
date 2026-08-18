@@ -157,6 +157,7 @@ function emitAgentMessageTone(context: AudioContext): void {
 
 type InboxRealtimeEvent = {
   type?: string;
+  cause?: 'initial_assignment' | 'assignment';
   conversation?: Conversation;
   overview?: Overview | null;
 };
