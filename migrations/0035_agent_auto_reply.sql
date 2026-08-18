@@ -8,12 +8,13 @@ ALTER TABLE agents
   ADD COLUMN auto_greeting_text TEXT;
 
 -- Conversation automations are resolved once per conversation and automation key.
--- A resolution row is written even when the automation is disabled, so later
--- transfers, requeues, reconnects or setting changes cannot retroactively fire it.
+-- The receipt is written even when an automation is disabled, so later transfers,
+-- requeues, reconnects or setting changes can never retroactively fire it.
 CREATE TABLE conversation_automation_receipts (
   conversation_id TEXT NOT NULL,
   automation_key TEXT NOT NULL,
   agent_id TEXT,
+  outcome TEXT NOT NULL CHECK (outcome IN ('sent', 'skipped')),
   message_id TEXT,
   message_body TEXT,
   resolved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -25,27 +26,33 @@ CREATE TABLE conversation_automation_receipts (
 CREATE INDEX idx_conversation_automation_agent
   ON conversation_automation_receipts(agent_id, resolved_at DESC);
 
--- Existing conversations have already passed their first effective assignment.
--- Mark them resolved without generating any retroactive greeting messages.
+-- Every conversation that existed before this feature is intentionally resolved
+-- as skipped. This prevents a historical waiting/requeued conversation from
+-- receiving a new greeting simply because the feature was deployed or enabled.
 INSERT OR IGNORE INTO conversation_automation_receipts (
   conversation_id,
   automation_key,
   agent_id,
+  outcome,
   resolved_at
 )
 SELECT
-  conversation_id,
+  c.id,
   'initial_greeting',
-  agent_id,
+  receipt.agent_id,
+  'skipped',
   CURRENT_TIMESTAMP
-FROM agent_traffic_receipts;
+FROM conversations c
+LEFT JOIN agent_traffic_receipts receipt
+  ON receipt.conversation_id = c.id;
 
--- Materialize an enabled initial greeting as a normal agent message in the same
--- transaction that resolves the one-time automation receipt. Keeping this at the
--- data boundary prevents duplicate greetings even when Workers retry.
+-- A sent automation is materialized as a normal agent message. The standard
+-- message table remains the only chat-history source of truth; the automation
+-- receipt only records why the message exists and guarantees exactly-once work.
 CREATE TRIGGER trg_initial_greeting_message
 AFTER INSERT ON conversation_automation_receipts
 WHEN NEW.automation_key = 'initial_greeting'
+  AND NEW.outcome = 'sent'
   AND NEW.agent_id IS NOT NULL
   AND NEW.message_id IS NOT NULL
   AND NEW.message_body IS NOT NULL
@@ -70,12 +77,54 @@ BEGIN
   );
 
   UPDATE conversations
-  SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-      visitor_unread_count = visitor_unread_count + 1,
+  SET visitor_unread_count = visitor_unread_count + 1,
       last_message_at = NEW.resolved_at,
       last_message_preview = NEW.message_body,
       updated_at = NEW.resolved_at
   WHERE id = NEW.conversation_id
     AND assigned_agent = NEW.agent_id
     AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP;
+END;
+
+-- The immutable traffic receipt is already the database-level definition of a
+-- conversation's first effective reception. Bind the initial greeting decision
+-- directly to that fact so every assignment path shares the same lifecycle.
+CREATE TRIGGER trg_initial_greeting_from_traffic_receipt
+AFTER INSERT ON agent_traffic_receipts
+BEGIN
+  INSERT OR IGNORE INTO conversation_automation_receipts (
+    conversation_id,
+    automation_key,
+    agent_id,
+    outcome,
+    message_id,
+    message_body,
+    resolved_at
+  )
+  SELECT
+    NEW.conversation_id,
+    'initial_greeting',
+    NEW.agent_id,
+    'sent',
+    'auto-greeting:' || NEW.conversation_id,
+    trim(a.auto_greeting_text),
+    NEW.received_at
+  FROM agents a
+  WHERE a.id = NEW.agent_id
+    AND a.auto_greeting_enabled = 1
+    AND length(trim(COALESCE(a.auto_greeting_text, ''))) > 0;
+
+  INSERT OR IGNORE INTO conversation_automation_receipts (
+    conversation_id,
+    automation_key,
+    agent_id,
+    outcome,
+    resolved_at
+  ) VALUES (
+    NEW.conversation_id,
+    'initial_greeting',
+    NEW.agent_id,
+    'skipped',
+    NEW.received_at
+  );
 END;
