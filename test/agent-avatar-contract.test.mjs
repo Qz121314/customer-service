@@ -44,5 +44,5 @@ test('agent avatar is locally prepared, explicitly confirmed and stored as one R
   assert.ok(
     entry.includes("import { agentAvatarApi } from './agent-avatar-api';"),
   );
-  assert.ok(main.includes("import './agent-avatar.css';"));
+  assert.ok(main.includes("import('./agent-avatar.css')"));
 });
