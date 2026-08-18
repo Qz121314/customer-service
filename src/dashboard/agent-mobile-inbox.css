@@ -335,9 +335,7 @@
     font-weight: 720;
   }
 
-  .workspace-shell:not(.is-thread-open)
-    .conversation-row.unread
-    .avatar.small {
+  .workspace-shell:not(.is-thread-open) .conversation-row.unread .avatar.small {
     color: #5150c7;
     background: #ebeaff;
   }
