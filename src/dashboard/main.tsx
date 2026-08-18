@@ -13,6 +13,7 @@ async function loadAgentStyles() {
   await import('./agent-foundation.css');
   await import('./media-view.css');
   await import('./agent-statistics.css');
+  await import('./agent-auto-reply.css');
   await import('./agent-avatar.css');
   await import('./agent-workspace.css');
   await import('./agent-desktop.css');
