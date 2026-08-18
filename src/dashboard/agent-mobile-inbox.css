@@ -1,0 +1,432 @@
+/* Final mobile inbox polish. Keep this layer inbox-only and intentionally small. */
+
+@media (max-width: 760px) {
+  body:has(.workspace-shell:not(.is-thread-open)) {
+    background: #eef1f4;
+  }
+
+  .workspace-shell:not(.is-thread-open) {
+    --agent-inbox-surface: #fff;
+    --agent-inbox-bg: #f3f5f7;
+    --agent-inbox-line: #e9ebef;
+    background: var(--agent-inbox-bg);
+  }
+
+  /* Stable app bar */
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar {
+    height: 60px;
+    min-height: 60px;
+    gap: 10px;
+    padding: 8px 10px 8px 12px;
+    border-bottom-color: var(--agent-inbox-line);
+    background: rgba(255, 255, 255, 0.985);
+    box-shadow: 0 1px 0 rgba(17, 24, 39, 0.025);
+    backdrop-filter: blur(20px) saturate(1.04);
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile {
+    position: relative;
+    min-width: 0;
+    max-width: min(39vw, 156px);
+    flex: 1 1 auto;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-avatar-button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    border-radius: 13px;
+    box-shadow: 0 2px 8px rgba(17, 24, 39, 0.07);
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile > div {
+    min-width: 0;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile strong {
+    overflow: hidden;
+    color: #171a20;
+    font-size: 14px;
+    font-weight: 720;
+    letter-spacing: -0.018em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile small {
+    display: none;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile .presence {
+    position: absolute;
+    right: auto;
+    bottom: 1px;
+    left: 29px;
+    width: 9px;
+    height: 9px;
+    margin: 0;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.035);
+    box-sizing: content-box;
+  }
+
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar-actions {
+    grid-template-columns: repeat(4, 36px);
+    gap: 2px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar .ghost-button,
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar .ghost-button.full {
+    border-radius: 11px;
+    color: #6e7580;
+  }
+
+  .workspace-shell:not(.is-thread-open)
+    .workspace-sidebar
+    .ghost-button.is-enabled {
+    color: var(--agent-accent);
+    background: #f1f0ff;
+  }
+
+  /* Page title and live state share one baseline. */
+  .workspace-shell:not(.is-thread-open) .conversation-pane {
+    height: calc(100dvh - 60px - env(safe-area-inset-top));
+    background: var(--agent-inbox-bg);
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-head {
+    display: flex;
+    min-height: 58px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px 8px;
+    background: var(--agent-inbox-bg);
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-head h1 {
+    color: #16191f;
+    font-size: 22px;
+    font-weight: 760;
+    letter-spacing: -0.045em;
+    line-height: 1.1;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-head-status {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .availability-pill,
+  .workspace-shell:not(.is-thread-open) .connection-status {
+    min-height: 28px;
+    border-radius: 999px;
+    font-weight: 680;
+  }
+
+  .workspace-shell:not(.is-thread-open) .availability-pill {
+    padding: 0 9px;
+    border: 0;
+    box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.035);
+  }
+
+  .workspace-shell:not(.is-thread-open) .availability-pill.is-online {
+    color: #147a57;
+    background: #eaf8f2;
+  }
+
+  .workspace-shell:not(.is-thread-open) .availability-pill.is-busy {
+    color: #9a6208;
+    background: #fff5e5;
+  }
+
+  .workspace-shell:not(.is-thread-open) .connection-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 8px;
+    border: 1px solid var(--agent-inbox-line);
+    color: #7f8690;
+    background: rgba(255, 255, 255, 0.82);
+    font-size: 0;
+  }
+
+  .workspace-shell:not(.is-thread-open) .connection-status i {
+    width: 6px;
+    height: 6px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .connection-status::after {
+    font-size: 9px;
+    font-weight: 660;
+  }
+
+  /* Compact native-style summary strip */
+  .workspace-shell:not(.is-thread-open) .inbox-overview {
+    min-height: 60px;
+    margin: 0 10px 9px;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--agent-inbox-line);
+    border-radius: 15px;
+    background: var(--agent-inbox-surface);
+    box-shadow: 0 3px 12px rgba(17, 24, 39, 0.035);
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric {
+    min-height: 60px;
+    align-content: center;
+    gap: 2px;
+    padding: 8px 4px;
+    border: 0;
+    border-right: 1px solid #eef0f3;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric:last-child {
+    border-right: 0;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric strong {
+    color: #1e2229;
+    font-size: 16px;
+    font-weight: 760;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.025em;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric span {
+    color: #8a919b;
+    font-size: 9px;
+    font-weight: 560;
+  }
+
+  /* Segmented filters */
+  .workspace-shell:not(.is-thread-open) .filters {
+    display: grid;
+    min-height: 38px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2px;
+    margin: 0 10px 9px;
+    padding: 3px;
+    border-radius: 12px;
+    background: #e9ecf1;
+  }
+
+  .workspace-shell:not(.is-thread-open) .filter {
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 6px;
+    border: 0;
+    border-radius: 9px;
+    color: #68707b;
+    background: transparent;
+    box-shadow: none;
+    font-size: 10px;
+    font-weight: 650;
+  }
+
+  .workspace-shell:not(.is-thread-open) .filter.active {
+    color: #4f4dc2;
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgba(17, 24, 39, 0.08),
+      0 1px 5px rgba(17, 24, 39, 0.04);
+  }
+
+  /* Search and sort are one control row. */
+  .workspace-shell:not(.is-thread-open) .inbox-tools {
+    min-height: 52px;
+    gap: 8px;
+    padding: 0 10px 10px;
+    border-bottom-color: var(--agent-inbox-line);
+    background: var(--agent-inbox-bg);
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-search,
+  .workspace-shell:not(.is-thread-open) .unread-first-toggle {
+    min-height: 42px;
+    border: 1px solid #e3e6ea;
+    border-radius: 13px;
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(17, 24, 39, 0.025);
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-search {
+    height: 42px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-search:focus-within {
+    border-color: #cecdf5;
+    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.07);
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-search input {
+    height: 40px;
+    color: #252932;
+    font-size: 13px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .unread-first-toggle {
+    min-width: 72px;
+    padding: 0 10px;
+    color: #6e7580;
+    font-size: 10px;
+    font-weight: 680;
+  }
+
+  .workspace-shell:not(.is-thread-open) .unread-first-toggle.is-active {
+    border-color: #d9d8fb;
+    color: #4f4dc2;
+    background: #f0efff;
+  }
+
+  /* Message-list rhythm */
+  .workspace-shell:not(.is-thread-open) .conversation-list {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    background: var(--agent-inbox-surface);
+    overscroll-behavior: contain;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row {
+    min-height: 76px;
+    gap: 11px;
+    padding: 10px 12px;
+    border-bottom-color: #eff1f3;
+    background: #fff;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row:active {
+    background: #f5f6f8;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row.selected {
+    background: #f7f7ff;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row.unread {
+    background: #fcfcff;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row.unread::before {
+    top: 14px;
+    left: 4px;
+    height: calc(100% - 28px);
+    border-radius: 999px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row .avatar.small {
+    width: 46px;
+    min-width: 46px;
+    height: 46px;
+    min-height: 46px;
+    border-radius: 14px;
+    color: #5d6470;
+    background: #eef0f3;
+    font-weight: 720;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-row.unread .avatar.small {
+    color: #5150c7;
+    background: #ebeaff;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-copy {
+    gap: 2px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-copy strong {
+    font-size: 13px;
+    font-weight: 690;
+  }
+
+  .workspace-shell:not(.is-thread-open)
+    .conversation-row.unread
+    .conversation-copy
+    strong {
+    font-weight: 760;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-copy time {
+    color: #999fa8;
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-copy small {
+    color: #747b86;
+    font-size: 10px;
+    font-weight: 560;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-copy p {
+    color: #969ca5;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 390px) {
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar {
+    gap: 7px;
+    padding-inline: 8px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile {
+    max-width: 118px;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-avatar-button {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .agent-profile .presence {
+    left: 27px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar-actions {
+    grid-template-columns: repeat(4, 34px);
+    gap: 0;
+  }
+
+  .workspace-shell:not(.is-thread-open) .conversation-head h1 {
+    font-size: 20px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview,
+  .workspace-shell:not(.is-thread-open) .filters {
+    margin-inline: 8px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric strong {
+    font-size: 15px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric span {
+    font-size: 8px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .inbox-tools {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .workspace-shell:not(.is-thread-open) .unread-first-toggle {
+    min-width: 66px;
+    padding-inline: 7px;
+    font-size: 9px;
+  }
+}
