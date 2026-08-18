@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
+// Keep the agent workspace expressed in operator-facing actions rather than implementation-state controls.
 const read = (path) => readFile(path, 'utf8');
 
 test('agent workspace exposes business actions instead of a raw status selector', async () => {
