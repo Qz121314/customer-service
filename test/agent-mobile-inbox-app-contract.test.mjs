@@ -18,9 +18,7 @@ test('mobile agent inbox uses a stable app-style shell', () => {
   );
 
   assert.ok(css.includes('height: 60px;'));
-  assert.ok(
-    css.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
-  );
+  assert.ok(css.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
   assert.ok(css.includes('border-radius: 15px;'));
   assert.ok(css.includes('font-variant-numeric: tabular-nums;'));
   assert.ok(css.includes('.conversation-head-status'));
