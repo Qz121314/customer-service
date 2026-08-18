@@ -139,25 +139,47 @@ function AgentLogin({
   onPassword: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
 }) {
+  const [credentialsUnlocked, setCredentialsUnlocked] = useState(false);
+  const unlockCredentials = () => setCredentialsUnlocked(true);
+
   return (
     <AuthPage title="客服工作台" variant="agent">
-      <form className="auth-form agent-auth-form" onSubmit={onSubmit}>
+      <form
+        className="auth-form agent-auth-form"
+        onSubmit={onSubmit}
+        autoComplete="off"
+        data-form-type="other"
+      >
         <label>
           客服账号
           <input
+            name="agent-account"
             value={username}
             onChange={(event) => onUsername(event.target.value)}
-            autoComplete="username"
-            autoFocus
+            autoComplete="off"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            readOnly={!credentialsUnlocked}
+            onFocus={unlockCredentials}
+            onPointerDown={unlockCredentials}
+            data-1p-ignore="true"
+            data-lpignore="true"
           />
         </label>
         <label>
           登录密码
           <input
             type="password"
+            name="agent-access-key"
             value={password}
             onChange={(event) => onPassword(event.target.value)}
-            autoComplete="current-password"
+            autoComplete="new-password"
+            readOnly={!credentialsUnlocked}
+            onFocus={unlockCredentials}
+            onPointerDown={unlockCredentials}
+            data-1p-ignore="true"
+            data-lpignore="true"
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
