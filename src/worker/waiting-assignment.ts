@@ -1,5 +1,4 @@
-import { broadcastWaitingAssignments } from './assignment-broadcast';
-import { resolveInitialGreetingAutomations } from './conversation-automation';
+import { broadcastAssignments } from './assignment-broadcast';
 import { routingBusinessDate } from './routing';
 
 type WaitingAssignmentEnv = {
@@ -162,15 +161,6 @@ export async function assignWaitingConversations(
     .bind(now, agentId)
     .run();
 
-  const automationMessages = await resolveInitialGreetingAutomations(
-    env.DB,
-    assignedConversationIds,
-  );
-  await broadcastWaitingAssignments(
-    env,
-    agentId,
-    assignedConversationIds,
-    automationMessages,
-  );
+  await broadcastAssignments(env, agentId, assignedConversationIds, now);
   return assignedConversationIds;
 }
