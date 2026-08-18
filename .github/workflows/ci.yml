@@ -35,23 +35,8 @@ jobs:
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
-      - name: Capture exact Prettier patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm exec prettier --write src/dashboard test
-          git diff -- src/dashboard test > /tmp/prettier.patch
-          git diff --name-only -- src/dashboard test > /tmp/prettier-files.txt
-
-      - name: Upload Prettier diagnostics
-        uses: actions/upload-artifact@v4
-        with:
-          name: agent-ui-prettier-diagnostics
-          path: |
-            /tmp/prettier.patch
-            /tmp/prettier-files.txt
-          if-no-files-found: error
-          retention-days: 1
+      - name: Format
+        run: pnpm format
 
       - name: Lint
         run: pnpm lint
