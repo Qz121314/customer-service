@@ -1,0 +1,60 @@
+name: Fix commercial closure contract generator
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.head_ref == 'ui/agent-commercial-closure' && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ui/agent-commercial-closure
+      - name: Fix test generator
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('.github/workflows/patch-agent-commercial-closure.yml')
+          lines = path.read_text().splitlines()
+          replacements = {
+              'assert.doesNotMatch(portal,': "assert.equal(portal.includes('aria-label=\"会话状态\"'), false);",
+              'assert.match(panels, /conversation-status': "assert.ok(panels.includes('conversation-status is-${conversation.status}'));",
+              'assert.match(shared, /': "assert.ok(shared.includes('.thread-status-action'));",
+              'assert.match(desktop, /': "assert.ok(desktop.includes('.workspace-shell .thread-status-action'));",
+              'assert.match(mobile, /grid-template': "assert.ok(mobile.includes('grid-template-columns: auto auto 38px'));",
+              'assert.doesNotMatch(mobile,': "assert.equal(mobile.includes('.thread-head select'), false);",
+          }
+          updated = []
+          replaced = set()
+          for line in lines:
+              stripped = line.strip()
+              replacement = None
+              for marker, value in replacements.items():
+                  if marker in stripped:
+                      replacement = value
+                      replaced.add(marker)
+                      break
+              if replacement is None:
+                  updated.append(line)
+              else:
+                  indent = line[: len(line) - len(line.lstrip())]
+                  updated.append(indent + replacement)
+          missing = set(replacements) - replaced
+          if missing:
+              raise SystemExit(f'missing markers: {sorted(missing)}')
+          path.write_text('\n'.join(updated) + '\n')
+      - name: Commit fix and remove helper
+        shell: bash
+        run: |
+          rm .github/workflows/fix-commercial-patch-test.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Fix agent commercial UI contract test"
+          git push origin HEAD:ui/agent-commercial-closure
