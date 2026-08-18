@@ -6,18 +6,15 @@ type AgentPushBindings = {
 
 type AgentPushRow = VapidRow & {
   endpoint: string;
-  expiration_time: number | null;
 };
 
 export async function sendAgentPushForConversation(
   env: AgentPushBindings,
   conversationId: string,
 ): Promise<void> {
-  const now = Date.now();
   const subscriptions = await env.DB.prepare(
     `SELECT
        subscription.endpoint,
-       subscription.expiration_time,
        vapid.public_key,
        vapid.private_jwk,
        vapid.subject
@@ -28,29 +25,22 @@ export async function sendAgentPushForConversation(
        ON vapid.id = 'default'
      WHERE conversation.id = ?1
        AND conversation.assigned_agent IS NOT NULL
+       AND (
+         subscription.expiration_time IS NULL
+         OR subscription.expiration_time > ?2
+       )
        AND COALESCE(
          conversation.expires_at,
          datetime(conversation.created_at, '+1 day')
        ) > CURRENT_TIMESTAMP`,
   )
-    .bind(conversationId)
+    .bind(conversationId, Date.now())
     .all<AgentPushRow>();
   if (!subscriptions.results?.length) return;
 
   const staleEndpoints = new Set<string>();
-  const activeSubscriptions = subscriptions.results.filter((subscription) => {
-    if (
-      subscription.expiration_time !== null &&
-      subscription.expiration_time <= now
-    ) {
-      staleEndpoints.add(subscription.endpoint);
-      return false;
-    }
-    return true;
-  });
-
   const deliveryResults = await Promise.all(
-    activeSubscriptions.map(async (subscription) => ({
+    subscriptions.results.map(async (subscription) => ({
       endpoint: subscription.endpoint,
       gone: await deliverAgentPush(subscription.endpoint, subscription),
     })),
