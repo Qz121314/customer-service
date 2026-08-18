@@ -128,10 +128,7 @@ test('realtime overview scans run only when assignment or status counts can chan
     /if \(assignment\?\.newlyAssigned && assignment\.assignedAt\)[\s\S]*broadcastAssignments\([\s\S]*\} else \{[\s\S]*broadcastClientConversationEvent\(/u,
   );
   assert.doesNotMatch(clientRoute, /includeOverview:\s*true/u);
-  assert.match(
-    assignmentBroadcaster,
-    /loadAgentOverview\(env\.DB, agentId\)/u,
-  );
+  assert.match(assignmentBroadcaster, /loadAgentOverview\(env\.DB, agentId\)/u);
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);
   assert.doesNotMatch(mediaSource, /\{ includeOverview: true \}/u);
   assert.match(
