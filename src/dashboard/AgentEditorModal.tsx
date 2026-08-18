@@ -1,5 +1,9 @@
 import type { FormEvent } from 'react';
-import type { AgentQuotaAdjustment, ProductCatalogItem } from './api';
+import type {
+  AgentQuotaAdjustment,
+  AgentQuotaLedger,
+  ProductCatalogItem,
+} from './api';
 import type { AgentDraft } from './dashboard-runtime';
 import { initials, relativeTime } from './dashboard-runtime';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
@@ -9,6 +13,7 @@ export function AgentEditorModal({
   products,
   saving,
   quotaAdjustments,
+  quotaLedger,
   quotaHistoryBusy,
   onDraftChange,
   onClose,
@@ -18,6 +23,7 @@ export function AgentEditorModal({
   products: ProductCatalogItem[];
   saving: boolean;
   quotaAdjustments: AgentQuotaAdjustment[];
+  quotaLedger: AgentQuotaLedger | null;
   quotaHistoryBusy: boolean;
   onDraftChange: (draft: AgentDraft) => void;
   onClose: () => void;
@@ -197,10 +203,10 @@ export function AgentEditorModal({
               <section className="traffic-quota-editor agent-editor-quota-workspace">
                 <div className="traffic-quota-editor-head">
                   <div>
-                    <strong>接待额度</strong>
-                    <small>按有效咨询扣减，用完后停止接收新会话</small>
+                    <strong>咨询额度</strong>
+                    <small>累计购买额度；每个会话首次有效接待只扣 1 次</small>
                   </div>
-                  <label className="switch-control" aria-label="启用接待额度">
+                  <label className="switch-control" aria-label="启用咨询额度">
                     <input
                       type="checkbox"
                       checked={draft.trafficQuotaEnabled}
@@ -217,17 +223,17 @@ export function AgentEditorModal({
 
                 <div className="traffic-quota-summary">
                   <div>
-                    <span>保存后总额</span>
+                    <span>保存后累计额度</span>
                     <strong>
                       {draft.trafficQuotaTotal + draft.trafficQuotaTopUp}
                     </strong>
                   </div>
                   <div>
-                    <span>已消耗</span>
+                    <span>已使用额度</span>
                     <strong>{draft.trafficQuotaUsed}</strong>
                   </div>
                   <div>
-                    <span>保存后可用</span>
+                    <span>保存后剩余</span>
                     <strong>
                       {Math.max(
                         0,
@@ -282,17 +288,44 @@ export function AgentEditorModal({
                 </div>
 
                 <p className="agent-editor-quota-note">
-                  追加额度只累加，不清零已消耗；保存失败后重试不会重复增加。
+                  每日接待上限按天重置；咨询额度是累计总量。转接、重新排队和恢复同一会话不会重复扣减。
                 </p>
 
                 {draft.id ? (
                   <div className="traffic-quota-history">
                     <div className="traffic-quota-history-head">
-                      <strong>最近额度变更</strong>
-                      <span>进入编辑时读取</span>
+                      <strong>额度账本</strong>
+                      <span
+                        className={
+                          quotaLedger?.consistent
+                            ? 'is-ok'
+                            : quotaLedger
+                              ? 'is-warning'
+                              : undefined
+                        }
+                      >
+                        {quotaHistoryBusy
+                          ? '正在核对'
+                          : quotaLedger?.consistent
+                            ? '账本已核对'
+                            : quotaLedger
+                              ? '账本需检查'
+                              : '进入编辑时读取'}
+                      </span>
                     </div>
                     {quotaHistoryBusy ? (
                       <p>正在读取…</p>
+                    ) : quotaLedger && !quotaLedger.consistent ? (
+                      <div className="traffic-quota-history-list">
+                        <div className="traffic-quota-history-row quota-ledger-warning">
+                          <strong>核对异常</strong>
+                          <span>
+                            总额 {quotaLedger.total}/{quotaLedger.expectedTotal} ·
+                            已用 {quotaLedger.used}/{quotaLedger.expectedUsed}
+                          </span>
+                          <time>请检查</time>
+                        </div>
+                      </div>
                     ) : quotaAdjustments.length ? (
                       <div className="traffic-quota-history-list">
                         {quotaAdjustments.map((adjustment) => (
@@ -314,7 +347,7 @@ export function AgentEditorModal({
                         ))}
                       </div>
                     ) : (
-                      <p>暂无追加记录</p>
+                      <p>账本正常，暂无追加记录</p>
                     )}
                   </div>
                 ) : null}
