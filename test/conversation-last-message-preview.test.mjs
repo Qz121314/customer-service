@@ -4,7 +4,8 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
-const migrationPath = '../migrations/0032_conversation_last_message_preview.sql';
+const migrationPath =
+  '../migrations/0032_conversation_last_message_preview.sql';
 const cachedSummary = 'c.last_message_preview AS last_message';
 
 test('backfills latest message preview', async () => {
