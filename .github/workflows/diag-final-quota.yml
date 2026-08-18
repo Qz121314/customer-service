@@ -111,28 +111,18 @@ jobs:
               1,
           )
 
-          quota_query = '''    database
-              .prepare(
-                `SELECT traffic_quota_total AS total,
-                   traffic_quota_used AS used
-                 FROM agents WHERE id = ?`,
+          acceptance = text[acceptance_start:]
+          for total, used in [(1, 1), (2, 2), (3, 3)]:
+              literal = f'{{ total: {total}, used: {used} }}'
+              sqlite_expected = (
+                  'Object.assign(Object.create(null), '
+                  + literal
+                  + ')'
               )
-              .get({agent}),'''
-          for agent, total, used in [
-              ('agentB', 1, 1),
-              ('agentA', 2, 2),
-              ('agentA', 3, 3),
-          ]:
-              old = quota_query.format(agent=agent)
-              new = '{ ...' + old.strip()[:-1] + ' },'
-              expected = f'    {{ total: {total}, used: {used} }},'
-              marker = old + '\n' + expected
-              replacement = '    ' + new + '\n' + expected
-              if marker not in text:
-                  raise SystemExit(
-                      f'quota row assertion not found for {agent} {total}/{used}'
-                  )
-              text = text.replace(marker, replacement, 1)
+              if literal not in acceptance:
+                  raise SystemExit(f'quota expected row missing: {total}/{used}')
+              acceptance = acceptance.replace(literal, sqlite_expected, 1)
+          text = text[:acceptance_start] + acceptance
 
           if 'adminQuotaApi' in text:
               raise SystemExit('adminQuotaApi reference still present')
