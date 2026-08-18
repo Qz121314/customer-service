@@ -85,7 +85,9 @@ export function AgentAutoReplyControl() {
               className="agent-auto-reply-overlay"
               role="presentation"
               onMouseDown={(event) => {
-                if (event.target === event.currentTarget && !saving) setOpen(false);
+                if (event.target === event.currentTarget && !saving) {
+                  setOpen(false);
+                }
               }}
             >
               <section
@@ -144,9 +146,13 @@ export function AgentAutoReplyControl() {
                       未开启或未填写内容时不会发送任何自动消息，会话仍会正常建立。
                     </p>
                     {invalidEnabledGreeting ? (
-                      <p className="agent-auto-reply-error">开启自动问候前需要填写内容。</p>
+                      <p className="agent-auto-reply-error">
+                        开启自动问候前需要填写内容。
+                      </p>
                     ) : null}
-                    {error ? <p className="agent-auto-reply-error">{error}</p> : null}
+                    {error ? (
+                      <p className="agent-auto-reply-error">{error}</p>
+                    ) : null}
                   </div>
                 )}
 
