@@ -3,6 +3,7 @@ name: Apply agent workspace commercial closure
 on:
   push:
     branches: [ui/agent-commercial-closure]
+  pull_request:
 
 permissions:
   contents: write
