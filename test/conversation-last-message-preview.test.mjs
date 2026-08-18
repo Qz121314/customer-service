@@ -57,5 +57,8 @@ test('client conversation summaries also reuse the cached preview', async () => 
       3,
     'list, owned conversation and realtime summary reads should use the cache',
   );
-  assert.doesNotMatch(clientApi, /SELECT body FROM messages m WHERE m\.conversation_id = c\.id/u);
+  assert.doesNotMatch(
+    clientApi,
+    /SELECT body FROM messages m WHERE m\.conversation_id = c\.id/u,
+  );
 });
