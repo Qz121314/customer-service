@@ -26,9 +26,7 @@
   }
 
   .workspace-shell:not(.is-thread-open) .workspace-sidebar .ghost-button,
-  .workspace-shell:not(.is-thread-open)
-    .workspace-sidebar
-    .ghost-button.full {
+  .workspace-shell:not(.is-thread-open) .workspace-sidebar .ghost-button.full {
     width: 34px;
     min-width: 34px;
     height: 34px;
@@ -136,23 +134,17 @@
     content: '';
   }
 
-  .workspace-shell:not(.is-thread-open)
-    .inbox-overview
-    .metric:nth-child(2) {
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric:nth-child(2) {
     --metric-accent: var(--agent-tech-violet);
     --metric-glow: rgba(139, 124, 255, 0.3);
   }
 
-  .workspace-shell:not(.is-thread-open)
-    .inbox-overview
-    .metric:nth-child(3) {
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric:nth-child(3) {
     --metric-accent: #8e9bb0;
     --metric-glow: rgba(142, 155, 176, 0.2);
   }
 
-  .workspace-shell:not(.is-thread-open)
-    .inbox-overview
-    .metric:nth-child(4) {
+  .workspace-shell:not(.is-thread-open) .inbox-overview .metric:nth-child(4) {
     --metric-accent: var(--agent-tech-green);
     --metric-glow: rgba(88, 214, 164, 0.28);
   }
