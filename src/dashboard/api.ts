@@ -85,6 +85,22 @@ export type AgentQuotaAdjustment = {
   createdAt: string;
 };
 
+export type AgentQuotaLedger = {
+  total: number;
+  used: number;
+  totalBaseline: number;
+  archivedUsed: number;
+  retainedUsed: number;
+  expectedTotal: number;
+  expectedUsed: number;
+  consistent: boolean;
+};
+
+export type AgentQuotaLedgerPayload = {
+  ledger: AgentQuotaLedger;
+  adjustments: AgentQuotaAdjustment[];
+};
+
 export type AgentSelfMonthlyStats = {
   month: string;
   days: number[];
@@ -278,13 +294,10 @@ export async function updateAgent(
   });
 }
 
-export async function getAgentQuotaAdjustments(
+export async function getAgentQuotaLedger(
   id: string,
-): Promise<AgentQuotaAdjustment[]> {
-  const response = await request<{ adjustments: AgentQuotaAdjustment[] }>(
-    `/api/admin/agents/${encodeURIComponent(id)}/quota-adjustments`,
-  );
-  return response.adjustments;
+): Promise<AgentQuotaLedgerPayload> {
+  return request(`/api/admin/agents/${encodeURIComponent(id)}/quota-ledger`);
 }
 
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {

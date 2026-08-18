@@ -50,6 +50,12 @@ function createRetentionDatabase() {
       site_id TEXT NOT NULL,
       visitor_external_id TEXT NOT NULL
     );
+    CREATE TABLE agents (
+      id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      traffic_quota_archived_used INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT
+    );
     CREATE TABLE agent_daily_stats (
       site_id TEXT NOT NULL,
       agent_id TEXT NOT NULL,
@@ -63,7 +69,8 @@ function createRetentionDatabase() {
       conversation_id TEXT PRIMARY KEY,
       site_id TEXT NOT NULL,
       agent_id TEXT NOT NULL,
-      business_date TEXT NOT NULL
+      business_date TEXT NOT NULL,
+      quota_consumed INTEGER NOT NULL DEFAULT -1
     );
     CREATE INDEX idx_agent_traffic_receipts_month
       ON agent_traffic_receipts(site_id, business_date, agent_id);
@@ -77,6 +84,10 @@ function d1(database) {
   const counter = { count: 0 };
   function prepare(sql) {
     let bindings = [];
+    const executeRun = () => {
+      const result = database.prepare(sql).run(...bindings);
+      return { meta: { changes: Number(result.changes) } };
+    };
     return {
       bind(...values) {
         bindings = values;
@@ -92,12 +103,24 @@ function d1(database) {
       },
       async run() {
         counter.count += 1;
-        const result = database.prepare(sql).run(...bindings);
-        return { meta: { changes: Number(result.changes) } };
+        return executeRun();
       },
+      executeRun,
     };
   }
-  return { prepare, counter };
+  async function batch(statements) {
+    counter.count += 1;
+    database.exec('BEGIN');
+    try {
+      const results = statements.map((statement) => statement.executeRun());
+      database.exec('COMMIT');
+      return results;
+    } catch (error) {
+      database.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  return { prepare, batch, counter };
 }
 
 function rowCount(database, table) {
@@ -196,7 +219,7 @@ test('cron cleanup removes conversation trees with bounded D1 work', async () =>
   database.close();
 });
 
-test('reporting history cleanup runs once daily and preserves the 400-day window', async () => {
+test('reporting history cleanup archives paid usage before pruning receipts', async () => {
   const database = createRetentionDatabase();
   const db = d1(database);
   const env = {
@@ -207,16 +230,21 @@ test('reporting history cleanup runs once daily and preserves the 400-day window
   };
 
   database.exec(`
+    INSERT INTO agents (id, site_id) VALUES
+      ('old-agent', 'default'),
+      ('boundary-agent', 'default'),
+      ('unlimited-agent', 'default');
     INSERT INTO agent_daily_stats (
       site_id, agent_id, business_date, conversation_count
     ) VALUES
       ('default', 'old-agent', '2025-07-12', 1),
       ('default', 'boundary-agent', '2025-07-13', 1);
     INSERT INTO agent_traffic_receipts (
-      conversation_id, site_id, agent_id, business_date
+      conversation_id, site_id, agent_id, business_date, quota_consumed
     ) VALUES
-      ('old-receipt', 'default', 'old-agent', '2025-07-12'),
-      ('boundary-receipt', 'default', 'boundary-agent', '2025-07-13');
+      ('old-receipt', 'default', 'old-agent', '2025-07-12', 1),
+      ('unlimited-old-receipt', 'default', 'unlimited-agent', '2025-07-12', -1),
+      ('boundary-receipt', 'default', 'boundary-agent', '2025-07-13', 1);
   `);
 
   await purgeExpiredConversations(env, new Date('2026-08-16T12:00:00.000Z'));
@@ -229,19 +257,59 @@ test('reporting history cleanup runs once daily and preserves the 400-day window
       .get().business_date,
     '2025-07-13',
   );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT traffic_quota_archived_used AS used
+         FROM agents WHERE id = 'old-agent'`,
+      )
+      .get().used,
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT traffic_quota_archived_used AS used
+         FROM agents WHERE id = 'unlimited-agent'`,
+      )
+      .get().used,
+    0,
+    'quota-disabled receipts must never become paid usage',
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT traffic_quota_archived_used AS used
+         FROM agents WHERE id = 'boundary-agent'`,
+      )
+      .get().used,
+    0,
+    'the 400-day boundary must remain in retained detail',
+  );
 
   database.exec(`
+    INSERT INTO agents (id, site_id) VALUES ('late-old-agent', 'default');
     INSERT INTO agent_daily_stats (
       site_id, agent_id, business_date, conversation_count
     ) VALUES ('default', 'late-old-agent', '2025-07-12', 1);
     INSERT INTO agent_traffic_receipts (
-      conversation_id, site_id, agent_id, business_date
-    ) VALUES ('late-old-receipt', 'default', 'late-old-agent', '2025-07-12');
+      conversation_id, site_id, agent_id, business_date, quota_consumed
+    ) VALUES ('late-old-receipt', 'default', 'late-old-agent', '2025-07-12', 1);
   `);
 
   await purgeExpiredConversations(env, new Date('2026-08-16T12:01:00.000Z'));
 
   assert.equal(rowCount(database, 'agent_daily_stats'), 2);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 2);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT traffic_quota_archived_used AS used
+         FROM agents WHERE id = 'late-old-agent'`,
+      )
+      .get().used,
+    0,
+    'reporting cleanup must run only at the scheduled minute',
+  );
   database.close();
 });

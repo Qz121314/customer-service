@@ -252,7 +252,7 @@ async function createAdminSession(password: string): Promise<string> {
   return `${payload}.${await hmac(password, payload)}`;
 }
 
-async function verifyAdminSession(
+export async function verifyAdminSession(
   request: Request,
   password: string,
 ): Promise<boolean> {
