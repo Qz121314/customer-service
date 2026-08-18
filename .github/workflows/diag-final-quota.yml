@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix Node-only ledger verification
+      - name: Fix Node-only quota acceptance harness
         shell: bash
         run: |
           python - <<'PY'
@@ -29,10 +29,6 @@ jobs:
           text = text.replace('let adminQuotaApi;\n', '', 1)
           text = text.replace('    { adminQuotaApi },\n', '', 1)
           text = text.replace("    import('../src/worker/admin-quota-api.ts'),\n", '', 1)
-          if 'adminQuotaApi' not in text:
-              pass
-          elif 'const ledgerA = await json(' not in text:
-              raise SystemExit('unexpected remaining adminQuotaApi reference')
 
           start = text.index('  const ledgerA = await json(\n')
           end_marker = '  database.close();\n});'
@@ -86,6 +82,24 @@ jobs:
 
           '''
           text = text[:start] + ledger + text[end:]
+
+          acceptance_start = text.index(
+              "test('consultation quota commercial lifecycle remains consistent end to end'"
+          )
+          create_seat = text.index('  async function createSeat({', acceptance_start)
+          catalog = '''  database.exec(`
+            INSERT INTO product_catalog (
+              site_id, id, title, section_id, section_name, category_id,
+              category_name, is_enabled
+            ) VALUES
+              ('default', 'quota-product-west', 'Quota West', 'west', 'West',
+               'quota-test', 'Quota test', 1),
+              ('default', 'quota-product-east', 'Quota East', 'east', 'East',
+               'quota-test', 'Quota test', 1);
+          `);
+
+          '''
+          text = text[:create_seat] + catalog + text[create_seat:]
           if 'adminQuotaApi' in text:
               raise SystemExit('adminQuotaApi reference still present')
           path.write_text(text)
@@ -106,5 +120,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add test/customer-service-full-flow.test.mjs diagnostic-final-quota.txt .quota-harness-trigger .github/workflows/diag-final-quota.yml
-          git commit -m "Fix final quota acceptance test harness"
+          git commit -m "Add final quota lifecycle acceptance coverage"
           git push origin HEAD:acceptance/quota-final-e2e
