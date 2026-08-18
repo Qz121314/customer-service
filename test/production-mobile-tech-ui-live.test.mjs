@@ -8,10 +8,13 @@ test('production agent bundle contains the mobile telemetry and command UI', asy
   assert.equal(pageResponse.ok, true, `agent page returned ${pageResponse.status}`);
 
   const html = await pageResponse.text();
-  const cssPaths = [...html.matchAll(/href="([^"]+\.css(?:\?[^"]*)?)"/g)].map(
-    (match) => match[1],
+  const cssPaths = [
+    ...html.matchAll(/href="([^"]+\.css(?:\?[^"]*)?)"/g),
+  ].map((match) => match[1]);
+  assert.ok(
+    cssPaths.length > 0,
+    'production agent page did not expose a CSS asset',
   );
-  assert.ok(cssPaths.length > 0, 'production agent page did not expose a CSS asset');
 
   const styles = (
     await Promise.all(
