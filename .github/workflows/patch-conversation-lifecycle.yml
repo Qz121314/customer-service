@@ -1,0 +1,77 @@
+name: Patch conversation lifecycle
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.head_ref == 'fix/conversation-lifecycle-closure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Apply precise lifecycle API patches
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          agent_path = Path('src/worker/agent-api.ts')
+          agent = agent_path.read_text()
+          old = '''  const result = await c.env.DB.prepare(
+            `UPDATE conversations
+             SET status = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?2 AND assigned_agent = ?3
+               AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+          )
+            .bind(body.status, id, agent.id)
+            .run();
+          if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
+          '''
+          new = '''  try {
+            const result = await c.env.DB.prepare(
+              `UPDATE conversations
+               SET status = ?1, updated_at = CURRENT_TIMESTAMP
+               WHERE id = ?2 AND assigned_agent = ?3
+                 AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+            )
+              .bind(body.status, id, agent.id)
+              .run();
+            if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
+          } catch (reason) {
+            if (String(reason).includes('CONVERSATION_REOPEN_CAPACITY')) {
+              return c.json({ error: 'CONVERSATION_REOPEN_CAPACITY' }, 409);
+            }
+            throw reason;
+          }
+          '''
+          if agent.count(old) != 1:
+              raise SystemExit(f'agent-api patch target count={agent.count(old)}')
+          agent_path.write_text(agent.replace(old, new))
+
+          api_path = Path('src/dashboard/api.ts')
+          api = api_path.read_text()
+          old_api = "  CONVERSATION_CLOSED: '会话已关闭',\n"
+          new_api = old_api + "  CONVERSATION_REOPEN_CAPACITY: '当前接待并发已满，请先结束其他处理中会话',\n"
+          if api.count(old_api) != 1:
+              raise SystemExit(f'dashboard api patch target count={api.count(old_api)}')
+          api_path.write_text(api.replace(old_api, new_api))
+          PY
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/worker/agent-api.ts src/dashboard/api.ts
+          git commit -m "Guard closed conversation reopening"
+          git push origin HEAD:${{ github.head_ref }}
