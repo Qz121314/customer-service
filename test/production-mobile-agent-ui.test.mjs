@@ -17,7 +17,7 @@ function htmlAssetUrls(html) {
 
 function bundledAssetUrls(source) {
   const urls = new Set();
-  for (const match of source.matchAll(/["'`](\/assets\/[^"'`\s)]+\.(?:js|css)(?:\?[^"'`\s)]*)?)["'`]/g)) {
+  for (const match of source.matchAll(/["'`](\/?assets\/[^"'`\s)]+\.(?:js|css)(?:\?[^"'`\s)]*)?)["'`]/g)) {
     urls.add(absoluteUrl(match[1]));
   }
   return [...urls];
