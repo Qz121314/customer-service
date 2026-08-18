@@ -17,27 +17,25 @@ WHEN NEW.assigned_agent IS NOT NULL
     WHERE receipt.conversation_id = NEW.id
   )
 BEGIN
-  SELECT CASE
-    WHEN EXISTS (
-      SELECT 1
-      FROM agents target
-      LEFT JOIN agent_daily_stats daily
-        ON daily.site_id = target.site_id
-       AND daily.agent_id = target.id
-       AND daily.business_date = NEW.assigned_business_date
-      WHERE target.id = NEW.assigned_agent
-        AND target.site_id = NEW.site_id
-        AND (
-          (
-            target.daily_conversation_limit > 0
-            AND COALESCE(daily.conversation_count, 0) >= target.daily_conversation_limit
-          )
-          OR (
-            target.traffic_quota_enabled = 1
-            AND target.traffic_quota_used >= target.traffic_quota_total
-          )
+  SELECT RAISE(ABORT, 'AGENT_NEW_TRAFFIC_LIMIT_EXHAUSTED')
+  WHERE EXISTS (
+    SELECT 1
+    FROM agents target
+    LEFT JOIN agent_daily_stats daily
+      ON daily.site_id = target.site_id
+     AND daily.agent_id = target.id
+     AND daily.business_date = NEW.assigned_business_date
+    WHERE target.id = NEW.assigned_agent
+      AND target.site_id = NEW.site_id
+      AND (
+        (
+          target.daily_conversation_limit > 0
+          AND COALESCE(daily.conversation_count, 0) >= target.daily_conversation_limit
         )
-    )
-    THEN RAISE(ABORT, 'AGENT_NEW_TRAFFIC_LIMIT_EXHAUSTED')
-  END;
+        OR (
+          target.traffic_quota_enabled = 1
+          AND target.traffic_quota_used >= target.traffic_quota_total
+        )
+      )
+  );
 END;
