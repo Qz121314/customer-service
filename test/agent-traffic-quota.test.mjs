@@ -84,6 +84,7 @@ async function createDatabase({ quotaEnabled = true, quotaTotal = 2 } = {}) {
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
+      requeue_excluded_agent_id TEXT,
       source_handoff_id TEXT,
       status TEXT NOT NULL,
       expires_at TEXT,

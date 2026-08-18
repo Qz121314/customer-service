@@ -70,6 +70,7 @@ function createDatabase() {
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
+      requeue_excluded_agent_id TEXT,
       status TEXT NOT NULL,
       expires_at TEXT,
       created_at TEXT NOT NULL,
@@ -302,6 +303,29 @@ test('conversation without a routing scope remains waiting', async () => {
   );
 
   assert.equal(assignment, null);
+  database.close();
+});
+
+test('persistent requeue exclusion keeps the releasing seat out of later routing', async () => {
+  const database = createDatabase();
+  addAgent(database, { id: 'agent-a' });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+  addConversation(database, 'conversation-1', 'product-a');
+  database
+    .prepare(
+      `UPDATE conversations
+       SET requeue_excluded_agent_id = 'agent-a'
+       WHERE id = 'conversation-1'`,
+    )
+    .run();
+
+  const db = d1(database);
+  assert.equal(await assignConversationAgent(db, 'conversation-1'), null);
+
+  addAgent(database, { id: 'agent-b' });
+  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
+  const reassigned = await assignConversationAgent(db, 'conversation-1');
+  assert.equal(reassigned?.id, 'agent-b');
   database.close();
 });
 

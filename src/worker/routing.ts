@@ -67,7 +67,9 @@ function assignmentResult(
  *
  * Daily and paid traffic limits apply only before the conversation has its
  * immutable traffic receipt. Requeues of already-counted traffic can recover
- * without consuming or requiring another unit of new-traffic quota.
+ * without consuming or requiring another unit of new-traffic quota. A manually
+ * requeued conversation also keeps its previous seat excluded until another seat
+ * actually receives it.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -84,6 +86,7 @@ export async function assignConversationAgent(
            c.product_id,
            COALESCE(c.section_id, p.section_id) AS section_id,
            COALESCE(c.category_id, p.category_id) AS category_id,
+           c.requeue_excluded_agent_id,
            EXISTS (
              SELECT 1
              FROM agent_traffic_receipts receipt
@@ -144,6 +147,10 @@ export async function assignConversationAgent(
           AND daily.business_date = ?3
          WHERE a.is_enabled = 1
            AND (?4 = '' OR a.id <> ?4)
+           AND (
+             ctx.requeue_excluded_agent_id IS NULL
+             OR a.id <> ctx.requeue_excluded_agent_id
+           )
            AND a.status = 'online'
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL

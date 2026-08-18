@@ -23,7 +23,9 @@ export async function assignWaitingConversations(
   // Claim matching conversations in one atomic SQLite statement. Already-counted
   // conversations are recovered first because they must not require or consume
   // another daily/new-traffic unit. Fresh traffic then fills only the remaining
-  // active capacity allowed by today's and the paid traffic quota.
+  // active capacity allowed by today's and the paid traffic quota. A conversation
+  // manually returned to routing stays excluded from its previous seat until a
+  // different seat actually accepts it.
   const assigned = await env.DB.prepare(
     `WITH agent_state AS (
        SELECT
@@ -95,6 +97,10 @@ export async function assignWaitingConversations(
        WHERE c.site_id = (SELECT site_id FROM agent_state)
          AND c.assigned_agent IS NULL
          AND c.status IN ('open', 'pending')
+         AND (
+           c.requeue_excluded_agent_id IS NULL
+           OR c.requeue_excluded_agent_id <> ?1
+         )
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
          AND EXISTS (
            SELECT 1

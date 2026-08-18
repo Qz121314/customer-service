@@ -220,6 +220,7 @@ const errorMessages: Record<string, string> = {
   INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   CONVERSATION_CLOSED: '会话已关闭',
+  CONVERSATION_REOPEN_CAPACITY: '当前接待并发已满，请先结束其他处理中会话',
   INVALID_TRANSFER_TARGET: '请选择有效的转接客服',
   TRANSFER_TARGET_UNAVAILABLE: '该客服当前无法接收新会话',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
