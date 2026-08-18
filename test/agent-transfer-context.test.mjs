@@ -83,7 +83,8 @@ test('agent workspace exposes transfer, requeue and product context', async () =
   assert.match(worker, /loadTransferTargets/u);
   assert.doesNotMatch(worker, /agent_quick_replies/u);
   assert.match(routing, /excludedAgentId/u);
-  assert.match(dashboard, /重新排队/u);
+  assert.match(dashboard, /重新分配/u);
+  assert.doesNotMatch(dashboard, /重新排队/u);
   assert.doesNotMatch(dashboard, /快捷回复/u);
   assert.match(dashboard, /conversation-context-card/u);
   assert.match(styles, /\.transfer-menu-panel/u);
