@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix Node-only quota acceptance harness
+      - name: Finalize quota acceptance harness
         shell: bash
         run: |
           python - <<'PY'
@@ -110,6 +110,30 @@ jobs:
               "          sourceHandoffId: `00000000-0000-4000-8000-${String(handoffIndex).padStart(12, '0')}`,\n",
               1,
           )
+
+          quota_query = '''    database
+              .prepare(
+                `SELECT traffic_quota_total AS total,
+                   traffic_quota_used AS used
+                 FROM agents WHERE id = ?`,
+              )
+              .get({agent}),'''
+          for agent, total, used in [
+              ('agentB', 1, 1),
+              ('agentA', 2, 2),
+              ('agentA', 3, 3),
+          ]:
+              old = quota_query.format(agent=agent)
+              new = '{ ...' + old.strip()[:-1] + ' },'
+              expected = f'    {{ total: {total}, used: {used} }},'
+              marker = old + '\n' + expected
+              replacement = '    ' + new + '\n' + expected
+              if marker not in text:
+                  raise SystemExit(
+                      f'quota row assertion not found for {agent} {total}/{used}'
+                  )
+              text = text.replace(marker, replacement, 1)
+
           if 'adminQuotaApi' in text:
               raise SystemExit('adminQuotaApi reference still present')
           path.write_text(text)
