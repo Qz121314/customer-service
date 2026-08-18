@@ -1,5 +1,3 @@
-import type { ConversationAutomationMessage } from './conversation-automation';
-
 type AssignmentBroadcastEnv = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
@@ -32,15 +30,28 @@ type AssignmentConversationRow = {
   last_message: string | null;
   external_id: string | null;
   visitor_name: string | null;
+  initial_assignment: number;
+  greeting_message_id: string | null;
+  greeting_message_body: string | null;
+  greeting_message_created_at: string | null;
 };
 
-export async function broadcastWaitingAssignments(
+/**
+ * Broadcast one assignment lifecycle after the database assignment has committed.
+ *
+ * The database traffic/automation receipts decide whether this assignment is the
+ * conversation's initial reception and whether a greeting exists. The caller only
+ * supplies the assignment timestamp it used in the atomic assignment statement.
+ * This keeps direct routing and waiting recovery on the same event semantics.
+ */
+export async function broadcastAssignments(
   env: AssignmentBroadcastEnv,
   agentId: string,
   conversationIds: string[],
-  automationMessages: ConversationAutomationMessage[] = [],
+  assignmentAt: string,
 ): Promise<void> {
-  if (conversationIds.length === 0) return;
+  const ids = [...new Set(conversationIds.filter(Boolean))];
+  if (ids.length === 0) return;
 
   const [conversations, overview] = await Promise.all([
     env.DB.prepare(
@@ -50,32 +61,35 @@ export async function broadcastWaitingAssignments(
          c.product_cover_url, c.product_href, c.expires_at,
          c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
          c.created_at, v.external_id, v.display_name AS visitor_name,
-         c.last_message_preview AS last_message
+         c.last_message_preview AS last_message,
+         CASE
+           WHEN automation.resolved_at = ?2
+            AND automation.agent_id = c.assigned_agent
+           THEN 1 ELSE 0
+         END AS initial_assignment,
+         greeting.id AS greeting_message_id,
+         greeting.body AS greeting_message_body,
+         greeting.created_at AS greeting_message_created_at
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       LEFT JOIN conversation_automation_receipts automation
+         ON automation.conversation_id = c.id
+        AND automation.automation_key = 'initial_greeting'
+       LEFT JOIN messages greeting ON greeting.id = automation.message_id
        WHERE c.id IN (
          SELECT CAST(value AS TEXT) FROM json_each(?1)
        )
        ORDER BY c.last_message_at ASC, c.id ASC`,
     )
-      .bind(JSON.stringify(conversationIds))
+      .bind(JSON.stringify(ids), assignmentAt)
       .all<AssignmentConversationRow>(),
     loadAgentOverview(env.DB, agentId),
   ]);
 
-  const messagesByConversation = new Map(
-    automationMessages.map((message) => [message.conversation_id, message]),
-  );
   await Promise.all(
     (conversations.results ?? []).map((conversation) =>
-      broadcastAssignment(
-        env,
-        agentId,
-        conversation,
-        overview,
-        messagesByConversation.get(conversation.id) ?? null,
-      ),
+      broadcastAssignment(env, agentId, conversation, overview),
     ),
   );
 }
@@ -85,11 +99,12 @@ async function broadcastAssignment(
   agentId: string,
   conversation: AssignmentConversationRow,
   overview: Record<string, unknown>,
-  automationMessage: ConversationAutomationMessage | null,
 ): Promise<void> {
+  const initialAssignment = conversation.initial_assignment === 1;
   const assignmentUpdates: Promise<void>[] = [
     broadcastRoom(env, `agent-inbox:${agentId}`, {
       type: 'conversation.changed',
+      cause: initialAssignment ? 'initial_assignment' : 'assignment',
       conversationId: conversation.id,
       conversation: agentConversationSummary(conversation),
       overview,
@@ -110,11 +125,13 @@ async function broadcastAssignment(
   }
   await Promise.all(assignmentUpdates);
 
-  if (!automationMessage) return;
+  const greeting = greetingMessage(conversation);
+  if (!initialAssignment || !greeting) return;
+
   const messageUpdates: Promise<void>[] = [
     broadcastRoom(env, conversation.id, {
       type: 'message',
-      message: conversationRoomMessage(automationMessage),
+      message: conversationRoomMessage(greeting),
     }),
   ];
   if (conversation.external_id) {
@@ -126,7 +143,7 @@ async function broadcastAssignment(
           type: 'message.created',
           conversationId: conversation.id,
           conversation: visitorConversationSummary(conversation),
-          message: clientRealtimeMessage(automationMessage),
+          message: clientRealtimeMessage(greeting),
         },
       ),
     );
@@ -218,7 +235,43 @@ function agentConversationSummary(conversation: AssignmentConversationRow) {
   };
 }
 
-function conversationRoomMessage(message: ConversationAutomationMessage) {
+type GreetingMessage = {
+  id: string;
+  conversation_id: string;
+  sender_type: 'agent';
+  sender_id: string;
+  body: string;
+  client_message_id: 'auto-greeting:v1';
+  read_by_visitor_at: null;
+  read_by_agent_at: null;
+  created_at: string;
+};
+
+function greetingMessage(
+  conversation: AssignmentConversationRow,
+): GreetingMessage | null {
+  if (
+    !conversation.assigned_agent ||
+    !conversation.greeting_message_id ||
+    !conversation.greeting_message_body ||
+    !conversation.greeting_message_created_at
+  ) {
+    return null;
+  }
+  return {
+    id: conversation.greeting_message_id,
+    conversation_id: conversation.id,
+    sender_type: 'agent',
+    sender_id: conversation.assigned_agent,
+    body: conversation.greeting_message_body,
+    client_message_id: 'auto-greeting:v1',
+    read_by_visitor_at: null,
+    read_by_agent_at: null,
+    created_at: conversation.greeting_message_created_at,
+  };
+}
+
+function conversationRoomMessage(message: GreetingMessage) {
   return {
     id: message.id,
     conversation_id: message.conversation_id,
@@ -231,7 +284,7 @@ function conversationRoomMessage(message: ConversationAutomationMessage) {
   };
 }
 
-function clientRealtimeMessage(message: ConversationAutomationMessage) {
+function clientRealtimeMessage(message: GreetingMessage) {
   return {
     id: message.id,
     direction: 'agent',
