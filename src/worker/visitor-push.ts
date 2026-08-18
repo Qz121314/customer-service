@@ -10,7 +10,6 @@ export type VapidRow = {
 
 type VisitorPushRow = VapidRow & {
   endpoint: string;
-  expiration_time: number | null;
 };
 
 const VAPID_ID = 'default';
@@ -29,11 +28,9 @@ export async function sendVisitorPushForConversation(
   env: VisitorPushBindings,
   conversationId: string,
 ): Promise<void> {
-  const now = Date.now();
   const subscriptions = await env.DB.prepare(
     `SELECT
        subscription.endpoint,
-       subscription.expiration_time,
        vapid.public_key,
        vapid.private_jwk,
        vapid.subject
@@ -47,29 +44,22 @@ export async function sendVisitorPushForConversation(
        ON vapid.id = 'default'
      WHERE conversation.id = ?1
        AND visitor.external_id IS NOT NULL
+       AND (
+         subscription.expiration_time IS NULL
+         OR subscription.expiration_time > ?2
+       )
        AND COALESCE(
          conversation.expires_at,
          datetime(conversation.created_at, '+1 day')
        ) > CURRENT_TIMESTAMP`,
   )
-    .bind(conversationId)
+    .bind(conversationId, Date.now())
     .all<VisitorPushRow>();
   if (!subscriptions.results?.length) return;
 
   const staleEndpoints = new Set<string>();
-  const activeSubscriptions = subscriptions.results.filter((subscription) => {
-    if (
-      subscription.expiration_time !== null &&
-      subscription.expiration_time <= now
-    ) {
-      staleEndpoints.add(subscription.endpoint);
-      return false;
-    }
-    return true;
-  });
-
   const deliveryResults = await Promise.all(
-    activeSubscriptions.map(async (subscription) => ({
+    subscriptions.results.map(async (subscription) => ({
       endpoint: subscription.endpoint,
       gone: await deliverVisitorPush(subscription.endpoint, subscription),
     })),
