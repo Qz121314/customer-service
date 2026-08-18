@@ -193,20 +193,24 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   expect(backBox?.width ?? 0).toBeGreaterThanOrEqual(38);
   expect(backBox?.height ?? 0).toBeGreaterThanOrEqual(38);
 
-  const mobileNavigation = await page.evaluate(() => ({
-    marker: window.history.state?.__customerServiceAgentView ?? null,
-    overscrollX: window.getComputedStyle(document.body).overscrollBehaviorX,
-  }));
+  const mobileNavigation = await page.evaluate(() => {
+    const browser = globalThis;
+    return {
+      marker: browser.history.state?.__customerServiceAgentView ?? null,
+      overscrollX: browser.getComputedStyle(browser.document.body)
+        .overscrollBehaviorX,
+    };
+  });
   expect(mobileNavigation.marker?.view).toBe('thread');
   expect(typeof mobileNavigation.marker?.conversationId).toBe('string');
   expect(mobileNavigation.overscrollX).toBe('auto');
 
-  await page.evaluate(() => window.history.back());
+  await page.evaluate(() => globalThis.history.back());
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(backButton).toBeHidden();
   await expect(mobileComposer).toBeHidden();
 
-  await page.evaluate(() => window.history.forward());
+  await page.evaluate(() => globalThis.history.forward());
   await expect(mobileComposer).toBeVisible();
   await expect(backButton).toBeVisible();
 
