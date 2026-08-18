@@ -7,24 +7,37 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test('mobile agent inbox uses a stable app-style shell', () => {
-  const css = source('../src/dashboard/agent-mobile-inbox.css');
+test('mobile agent inbox uses a stable app-style shell with telemetry controls', () => {
+  const inboxCss = source('../src/dashboard/agent-mobile-inbox.css');
+  const techCss = source('../src/dashboard/agent-mobile-tech-controls.css');
   const entry = source('../src/dashboard/main.tsx');
+  const techImport = "import './agent-mobile-tech-controls.css';";
+  const threadImport = "import './agent-mobile-thread.css';";
 
-  assert.ok(entry.includes("import './agent-mobile-inbox.css';"));
-  assert.ok(
-    entry.indexOf("import './agent-mobile-inbox.css';") >
-      entry.indexOf("import './agent-avatar.css';"),
-  );
+  assert.ok(entry.includes(techImport));
+  assert.ok(entry.indexOf(techImport) > entry.indexOf(threadImport));
 
-  assert.ok(css.includes('height: 60px;'));
-  assert.ok(css.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
-  assert.ok(css.includes('border-radius: 15px;'));
-  assert.ok(css.includes('font-variant-numeric: tabular-nums;'));
-  assert.ok(css.includes('.conversation-head-status'));
-  assert.ok(css.includes('flex-direction: row;'));
-  assert.ok(css.includes('.filter.active'));
-  assert.ok(css.includes('background: #e9ecf1;'));
-  assert.ok(css.includes('.conversation-row.selected'));
-  assert.ok(css.includes('min-height: 76px;'));
+  for (const contract of [
+    'height: 60px;',
+    'font-variant-numeric: tabular-nums;',
+    '.conversation-head-status',
+    '.filter.active',
+    '.conversation-row.selected',
+    'min-height: 76px;',
+  ]) {
+    assert.ok(inboxCss.includes(contract), contract);
+  }
+
+  for (const contract of [
+    'grid-template-columns: repeat(2, minmax(0, 1fr));',
+    '--agent-tech-panel: #111a2b;',
+    'font-family:',
+    'ui-monospace',
+    '.workspace-shell.is-thread-open .thread-actions',
+    'grid-template-columns: 72px 38px;',
+    '.workspace-shell.is-thread-open .transfer-menu > summary',
+    'background-size: 18px 18px;',
+  ]) {
+    assert.ok(techCss.includes(contract), contract);
+  }
 });
