@@ -3,7 +3,7 @@ export type AgentAssignment = {
   name: string;
 };
 
-export type AgentAssignmentResult = AgentAssignment & {
+export type AgentAssignmentLifecycle = {
   newlyAssigned: boolean;
   assignedAt: string | null;
 };
@@ -13,6 +13,7 @@ type AgentAssignmentRow = AgentAssignment & {
 };
 
 const ROUTING_TIME_ZONE = 'America/Los_Angeles';
+const assignmentLifecycle = new WeakMap<AgentAssignment, AgentAssignmentLifecycle>();
 
 export function routingBusinessDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -28,6 +29,17 @@ export function routingBusinessDate(now = new Date()): string {
 }
 
 /**
+ * Return assignment lifecycle metadata without changing the public assignment
+ * object shape. The metadata only lives for the current Worker invocation and is
+ * never serialized through existing assignment APIs.
+ */
+export function readAgentAssignmentLifecycle(
+  assignment: AgentAssignment | null,
+): AgentAssignmentLifecycle | null {
+  return assignment ? (assignmentLifecycle.get(assignment) ?? null) : null;
+}
+
+/**
  * Assign one conversation to one currently-eligible agent.
  *
  * Routing is scope-native: product, section and category scopes are the only
@@ -40,16 +52,12 @@ export function routingBusinessDate(now = new Date()): string {
  * Daily and paid traffic limits apply only before the conversation has its
  * immutable traffic receipt. Requeues of already-counted traffic can recover
  * without consuming or requiring another unit of new-traffic quota.
- *
- * Lifecycle metadata is returned alongside the stable id/name assignment so
- * internal callers can identify the exact assignment event without another D1
- * read. API boundaries must serialize only id/name when exposing an assignment.
  */
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
   excludedAgentId: string | null = null,
-): Promise<AgentAssignmentResult | null> {
+): Promise<AgentAssignment | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
   const assignment = await db
@@ -173,18 +181,15 @@ export async function assignConversationAgent(
     .bind(now, assignment.id, assignment.site_id)
     .run();
 
-  return {
-    id: assignment.id,
-    name: assignment.name,
-    newlyAssigned: true,
-    assignedAt: now,
-  };
+  const result = { id: assignment.id, name: assignment.name };
+  assignmentLifecycle.set(result, { newlyAssigned: true, assignedAt: now });
+  return result;
 }
 
 async function assignedAgent(
   db: D1Database,
   conversationId: string,
-): Promise<AgentAssignmentResult | null> {
+): Promise<AgentAssignment | null> {
   const assignment = await db
     .prepare(
       `SELECT a.id, a.name, c.assigned_at
@@ -196,10 +201,11 @@ async function assignedAgent(
     .bind(conversationId)
     .first<AgentAssignment & { assigned_at: string | null }>();
   if (!assignment) return null;
-  return {
-    id: assignment.id,
-    name: assignment.name,
+
+  const result = { id: assignment.id, name: assignment.name };
+  assignmentLifecycle.set(result, {
     newlyAssigned: false,
     assignedAt: assignment.assigned_at,
-  };
+  });
+  return result;
 }
