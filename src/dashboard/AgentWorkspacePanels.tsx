@@ -4,6 +4,7 @@ import type {
   AgentInbox,
   Conversation,
 } from './api';
+import { rememberAgentConversationHistory } from './agent-history';
 import type { AgentNotificationState } from './agent-push';
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
@@ -223,7 +224,14 @@ export function AgentInboxPane({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              onClick={() => onSelectConversation(conversation.id)}
+              data-conversation-id={conversation.id}
+              onClick={() => {
+                rememberAgentConversationHistory(
+                  conversation.id,
+                  Boolean(selectedId),
+                );
+                onSelectConversation(conversation.id);
+              }}
             >
               <span className="avatar small">
                 {initials(conversation.visitor_name || '访客')}

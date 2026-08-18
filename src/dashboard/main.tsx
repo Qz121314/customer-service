@@ -1,6 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import {
+  clearAgentThreadHistoryMarker,
+  readAgentThreadHistoryMarker,
+} from './agent-history';
 
 const isAgentRoute = window.location.pathname.startsWith('/agent');
 const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
@@ -112,6 +116,84 @@ function installAgentVisualViewportSync() {
   scheduleGeometry();
 }
 
+function installAgentHistoryNavigation() {
+  const root = document.getElementById('root');
+  if (!root) return;
+
+  // Keep vertical overscroll containment, but allow the browser/OS edge-back
+  // gesture to consume the same History entry as the visible back button.
+  document.body.style.overscrollBehaviorX = 'auto';
+  clearAgentThreadHistoryMarker();
+
+  let backPending = false;
+  let wasThreadOpen = false;
+
+  const threadIsOpen = () =>
+    root
+      .querySelector<HTMLElement>('.workspace-shell')
+      ?.classList.contains('is-thread-open') ?? false;
+
+  const clickThreadBack = () => {
+    root.querySelector<HTMLButtonElement>('.thread-back-button')?.click();
+  };
+
+  const reopenHistoryThread = (conversationId: string) => {
+    const row = [
+      ...root.querySelectorAll<HTMLButtonElement>(
+        '.conversation-row[data-conversation-id]',
+      ),
+    ].find((item) => item.dataset.conversationId === conversationId);
+    row?.click();
+  };
+
+  root.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest('.thread-back-button')) return;
+      if (!readAgentThreadHistoryMarker()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      backPending = true;
+      window.history.back();
+    },
+    true,
+  );
+
+  window.addEventListener('popstate', () => {
+    backPending = false;
+    const marker = readAgentThreadHistoryMarker();
+    if (marker) {
+      if (!threadIsOpen()) reopenHistoryThread(marker.conversationId);
+      return;
+    }
+    if (threadIsOpen()) clickThreadBack();
+  });
+
+  const reconcileThreadClosure = () => {
+    const threadOpen = threadIsOpen();
+    if (
+      wasThreadOpen &&
+      !threadOpen &&
+      readAgentThreadHistoryMarker() &&
+      !backPending
+    ) {
+      backPending = true;
+      window.history.back();
+    }
+    wasThreadOpen = threadOpen;
+  };
+
+  const observer = new MutationObserver(reconcileThreadClosure);
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+}
+
 if (isAgentRoute && 'serviceWorker' in navigator) {
   window.addEventListener(
     'load',
@@ -131,7 +213,10 @@ async function bootstrap() {
       <App />
     </StrictMode>,
   );
-  if (isAgentRoute) installAgentVisualViewportSync();
+  if (isAgentRoute) {
+    installAgentVisualViewportSync();
+    installAgentHistoryNavigation();
+  }
 }
 
 void bootstrap();

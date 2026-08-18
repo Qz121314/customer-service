@@ -25,9 +25,15 @@ test('mobile agent follows the visual viewport when the keyboard opens', () => {
     assert.ok(main.includes(contract), contract);
   }
 
+  const renderIndex = main.indexOf(
+    "createRoot(document.getElementById('root')!).render(",
+  );
+  const viewportInstallIndex = main.lastIndexOf(
+    'installAgentVisualViewportSync();',
+  );
+  assert.ok(renderIndex >= 0, 'app root rendering must exist');
   assert.ok(
-    main.indexOf("createRoot(document.getElementById('root')!).render(") <
-      main.indexOf('if (isAgentRoute) installAgentVisualViewportSync();'),
+    viewportInstallIndex > renderIndex,
     'viewport sync must be installed after the app root starts rendering',
   );
 });
