@@ -12,6 +12,7 @@ type AssignmentConversationRow = {
   status: ConversationStatus;
   assigned_agent: string | null;
   agent_name: string | null;
+  agent_avatar_version: string | null;
   subject: string | null;
   group_id: string | null;
   product_id: string | null;
@@ -30,6 +31,10 @@ type AssignmentConversationRow = {
   last_message: string | null;
   external_id: string | null;
   visitor_name: string | null;
+  greeting_message_id: string | null;
+  greeting_body: string | null;
+  greeting_read_by_visitor_at: string | null;
+  greeting_created_at: string | null;
 };
 
 export async function broadcastWaitingAssignments(
@@ -42,16 +47,23 @@ export async function broadcastWaitingAssignments(
   const [conversations, overview] = await Promise.all([
     env.DB.prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-         a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+         a.name AS agent_name, a.avatar_version AS agent_avatar_version,
+         c.subject, c.group_id, c.product_id, c.section_id,
          c.section_name, c.category_id, c.category_name, c.product_title,
          c.product_cover_url, c.product_href, c.expires_at,
          c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-         c.created_at, v.external_id, v.display_name AS visitor_name,
-         (SELECT body FROM messages m WHERE m.conversation_id = c.id
-           ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+         c.created_at, c.last_message_preview AS last_message,
+         v.external_id, v.display_name AS visitor_name,
+         greeting.id AS greeting_message_id,
+         greeting.body AS greeting_body,
+         greeting.read_by_visitor_at AS greeting_read_by_visitor_at,
+         greeting.created_at AS greeting_created_at
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       LEFT JOIN messages greeting
+         ON greeting.conversation_id = c.id
+        AND greeting.automation_key = 'initial_greeting'
        WHERE c.id IN (
          SELECT CAST(value AS TEXT) FROM json_each(?1)
        )
@@ -65,6 +77,7 @@ export async function broadcastWaitingAssignments(
   const tasks: Promise<void>[] = [];
   for (const conversation of conversations.results ?? []) {
     if (conversation.external_id) {
+      const greeting = initialGreetingMessage(conversation);
       tasks.push(
         broadcastRoom(
           env,
@@ -73,6 +86,7 @@ export async function broadcastWaitingAssignments(
             type: 'conversation.assigned',
             conversationId: conversation.id,
             conversation: visitorConversationSummary(conversation),
+            ...(greeting ? { message: greeting } : {}),
           },
         ),
       );
@@ -137,7 +151,10 @@ function visitorConversationSummary(conversation: AssignmentConversationRow) {
   return {
     id: conversation.id,
     agentName: conversation.agent_name,
-    agentAvatarUrl: null,
+    agentAvatarUrl:
+      conversation.assigned_agent && conversation.agent_avatar_version
+        ? `/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}?v=${encodeURIComponent(conversation.agent_avatar_version)}`
+        : null,
     productId: conversation.product_id ?? '',
     sectionId: conversation.section_id ?? '',
     productTitle: conversation.product_title ?? conversation.subject ?? '',
@@ -146,6 +163,24 @@ function visitorConversationSummary(conversation: AssignmentConversationRow) {
     lastMessageAt: toIso(conversation.last_message_at),
     unreadCount: Number(conversation.visitor_unread_count || 0),
     status: publicStatus(conversation.status),
+  };
+}
+
+function initialGreetingMessage(conversation: AssignmentConversationRow) {
+  if (
+    !conversation.greeting_message_id ||
+    !conversation.greeting_body ||
+    !conversation.greeting_created_at
+  ) {
+    return null;
+  }
+  return {
+    id: conversation.greeting_message_id,
+    direction: 'agent' as const,
+    body: conversation.greeting_body,
+    sentAt: toIso(conversation.greeting_created_at),
+    delivery: conversation.greeting_read_by_visitor_at ? ('read' as const) : ('sent' as const),
+    attachments: [],
   };
 }
 
