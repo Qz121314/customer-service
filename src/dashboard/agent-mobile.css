@@ -526,6 +526,18 @@
     font-weight: 560;
   }
 
+  .conversation-meta-row {
+    gap: 5px;
+  }
+
+  .conversation-status {
+    min-width: 36px;
+    height: 17px;
+    min-height: 17px;
+    padding-inline: 5px;
+    font-size: 7px;
+  }
+
   .conversation-copy p {
     color: #969eaa;
     font-size: 11px;
@@ -670,7 +682,7 @@
   .thread-actions {
     display: grid;
     min-height: 40px;
-    grid-template-columns: 70px 38px;
+    grid-template-columns: auto auto 38px;
     align-items: center;
     gap: 2px;
     padding: 3px;
@@ -681,26 +693,32 @@
     box-shadow: none;
   }
 
-  .thread-head select {
-    width: 70px;
-    min-width: 70px;
+  .thread-status,
+  .thread-status-action {
     height: 32px;
     min-height: 32px;
     margin: 0;
-    padding: 0 23px 0 9px;
-    border: 0;
+    padding: 0 8px;
     border-radius: 9px;
-    outline: 0;
-    color: var(--mobile-accent-strong);
-    background-color: var(--mobile-accent-soft);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%235150c3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 7px center;
-    background-size: 11px 11px;
-    font-size: 10px;
-    font-weight: 710;
+    font-size: 9px;
     line-height: 32px;
     box-shadow: none;
+  }
+
+  .thread-status {
+    min-width: 48px;
+  }
+
+  .thread-status-action {
+    min-width: 54px;
+    border: 0;
+    color: var(--mobile-accent-strong);
+    background: var(--mobile-accent-soft);
+  }
+
+  .thread-status-action.is-pending {
+    color: #a34e4e;
+    background: #fff0f0;
   }
 
   .transfer-menu {
@@ -1181,16 +1199,21 @@
   }
 
   .thread-actions {
-    grid-template-columns: 64px 34px;
+    grid-template-columns: auto auto 34px;
   }
 
-  .thread-head select {
-    width: 64px;
-    min-width: 64px;
-    padding-right: 20px;
-    padding-left: 8px;
-    background-position: right 6px center;
-    font-size: 9px;
+  .thread-status,
+  .thread-status-action {
+    padding-inline: 6px;
+    font-size: 8px;
+  }
+
+  .thread-status {
+    min-width: 44px;
+  }
+
+  .thread-status-action {
+    min-width: 50px;
   }
 
   .transfer-menu {

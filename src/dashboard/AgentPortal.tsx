@@ -1279,8 +1279,8 @@ function AgentWorkspace({
         )}
         {!selectedId ? (
           <div className="thread-empty">
-            <strong>选择一个会话</strong>
-            <span>这里只显示系统已经分配给当前客服账号的会话。</span>
+            <strong>选择一个会话开始处理</strong>
+            <span>新咨询分配给你后会出现在左侧列表。</span>
           </div>
         ) : !detail ? (
           <div className="thread-empty">正在加载会话…</div>
@@ -1310,34 +1310,50 @@ function AgentWorkspace({
                 />
               </div>
               <div className="thread-actions">
-                <select
-                  value={String(detail.conversation.status)}
-                  onChange={(event) =>
+                <span
+                  className={`thread-status is-${detail.conversation.status}`}
+                  aria-label="当前会话状态"
+                >
+                  {detail.conversation.status === 'open'
+                    ? '新会话'
+                    : detail.conversation.status === 'pending'
+                      ? '处理中'
+                      : '已关闭'}
+                </span>
+                <button
+                  type="button"
+                  className={`thread-status-action is-${detail.conversation.status}`}
+                  onClick={() =>
                     void changeStatus(
-                      event.target.value as Conversation['status'],
+                      detail.conversation.status === 'open'
+                        ? 'pending'
+                        : detail.conversation.status === 'pending'
+                          ? 'closed'
+                          : 'pending',
                     )
                   }
-                  aria-label="会话状态"
                 >
-                  <option value="open">新会话</option>
-                  <option value="pending">处理中</option>
-                  <option value="closed">已关闭</option>
-                </select>
+                  {detail.conversation.status === 'open'
+                    ? '开始处理'
+                    : detail.conversation.status === 'pending'
+                      ? '结束会话'
+                      : '重新处理'}
+                </button>
                 {detail.conversation.status !== 'closed' && (
                   <details className="transfer-menu">
                     <summary>转接</summary>
                     <div className="transfer-menu-panel">
                       <header>
                         <strong>转接会话</strong>
-                        <span>交给其他在线客服，或重新进入自动分流。</span>
+                        <span>转给其他可接待客服，或重新交回分配队列。</span>
                       </header>
                       <button
                         type="button"
                         disabled={transferring}
                         onClick={() => void handoffConversation(null)}
                       >
-                        <span>重新排队</span>
-                        <small>排除当前客服后自动分流</small>
+                        <span>重新分配</span>
+                        <small>交给其他可接待客服</small>
                       </button>
                       {transferTargets.map((target) => (
                         <button

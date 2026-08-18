@@ -192,13 +192,6 @@
     color: #626c7a;
   }
 
-  .workspace-shell .thread-head select {
-    border-color: #cfd5de;
-    background: #fff;
-    color: #202733;
-    font-weight: 700;
-  }
-
   .workspace-shell .transfer-menu > summary {
     border-color: #cfd5de;
     background: #fff;
@@ -278,16 +271,20 @@
     gap: 6px;
   }
 
-  .workspace-shell .thread-head select,
+  .workspace-shell .thread-status,
+  .workspace-shell .thread-status-action,
   .workspace-shell .transfer-menu > summary {
     min-height: 34px;
     border-radius: 8px;
     font-size: 11px;
   }
 
-  .workspace-shell .thread-head select {
-    min-width: 92px;
-    padding-inline: 10px 30px;
+  .workspace-shell .thread-status {
+    min-width: 62px;
+  }
+
+  .workspace-shell .thread-status-action {
+    min-width: 76px;
   }
 
   .workspace-shell .transfer-menu > summary {

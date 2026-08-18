@@ -46,13 +46,17 @@ test('agent route isolates styles and mobile UI has one visual owner', () => {
     'grid-template-columns: repeat(4, minmax(0, 1fr));',
     '.inbox-overview .metric + .metric::before',
     '.thread-actions',
-    'grid-template-columns: 70px 38px;',
+    'grid-template-columns: auto auto 38px;',
+    'grid-template-columns: auto auto 34px;',
+    '.thread-status-action',
     'grid-template-columns: 38px minmax(0, 1fr) 42px;',
     'env(safe-area-inset-bottom)',
     '@media (display-mode: standalone)',
   ]) {
     assert.ok(mobile.includes(contract), contract);
   }
+
+  assert.equal(mobile.includes('.thread-head select'), false);
 
   for (const legacyVisualLayer of [
     '--agent-tech-',

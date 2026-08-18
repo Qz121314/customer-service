@@ -234,12 +234,12 @@ export function AgentInboxPane({
           >
             <i aria-hidden="true" />
             {connectionState === 'connected'
-              ? '实时连接正常'
+              ? '连接正常'
               : connectionState === 'offline'
                 ? '网络已断开 · 草稿已保存'
                 : connectionState === 'connecting'
-                  ? '正在建立连接'
-                  : '连接中断 · 正在恢复'}
+                  ? '正在连接'
+                  : '正在恢复连接'}
           </span>
         </div>
       </header>
@@ -302,9 +302,7 @@ export function AgentInboxPane({
                 : '没有找到匹配的会话'}
             </strong>
             {conversationCount === 0 && (
-              <span>
-                保持在线，负责产品的新会话会在对应在线客服之间自动轮询。
-              </span>
+              <span>保持在线，新咨询分配给你后会自动出现在这里。</span>
             )}
           </div>
         ) : (
@@ -339,11 +337,22 @@ export function AgentInboxPane({
                   </strong>
                   <time>{relativeTime(conversation.last_message_at)}</time>
                 </span>
-                <small>
-                  {conversation.product_title ||
-                    conversation.subject ||
-                    '访客咨询'}
-                </small>
+                <span className="conversation-meta-row">
+                  <small>
+                    {conversation.product_title ||
+                      conversation.subject ||
+                      '访客咨询'}
+                  </small>
+                  <span
+                    className={`conversation-status is-${conversation.status}`}
+                  >
+                    {conversation.status === 'open'
+                      ? '新会话'
+                      : conversation.status === 'pending'
+                        ? '处理中'
+                        : '已关闭'}
+                  </span>
+                </span>
                 <p>{conversation.last_message || '会话已创建'}</p>
               </span>
             </button>
