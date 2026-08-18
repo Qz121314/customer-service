@@ -16,7 +16,8 @@ test('push delivery removes only terminal or explicitly expired subscriptions in
     assert.match(source, /subscription\.expiration_time <= now/u);
     assert.match(source, /response\.status === 404 \|\| response\.status === 410/u);
     assert.match(source, /const staleEndpoints = new Set<string>\(\)/u);
-    assert.match(source, /WHERE endpoint IN \(\$\{placeholders\}\)/u);
+    assert.match(source, /SELECT CAST\(value AS TEXT\) FROM json_each\(\?1\)/u);
+    assert.match(source, /\.bind\(JSON\.stringify\(endpoints\)\)/u);
     assert.match(source, /if \(!response\.ok\) \{/u);
     assert.doesNotMatch(
       source,
