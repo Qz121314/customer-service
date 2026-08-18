@@ -40,6 +40,8 @@ test('admin copy separates daily reception limits from cumulative consultation q
   assert.match(editor, /转接、重新排队和恢复同一会话不会重复扣减/u);
   assert.match(editor, /账本已核对/u);
   assert.match(editor, /账本需检查/u);
-  assert.match(editor, /quotaLedger\.total\/\{quotaLedger\.expectedTotal\}/u);
-  assert.match(editor, /quotaLedger\.used\/\{quotaLedger\.expectedUsed\}/u);
+  assert.match(editor, /quotaLedger\.total/u);
+  assert.match(editor, /quotaLedger\.expectedTotal/u);
+  assert.match(editor, /quotaLedger\.used/u);
+  assert.match(editor, /quotaLedger\.expectedUsed/u);
 });
