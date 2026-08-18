@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build
+        run: pnpm build
+
       - name: Inspect remote D1 migrations
         run: pnpm exec wrangler d1 migrations list customer-service-db --remote
 
