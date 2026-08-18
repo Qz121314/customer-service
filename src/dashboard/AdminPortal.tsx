@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import {
   AgentAccount,
   AgentQuotaAdjustment,
+  AgentQuotaLedger,
   AgentMonthlyStats,
   ProductCatalogItem,
   adminLogin,
@@ -9,7 +10,7 @@ import {
   createAgent,
   getAdminSession,
   getAgentMonthlyStats,
-  getAgentQuotaAdjustments,
+  getAgentQuotaLedger,
   getAgents,
   getProductCatalog,
   updateAgent,
@@ -98,6 +99,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [quotaAdjustments, setQuotaAdjustments] = useState<
     AgentQuotaAdjustment[]
   >([]);
+  const [quotaLedger, setQuotaLedger] = useState<AgentQuotaLedger | null>(null);
   const [quotaHistoryBusy, setQuotaHistoryBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -156,17 +158,21 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   useEffect(() => {
     if (!editorOpen || !draft.id) {
       setQuotaAdjustments([]);
+      setQuotaLedger(null);
       setQuotaHistoryBusy(false);
       return;
     }
     let active = true;
+    setQuotaLedger(null);
     setQuotaHistoryBusy(true);
-    getAgentQuotaAdjustments(draft.id)
-      .then((adjustments) => {
-        if (active) setQuotaAdjustments(adjustments);
+    getAgentQuotaLedger(draft.id)
+      .then((result) => {
+        if (!active) return;
+        setQuotaAdjustments(result.adjustments);
+        setQuotaLedger(result.ledger);
       })
       .catch((reason) => {
-        if (active) setError(message(reason, '无法读取额度变更'));
+        if (active) setError(message(reason, '无法核对咨询额度账本'));
       })
       .finally(() => {
         if (active) setQuotaHistoryBusy(false);
@@ -195,6 +201,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       trafficQuotaRequestId: crypto.randomUUID(),
     });
     setQuotaAdjustments([]);
+    setQuotaLedger(null);
     setEditorOpen(true);
     setError('');
   }
@@ -215,6 +222,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       trafficQuotaRequestId: crypto.randomUUID(),
       isEnabled: agent.isEnabled,
     });
+    setQuotaLedger(null);
     setEditorOpen(true);
     setError('');
   }
@@ -279,7 +287,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const sectionTitle = section === 'agents' ? '客服坐席' : '坐席工作台';
   const sectionHint =
     section === 'agents'
-      ? '管理员创建客服账号，并配置负责范围、同时会话上限和每日接待配额。'
+      ? '配置负责范围、同时会话上限、每日接待上限与累计咨询额度。'
       : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
 
   return (
@@ -429,7 +437,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                         <th>状态</th>
                         <th>同时会话</th>
                         <th>今日接待</th>
-                        <th>额度余额</th>
+                        <th>咨询额度</th>
                         <th>最后在线</th>
                         <th aria-label="操作" />
                       </tr>
@@ -610,6 +618,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           products={products}
           saving={saving}
           quotaAdjustments={quotaAdjustments}
+          quotaLedger={quotaLedger}
           quotaHistoryBusy={quotaHistoryBusy}
           onDraftChange={setDraft}
           onClose={() => {
