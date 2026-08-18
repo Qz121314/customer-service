@@ -1,10 +1,43 @@
 export type AgentNotificationState =
   'unsupported' | 'disabled' | 'blocked' | 'enabled';
 
+const AGENT_NOTIFICATION_PARAM = 'notification';
+const AGENT_NOTIFICATION_TARGET = 'latest-unread';
+const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
+
 type PushConfig = {
   enabled: boolean;
   applicationServerKey: string;
 };
+
+export function hasAgentNotificationOpenIntent(): boolean {
+  return (
+    new URLSearchParams(window.location.search).get(AGENT_NOTIFICATION_PARAM) ===
+    AGENT_NOTIFICATION_TARGET
+  );
+}
+
+export function clearAgentNotificationOpenIntent(): void {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(AGENT_NOTIFICATION_PARAM) !== AGENT_NOTIFICATION_TARGET) {
+    return;
+  }
+  url.searchParams.delete(AGENT_NOTIFICATION_PARAM);
+  window.history.replaceState(
+    window.history.state,
+    '',
+    `${url.pathname}${url.search}${url.hash}`,
+  );
+}
+
+export function isAgentNotificationOpenMessage(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    record.type === AGENT_NOTIFICATION_MESSAGE_TYPE &&
+    record.target === AGENT_NOTIFICATION_TARGET
+  );
+}
 
 export async function prepareAgentNotifications(): Promise<AgentNotificationState> {
   if (!supported()) return 'unsupported';
