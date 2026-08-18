@@ -7,35 +7,32 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test(
-  'agent statistics opens inside the workspace instead of navigating away',
-  () => {
-    const portal = source('../src/dashboard/AgentPortal.tsx');
-    const panels = source('../src/dashboard/AgentWorkspacePanels.tsx');
-    const chrome = source('../src/dashboard/AgentWorkspaceChrome.tsx');
-    const app = `${portal}\n${panels}\n${chrome}`;
-    const statistics = source('../src/dashboard/AgentStatisticsWorkspace.tsx');
-    const statisticsStyles = source('../src/dashboard/agent-statistics.css');
-    const desktopStyles = source('../src/dashboard/agent-desktop.css');
-    const mobileStyles = source('../src/dashboard/agent-mobile.css');
+test('agent statistics opens inside the workspace instead of navigating away', () => {
+  const portal = source('../src/dashboard/AgentPortal.tsx');
+  const panels = source('../src/dashboard/AgentWorkspacePanels.tsx');
+  const chrome = source('../src/dashboard/AgentWorkspaceChrome.tsx');
+  const app = `${portal}\n${panels}\n${chrome}`;
+  const statistics = source('../src/dashboard/AgentStatisticsWorkspace.tsx');
+  const statisticsStyles = source('../src/dashboard/agent-statistics.css');
+  const desktopStyles = source('../src/dashboard/agent-desktop.css');
+  const mobileStyles = source('../src/dashboard/agent-mobile.css');
 
-    assert.ok(app.includes('setStatisticsOpen(true)'));
-    assert.ok(app.includes('<AgentStatisticsModal'));
-    assert.ok(!app.includes('href="/agent/stats"'));
-    assert.ok(statistics.includes('className="agent-statistics-backdrop"'));
-    assert.ok(statistics.includes('aria-modal="true"'));
-    assert.ok(statistics.includes("event.key === 'Escape'"));
-    assert.ok(statisticsStyles.includes('.agent-statistics-backdrop'));
-    assert.ok(statisticsStyles.includes('.agent-statistics-dialog'));
-    assert.ok(app.includes('className="workspace-sidebar-actions"'));
-    assert.ok(panels.includes('<AgentActionToolbar'));
-    assert.ok(
-      desktopStyles.includes('.workspace-shell .workspace-sidebar-actions'),
-    );
-    assert.ok(desktopStyles.includes('margin-top: auto'));
-    assert.ok(mobileStyles.includes('.workspace-sidebar-actions'));
-  },
-);
+  assert.ok(app.includes('setStatisticsOpen(true)'));
+  assert.ok(app.includes('<AgentStatisticsModal'));
+  assert.ok(!app.includes('href="/agent/stats"'));
+  assert.ok(statistics.includes('className="agent-statistics-backdrop"'));
+  assert.ok(statistics.includes('aria-modal="true"'));
+  assert.ok(statistics.includes("event.key === 'Escape'"));
+  assert.ok(statisticsStyles.includes('.agent-statistics-backdrop'));
+  assert.ok(statisticsStyles.includes('.agent-statistics-dialog'));
+  assert.ok(app.includes('className="workspace-sidebar-actions"'));
+  assert.ok(panels.includes('<AgentActionToolbar'));
+  assert.ok(
+    desktopStyles.includes('.workspace-shell .workspace-sidebar-actions'),
+  );
+  assert.ok(desktopStyles.includes('margin-top: auto'));
+  assert.ok(mobileStyles.includes('.workspace-sidebar-actions'));
+});
 
 test('admin statistics opens as a modal with a wrapped day grid', () => {
   const portal = source('../src/dashboard/AdminPortal.tsx');
