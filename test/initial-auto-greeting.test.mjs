@@ -75,7 +75,7 @@ function createDatabase() {
   return database;
 }
 
-function addConversation(database, id, handoffId) {
+function addConversation(database, id, handoffId, visitorExternalId) {
   const visitorId = `visitor-${id}`;
   database
     .prepare(
@@ -83,7 +83,7 @@ function addConversation(database, id, handoffId) {
          id, site_id, token_hash, external_id, expires_at
        ) VALUES (?1, 'default', ?2, ?3, '2099-01-01T00:00:00.000Z')`,
     )
-    .run(visitorId, `token-${id}`, `ABC${String(id).padStart(3, '0')}`);
+    .run(visitorId, `token-${id}`, visitorExternalId);
   database
     .prepare(
       `INSERT INTO conversations (
@@ -131,6 +131,7 @@ test('initial greeting is optional and never blocks first assignment accounting'
     database,
     'conversation-1',
     '11111111-1111-4111-8111-111111111111',
+    'ABC101',
   );
 
   assert.equal(
@@ -157,6 +158,7 @@ test('configured greeting is created by the immutable first-receipt lifecycle ex
     database,
     'conversation-2',
     '22222222-2222-4222-8222-222222222222',
+    'ABC102',
   );
 
   assert.equal(
@@ -214,6 +216,7 @@ test('transfer to another greeted seat cannot create a second initial greeting',
     database,
     'conversation-3',
     '33333333-3333-4333-8333-333333333333',
+    'ABC103',
   );
 
   assert.equal(
@@ -250,9 +253,13 @@ test('waiting conversation greets only when a seat is actually assigned', async 
     database,
     'conversation-4',
     '44444444-4444-4444-8444-444444444444',
+    'ABC104',
   );
 
-  assert.equal(await assignConversationAgent(d1(database), 'conversation-4'), null);
+  assert.equal(
+    await assignConversationAgent(d1(database), 'conversation-4'),
+    null,
+  );
   assert.equal(greetingRows(database, 'conversation-4').length, 0);
   assert.equal(quotaState(database, 'agent-a').used, 0);
 
@@ -276,17 +283,25 @@ test('client start protocol accepts a message-less CTA while keeping legacy firs
   );
   assert.match(source, /const hasInitialMessageInput =/u);
   assert.match(source, /if \(hasInitialMessageInput && !clientMessageId\)/u);
-  assert.match(source, /if \(hasInitialMessageInput && !validMessage\(initialMessage\)\)/u);
+  assert.match(
+    source,
+    /if \(hasInitialMessageInput && !validMessage\(initialMessage\)\)/u,
+  );
   assert.match(source, /if \(clientMessageId && initialMessage\)/u);
   assert.match(source, /const assignment = await assignConversationAgent/u);
 });
 
 test('agent auto reply UI explicitly preserves optional greeting semantics', () => {
   const source = readFileSync(
-    fileURLToPath(new URL('../src/dashboard/AgentAutoReplyControl.tsx', import.meta.url)),
+    fileURLToPath(
+      new URL('../src/dashboard/AgentAutoReplyControl.tsx', import.meta.url),
+    ),
     'utf8',
   );
   assert.match(source, />自动回复</u);
   assert.match(source, />首次问候语</u);
-  assert.match(source, /未开启或未填写内容时不会发送任何自动消息，会话仍会正常建立。/u);
+  assert.match(
+    source,
+    /未开启或未填写内容时不会发送任何自动消息，会话仍会正常建立。/u,
+  );
 });
