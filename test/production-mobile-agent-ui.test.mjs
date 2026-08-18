@@ -3,18 +3,24 @@ import test from 'node:test';
 
 const BASE_URL = 'https://customer-service-app.fcqz121314.workers.dev';
 
-function assetUrls(text, extension) {
-  const matches = new Set();
-  const pattern = new RegExp(
-    String.raw`(?:["'\x60(])((?:https?:\\/\\/[^"'\x60)]+|\\/)?assets\\/[^"'\x60)]+\\.${extension}(?:\\?[^"'\x60)]*)?)`,
-    'g',
-  );
-  for (const match of text.matchAll(pattern)) matches.add(match[1]);
-  return [...matches];
+function absoluteUrl(value) {
+  return new URL(value, `${BASE_URL}/`).href;
 }
 
-function absoluteUrl(value) {
-  return new URL(value.replaceAll('\\/', '/'), `${BASE_URL}/`).href;
+function htmlAssetUrls(html) {
+  const urls = new Set();
+  for (const match of html.matchAll(/<(?:script|link)\b[^>]*(?:src|href)=["']([^"']+)["']/gi)) {
+    urls.add(absoluteUrl(match[1]));
+  }
+  return [...urls];
+}
+
+function bundledAssetUrls(source) {
+  const urls = new Set();
+  for (const match of source.matchAll(/["'`](\/assets\/[^"'`\s)]+\.(?:js|css)(?:\?[^"'`\s)]*)?)["'`]/g)) {
+    urls.add(absoluteUrl(match[1]));
+  }
+  return [...urls];
 }
 
 async function fetchText(url) {
@@ -35,23 +41,30 @@ test(
     assert.equal(health.ok, true, `health returned ${health.status}`);
 
     const html = await fetchText(`${BASE_URL}/agent`);
-    const pendingJs = assetUrls(html, 'js').map(absoluteUrl);
-    const seenJs = new Set();
-    const cssUrls = new Set(assetUrls(html, 'css').map(absoluteUrl));
+    const htmlAssets = htmlAssetUrls(html);
+    console.log('production HTML assets', htmlAssets);
 
-    while (pendingJs.length > 0 && seenJs.size < 40) {
+    const pendingJs = htmlAssets.filter((url) => /\.js(?:\?|$)/.test(url));
+    const cssUrls = new Set(
+      htmlAssets.filter((url) => /\.css(?:\?|$)/.test(url)),
+    );
+    const seenJs = new Set();
+
+    while (pendingJs.length > 0 && seenJs.size < 50) {
       const url = pendingJs.shift();
       if (!url || seenJs.has(url)) continue;
       seenJs.add(url);
       const source = await fetchText(url);
-      for (const css of assetUrls(source, 'css')) cssUrls.add(absoluteUrl(css));
-      for (const js of assetUrls(source, 'js')) {
-        const next = absoluteUrl(js);
-        if (!seenJs.has(next)) pendingJs.push(next);
+      for (const asset of bundledAssetUrls(source)) {
+        if (/\.css(?:\?|$)/.test(asset)) cssUrls.add(asset);
+        if (/\.js(?:\?|$)/.test(asset) && !seenJs.has(asset)) pendingJs.push(asset);
       }
     }
 
-    assert.ok(seenJs.size > 0, 'production agent did not expose a JS bundle');
+    console.log('production JS assets', [...seenJs]);
+    console.log('production CSS assets', [...cssUrls]);
+
+    assert.ok(seenJs.size > 0, `production agent did not expose a JS bundle: ${html.slice(0, 800)}`);
     assert.ok(cssUrls.size > 0, 'production agent did not expose CSS assets');
 
     const css = (
