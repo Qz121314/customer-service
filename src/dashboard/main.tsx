@@ -1,31 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import {
+  clearAgentThreadHistoryMarker,
+  readAgentThreadHistoryMarker,
+} from './agent-history';
 
 const isAgentRoute = window.location.pathname.startsWith('/agent');
 const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
-const AGENT_HISTORY_KEY = '__customerServiceAgentView';
-
-type AgentThreadHistoryMarker = {
-  view: 'thread';
-  conversationId: string;
-};
-
-function readAgentThreadHistoryMarker(): AgentThreadHistoryMarker | null {
-  const state = window.history.state;
-  if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
-  const marker = (state as Record<string, unknown>)[AGENT_HISTORY_KEY];
-  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return null;
-  const record = marker as Record<string, unknown>;
-  if (
-    record.view !== 'thread' ||
-    typeof record.conversationId !== 'string' ||
-    !record.conversationId
-  ) {
-    return null;
-  }
-  return { view: 'thread', conversationId: record.conversationId };
-}
 
 async function loadAgentStyles() {
   await import('./agent-foundation.css');
@@ -138,86 +120,72 @@ function installAgentHistoryNavigation() {
   const root = document.getElementById('root');
   if (!root) return;
 
-  // Mobile CSS keeps vertical overscroll contained; horizontal overscroll must
-  // stay available so the browser/OS edge-back gesture can consume History.
+  // Keep vertical overscroll containment, but allow the browser/OS edge-back
+  // gesture to consume the same History entry as the visible back button.
   document.body.style.overscrollBehaviorX = 'auto';
+  clearAgentThreadHistoryMarker();
 
-  const staleMarker = readAgentThreadHistoryMarker();
-  if (staleMarker) {
-    const state = {
-      ...(window.history.state as Record<string, unknown>),
-    };
-    delete state[AGENT_HISTORY_KEY];
-    window.history.replaceState(state, '', window.location.href);
-  }
+  let backPending = false;
+  let wasThreadOpen = false;
 
-  let frame = 0;
-  let replayConversationId: string | null = null;
-  let replayClickPending = false;
-  let historyBackPending = false;
+  const threadIsOpen = () =>
+    root
+      .querySelector<HTMLElement>('.workspace-shell')
+      ?.classList.contains('is-thread-open') ?? false;
 
-  const syncNavigation = () => {
-    frame = 0;
-    const marker = readAgentThreadHistoryMarker();
-    const shell = root.querySelector<HTMLElement>('.workspace-shell');
-    const threadOpen = shell?.classList.contains('is-thread-open') ?? false;
+  const clickThreadBack = () => {
+    root.querySelector<HTMLButtonElement>('.thread-back-button')?.click();
+  };
 
-    if (replayConversationId) {
-      if (!marker || marker.conversationId !== replayConversationId) {
-        replayConversationId = null;
-        replayClickPending = false;
-      } else if (threadOpen) {
-        replayConversationId = null;
-        replayClickPending = false;
-        historyBackPending = false;
-        return;
-      } else if (!replayClickPending) {
-        const row = [
-          ...root.querySelectorAll<HTMLButtonElement>(
-            '.conversation-row[data-conversation-id]',
-          ),
-        ].find(
-          (item) => item.dataset.conversationId === replayConversationId,
-        );
-        if (row) {
-          replayClickPending = true;
-          row.click();
-        }
-        return;
-      } else {
-        return;
-      }
-    }
+  const reopenHistoryThread = (conversationId: string) => {
+    const row = [
+      ...root.querySelectorAll<HTMLButtonElement>(
+        '.conversation-row[data-conversation-id]',
+      ),
+    ].find((item) => item.dataset.conversationId === conversationId);
+    row?.click();
+  };
 
-    if (!marker) {
-      historyBackPending = false;
-      if (threadOpen) {
-        root
-          .querySelector<HTMLButtonElement>('.thread-back-button')
-          ?.click();
-      }
-      return;
-    }
-
-    if (!threadOpen && !historyBackPending) {
-      historyBackPending = true;
+  root.addEventListener(
+    'click',
+    (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest('.thread-back-button')) return;
+      if (!readAgentThreadHistoryMarker()) return;
+      event.preventDefault();
+      event.stopPropagation();
+      backPending = true;
       window.history.back();
-    }
-  };
-
-  const scheduleNavigation = () => {
-    if (frame !== 0) window.cancelAnimationFrame(frame);
-    frame = window.requestAnimationFrame(syncNavigation);
-  };
+    },
+    true,
+  );
 
   window.addEventListener('popstate', () => {
-    historyBackPending = false;
-    replayClickPending = false;
-    replayConversationId = readAgentThreadHistoryMarker()?.conversationId ?? null;
-    scheduleNavigation();
+    backPending = false;
+    const marker = readAgentThreadHistoryMarker();
+    if (marker) {
+      if (!threadIsOpen()) reopenHistoryThread(marker.conversationId);
+      return;
+    }
+    if (threadIsOpen()) clickThreadBack();
   });
 
-  const observer = new MutationObserver(scheduleNavigation);
+  const reconcileThreadClosure = () => {
+    const threadOpen = threadIsOpen();
+    if (
+      wasThreadOpen &&
+      !threadOpen &&
+      readAgentThreadHistoryMarker() &&
+      !backPending
+    ) {
+      backPending = true;
+      window.history.back();
+    }
+    wasThreadOpen = threadOpen;
+  };
+
+  const observer = new MutationObserver(reconcileThreadClosure);
   observer.observe(root, {
     childList: true,
     subtree: true,
