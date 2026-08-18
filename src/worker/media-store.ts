@@ -269,7 +269,7 @@ export async function completeMedia(
          SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
              visitor_unread_count = visitor_unread_count + 1,
              agent_unread_count = 0,
-             last_message_at = ?1, updated_at = ?1
+             last_message_at = ?1, last_message_preview = '', updated_at = ?1
          WHERE id = ?2
            AND EXISTS (
              SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
@@ -281,7 +281,7 @@ export async function completeMedia(
       env.DB.prepare(
         `UPDATE conversations
          SET agent_unread_count = agent_unread_count + 1,
-             last_message_at = ?1, updated_at = ?1
+             last_message_at = ?1, last_message_preview = '', updated_at = ?1
          WHERE id = ?2
            AND EXISTS (
              SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
