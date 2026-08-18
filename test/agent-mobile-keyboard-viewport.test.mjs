@@ -26,7 +26,7 @@ test('mobile agent follows the visual viewport when the keyboard opens', () => {
   }
 
   assert.ok(
-    main.indexOf('createRoot(document.getElementById(\'root\')!).render(') <
+    main.indexOf("createRoot(document.getElementById('root')!).render(") <
       main.indexOf('if (isAgentRoute) installAgentVisualViewportSync();'),
     'viewport sync must be installed after the app root starts rendering',
   );
