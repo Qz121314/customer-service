@@ -385,7 +385,10 @@ function AgentWorkspace({
       void heartbeat()
         .then(applyInbox)
         .catch(() => void refresh().catch(() => undefined));
-      if (selectedId) {
+      if (
+        selectedId &&
+        (unreadCountRef.current.get(selectedId) ?? 0) > 0
+      ) {
         void acknowledgeConversation(
           selectedId,
           lastVisibleVisitorMessageId,
