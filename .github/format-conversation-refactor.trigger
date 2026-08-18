@@ -1,1 +1,1 @@
-format conversation refactor
+diagnose conversation lifecycle tests
