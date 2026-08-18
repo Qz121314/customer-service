@@ -136,6 +136,26 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await seedConversationAndAgent(page);
   await loginAgent(page);
 
+  const autoReplyButton = page.getByRole('button', {
+    name: '打开自动回复设置',
+  });
+  await expect(autoReplyButton).toBeVisible();
+  await autoReplyButton.click();
+  const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
+  await expect(autoReplyDialog).toBeVisible();
+  const autoReplyToggle = autoReplyDialog.getByRole('checkbox', {
+    name: /自动发送首次问候/u,
+  });
+  await expect(autoReplyToggle).not.toBeChecked();
+  await autoReplyToggle.check();
+  await autoReplyDialog
+    .getByLabel('问候内容')
+    .fill('您好，我来为您服务，请问有什么可以帮您？');
+  await autoReplyDialog.getByRole('button', { name: '保存设置' }).click();
+  await expect(autoReplyDialog.getByRole('button', { name: '已保存' })).toBeVisible();
+  await autoReplyDialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(autoReplyDialog).toBeHidden();
+
   const avatarButton = page.getByRole('button', { name: '更换客服头像' });
   await expect(avatarButton).toBeVisible();
   await avatarButton.click();
