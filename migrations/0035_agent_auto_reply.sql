@@ -92,6 +92,15 @@ END;
 CREATE TRIGGER trg_initial_greeting_from_traffic_receipt
 AFTER INSERT ON agent_traffic_receipts
 BEGIN
+  -- First reception itself needs the seat's attention even when the visitor has
+  -- not typed yet. MAX keeps an existing unread visitor-message count unchanged,
+  -- so legacy create-with-message requests never receive a synthetic extra count.
+  UPDATE conversations
+  SET agent_unread_count = MAX(agent_unread_count, 1),
+      updated_at = NEW.received_at
+  WHERE id = NEW.conversation_id
+    AND assigned_agent = NEW.agent_id;
+
   INSERT OR IGNORE INTO conversation_automation_receipts (
     conversation_id,
     automation_key,
