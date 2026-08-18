@@ -6,6 +6,7 @@ import { assignWaitingConversations } from './waiting-assignment';
 
 type Bindings = {
   DB: D1Database;
+  CONVERSATION_ROOMS: DurableObjectNamespace;
 };
 
 type Env = { Bindings: Bindings };
@@ -170,6 +171,7 @@ async function loadAgentInbox(
     delete conversation.__overview_closed;
     delete conversation.__closed_rank;
   }
+  const closedHasMore = counts.closed > closedLoaded;
   return {
     conversations,
     overview: {
@@ -181,8 +183,10 @@ async function loadAgentInbox(
     availability: agent.status === 'busy' ? 'busy' : 'online',
     history: {
       closedLoaded,
-      closedHasMore: counts.closed > closedLoaded,
-      nextClosedCursor: closedHasMoreCursor(conversations),
+      closedHasMore,
+      nextClosedCursor: closedHasMore
+        ? closedHasMoreCursor(conversations)
+        : null,
     },
   };
 }
