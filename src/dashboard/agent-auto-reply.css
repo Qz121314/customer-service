@@ -1,0 +1,165 @@
+.agent-auto-reply-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(8 11 18 / 46%);
+  backdrop-filter: blur(8px);
+}
+
+.agent-auto-reply-dialog {
+  width: min(520px, 100%);
+  overflow: hidden;
+  border: 1px solid rgb(17 24 39 / 10%);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 26px 80px rgb(15 23 42 / 22%);
+}
+
+.agent-auto-reply-header,
+.agent-auto-reply-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+}
+
+.agent-auto-reply-header {
+  border-bottom: 1px solid rgb(15 23 42 / 7%);
+}
+
+.agent-auto-reply-header h2 {
+  margin: 3px 0 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.agent-auto-reply-kicker {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.agent-auto-reply-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: #f5f6f8;
+  color: #667085;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agent-auto-reply-body {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.agent-auto-reply-loading {
+  padding: 38px 22px;
+  color: #667085;
+  text-align: center;
+}
+
+.agent-auto-reply-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 15px 16px;
+  border: 1px solid rgb(15 23 42 / 8%);
+  border-radius: 14px;
+  background: #fafbfc;
+}
+
+.agent-auto-reply-switch-row span {
+  display: grid;
+  gap: 4px;
+}
+
+.agent-auto-reply-switch-row strong {
+  font-size: 14px;
+}
+
+.agent-auto-reply-switch-row small,
+.agent-auto-reply-note,
+.agent-auto-reply-count {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.agent-auto-reply-switch-row input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+.agent-auto-reply-editor {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.agent-auto-reply-editor textarea {
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  box-sizing: border-box;
+  border: 1px solid #d8dde6;
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: #fff;
+  color: #101828;
+  font: inherit;
+  font-weight: 450;
+  line-height: 1.55;
+  outline: none;
+}
+
+.agent-auto-reply-editor textarea:focus {
+  border-color: #7c83ff;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 12%);
+}
+
+.agent-auto-reply-count {
+  justify-self: end;
+}
+
+.agent-auto-reply-note,
+.agent-auto-reply-error {
+  margin: 0;
+}
+
+.agent-auto-reply-error {
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.agent-auto-reply-actions {
+  justify-content: flex-end;
+  border-top: 1px solid rgb(15 23 42 / 7%);
+  background: #fafbfc;
+}
+
+@media (max-width: 640px) {
+  .agent-auto-reply-overlay {
+    align-items: end;
+    padding: 0;
+  }
+
+  .agent-auto-reply-dialog {
+    width: 100%;
+    max-height: min(82dvh, 680px);
+    border-radius: 22px 22px 0 0;
+  }
+}
