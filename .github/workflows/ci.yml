@@ -42,7 +42,22 @@ jobs:
         run: pnpm lint
 
       - name: Typecheck
-        run: pnpm typecheck
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm typecheck 2>&1 | tee /tmp/typecheck.log
+
+      - name: Upload refactor diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-ui-refactor-diagnostics
+          path: |
+            src/dashboard/AgentWorkspaceChrome.tsx
+            src/dashboard/agent-mobile.css
+            /tmp/typecheck.log
+          if-no-files-found: warn
+          retention-days: 1
 
       - name: Test
         run: pnpm test
