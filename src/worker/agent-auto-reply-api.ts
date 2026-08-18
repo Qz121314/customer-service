@@ -33,7 +33,11 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
   const body = await readJson<{ enabled?: boolean; text?: string }>(c.req.raw);
-  if (!body || typeof body.enabled !== 'boolean' || typeof body.text !== 'string') {
+  if (
+    !body ||
+    typeof body.enabled !== 'boolean' ||
+    typeof body.text !== 'string'
+  ) {
     return c.json({ error: 'INVALID_AUTO_REPLY' }, 400);
   }
 

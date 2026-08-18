@@ -18,7 +18,8 @@ export function AgentAutoReplySettingsModal({
   open: boolean;
   onClose: () => void;
 }) {
-  const [settings, setSettings] = useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
+  const [settings, setSettings] =
+    useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
   const [saved, setSaved] = useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,7 +38,9 @@ export function AgentAutoReplySettingsModal({
       })
       .catch((reason) => {
         if (!active) return;
-        setError(reason instanceof Error ? reason.message : '无法加载自动回复设置');
+        setError(
+          reason instanceof Error ? reason.message : '无法加载自动回复设置',
+        );
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -80,7 +83,9 @@ export function AgentAutoReplySettingsModal({
       setSettings(next);
       setSaved(next);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '自动回复设置保存失败');
+      setError(
+        reason instanceof Error ? reason.message : '自动回复设置保存失败',
+      );
     } finally {
       setSaving(false);
     }

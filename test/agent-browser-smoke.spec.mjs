@@ -152,8 +152,12 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     .getByLabel('问候内容')
     .fill('您好，我来为您服务，请问有什么可以帮您？');
   await autoReplyDialog.getByRole('button', { name: '保存设置' }).click();
-  await expect(autoReplyDialog.getByRole('button', { name: '已保存' })).toBeVisible();
-  await autoReplyDialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(
+    autoReplyDialog.getByRole('button', { name: '已保存' }),
+  ).toBeVisible();
+  await autoReplyDialog
+    .getByRole('button', { name: '关闭', exact: true })
+    .click();
   await expect(autoReplyDialog).toBeHidden();
 
   const avatarButton = page.getByRole('button', { name: '更换客服头像' });

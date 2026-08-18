@@ -266,7 +266,9 @@ function visitorConversationSummary(
   };
 }
 
-function agentConversationSummary(conversation: AssignmentConversationSnapshot) {
+function agentConversationSummary(
+  conversation: AssignmentConversationSnapshot,
+) {
   return {
     id: conversation.id,
     site_id: conversation.site_id,

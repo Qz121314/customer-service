@@ -37,11 +37,23 @@ test('CTA conversation start does not require a synthetic visitor message', () =
     "clientApi.post('/client/v1/conversations/:id/messages'",
   );
 
-  assert.match(route, /const messageFieldPresent = body\?\.message !== undefined/u);
+  assert.match(
+    route,
+    /const messageFieldPresent = body\?\.message !== undefined/u,
+  );
   assert.match(route, /const hasInitialMessage = Boolean\(initialMessage\)/u);
-  assert.match(route, /if \(messageFieldPresent \|\| clientMessageFieldPresent\)/u);
-  assert.doesNotMatch(route, /if \(!clientMessageId\)[\s\S]{0,160}INVALID_CLIENT_MESSAGE_ID/u);
-  assert.match(route, /if \(hasInitialMessage && clientMessageId && initialMessage\)/u);
+  assert.match(
+    route,
+    /if \(messageFieldPresent \|\| clientMessageFieldPresent\)/u,
+  );
+  assert.doesNotMatch(
+    route,
+    /if \(!clientMessageId\)[\s\S]{0,160}INVALID_CLIENT_MESSAGE_ID/u,
+  );
+  assert.match(
+    route,
+    /if \(hasInitialMessage && clientMessageId && initialMessage\)/u,
+  );
 });
 
 test('visitor upsert keeps returning visitors to one D1 statement', () => {

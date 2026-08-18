@@ -45,7 +45,11 @@ function addConversation(database, id, visitorId = `${id}-visitor`) {
          id, site_id, token_hash, external_id, expires_at
        ) VALUES (?, 'default', ?, ?, datetime('now', '+1 day'))`,
     )
-    .run(visitorId, `${visitorId}-token`, `ABC${String(id.length).padStart(3, '0')}`);
+    .run(
+      visitorId,
+      `${visitorId}-token`,
+      `ABC${String(id.length).padStart(3, '0')}`,
+    );
   database
     .prepare(
       `INSERT INTO conversations (
@@ -80,8 +84,11 @@ function row(database, sql, ...bindings) {
 
 function count(database, table, where = '1 = 1', ...bindings) {
   return Number(
-    row(database, `SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`, ...bindings)
-      .count,
+    row(
+      database,
+      `SELECT COUNT(*) AS count FROM ${table} WHERE ${where}`,
+      ...bindings,
+    ).count,
   );
 }
 

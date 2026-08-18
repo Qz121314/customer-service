@@ -15,7 +15,10 @@ test('agent auto reply defaults off and has no forced greeting copy in storage',
   assert.match(migration, /auto_greeting_enabled INTEGER NOT NULL DEFAULT 0/u);
   assert.match(migration, /auto_greeting_text TEXT/u);
   assert.doesNotMatch(migration, /auto_greeting_text TEXT[^;]*DEFAULT\s+['"]/u);
-  assert.match(migration, /outcome TEXT NOT NULL CHECK \(outcome IN \('sent', 'skipped'\)\)/u);
+  assert.match(
+    migration,
+    /outcome TEXT NOT NULL CHECK \(outcome IN \('sent', 'skipped'\)\)/u,
+  );
 });
 
 test('auto reply settings are authenticated agent-owned API resources', () => {

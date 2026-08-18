@@ -1178,7 +1178,9 @@ async function persistClientMessage(
   return { message, duplicate: false };
 }
 
-function assignmentVisitorMessage(message: MessageRow): AssignmentVisitorMessage {
+function assignmentVisitorMessage(
+  message: MessageRow,
+): AssignmentVisitorMessage {
   if (message.sender_type !== 'visitor' || !message.sender_id) {
     throw new Error('Assignment visitor message invariant failed');
   }
