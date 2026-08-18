@@ -301,7 +301,6 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
 }
 
 async function loadTransferTargets(db: D1Database, agentId: string) {
-  const businessDate = routingBusinessDate();
   const result = await db
     .prepare(
       `SELECT a.id, a.name, a.status, a.max_active_conversations,
@@ -312,10 +311,6 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
          ON load.assigned_agent = a.id
         AND load.status IN ('open', 'pending')
         AND COALESCE(load.expires_at, datetime(load.created_at, '+1 day')) > CURRENT_TIMESTAMP
-       LEFT JOIN agent_daily_stats daily
-         ON daily.site_id = a.site_id
-        AND daily.agent_id = a.id
-        AND daily.business_date = ?2
        WHERE current.id = ?1
          AND a.is_enabled = 1
          AND a.status = 'online'
@@ -323,14 +318,6 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
          AND a.password_hash IS NOT NULL
          AND a.last_seen_at IS NOT NULL
          AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
-         AND (
-           a.daily_conversation_limit = 0
-           OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
-         )
-         AND (
-           a.traffic_quota_enabled = 0
-           OR a.traffic_quota_used < a.traffic_quota_total
-         )
        GROUP BY a.id, a.name, a.status, a.max_active_conversations
        HAVING (
          a.max_active_conversations = 0
@@ -338,7 +325,7 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
        )
        ORDER BY COUNT(load.id) ASC, a.name ASC, a.id ASC`,
     )
-    .bind(agentId, businessDate)
+    .bind(agentId)
     .all<TransferTargetRow>();
   return result.results ?? [];
 }
@@ -859,13 +846,22 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
                ) < target.max_active_conversations
              )
              AND (
-               target.daily_conversation_limit = 0
-               OR COALESCE(daily.conversation_count, 0) < target.daily_conversation_limit
-             )
-             AND (
-               target.traffic_quota_enabled = 0
-               OR target.traffic_quota_used < target.traffic_quota_total
-             )
+     EXISTS (
+       SELECT 1
+       FROM agent_traffic_receipts receipt
+       WHERE receipt.conversation_id = ?4
+     )
+     OR (
+       (
+         target.daily_conversation_limit = 0
+         OR COALESCE(daily.conversation_count, 0) < target.daily_conversation_limit
+       )
+       AND (
+         target.traffic_quota_enabled = 0
+         OR target.traffic_quota_used < target.traffic_quota_total
+       )
+     )
+   )
          )
        RETURNING assigned_agent AS id,
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
