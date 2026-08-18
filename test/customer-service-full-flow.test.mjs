@@ -947,3 +947,423 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
 
   database.close();
 });
+
+test('consultation quota commercial lifecycle remains consistent end to end', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const adminPassword = 'admin-password';
+  const rooms = fakeRooms();
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: rooms.namespace,
+    ADMIN_PASSWORD: adminPassword,
+  };
+  const executionCtx = {
+    waitUntil() {},
+    passThroughOnException() {},
+  };
+
+  database.exec(`
+  INSERT INTO product_catalog (
+    site_id, id, title, section_id, section_name, category_id,
+    category_name, is_enabled
+  ) VALUES
+    ('default', 'quota-product-west', 'Quota West', 'west', 'West',
+     'quota-test', 'Quota test', 1),
+    ('default', 'quota-product-east', 'Quota East', 'east', 'East',
+     'quota-test', 'Quota test', 1);
+`);
+
+  async function createSeat({
+    name,
+    username,
+    sectionIds,
+    quota,
+    dailyLimit,
+    requestId,
+  }) {
+    const response = await adminConfigApi.request(
+      '/api/admin/agents',
+      {
+        method: 'POST',
+        headers: {
+          cookie: adminCookie(adminPassword),
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          username,
+          password: 'pass',
+          routingScope: { type: 'section', sectionIds },
+          maxActiveConversations: 0,
+          dailyConversationLimit: dailyLimit,
+          trafficQuotaEnabled: true,
+          trafficQuotaTopUp: quota,
+          trafficQuotaRequestId: requestId,
+          isEnabled: true,
+        }),
+      },
+      env,
+    );
+    const created = await json(response);
+    return created.id;
+  }
+
+  const agentA = await createSeat({
+    name: 'Quota Agent A',
+    username: 'quota-agent-a',
+    sectionIds: ['west'],
+    quota: 2,
+    dailyLimit: 3,
+    requestId: 'quota-final-create-a',
+  });
+  const agentB = await createSeat({
+    name: 'Quota Agent B',
+    username: 'quota-agent-b',
+    sectionIds: ['east', 'west'],
+    quota: 1,
+    dailyLimit: 1,
+    requestId: 'quota-final-create-b',
+  });
+
+  const tokenA = 'quota-final-session-a';
+  const tokenB = 'quota-final-session-b';
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  database
+    .prepare(
+      `UPDATE agents
+       SET status = 'online', last_seen_at = CURRENT_TIMESTAMP
+       WHERE id IN (?, ?)`,
+    )
+    .run(agentA, agentB);
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
+    )
+    .run(
+      'quota-final-session-row-a',
+      agentA,
+      sha256(tokenA),
+      expiresAt,
+      'quota-final-session-row-b',
+      agentB,
+      sha256(tokenB),
+      expiresAt,
+    );
+
+  let handoffIndex = 0;
+  async function createConversation(sectionId) {
+    handoffIndex += 1;
+    const visitorId = `QTA00${handoffIndex}`;
+    const response = await clientApi.request(
+      '/client/v1/conversations',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          visitorId,
+          sourceHandoffId: `00000000-0000-4000-8000-${String(handoffIndex).padStart(12, '0')}`,
+          clientMessageId: `quota-final-message-${handoffIndex}`,
+          message: `Quota acceptance ${handoffIndex}`,
+          product: {
+            id: `quota-final-product-${sectionId}-${handoffIndex}`,
+            sectionId,
+            sectionName: sectionId,
+            categoryId: 'quota-test',
+            categoryName: 'Quota test',
+            title: `Quota ${sectionId} ${handoffIndex}`,
+            href: `/quota/${sectionId}/${handoffIndex}`,
+            coverUrl: null,
+          },
+        }),
+      },
+      env,
+    );
+    return json(response);
+  }
+
+  const east = await createConversation('east');
+  const eastId = east.conversation.id;
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(eastId).assigned_agent,
+    agentB,
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT traffic_quota_total AS total,
+           traffic_quota_used AS used
+         FROM agents WHERE id = ?`,
+      )
+      .get(agentB),
+    Object.assign(Object.create(null), { total: 1, used: 1 }),
+  );
+
+  const westOne = await createConversation('west');
+  const westTwo = await createConversation('west');
+  const westThree = await createConversation('west');
+  const westOneId = westOne.conversation.id;
+  const westTwoId = westTwo.conversation.id;
+  const westThreeId = westThree.conversation.id;
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(westOneId).assigned_agent,
+    agentA,
+  );
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(westTwoId).assigned_agent,
+    agentA,
+  );
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(westThreeId).assigned_agent,
+    null,
+    'fresh traffic must wait when every matching seat has exhausted new-traffic quota',
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT traffic_quota_total AS total,
+           traffic_quota_used AS used
+         FROM agents WHERE id = ?`,
+      )
+      .get(agentA),
+    Object.assign(Object.create(null), { total: 2, used: 2 }),
+  );
+
+  const cookieA = `cs_agent_session=${tokenA}`;
+  const cookieB = `cs_agent_session=${tokenB}`;
+  const inboxA = await json(
+    await agentApi.request(
+      '/api/agent/conversations',
+      { headers: { cookie: cookieA } },
+      env,
+    ),
+  );
+  assert.ok(
+    inboxA.transferTargets.some((target) => target.id === agentB),
+    'an exhausted seat with spare active capacity must remain a transfer target for already-counted traffic',
+  );
+
+  const beforeTransferB = database
+    .prepare(
+      `SELECT a.traffic_quota_used AS used,
+         COALESCE(SUM(s.conversation_count), 0) AS daily
+       FROM agents a
+       LEFT JOIN agent_daily_stats s ON s.agent_id = a.id
+       WHERE a.id = ?
+       GROUP BY a.id`,
+    )
+    .get(agentB);
+  const transferResponse = await agentApi.fetch(
+    new globalThis.Request(
+      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(westOneId)}/transfer`,
+      {
+        method: 'POST',
+        headers: {
+          cookie: cookieA,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ targetAgentId: agentB }),
+      },
+    ),
+    env,
+    executionCtx,
+  );
+  const transferred = await json(transferResponse);
+  assert.equal(transferred.assignment.id, agentB);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT a.traffic_quota_used AS used,
+           COALESCE(SUM(s.conversation_count), 0) AS daily
+         FROM agents a
+         LEFT JOIN agent_daily_stats s ON s.agent_id = a.id
+         WHERE a.id = ?
+         GROUP BY a.id`,
+      )
+      .get(agentB),
+    beforeTransferB,
+    'transfer must not consume paid or daily new-traffic quota again',
+  );
+
+  const requeueResponse = await agentApi.fetch(
+    new globalThis.Request(
+      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(westOneId)}/transfer`,
+      {
+        method: 'POST',
+        headers: {
+          cookie: cookieB,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ targetAgentId: null }),
+      },
+    ),
+    env,
+    executionCtx,
+  );
+  const requeued = await json(requeueResponse);
+  assert.equal(
+    requeued.assignment.id,
+    agentA,
+    'already-counted traffic must recover to a matching exhausted seat without another unit',
+  );
+  assert.equal(
+    database
+      .prepare('SELECT traffic_quota_used FROM agents WHERE id = ?')
+      .get(agentA).traffic_quota_used,
+    2,
+  );
+
+  const topUpResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(agentA)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        trafficQuotaTopUp: 1,
+        trafficQuotaRequestId: 'quota-final-topup-a',
+      }),
+    },
+    env,
+    executionCtx,
+  );
+  const toppedUp = await json(topUpResponse);
+  assert.equal(toppedUp.quotaApplied, true);
+  assert.equal(toppedUp.assignedWaitingCount, 1);
+  assert.equal(
+    database
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
+      .get(westThreeId).assigned_agent,
+    agentA,
+    'adding one unit must immediately admit one waiting fresh conversation',
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT traffic_quota_total AS total,
+           traffic_quota_used AS used
+         FROM agents WHERE id = ?`,
+      )
+      .get(agentA),
+    Object.assign(Object.create(null), { total: 3, used: 3 }),
+  );
+
+  const disableResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(agentA)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ isEnabled: false }),
+    },
+    env,
+  );
+  await json(disableResponse);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT id, assigned_agent
+         FROM conversations
+         WHERE id IN (?, ?, ?)
+         ORDER BY id`,
+      )
+      .all(westOneId, westTwoId, westThreeId)
+      .map((row) => row.assigned_agent),
+    [agentB, agentB, agentB],
+    'disabling a seat must reassign its already-counted active traffic even when the target has no new-traffic quota',
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT a.traffic_quota_used AS used,
+           COALESCE(SUM(s.conversation_count), 0) AS daily
+         FROM agents a
+         LEFT JOIN agent_daily_stats s ON s.agent_id = a.id
+         WHERE a.id = ?
+         GROUP BY a.id`,
+      )
+      .get(agentB),
+    beforeTransferB,
+    'reassignment after seat disable must not bill the target again',
+  );
+
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT agent_id, COUNT(*) AS count
+         FROM agent_traffic_receipts
+         WHERE conversation_id IN (?, ?, ?, ?)
+         GROUP BY agent_id
+         ORDER BY agent_id`,
+      )
+      .all(eastId, westOneId, westTwoId, westThreeId)
+      .map((row) => ({ agentId: row.agent_id, count: row.count })),
+    [
+      { agentId: agentA, count: 3 },
+      { agentId: agentB, count: 1 },
+    ].sort((left, right) => left.agentId.localeCompare(right.agentId)),
+    'immutable first-reception receipts must remain the billing source of truth after transfers',
+  );
+
+  function readQuotaLedger(agentId) {
+    const row = database
+      .prepare(
+        `SELECT
+         agent.traffic_quota_total AS total,
+         agent.traffic_quota_used AS used,
+         agent.traffic_quota_total_baseline + COALESCE((
+           SELECT SUM(adjustment.amount)
+           FROM agent_quota_adjustments adjustment
+           WHERE adjustment.site_id = agent.site_id
+             AND adjustment.agent_id = agent.id
+             AND adjustment.applied_at IS NOT NULL
+         ), 0) AS expectedTotal,
+         agent.traffic_quota_archived_used + COALESCE((
+           SELECT COUNT(*)
+           FROM agent_traffic_receipts receipt
+           WHERE receipt.site_id = agent.site_id
+             AND receipt.agent_id = agent.id
+             AND receipt.quota_consumed = 1
+         ), 0) AS expectedUsed
+       FROM agents agent
+       WHERE agent.site_id = 'default'
+         AND agent.id = ?`,
+      )
+      .get(agentId);
+    return {
+      ...row,
+      consistent:
+        row.total === row.expectedTotal && row.used === row.expectedUsed,
+    };
+  }
+
+  assert.deepEqual(readQuotaLedger(agentA), {
+    total: 3,
+    used: 3,
+    expectedTotal: 3,
+    expectedUsed: 3,
+    consistent: true,
+  });
+  assert.deepEqual(readQuotaLedger(agentB), {
+    total: 1,
+    used: 1,
+    expectedTotal: 1,
+    expectedUsed: 1,
+    consistent: true,
+  });
+
+  database.close();
+});
