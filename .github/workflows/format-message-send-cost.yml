@@ -1,0 +1,38 @@
+name: Format message send cost contract
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/conversation-auto-greeting
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Format target
+        run: pnpm exec prettier --write test/message-send-d1-cost.test.mjs
+      - name: Commit formatting
+        shell: bash
+        run: |
+          if git diff --quiet -- test/message-send-d1-cost.test.mjs; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add test/message-send-d1-cost.test.mjs
+          git commit -m "test: format message send cost contract"
+          git push origin HEAD:feature/conversation-auto-greeting
