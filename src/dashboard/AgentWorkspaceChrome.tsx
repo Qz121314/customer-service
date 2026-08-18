@@ -24,9 +24,7 @@ export function AgentActionToolbar({
         type="button"
         className={`ghost-button full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
         aria-label={
-          notificationState === 'enabled'
-            ? '关闭新消息通知'
-            : '开启新消息通知'
+          notificationState === 'enabled' ? '关闭新消息通知' : '开启新消息通知'
         }
         title={
           notificationState === 'unsupported'
@@ -55,9 +53,7 @@ export function AgentActionToolbar({
         type="button"
         className={`ghost-button full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
         aria-pressed={soundEnabled}
-        aria-label={
-          soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
-        }
+        aria-label={soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'}
         title={soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'}
         onClick={onToggleSound}
       >
