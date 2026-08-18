@@ -140,12 +140,8 @@ function AgentLogin({
   onSubmit: (event: FormEvent) => void;
 }) {
   return (
-    <AuthPage
-      eyebrow="AGENT WORKSPACE"
-      title="客服登录"
-      description="所有客服使用同一个入口，登录后只进入自己的会话工作台。"
-    >
-      <form className="auth-form" onSubmit={onSubmit}>
+    <AuthPage title="客服工作台" variant="agent">
+      <form className="auth-form agent-auth-form" onSubmit={onSubmit}>
         <label>
           客服账号
           <input
@@ -166,14 +162,11 @@ function AgentLogin({
         </label>
         {error && <div className="auth-error">{error}</div>}
         <button
-          className="primary-button"
+          className="primary-button agent-login-button"
           disabled={!username.trim() || !password}
         >
           进入工作台
         </button>
-        <a className="auth-link" href="/">
-          返回管理中心
-        </a>
       </form>
     </AuthPage>
   );
@@ -183,20 +176,25 @@ function AuthPage({
   eyebrow,
   title,
   description,
+  variant = 'default',
   children,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
-  description: string;
+  description?: string;
+  variant?: 'default' | 'agent';
   children: ReactNode;
 }) {
+  const agent = variant === 'agent';
   return (
-    <div className="auth-page">
-      <div className="auth-card">
-        <div className="auth-mark">CS</div>
-        <span className="eyebrow">{eyebrow}</span>
+    <div className={`auth-page${agent ? ' agent-auth-page' : ''}`}>
+      <div className={`auth-card${agent ? ' agent-auth-card' : ''}`}>
+        <div className="auth-mark" aria-hidden="true">
+          CS
+        </div>
+        {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
         <h1>{title}</h1>
-        <p>{description}</p>
+        {description ? <p>{description}</p> : null}
         {children}
       </div>
     </div>

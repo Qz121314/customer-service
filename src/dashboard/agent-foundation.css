@@ -236,3 +236,201 @@ p {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.agent-auth-page {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(20px, 4vw, 44px);
+  color: #f5f7fb;
+  background: #080b12;
+}
+
+.agent-auth-page::before {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(126, 139, 172, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126, 139, 172, 0.055) 1px, transparent 1px);
+  background-size: 34px 34px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.86), transparent 88%);
+  content: '';
+}
+
+.agent-auth-page::after {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  width: min(72vw, 720px);
+  aspect-ratio: 1;
+  border: 1px solid rgba(123, 132, 255, 0.08);
+  border-radius: 50%;
+  background: rgba(91, 91, 214, 0.025);
+  box-shadow:
+    0 0 110px rgba(91, 91, 214, 0.12),
+    inset 0 0 90px rgba(91, 91, 214, 0.04);
+  content: '';
+  transform: translate(-50%, -50%);
+}
+
+.agent-auth-card {
+  position: relative;
+  width: min(410px, 100%);
+  overflow: hidden;
+  padding: 40px 38px 38px;
+  border-color: rgba(143, 153, 180, 0.18);
+  border-radius: 24px;
+  background: rgba(13, 17, 27, 0.92);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.018) inset;
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.agent-auth-card::before {
+  position: absolute;
+  top: 0;
+  right: 14%;
+  left: 14%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(122, 132, 255, 0.9),
+    transparent
+  );
+  content: '';
+}
+
+.agent-auth-card .auth-mark {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 26px;
+  border: 1px solid rgba(139, 149, 255, 0.32);
+  border-radius: 14px;
+  color: #f7f8ff;
+  background: #111626;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 10px 30px rgba(0, 0, 0, 0.28),
+    0 0 30px rgba(91, 91, 214, 0.12);
+  font-size: 17px;
+  letter-spacing: -0.07em;
+}
+
+.agent-auth-card h1 {
+  color: #f7f8fc;
+  font-size: 29px;
+  font-weight: 760;
+  letter-spacing: -0.045em;
+}
+
+.agent-auth-form {
+  gap: 18px;
+  margin-top: 30px;
+}
+
+.agent-auth-form label {
+  gap: 8px;
+  color: #aeb7c8;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+}
+
+.agent-auth-form input {
+  min-height: 49px;
+  padding: 0 14px;
+  border-color: #252c3b;
+  border-radius: 12px;
+  color: #f4f6fb;
+  background: #0b0f18;
+  caret-color: #8b92ff;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.agent-auth-form input:hover {
+  border-color: #343d50;
+  background: #0d121d;
+}
+
+.agent-auth-form input:focus {
+  border-color: #7079ee;
+  background: #0d121d;
+  box-shadow:
+    0 0 0 3px rgba(102, 111, 238, 0.13),
+    0 0 26px rgba(91, 91, 214, 0.06);
+}
+
+.agent-auth-form input:-webkit-autofill,
+.agent-auth-form input:-webkit-autofill:hover,
+.agent-auth-form input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f4f6fb;
+  box-shadow: 0 0 0 1000px #0d121d inset;
+  caret-color: #8b92ff;
+}
+
+.agent-auth-card .auth-error {
+  border-color: rgba(224, 107, 117, 0.25);
+  color: #f0a5ad;
+  background: rgba(127, 44, 55, 0.14);
+}
+
+.agent-login-button {
+  min-height: 49px;
+  margin-top: 4px;
+  border-color: rgba(139, 149, 255, 0.42);
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, #565fdc, #7479ef);
+  box-shadow:
+    0 10px 24px rgba(61, 68, 183, 0.24),
+    0 1px 0 rgba(255, 255, 255, 0.16) inset;
+  letter-spacing: 0.01em;
+}
+
+.agent-login-button:hover:not(:disabled) {
+  border-color: rgba(158, 166, 255, 0.58);
+  background: linear-gradient(135deg, #626be6, #8085f5);
+  transform: translateY(-1px);
+}
+
+.agent-login-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.agent-login-button:disabled {
+  border-color: #292f3d;
+  color: #6f7888;
+  background: #1a1f2b;
+  box-shadow: none;
+  opacity: 1;
+}
+
+@media (max-width: 520px) {
+  .agent-auth-page {
+    padding: 18px;
+  }
+
+  .agent-auth-page::after {
+    width: 130vw;
+  }
+
+  .agent-auth-card {
+    padding: 34px 24px 30px;
+    border-radius: 20px;
+  }
+
+  .agent-auth-card .auth-mark {
+    margin-bottom: 24px;
+  }
+
+  .agent-auth-card h1 {
+    font-size: 27px;
+  }
+}
