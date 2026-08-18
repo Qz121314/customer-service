@@ -3,6 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const agentSource = readFileSync('src/worker/agent-api.ts', 'utf8');
+const assignmentBroadcastSource = readFileSync(
+  'src/worker/assignment-broadcast.ts',
+  'utf8',
+);
 const clientSource = readFileSync('src/worker/client-api.ts', 'utf8');
 const mediaSource = readFileSync('src/worker/media-store.ts', 'utf8');
 
@@ -87,6 +91,11 @@ test('realtime overview scans run only when assignment or status counts can chan
     'export async function broadcastClientConversationEvent(',
     'async function loadAgentOverview(',
   );
+  const assignmentBroadcaster = section(
+    assignmentBroadcastSource,
+    'export async function broadcastAssignments(',
+    'async function broadcastAssignment(',
+  );
   const clientRoute = section(
     clientSource,
     "clientApi.post('/client/v1/conversations/:id/messages'",
@@ -114,7 +123,15 @@ test('realtime overview scans run only when assignment or status counts can chan
     broadcaster,
     /previousAgentId[\s\S]*loadAgentOverview\(env\.DB, previousAgentId\)/u,
   );
-  assert.match(clientRoute, /includeOverview: assignmentChanged/u);
+  assert.match(
+    clientRoute,
+    /if \(assignment\?\.newlyAssigned && assignment\.assignedAt\)[\s\S]*broadcastAssignments\([\s\S]*\} else \{[\s\S]*broadcastClientConversationEvent\(/u,
+  );
+  assert.doesNotMatch(clientRoute, /includeOverview:\s*true/u);
+  assert.match(
+    assignmentBroadcaster,
+    /loadAgentOverview\(env\.DB, agentId\)/u,
+  );
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);
   assert.doesNotMatch(mediaSource, /\{ includeOverview: true \}/u);
   assert.match(
