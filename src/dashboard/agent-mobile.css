@@ -41,40 +41,48 @@
     background: #edf1f5;
   }
 
-  /* One mobile app bar for both inbox and conversation screens. */
-  .mobile-agent-bar {
-    position: relative;
-    z-index: 40;
-    display: grid;
+  /* Inbox chrome and thread chrome share one visual system. */
+  .workspace-sidebar,
+  .thread-head {
+    box-sizing: border-box;
     width: 100%;
-    height: 60px;
+    min-width: 0;
     min-height: 60px;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px 8px 12px;
+    border: 0;
     border-bottom: 1px solid #e3e8ef;
     background: rgba(255, 255, 255, 0.985);
     box-shadow: 0 1px 0 rgba(15, 23, 42, 0.035);
     backdrop-filter: blur(20px) saturate(1.05);
   }
 
-  .mobile-agent-bar:has(.mobile-agent-back) {
-    grid-template-columns: 40px 36px minmax(0, 1fr) auto;
-    gap: 7px;
-    padding-inline: 8px;
-  }
-
-  .mobile-agent-profile {
+  .workspace-sidebar {
     position: relative;
-    display: grid;
-    min-width: 0;
-    grid-template-columns: 38px minmax(0, 1fr);
+    z-index: 40;
+    display: flex;
+    height: 60px;
+    flex-direction: row;
     align-items: center;
-    gap: 9px;
+    gap: 8px;
+    padding: 8px 10px 8px 12px;
   }
 
-  .mobile-agent-profile .agent-avatar-button {
+  .workspace-brand-lockup {
+    display: none;
+  }
+
+  .agent-profile {
+    position: relative;
+    min-width: 0;
+    max-width: min(39vw, 156px);
+    flex: 1 1 auto;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 9px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .agent-profile .agent-avatar-button {
     width: 38px;
     min-width: 38px;
     height: 38px;
@@ -83,113 +91,42 @@
     box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
   }
 
-  .mobile-agent-profile > div {
+  .agent-profile > div {
     min-width: 0;
   }
 
-  .mobile-agent-profile strong,
-  .mobile-agent-title strong {
-    display: block;
+  .agent-profile strong {
     overflow: hidden;
     color: #171b23;
+    font-size: 14px;
     font-weight: 740;
     letter-spacing: -0.02em;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .mobile-agent-profile strong {
-    font-size: 14px;
+  .agent-profile small {
+    display: none;
   }
 
-  .mobile-agent-profile .presence {
+  .agent-profile .presence {
     position: absolute;
     bottom: 0;
     left: 29px;
     width: 9px;
     height: 9px;
+    margin: 0;
     border: 2px solid #fff;
     box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.04);
     box-sizing: content-box;
   }
 
-  .mobile-agent-back {
+  .workspace-sidebar-actions {
     display: grid;
-    width: 40px;
-    min-width: 40px;
-    height: 40px;
-    min-height: 40px;
-    place-items: center;
-    padding: 0;
-    border: 1px solid #e1e7ef;
-    border-radius: 12px;
-    color: #526073;
-    background: linear-gradient(180deg, #fff 0%, #f5f7fa 100%);
-    box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.04),
-      inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  }
-
-  .mobile-agent-back > span {
-    width: 20px;
-    height: 20px;
-    background: center / 20px 20px no-repeat
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23526073' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E");
-  }
-
-  .mobile-agent-back:active {
-    background: #edf1f5;
-    transform: scale(0.94);
-  }
-
-  .mobile-agent-visitor-avatar {
-    display: grid;
-    width: 36px;
-    height: 36px;
-    place-items: center;
-    border-radius: 12px;
-    color: #5a6472;
-    background: #edf0f4;
-    font-size: 11px;
-    font-weight: 760;
-    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.025);
-  }
-
-  .mobile-agent-title {
-    display: grid;
-    min-width: 0;
-    align-content: center;
-    gap: 2px;
-  }
-
-  .mobile-agent-title strong {
-    font-size: 14px;
-    line-height: 1.15;
-  }
-
-  .mobile-agent-title .conversation-expiry {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    overflow: hidden;
-    color: #8a94a2;
-    font-size: 9px;
-    font-weight: 560;
-    line-height: 1.25;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .mobile-agent-title .conversation-expiry > span {
-    display: none;
-  }
-
-  /* Shared action toolbar: same controls on inbox and thread. */
-  .mobile-agent-bar .workspace-sidebar-actions {
-    display: grid;
+    flex: 0 0 auto;
     grid-template-columns: repeat(4, 34px);
     gap: 1px;
-    margin: 0;
+    margin: 0 0 0 auto;
     padding: 3px;
     border: 1px solid #e4e9f0;
     border-radius: 14px;
@@ -199,8 +136,8 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.88);
   }
 
-  .mobile-agent-bar .ghost-button,
-  .mobile-agent-bar .ghost-button.full {
+  .workspace-sidebar .ghost-button,
+  .workspace-sidebar .ghost-button.full {
     position: relative;
     display: grid;
     width: 34px;
@@ -208,6 +145,7 @@
     height: 34px;
     min-height: 34px;
     place-items: center;
+    margin: 0;
     padding: 0;
     border: 0;
     border-radius: 10px;
@@ -216,28 +154,28 @@
     box-shadow: none;
   }
 
-  .mobile-agent-bar .ghost-button > span {
+  .workspace-sidebar .ghost-button > span {
     display: none;
   }
 
-  .mobile-agent-bar .ghost-button .ui-icon {
+  .workspace-sidebar .ghost-button .ui-icon {
     width: 18px;
     height: 18px;
   }
 
-  .mobile-agent-bar .ghost-button:active {
+  .workspace-sidebar .ghost-button:active {
     background: #e9edf3;
     transform: scale(0.94);
   }
 
-  .mobile-agent-bar .ghost-button.is-enabled {
+  .workspace-sidebar .ghost-button.is-enabled {
     color: #514fd2;
     background: linear-gradient(180deg, #efefff 0%, #e8e8ff 100%);
     box-shadow: inset 0 0 0 1px rgba(88, 86, 214, 0.08);
   }
 
-  .mobile-agent-bar .workspace-notification-button.is-enabled::after,
-  .mobile-agent-bar .workspace-sound-button.is-enabled::after {
+  .workspace-notification-button.is-enabled::after,
+  .workspace-sound-button.is-enabled::after {
     position: absolute;
     top: 5px;
     right: 5px;
@@ -250,37 +188,33 @@
     box-sizing: content-box;
   }
 
-  .workspace-sidebar {
-    display: none;
-  }
-
-  .conversation-pane,
-  .thread-pane {
+  .conversation-pane {
+    display: flex;
     width: 100%;
     height: calc(100dvh - 60px - env(safe-area-inset-top));
     min-height: 0;
     border: 0;
+    background: #f3f5f8;
   }
 
   .workspace-shell:not(.is-thread-open) .thread-pane {
     display: none;
   }
 
+  .workspace-shell.is-thread-open .workspace-sidebar,
   .workspace-shell.is-thread-open .conversation-pane {
     display: none;
   }
 
   .workspace-shell.is-thread-open .thread-pane {
     display: flex;
+    width: 100%;
+    height: calc(100dvh - env(safe-area-inset-top));
+    min-height: 0;
     background: var(--agent-thread);
   }
 
-  /* Inbox page */
-  .conversation-pane {
-    display: flex;
-    background: #f3f5f8;
-  }
-
+  /* Inbox */
   .conversation-head {
     min-height: 58px;
     padding: 10px 12px 8px;
@@ -355,7 +289,6 @@
     content: '离线';
   }
 
-  /* Technology-style realtime summary, integrated into the same mobile language. */
   .inbox-overview {
     position: relative;
     display: grid;
@@ -667,12 +600,107 @@
     line-height: 1.5;
   }
 
-  /* Thread page uses the same app bar; desktop thread-head is not part of mobile UI. */
+  /* Thread */
   .thread-head {
+    display: grid;
+    z-index: 40;
+    height: 60px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    padding: 8px;
+  }
+
+  .thread-back-button {
+    display: grid;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #e1e7ef;
+    border-radius: 12px;
+    color: transparent;
+    background: linear-gradient(180deg, #fff 0%, #f5f7fa 100%);
+    box-shadow:
+      0 1px 2px rgba(15, 23, 42, 0.04),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    font-size: 0;
+  }
+
+  .thread-back-button::before {
+    width: 20px;
+    height: 20px;
+    background: center / 20px 20px no-repeat
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23526073' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 18-6-6 6-6'/%3E%3C/svg%3E");
+    content: '';
+  }
+
+  .thread-back-button:active {
+    background: #edf1f5;
+    transform: scale(0.94);
+  }
+
+  .thread-head-copy {
+    display: grid;
+    min-width: 0;
+    min-height: 40px;
+    align-content: center;
+    gap: 2px;
+    padding-left: 40px;
+  }
+
+  .thread-head-copy::before {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    background: #edf0f4 center / 16px 16px no-repeat
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23667180' stroke-width='1.7'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4.5 21a7.5 7.5 0 0 1 15 0'/%3E%3C/svg%3E");
+    box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.025);
+    content: '';
+    transform: translateY(-50%);
+  }
+
+  .thread-head .eyebrow,
+  .thread-head p {
     display: none;
   }
 
-  .mobile-agent-bar .thread-actions {
+  .thread-head h2 {
+    margin: 0;
+    overflow: hidden;
+    color: #171b23;
+    font-size: 14px;
+    font-weight: 740;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-expiry {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    color: #8a94a2;
+    font-size: 9px;
+    font-weight: 560;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-expiry > span {
+    display: none;
+  }
+
+  .thread-actions {
     display: grid;
     min-height: 42px;
     grid-template-columns: 72px 38px;
@@ -688,7 +716,7 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
-  .mobile-agent-bar .thread-actions select {
+  .thread-head select {
     width: 72px;
     min-width: 72px;
     height: 34px;
@@ -710,7 +738,7 @@
     box-shadow: inset 0 0 0 1px rgba(88, 86, 214, 0.075);
   }
 
-  .mobile-agent-bar .transfer-menu {
+  .transfer-menu {
     display: grid;
     width: 38px;
     min-width: 38px;
@@ -722,7 +750,7 @@
     border-left: 1px solid #dfe5ed;
   }
 
-  .mobile-agent-bar .transfer-menu > summary {
+  .transfer-menu > summary {
     width: 34px;
     min-width: 34px;
     height: 32px;
@@ -735,12 +763,12 @@
     font-size: 0;
   }
 
-  .mobile-agent-bar .transfer-menu[open] > summary,
-  .mobile-agent-bar .transfer-menu > summary:active {
+  .transfer-menu[open] > summary,
+  .transfer-menu > summary:active {
     background-color: #e7ebf1;
   }
 
-  .mobile-agent-bar .transfer-menu-panel {
+  .transfer-menu-panel {
     position: fixed;
     top: calc(env(safe-area-inset-top) + 58px);
     right: 8px;
@@ -1016,78 +1044,38 @@
 }
 
 @media (max-width: 390px) {
-  .mobile-agent-bar {
+  .workspace-sidebar {
     gap: 6px;
     padding-inline: 8px;
   }
 
-  .mobile-agent-bar:has(.mobile-agent-back) {
-    grid-template-columns: 38px 33px minmax(0, 1fr) auto;
-    gap: 5px;
-    padding-inline: 6px;
-  }
-
-  .mobile-agent-profile {
+  .agent-profile {
+    max-width: 118px;
     grid-template-columns: 36px minmax(0, 1fr);
     gap: 7px;
   }
 
-  .mobile-agent-profile .agent-avatar-button {
+  .agent-profile .agent-avatar-button {
     width: 36px;
     min-width: 36px;
     height: 36px;
     min-height: 36px;
   }
 
-  .mobile-agent-profile .presence {
+  .agent-profile .presence {
     left: 27px;
   }
 
-  .mobile-agent-bar .workspace-sidebar-actions {
+  .workspace-sidebar-actions {
     grid-template-columns: repeat(4, 32px);
   }
 
-  .mobile-agent-bar .ghost-button,
-  .mobile-agent-bar .ghost-button.full {
+  .workspace-sidebar .ghost-button,
+  .workspace-sidebar .ghost-button.full {
     width: 32px;
     min-width: 32px;
     height: 32px;
     min-height: 32px;
-  }
-
-  .mobile-agent-back {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    min-height: 38px;
-  }
-
-  .mobile-agent-visitor-avatar {
-    width: 33px;
-    height: 33px;
-    border-radius: 11px;
-  }
-
-  .mobile-agent-title strong {
-    font-size: 13px;
-  }
-
-  .mobile-agent-bar .thread-actions {
-    grid-template-columns: 64px 34px;
-  }
-
-  .mobile-agent-bar .thread-actions select {
-    width: 64px;
-    min-width: 64px;
-    padding-right: 20px;
-    padding-left: 8px;
-    background-position: right 6px center;
-    font-size: 9px;
-  }
-
-  .mobile-agent-bar .transfer-menu {
-    width: 34px;
-    min-width: 34px;
   }
 
   .conversation-head {
@@ -1116,6 +1104,50 @@
     min-width: 66px;
     padding-inline: 7px;
     font-size: 9px;
+  }
+
+  .thread-head {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 5px;
+    padding-inline: 6px;
+  }
+
+  .thread-back-button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .thread-head-copy {
+    padding-left: 37px;
+  }
+
+  .thread-head-copy::before {
+    width: 32px;
+    height: 32px;
+  }
+
+  .thread-head h2 {
+    font-size: 13px;
+  }
+
+  .thread-actions {
+    grid-template-columns: 64px 34px;
+  }
+
+  .thread-head select {
+    width: 64px;
+    min-width: 64px;
+    padding-right: 20px;
+    padding-left: 8px;
+    background-position: right 6px center;
+    font-size: 9px;
+  }
+
+  .transfer-menu {
+    width: 34px;
+    min-width: 34px;
   }
 
   .conversation-context-card {
@@ -1148,7 +1180,8 @@
 }
 
 @media (display-mode: standalone) and (max-width: 760px) {
-  .mobile-agent-bar,
+  .workspace-sidebar,
+  .thread-head,
   .composer {
     background: rgba(255, 255, 255, 0.99);
   }
