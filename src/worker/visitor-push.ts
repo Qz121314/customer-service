@@ -104,13 +104,14 @@ async function deleteVisitorPushSubscriptions(
   endpoints: string[],
 ): Promise<void> {
   if (endpoints.length === 0) return;
-  const placeholders = endpoints.map((_, index) => `?${index + 1}`).join(', ');
   await db
     .prepare(
       `DELETE FROM visitor_push_subscriptions
-       WHERE endpoint IN (${placeholders})`,
+       WHERE endpoint IN (
+         SELECT CAST(value AS TEXT) FROM json_each(?1)
+       )`,
     )
-    .bind(...endpoints)
+    .bind(JSON.stringify(endpoints))
     .run();
 }
 
