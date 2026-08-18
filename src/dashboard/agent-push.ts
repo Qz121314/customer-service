@@ -19,7 +19,10 @@ export function hasAgentNotificationOpenIntent(): boolean {
 
 export function clearAgentNotificationOpenIntent(): void {
   const url = new URL(window.location.href);
-  if (url.searchParams.get(AGENT_NOTIFICATION_PARAM) !== AGENT_NOTIFICATION_TARGET) {
+  if (
+    url.searchParams.get(AGENT_NOTIFICATION_PARAM) !==
+    AGENT_NOTIFICATION_TARGET
+  ) {
     return;
   }
   url.searchParams.delete(AGENT_NOTIFICATION_PARAM);
