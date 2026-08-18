@@ -60,43 +60,35 @@ jobs:
           python /tmp/agent-commercial-patch.py
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('src/dashboard/agent-mobile.css')
           text = path.read_text()
-          old = """  .thread-actions {
-            grid-template-columns: 64px 34px;
-          }
-
-          .thread-head select {
-            width: 64px;
-            min-width: 64px;
-            padding-right: 20px;
-            padding-left: 8px;
-            background-position: right 6px center;
-            font-size: 9px;
-          }
-          """
-          new = """  .thread-actions {
-            grid-template-columns: auto auto 34px;
-          }
-
-          .thread-status,
-          .thread-status-action {
-            padding-inline: 6px;
-            font-size: 8px;
-          }
-
-          .thread-status {
-            min-width: 44px;
-          }
-
-          .thread-status-action {
-            min-width: 50px;
-          }
-          """
-          if text.count(old) != 1:
-              raise SystemExit(f'narrow mobile status block count={text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
+          pattern = re.compile(
+              r"  \.thread-actions \{\n\s+grid-template-columns: 64px 34px;\n  \}\n\n"
+              r"  \.thread-head select \{\n.*?\n  \}\n",
+              re.S,
+          )
+          replacement = (
+              "  .thread-actions {\n"
+              "    grid-template-columns: auto auto 34px;\n"
+              "  }\n\n"
+              "  .thread-status,\n"
+              "  .thread-status-action {\n"
+              "    padding-inline: 6px;\n"
+              "    font-size: 8px;\n"
+              "  }\n\n"
+              "  .thread-status {\n"
+              "    min-width: 44px;\n"
+              "  }\n\n"
+              "  .thread-status-action {\n"
+              "    min-width: 50px;\n"
+              "  }\n"
+          )
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'narrow mobile status block count={count}')
+          path.write_text(text)
           PY
 
       - name: Format changed files
