@@ -762,15 +762,22 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
   if (!body || !['open', 'pending', 'closed'].includes(body.status ?? '')) {
     return c.json({ error: 'INVALID_STATUS' }, 400);
   }
-  const result = await c.env.DB.prepare(
-    `UPDATE conversations
-     SET status = ?1, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?2 AND assigned_agent = ?3
-       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
-  )
-    .bind(body.status, id, agent.id)
-    .run();
-  if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
+  try {
+    const result = await c.env.DB.prepare(
+      `UPDATE conversations
+       SET status = ?1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?2 AND assigned_agent = ?3
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+    )
+      .bind(body.status, id, agent.id)
+      .run();
+    if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
+  } catch (reason) {
+    if (String(reason).includes('CONVERSATION_REOPEN_CAPACITY')) {
+      return c.json({ error: 'CONVERSATION_REOPEN_CAPACITY' }, 409);
+    }
+    throw reason;
+  }
   await broadcastConversationRoom(c.env, id, {
     type: 'conversation.status',
     status: body.status,
