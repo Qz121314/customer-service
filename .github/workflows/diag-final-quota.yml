@@ -100,6 +100,16 @@ jobs:
 
           '''
           text = text[:create_seat] + catalog + text[create_seat:]
+          text = text.replace(
+              '    const visitorId = `quota-final-visitor-${handoffIndex}`;\n',
+              '    const visitorId = `QTA00${handoffIndex}`;\n',
+              1,
+          )
+          text = text.replace(
+              '          sourceHandoffId: `quota-final-handoff-${handoffIndex}`,\n',
+              "          sourceHandoffId: `00000000-0000-4000-8000-${String(handoffIndex).padStart(12, '0')}`,\n",
+              1,
+          )
           if 'adminQuotaApi' in text:
               raise SystemExit('adminQuotaApi reference still present')
           path.write_text(text)
