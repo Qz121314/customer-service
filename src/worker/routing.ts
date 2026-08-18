@@ -31,6 +31,10 @@ export function routingBusinessDate(now = new Date()): string {
  * stale capacity check before writing. Active load is balanced first; today's
  * accepted count is a secondary fairness signal; last_assigned_at and id make
  * equal-load ordering deterministic.
+ *
+ * Daily and paid traffic limits apply only before the conversation has its
+ * immutable traffic receipt. Requeues of already-counted traffic can recover
+ * without consuming or requiring another unit of new-traffic quota.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -46,7 +50,12 @@ export async function assignConversationAgent(
            c.site_id,
            c.product_id,
            COALESCE(c.section_id, p.section_id) AS section_id,
-           COALESCE(c.category_id, p.category_id) AS category_id
+           COALESCE(c.category_id, p.category_id) AS category_id,
+           EXISTS (
+             SELECT 1
+             FROM agent_traffic_receipts receipt
+             WHERE receipt.conversation_id = c.id
+           ) AS already_received
          FROM conversations c
          LEFT JOIN product_catalog p
            ON p.site_id = c.site_id
@@ -112,11 +121,13 @@ export async function assignConversationAgent(
              OR COALESCE(load.active_count, 0) < a.max_active_conversations
            )
            AND (
-             a.daily_conversation_limit = 0
+             ctx.already_received = 1
+             OR a.daily_conversation_limit = 0
              OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
            )
            AND (
-             a.traffic_quota_enabled = 0
+             ctx.already_received = 1
+             OR a.traffic_quota_enabled = 0
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
