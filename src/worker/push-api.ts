@@ -60,7 +60,9 @@ pushApi.post('/client/v1/push/subscriptions', async (c) => {
   );
   if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
   if (!conversationId) return clientError(c, 400, 'INVALID_CONVERSATION_ID');
-  if (!endpoint) return clientError(c, 400, 'INVALID_PUSH_SUBSCRIPTION');
+  if (!endpoint || expirationTime === undefined) {
+    return clientError(c, 400, 'INVALID_PUSH_SUBSCRIPTION');
+  }
 
   const identity = await resolveConversationIdentity(c.env.DB, conversationId, {
     visitorId,
@@ -172,14 +174,17 @@ function normalizePushEndpoint(value: unknown): string | null {
   }
 }
 
-function normalizeExpirationTime(value: unknown): number | null {
+function normalizeExpirationTime(
+  value: unknown,
+): number | null | undefined {
   if (value === null || value === undefined) return null;
   if (
     typeof value !== 'number' ||
     !Number.isFinite(value) ||
     value <= Date.now()
-  )
-    return null;
+  ) {
+    return undefined;
+  }
   return Math.floor(value);
 }
 
