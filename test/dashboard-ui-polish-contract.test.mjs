@@ -7,33 +7,28 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test('dashboard polish removes narrow chat constraints and agent workspace remains the final chat layer', () => {
+test('admin polish stays on the admin route while agent styles are isolated', () => {
   const main = source('../src/dashboard/main.tsx');
   const polish = source('../src/dashboard/ui-polish.css');
   const workspace = source('../src/dashboard/agent-workspace.css');
 
+  assert.ok(main.includes('if (isAgentRoute)'));
+  assert.ok(main.includes("import('./agent-foundation.css')"));
+  assert.ok(main.includes("import('./agent-workspace.css')"));
+  assert.ok(main.includes("import('./agent-mobile.css')"));
+  assert.ok(main.includes("import('./ui-polish.css')"));
+  assert.ok(main.includes("import('./styles.css')"));
   assert.ok(!main.includes("'./dialogue-flow.css'"));
-  assert.ok(
-    main.indexOf("'./ui-polish.css'") >
-      main.indexOf("'./cloud-service-ui.css'"),
-  );
-  assert.ok(
-    main.indexOf("'./agent-workspace.css'") > main.indexOf("'./ui-polish.css'"),
-  );
   assert.ok(
     polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
   );
   assert.ok(polish.includes('overflow-y: auto;'));
   assert.ok(polish.includes('max-width: none;'));
-  assert.ok(polish.includes('width: min(100%, 980px);'));
-  assert.ok(polish.includes('@media (max-width: 760px)'));
-  assert.ok(
-    workspace.includes('grid-template-columns: auto minmax(0, 1fr) auto;'),
-  );
-  assert.ok(workspace.includes('height: 100dvh;'));
+  assert.equal(workspace.includes('@media (max-width: 760px)'), false);
+  assert.equal(workspace.includes('@media (min-width: 761px)'), false);
 });
 
-test('dashboard second polish pass keeps dense desktop controls and a 360px fallback', () => {
+test('dashboard second polish pass keeps dense admin controls and a 360px fallback', () => {
   const polish = source('../src/dashboard/ui-polish.css');
 
   assert.ok(polish.includes('min-height: 74px;'));

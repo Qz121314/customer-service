@@ -1,27 +1,40 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './styles.css';
-import './product-assignment.css';
-import './chat-dialogue.css';
-import './media-view.css';
-import './agent-statistics.css';
-import './cloud-service-ui.css';
-import './ui-polish.css';
-import './agent-editor.css';
-import './agent-workspace.css';
-import './agent-desktop.css';
-import './agent-mobile.css';
-import './agent-composer-status.css';
-import './agent-avatar.css';
-import './agent-mobile-inbox.css';
-import './agent-mobile-thread.css';
-import './agent-mobile-tech-controls.css';
 
-if (
-  window.location.pathname.startsWith('/agent') &&
-  'serviceWorker' in navigator
-) {
+const isAgentRoute = window.location.pathname.startsWith('/agent');
+
+async function loadAgentStyles() {
+  await import('./agent-foundation.css');
+  await import('./media-view.css');
+  await import('./agent-statistics.css');
+  await import('./agent-avatar.css');
+  await import('./agent-workspace.css');
+  await import('./agent-desktop.css');
+  await import('./agent-mobile.css');
+}
+
+async function loadAdminStyles() {
+  await import('./styles.css');
+  await import('./product-assignment.css');
+  await import('./chat-dialogue.css');
+  await import('./media-view.css');
+  await import('./agent-statistics.css');
+  await import('./cloud-service-ui.css');
+  await import('./ui-polish.css');
+  await import('./agent-editor.css');
+  await import('./agent-avatar.css');
+}
+
+async function loadRouteStyles() {
+  if (isAgentRoute) {
+    await loadAgentStyles();
+    return;
+  }
+  await loadAdminStyles();
+}
+
+if (isAgentRoute && 'serviceWorker' in navigator) {
   window.addEventListener(
     'load',
     () => {
@@ -33,8 +46,13 @@ if (
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+async function bootstrap() {
+  await loadRouteStyles();
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+void bootstrap();
