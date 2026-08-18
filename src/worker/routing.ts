@@ -3,7 +3,8 @@ export type AgentAssignment = {
   name: string;
 };
 
-export type AgentAssignmentResult = AgentAssignment & {
+export type AgentAssignmentOutcome = {
+  agent: AgentAssignment;
   newlyAssigned: boolean;
   assignedAt: string | null;
 };
@@ -41,15 +42,15 @@ export function routingBusinessDate(now = new Date()): string {
  * immutable traffic receipt. Requeues of already-counted traffic can recover
  * without consuming or requiring another unit of new-traffic quota.
  *
- * The result exposes whether this call performed the assignment and the exact
- * assigned_at timestamp. Downstream lifecycle broadcasting can therefore mark a
- * genuine first reception without inferring it from UI state or unread counts.
+ * Public agent identity and internal lifecycle metadata are returned separately,
+ * so assignedAt/newlyAssigned can never leak through an API that serializes the
+ * public assignment object.
  */
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
   excludedAgentId: string | null = null,
-): Promise<AgentAssignmentResult | null> {
+): Promise<AgentAssignmentOutcome | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
   const assignment = await db
@@ -174,8 +175,7 @@ export async function assignConversationAgent(
     .run();
 
   return {
-    id: assignment.id,
-    name: assignment.name,
+    agent: { id: assignment.id, name: assignment.name },
     newlyAssigned: true,
     assignedAt: now,
   };
@@ -184,7 +184,7 @@ export async function assignConversationAgent(
 async function assignedAgent(
   db: D1Database,
   conversationId: string,
-): Promise<AgentAssignmentResult | null> {
+): Promise<AgentAssignmentOutcome | null> {
   const assignment = await db
     .prepare(
       `SELECT a.id, a.name, c.assigned_at
@@ -197,8 +197,7 @@ async function assignedAgent(
     .first<AgentAssignment & { assigned_at: string | null }>();
   if (!assignment) return null;
   return {
-    id: assignment.id,
-    name: assignment.name,
+    agent: { id: assignment.id, name: assignment.name },
     newlyAssigned: false,
     assignedAt: assignment.assigned_at,
   };
