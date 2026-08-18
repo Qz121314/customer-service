@@ -8,10 +8,10 @@ function source(path) {
 }
 
 test('agent attachment plus is centered geometrically instead of by font metrics', () => {
-  const css = source('../src/dashboard/agent-composer-status.css');
+  const css = source('../src/dashboard/agent-workspace.css');
 
-  assert.ok(css.includes('.workspace-shell .media-picker::before,'));
-  assert.ok(css.includes('.workspace-shell .media-picker::after'));
+  assert.ok(css.includes('.media-picker::before,'));
+  assert.ok(css.includes('.media-picker::after'));
   assert.ok(css.includes('top: 50%;'));
   assert.ok(css.includes('left: 50%;'));
   assert.ok(css.includes('transform: translate(-50%, -50%);'));
