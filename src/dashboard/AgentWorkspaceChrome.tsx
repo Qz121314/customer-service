@@ -1,4 +1,5 @@
 import type { AgentNotificationState } from './agent-push';
+import { AgentAutoReplyControl } from './AgentAutoReplyControl';
 import { UiIcon } from './dashboard-ui';
 
 export function AgentActionToolbar({
@@ -60,6 +61,7 @@ export function AgentActionToolbar({
         <UiIcon name="sound" />
         <span>{soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}</span>
       </button>
+      <AgentAutoReplyControl />
       <button
         type="button"
         className="ghost-button full workspace-statistics-button"
