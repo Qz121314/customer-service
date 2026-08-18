@@ -68,6 +68,7 @@ type TransferConversationRow = {
 const COOKIE = 'cs_agent_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const MESSAGE_LIMIT = 8000;
+const CLOSED_INBOX_PREVIEW_LIMIT = 40;
 
 export const agentApi = new Hono<Env>();
 
@@ -348,47 +349,47 @@ async function loadAgentInbox(
   requestedStatus?: string,
 ) {
   type InboxConversationRow = Record<string, unknown> & {
+    id: string;
+    status: ConversationStatus;
+    last_message_at: string;
     __overview_open?: number;
     __overview_pending?: number;
     __overview_closed?: number;
+    __closed_rank?: number;
   };
 
   const filtered =
     requestedStatus === 'open' ||
     requestedStatus === 'pending' ||
     requestedStatus === 'closed';
-  const overviewColumns = filtered
-    ? ''
-    : `       SUM(CASE WHEN c.status = 'open' THEN 1 ELSE 0 END) OVER () AS __overview_open,
-     SUM(CASE WHEN c.status = 'pending' THEN 1 ELSE 0 END) OVER () AS __overview_pending,
-     SUM(CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END) OVER () AS __overview_closed,
-`;
-  let statement = db.prepare(
-    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
-       c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
-       c.expires_at,
-       v.display_name AS visitor_name,
-${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = c.id
-        ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.assigned_agent = ?1
-       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
-       ${filtered ? 'AND c.status = ?2' : ''}
-     ORDER BY CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END,
-       c.last_message_at DESC, c.id DESC
-     LIMIT 100`,
-  );
-  statement = filtered
-    ? statement.bind(agent.id, requestedStatus)
-    : statement.bind(agent.id);
   const transferTargetsRequest = loadTransferTargets(db, agent.id);
 
   if (filtered) {
+    const shouldBoundClosed = requestedStatus === 'closed';
+    const statement = db.prepare(
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
+         c.expires_at, v.display_name AS visitor_name,
+         (SELECT body FROM messages m WHERE m.conversation_id = c.id
+          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.assigned_agent = ?1
+         AND c.status = ?2
+         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+       ORDER BY c.last_message_at DESC, c.id DESC
+       LIMIT COALESCE(?3, -1)`,
+    );
     const [result, overview, transferTargets] = await Promise.all([
-      statement.all<InboxConversationRow>(),
+      statement
+        .bind(
+          agent.id,
+          requestedStatus,
+          shouldBoundClosed ? CLOSED_INBOX_PREVIEW_LIMIT : null,
+        )
+        .all<InboxConversationRow>(),
       loadAgentOverview(db, agent.id),
       transferTargetsRequest,
     ]);
@@ -400,8 +401,39 @@ ${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = 
     };
   }
 
+  const statement = db.prepare(
+    `WITH ranked AS (
+       SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
+         c.expires_at, v.display_name AS visitor_name,
+         SUM(CASE WHEN c.status = 'open' THEN 1 ELSE 0 END) OVER () AS __overview_open,
+         SUM(CASE WHEN c.status = 'pending' THEN 1 ELSE 0 END) OVER () AS __overview_pending,
+         SUM(CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END) OVER () AS __overview_closed,
+         CASE
+           WHEN c.status = 'closed' THEN ROW_NUMBER() OVER (
+             PARTITION BY c.status
+             ORDER BY c.last_message_at DESC, c.id DESC
+           )
+           ELSE 0
+         END AS __closed_rank,
+         (SELECT body FROM messages m WHERE m.conversation_id = c.id
+          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.assigned_agent = ?1
+         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+     )
+     SELECT * FROM ranked
+     WHERE status <> 'closed' OR __closed_rank <= ?2
+     ORDER BY CASE WHEN status = 'closed' THEN 1 ELSE 0 END,
+       last_message_at DESC, id DESC`,
+  );
   const [result, quotaOverview, transferTargets] = await Promise.all([
-    statement.all<InboxConversationRow>(),
+    statement
+      .bind(agent.id, CLOSED_INBOX_PREVIEW_LIMIT)
+      .all<InboxConversationRow>(),
     loadAgentQuotaOverview(db, agent.id),
     transferTargetsRequest,
   ]);
@@ -412,10 +444,13 @@ ${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = 
     pending: Number(firstConversation?.__overview_pending ?? 0),
     closed: Number(firstConversation?.__overview_closed ?? 0),
   };
+  let closedLoaded = 0;
   for (const conversation of conversations) {
+    if (conversation.status === 'closed') closedLoaded += 1;
     delete conversation.__overview_open;
     delete conversation.__overview_pending;
     delete conversation.__overview_closed;
+    delete conversation.__closed_rank;
   }
   return {
     conversations,
@@ -426,6 +461,10 @@ ${overviewColumns}       (SELECT body FROM messages m WHERE m.conversation_id = 
     },
     transferTargets,
     availability: agent.status === 'busy' ? 'busy' : 'online',
+    history: {
+      closedLoaded,
+      closedHasMore: counts.closed > closedLoaded,
+    },
   };
 }
 
