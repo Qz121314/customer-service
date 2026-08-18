@@ -40,14 +40,17 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
-          import textwrap
 
           workflow = Path('.github/workflows/patch-agent-commercial-closure.yml').read_text()
           marker = '      - name: Patch agent workspace\n'
           start = workflow.index(marker)
           run_start = workflow.index('        run: |\n', start) + len('        run: |\n')
           end = workflow.index('      - name: Format changed files\n', run_start)
-          script = textwrap.dedent(workflow[run_start:end])
+          raw = workflow[run_start:end]
+          script = '\n'.join(
+              line[10:] if line.startswith('          ') else line
+              for line in raw.splitlines()
+          ) + '\n'
           Path('/tmp/agent-commercial-patch.py').write_text(script)
 
       - name: Run exact workspace patch
