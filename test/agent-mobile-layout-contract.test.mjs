@@ -12,7 +12,11 @@ test('agent route isolates its styles and mobile UI has one owner', () => {
   const workspace = source('../src/dashboard/agent-workspace.css');
   const mobile = source('../src/dashboard/agent-mobile.css');
 
-  assert.ok(main.includes("const isAgentRoute = window.location.pathname.startsWith('/agent')"));
+  assert.ok(
+    main.includes(
+      "const isAgentRoute = window.location.pathname.startsWith('/agent')",
+    ),
+  );
   assert.ok(main.includes("import('./agent-foundation.css')"));
   assert.ok(main.includes("import('./agent-workspace.css')"));
   assert.ok(main.includes("import('./agent-desktop.css')"));
