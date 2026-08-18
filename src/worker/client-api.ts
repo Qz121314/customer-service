@@ -3,6 +3,10 @@ import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
 import { assignConversationAgent } from './routing';
 import {
+  broadcastAssignments,
+  type AssignmentVisitorMessage,
+} from './assignment-broadcast';
+import {
   consumeConversationCreationQuota,
   passesBurstLimit,
   requestSourceHash,
@@ -198,9 +202,13 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   const visitorId = normalizeVisitorId(body?.visitorId);
   const sourceHandoffId = normalizeHandoffId(body?.sourceHandoffId);
-  const clientMessageId = normalizeId(body?.clientMessageId, 160);
-  const message = body?.message?.trim();
   const product = normalizeProduct(body?.product);
+  const messageFieldPresent = body?.message !== undefined;
+  const clientMessageFieldPresent = body?.clientMessageId !== undefined;
+  const initialMessage =
+    typeof body?.message === 'string' ? body.message.trim() : null;
+  const clientMessageId = normalizeId(body?.clientMessageId, 160);
+  const hasInitialMessage = Boolean(initialMessage);
 
   if (!visitorId)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
@@ -212,16 +220,19 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Source handoff ID is required and must be a UUID v4.',
     );
   }
-  if (!clientMessageId) {
-    return error(
-      c,
-      400,
-      'INVALID_CLIENT_MESSAGE_ID',
-      'Client message ID is invalid.',
-    );
+  if (messageFieldPresent || clientMessageFieldPresent) {
+    if (!hasInitialMessage || !validMessage(initialMessage ?? undefined)) {
+      return error(c, 400, 'INVALID_MESSAGE', 'Message is invalid.');
+    }
+    if (!clientMessageId) {
+      return error(
+        c,
+        400,
+        'INVALID_CLIENT_MESSAGE_ID',
+        'Client message ID is invalid.',
+      );
+    }
   }
-  if (!validMessage(message))
-    return error(c, 400, 'INVALID_MESSAGE', 'Message is invalid.');
   if (!product)
     return error(c, 400, 'INVALID_PRODUCT', 'Product context is invalid.');
 
@@ -229,6 +240,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
+  // Start idempotency is anchored by sourceHandoffId. The optional message match
+  // keeps the legacy create-with-message protocol retry-safe without making a
+  // visitor message mandatory for the new CTA-driven conversation start.
   const replay = await c.env.DB.prepare(
     `WITH message_match AS (
        SELECT m.conversation_id
@@ -369,31 +383,51 @@ clientApi.post('/client/v1/conversations', async (c) => {
     )
     .run();
 
-  const { message: createdMessage } = await persistClientMessage(c.env.DB, {
-    conversationId,
-    senderType: 'visitor',
-    senderId: visitor.id,
-    body: message!,
-    clientMessageId,
-  });
+  let createdMessage: MessageRow | null = null;
+  if (hasInitialMessage && clientMessageId && initialMessage) {
+    const persisted = await persistClientMessage(c.env.DB, {
+      conversationId,
+      senderType: 'visitor',
+      senderId: visitor.id,
+      body: initialMessage,
+      clientMessageId,
+    });
+    createdMessage = persisted.message;
+  }
 
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
+  let conversation: ConversationRow | null = null;
 
-  await broadcastRoom(c.env, conversationId, {
-    type: 'message',
-    message: adminMessage(createdMessage),
-  });
-  const conversation = await broadcastClientConversationEvent(
-    c.env,
-    conversationId,
-    'message.created',
-    {
-      message: clientMessage(createdMessage),
-    },
-    { includeOverview: Boolean(assignment) },
-  );
+  if (assignment?.newlyAssigned && assignment.assignedAt) {
+    const snapshots = await broadcastAssignments(
+      c.env,
+      assignment.id,
+      [conversationId],
+      assignment.assignedAt,
+      createdMessage ? [assignmentVisitorMessage(createdMessage)] : [],
+    );
+    conversation = snapshots.find((item) => item.id === conversationId) ?? null;
+  } else if (createdMessage) {
+    await broadcastRoom(c.env, conversationId, {
+      type: 'message',
+      message: adminMessage(createdMessage),
+    });
+    conversation = await broadcastClientConversationEvent(
+      c.env,
+      conversationId,
+      'message.created',
+      { message: clientMessage(createdMessage) },
+    );
+  } else {
+    conversation = await ownedConversation(
+      c.env.DB,
+      conversationId,
+      site.id,
+      visitorId,
+    );
+  }
+
   if (!conversation) throw new Error('Conversation persistence failed');
-
   return c.json(
     {
       conversation: await conversationDetail(c.env.DB, conversation, 30, null),
@@ -462,23 +496,29 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     .bind(conversation.visitor_id)
     .run();
 
-  let assignmentChanged = false;
-  if (!conversation.assigned_agent) {
-    assignmentChanged = Boolean(
-      await assignConversationAgent(c.env.DB, conversation.id),
+  const assignment = !conversation.assigned_agent
+    ? await assignConversationAgent(c.env.DB, conversation.id)
+    : null;
+  if (assignment?.newlyAssigned && assignment.assignedAt) {
+    await broadcastAssignments(
+      c.env,
+      assignment.id,
+      [conversation.id],
+      assignment.assignedAt,
+      [assignmentVisitorMessage(createdMessage)],
+    );
+  } else {
+    await broadcastRoom(c.env, conversation.id, {
+      type: 'message',
+      message: adminMessage(createdMessage),
+    });
+    await broadcastClientConversationEvent(
+      c.env,
+      conversation.id,
+      'message.created',
+      { message: clientMessage(createdMessage) },
     );
   }
-  await broadcastRoom(c.env, conversation.id, {
-    type: 'message',
-    message: adminMessage(createdMessage),
-  });
-  await broadcastClientConversationEvent(
-    c.env,
-    conversation.id,
-    'message.created',
-    { message: clientMessage(createdMessage) },
-    { includeOverview: assignmentChanged },
-  );
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
@@ -1136,6 +1176,25 @@ async function persistClientMessage(
     created_at: createdAt,
   };
   return { message, duplicate: false };
+}
+
+function assignmentVisitorMessage(
+  message: MessageRow,
+): AssignmentVisitorMessage {
+  if (message.sender_type !== 'visitor' || !message.sender_id) {
+    throw new Error('Assignment visitor message invariant failed');
+  }
+  return {
+    id: message.id,
+    conversation_id: message.conversation_id,
+    sender_type: 'visitor',
+    sender_id: message.sender_id,
+    body: message.body,
+    client_message_id: message.client_message_id,
+    read_by_visitor_at: null,
+    read_by_agent_at: null,
+    created_at: message.created_at,
+  };
 }
 
 function clientMessage(message: MessageRow) {

@@ -1,4 +1,4 @@
-import { broadcastWaitingAssignments } from './assignment-broadcast';
+import { broadcastAssignments } from './assignment-broadcast';
 import { routingBusinessDate } from './routing';
 
 type WaitingAssignmentEnv = {
@@ -161,6 +161,6 @@ export async function assignWaitingConversations(
     .bind(now, agentId)
     .run();
 
-  await broadcastWaitingAssignments(env, agentId, assignedConversationIds);
+  await broadcastAssignments(env, agentId, assignedConversationIds, now);
   return assignedConversationIds;
 }
