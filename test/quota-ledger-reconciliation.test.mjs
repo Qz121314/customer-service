@@ -5,7 +5,10 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 const migration = await readFile(
-  new URL('../migrations/0034_agent_quota_ledger_baselines.sql', import.meta.url),
+  new URL(
+    '../migrations/0034_agent_quota_ledger_baselines.sql',
+    import.meta.url,
+  ),
   'utf8',
 );
 
