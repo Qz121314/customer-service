@@ -24,7 +24,10 @@ async function createDatabase() {
     );
   `);
   const migration = await readFile(
-    new URL('../migrations/0036_conversation_lifecycle_guards.sql', import.meta.url),
+    new URL(
+      '../migrations/0036_conversation_lifecycle_guards.sql',
+      import.meta.url,
+    ),
     'utf8',
   );
   database.exec(migration);
