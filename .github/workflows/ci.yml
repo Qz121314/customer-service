@@ -35,6 +35,34 @@ jobs:
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
+      - name: Format src diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check src
+
+      - name: Format test diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check test
+
+      - name: Format migrations diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check migrations
+
+      - name: Format scripts diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check scripts
+
+      - name: Format docs diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check docs
+
+      - name: Format root diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check "*.{json,jsonc,yaml,yml,mjs,md}"
+
+      - name: Format github diagnostic
+        continue-on-error: true
+        run: pnpm exec prettier --check .github
+
       - name: Format
         run: pnpm format
 
