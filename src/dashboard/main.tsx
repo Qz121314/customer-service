@@ -138,6 +138,10 @@ function installAgentHistoryNavigation() {
   const root = document.getElementById('root');
   if (!root) return;
 
+  // Mobile CSS keeps vertical overscroll contained; horizontal overscroll must
+  // stay available so the browser/OS edge-back gesture can consume History.
+  document.body.style.overscrollBehaviorX = 'auto';
+
   const staleMarker = readAgentThreadHistoryMarker();
   if (staleMarker) {
     const state = {
