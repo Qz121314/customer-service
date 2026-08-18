@@ -37,7 +37,9 @@ export function rememberAgentConversationHistory(
   conversationId: string,
   threadAlreadyOpen: boolean,
 ) {
-  if (readAgentThreadHistoryMarker()?.conversationId === conversationId) return;
+  if (readAgentThreadHistoryMarker()?.conversationId === conversationId) {
+    return;
+  }
   const nextState = {
     ...historyStateRecord(),
     [AGENT_HISTORY_KEY]: { view: 'thread', conversationId },
