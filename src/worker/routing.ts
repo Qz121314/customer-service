@@ -3,6 +3,11 @@ export type AgentAssignment = {
   name: string;
 };
 
+export type AgentAssignmentResult = AgentAssignment & {
+  newlyAssigned: boolean;
+  assignedAt: string | null;
+};
+
 type AgentAssignmentRow = AgentAssignment & {
   site_id: string;
 };
@@ -35,12 +40,16 @@ export function routingBusinessDate(now = new Date()): string {
  * Daily and paid traffic limits apply only before the conversation has its
  * immutable traffic receipt. Requeues of already-counted traffic can recover
  * without consuming or requiring another unit of new-traffic quota.
+ *
+ * The result exposes whether this call performed the assignment and the exact
+ * assigned_at timestamp. Downstream lifecycle broadcasting can therefore mark a
+ * genuine first reception without inferring it from UI state or unread counts.
  */
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
   excludedAgentId: string | null = null,
-): Promise<AgentAssignment | null> {
+): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
   const assignment = await db
@@ -164,21 +173,33 @@ export async function assignConversationAgent(
     .bind(now, assignment.id, assignment.site_id)
     .run();
 
-  return { id: assignment.id, name: assignment.name };
+  return {
+    id: assignment.id,
+    name: assignment.name,
+    newlyAssigned: true,
+    assignedAt: now,
+  };
 }
 
 async function assignedAgent(
   db: D1Database,
   conversationId: string,
-): Promise<AgentAssignment | null> {
-  return db
+): Promise<AgentAssignmentResult | null> {
+  const assignment = await db
     .prepare(
-      `SELECT a.id, a.name
+      `SELECT a.id, a.name, c.assigned_at
        FROM conversations c
        JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
        WHERE c.id = ?1
        LIMIT 1`,
     )
     .bind(conversationId)
-    .first<AgentAssignment>();
+    .first<AgentAssignment & { assigned_at: string | null }>();
+  if (!assignment) return null;
+  return {
+    id: assignment.id,
+    name: assignment.name,
+    newlyAssigned: false,
+    assignedAt: assignment.assigned_at,
+  };
 }
