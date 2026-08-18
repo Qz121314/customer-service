@@ -15,6 +15,7 @@ import './agent-mobile.css';
 import './agent-composer-status.css';
 import './agent-avatar.css';
 import './agent-mobile-inbox.css';
+import './agent-mobile-thread.css';
 
 if (
   window.location.pathname.startsWith('/agent') &&
