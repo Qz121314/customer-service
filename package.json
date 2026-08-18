@@ -20,7 +20,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply customer-service-db --remote",
     "lint": "eslint .",
-    "format": "cp src/worker/agent-api.ts /tmp/agent-api.before.ts && cp test/agent-inbox-active-boundary.test.mjs /tmp/agent-inbox-active-boundary.before.mjs && prettier --write src/worker/agent-api.ts test/agent-inbox-active-boundary.test.mjs >/dev/null && diff -u /tmp/agent-api.before.ts src/worker/agent-api.ts || true; diff -u /tmp/agent-inbox-active-boundary.before.mjs test/agent-inbox-active-boundary.test.mjs || true; exit 1",
+    "format": "prettier --check .",
     "format:write": "prettier --write .",
     "preflight": "pnpm format && pnpm lint && pnpm typecheck",
     "verify": "pnpm preflight && pnpm db:migrate:local && pnpm test && pnpm build && pnpm cf:check",
