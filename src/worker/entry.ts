@@ -4,6 +4,7 @@ import { clientApi } from './client-api';
 import { integrationApi } from './integration-api';
 import { adminConfigApi } from './admin-config-api';
 import { agentApi } from './agent-api';
+import { agentInboxApi } from './agent-inbox-api';
 import { agentAvatarApi } from './agent-avatar-api';
 import { mediaApi } from './media-api';
 import { pushApi } from './push-api';
@@ -117,6 +118,7 @@ app.use('/api/agent/*', async (c, next) => {
 app.route('/', adminConfigApi);
 app.route('/', mediaApi);
 app.route('/', agentAvatarApi);
+app.route('/', agentInboxApi);
 app.route('/', agentApi);
 app.route('/', agentPushApi);
 app.route('/', pushApi);
