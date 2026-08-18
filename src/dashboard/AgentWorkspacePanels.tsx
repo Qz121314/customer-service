@@ -11,6 +11,48 @@ import { Metric } from './dashboard-ui';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentActionToolbar } from './AgentWorkspaceChrome';
 
+const AGENT_HISTORY_KEY = '__customerServiceAgentView';
+
+function conversationHistoryMarker(
+  state: unknown,
+): { view: 'thread'; conversationId: string } | null {
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+  const marker = (state as Record<string, unknown>)[AGENT_HISTORY_KEY];
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return null;
+  const record = marker as Record<string, unknown>;
+  if (
+    record.view !== 'thread' ||
+    typeof record.conversationId !== 'string' ||
+    !record.conversationId
+  ) {
+    return null;
+  }
+  return { view: 'thread', conversationId: record.conversationId };
+}
+
+function rememberConversationHistory(
+  conversationId: string,
+  threadAlreadyOpen: boolean,
+) {
+  const currentState = window.history.state;
+  if (conversationHistoryMarker(currentState)?.conversationId === conversationId) {
+    return;
+  }
+  const baseState =
+    currentState && typeof currentState === 'object' && !Array.isArray(currentState)
+      ? (currentState as Record<string, unknown>)
+      : {};
+  const nextState = {
+    ...baseState,
+    [AGENT_HISTORY_KEY]: { view: 'thread', conversationId },
+  };
+  if (threadAlreadyOpen) {
+    window.history.replaceState(nextState, '', window.location.href);
+    return;
+  }
+  window.history.pushState(nextState, '', window.location.href);
+}
+
 export function AgentSidebar({
   identity,
   availability,
@@ -223,7 +265,11 @@ export function AgentInboxPane({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              onClick={() => onSelectConversation(conversation.id)}
+              data-conversation-id={conversation.id}
+              onClick={() => {
+                rememberConversationHistory(conversation.id, Boolean(selectedId));
+                onSelectConversation(conversation.id);
+              }}
             >
               <span className="avatar small">
                 {initials(conversation.visitor_name || '访客')}
