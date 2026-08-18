@@ -37,7 +37,9 @@ agentPushApi.post('/api/agent/push/subscriptions', async (c) => {
   const expirationTime = normalizeExpirationTime(
     body?.subscription?.expirationTime,
   );
-  if (!endpoint) return c.json({ error: 'INVALID_PUSH_SUBSCRIPTION' }, 400);
+  if (!endpoint || expirationTime === undefined) {
+    return c.json({ error: 'INVALID_PUSH_SUBSCRIPTION' }, 400);
+  }
 
   await c.env.DB.prepare(
     `INSERT INTO agent_push_subscriptions
@@ -82,14 +84,17 @@ function normalizePushEndpoint(value: unknown): string | null {
   }
 }
 
-function normalizeExpirationTime(value: unknown): number | null {
+function normalizeExpirationTime(
+  value: unknown,
+): number | null | undefined {
   if (value === null || value === undefined) return null;
   if (
     typeof value !== 'number' ||
     !Number.isFinite(value) ||
     value <= Date.now()
-  )
-    return null;
+  ) {
+    return undefined;
+  }
   return Math.floor(value);
 }
 
