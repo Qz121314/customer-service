@@ -431,7 +431,9 @@ async function loadAgentInbox(
        last_message_at DESC, id DESC`,
   );
   const [result, quotaOverview, transferTargets] = await Promise.all([
-    statement.bind(agent.id, CLOSED_INBOX_PREVIEW_LIMIT).all<InboxConversationRow>(),
+    statement
+      .bind(agent.id, CLOSED_INBOX_PREVIEW_LIMIT)
+      .all<InboxConversationRow>(),
     loadAgentQuotaOverview(db, agent.id),
     transferTargetsRequest,
   ]);
