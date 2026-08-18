@@ -12,7 +12,7 @@ test('agent desktop workspace stays compact and preserves readable contrast', as
     ),
   ]);
 
-  assert.match(main, /import '\.\/agent-desktop\.css';/u);
+  assert.match(main, /import\('\.\/agent-desktop\.css'\)/u);
   assert.doesNotMatch(
     main,
     /agent-desktop-compact|agent-desktop-thread-polish/u,
