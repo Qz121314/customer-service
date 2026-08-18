@@ -174,9 +174,7 @@ function normalizePushEndpoint(value: unknown): string | null {
   }
 }
 
-function normalizeExpirationTime(
-  value: unknown,
-): number | null | undefined {
+function normalizeExpirationTime(value: unknown): number | null | undefined {
   if (value === null || value === undefined) return null;
   if (
     typeof value !== 'number' ||

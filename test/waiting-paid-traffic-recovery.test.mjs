@@ -138,7 +138,9 @@ test('already-paid waiting conversation recovers while fresh traffic stays block
   assert.deepEqual(first, ['conversation-0']);
   assert.equal(
     database
-      .prepare(`SELECT traffic_quota_used AS used FROM agents WHERE id = 'paid-agent'`)
+      .prepare(
+        `SELECT traffic_quota_used AS used FROM agents WHERE id = 'paid-agent'`,
+      )
       .get().used,
     1,
   );
@@ -167,7 +169,9 @@ test('already-paid waiting conversation recovers while fresh traffic stays block
   assert.equal(db.counter.count, 4);
   assert.equal(
     database
-      .prepare(`SELECT traffic_quota_used AS used FROM agents WHERE id = 'paid-agent'`)
+      .prepare(
+        `SELECT traffic_quota_used AS used FROM agents WHERE id = 'paid-agent'`,
+      )
       .get().used,
     1,
     'recovery must not consume another paid unit',
