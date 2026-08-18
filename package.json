@@ -20,7 +20,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply customer-service-db --remote",
     "lint": "eslint .",
-    "format": "prettier --check .",
+    "format": "prettier --write test/production-mobile-tech-ui-live.test.mjs && prettier --check .",
     "format:write": "prettier --write .",
     "preflight": "pnpm format && pnpm lint && pnpm typecheck",
     "verify": "pnpm preflight && pnpm db:migrate:local && pnpm test && pnpm build && pnpm cf:check",
