@@ -1,27 +1,37 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import './styles.css';
-import './product-assignment.css';
-import './chat-dialogue.css';
-import './media-view.css';
-import './agent-statistics.css';
-import './cloud-service-ui.css';
-import './ui-polish.css';
-import './agent-editor.css';
-import './agent-workspace.css';
-import './agent-desktop.css';
-import './agent-mobile.css';
-import './agent-composer-status.css';
-import './agent-avatar.css';
-import './agent-mobile-inbox.css';
-import './agent-mobile-thread.css';
-import './agent-mobile-tech-controls.css';
 
-if (
-  window.location.pathname.startsWith('/agent') &&
-  'serviceWorker' in navigator
-) {
+const isAgentRoute = window.location.pathname.startsWith('/agent');
+
+async function loadRouteStyles() {
+  if (isAgentRoute) {
+    await Promise.all([
+      import('./agent-foundation.css'),
+      import('./media-view.css'),
+      import('./agent-statistics.css'),
+      import('./agent-avatar.css'),
+      import('./agent-workspace.css'),
+      import('./agent-desktop.css'),
+      import('./agent-mobile.css'),
+    ]);
+    return;
+  }
+
+  await Promise.all([
+    import('./styles.css'),
+    import('./product-assignment.css'),
+    import('./chat-dialogue.css'),
+    import('./media-view.css'),
+    import('./agent-statistics.css'),
+    import('./cloud-service-ui.css'),
+    import('./ui-polish.css'),
+    import('./agent-editor.css'),
+    import('./agent-avatar.css'),
+  ]);
+}
+
+if (isAgentRoute && 'serviceWorker' in navigator) {
   window.addEventListener(
     'load',
     () => {
@@ -33,8 +43,13 @@ if (
   );
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+async function bootstrap() {
+  await loadRouteStyles();
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+}
+
+void bootstrap();
