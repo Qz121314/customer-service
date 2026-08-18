@@ -145,7 +145,11 @@ p {
   place-items: center;
   padding: 24px;
   background:
-    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(
+      circle at 20% 10%,
+      rgba(255, 255, 255, 0.96),
+      transparent 34%
+    ),
     #f1f3f6;
 }
 
