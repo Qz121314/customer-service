@@ -1,0 +1,250 @@
+import type {
+  AgentAvailability,
+  AgentIdentity,
+  Conversation,
+  TransferTarget,
+} from './api';
+import type { AgentNotificationState } from './agent-push';
+import { AgentAvatarControl } from './AgentAvatarControl';
+import { initials } from './dashboard-runtime';
+import { ConversationExpiryCountdown, UiIcon } from './dashboard-ui';
+
+export function AgentActionToolbar({
+  notificationState,
+  notificationBusy,
+  soundEnabled,
+  onToggleNotifications,
+  onToggleSound,
+  onOpenStatistics,
+  onLogout,
+}: {
+  notificationState: AgentNotificationState;
+  notificationBusy: boolean;
+  soundEnabled: boolean;
+  onToggleNotifications: () => void;
+  onToggleSound: () => void;
+  onOpenStatistics: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <div className="workspace-sidebar-actions" aria-label="客服工具">
+      <button
+        type="button"
+        className={`ghost-button full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
+        aria-label={
+          notificationState === 'enabled'
+            ? '关闭新消息通知'
+            : '开启新消息通知'
+        }
+        title={
+          notificationState === 'unsupported'
+            ? '当前浏览器不支持后台通知'
+            : notificationState === 'blocked'
+              ? '通知已被浏览器阻止'
+              : notificationState === 'enabled'
+                ? '新消息通知已开启'
+                : '开启新消息通知'
+        }
+        disabled={notificationBusy || notificationState === 'unsupported'}
+        onClick={onToggleNotifications}
+      >
+        <UiIcon name="notification" />
+        <span>
+          {notificationBusy
+            ? '正在设置…'
+            : notificationState === 'enabled'
+              ? '新消息通知已开启'
+              : notificationState === 'blocked'
+                ? '通知已被阻止'
+                : '开启新消息通知'}
+        </span>
+      </button>
+      <button
+        type="button"
+        className={`ghost-button full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
+        aria-pressed={soundEnabled}
+        aria-label={soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'}
+        title={soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'}
+        onClick={onToggleSound}
+      >
+        <UiIcon name="sound" />
+        <span>{soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}</span>
+      </button>
+      <button
+        type="button"
+        className="ghost-button full workspace-statistics-button"
+        aria-label="打开接待流量"
+        title="接待流量"
+        onClick={onOpenStatistics}
+      >
+        <UiIcon name="statistics" />
+        <span>接待流量</span>
+      </button>
+      <button
+        type="button"
+        className="ghost-button full workspace-logout-button"
+        aria-label="退出客服账号"
+        title="退出客服账号"
+        onClick={onLogout}
+      >
+        <UiIcon name="logout" />
+        <span>退出客服账号</span>
+      </button>
+    </div>
+  );
+}
+
+export function ConversationCommandControls({
+  status,
+  transferTargets,
+  transferring,
+  onChangeStatus,
+  onTransfer,
+}: {
+  status: Conversation['status'];
+  transferTargets: TransferTarget[];
+  transferring: boolean;
+  onChangeStatus: (status: Conversation['status']) => void;
+  onTransfer: (targetAgentId: string | null) => void;
+}) {
+  return (
+    <div className="thread-actions">
+      <select
+        value={String(status)}
+        onChange={(event) =>
+          onChangeStatus(event.target.value as Conversation['status'])
+        }
+        aria-label="会话状态"
+      >
+        <option value="open">新会话</option>
+        <option value="pending">处理中</option>
+        <option value="closed">已关闭</option>
+      </select>
+      {status !== 'closed' && (
+        <details className="transfer-menu">
+          <summary aria-label="转接会话">转接</summary>
+          <div className="transfer-menu-panel">
+            <header>
+              <strong>转接会话</strong>
+              <span>交给其他在线客服，或重新进入自动分流。</span>
+            </header>
+            <button
+              type="button"
+              disabled={transferring}
+              onClick={() => onTransfer(null)}
+            >
+              <span>重新排队</span>
+              <small>排除当前客服后自动分流</small>
+            </button>
+            {transferTargets.map((target) => (
+              <button
+                type="button"
+                key={target.id}
+                disabled={transferring}
+                onClick={() => onTransfer(target.id)}
+              >
+                <span>{target.name}</span>
+                <small>
+                  处理中 {target.active_count}
+                  {target.max_active_conversations > 0
+                    ? ` / ${target.max_active_conversations}`
+                    : ''}
+                </small>
+              </button>
+            ))}
+            {transferTargets.length === 0 && (
+              <p>当前没有其他可接收会话的在线客服。</p>
+            )}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+}
+
+export function AgentMobileAppBar({
+  identity,
+  availability,
+  notificationState,
+  notificationBusy,
+  soundEnabled,
+  conversation,
+  transferTargets,
+  transferring,
+  onBack,
+  onToggleNotifications,
+  onToggleSound,
+  onOpenStatistics,
+  onLogout,
+  onChangeStatus,
+  onTransfer,
+}: {
+  identity: AgentIdentity;
+  availability: AgentAvailability;
+  notificationState: AgentNotificationState;
+  notificationBusy: boolean;
+  soundEnabled: boolean;
+  conversation: Conversation | null;
+  transferTargets: TransferTarget[];
+  transferring: boolean;
+  onBack: () => void;
+  onToggleNotifications: () => void;
+  onToggleSound: () => void;
+  onOpenStatistics: () => void;
+  onLogout: () => void;
+  onChangeStatus: (status: Conversation['status']) => void;
+  onTransfer: (targetAgentId: string | null) => void;
+}) {
+  return (
+    <header className="mobile-agent-bar">
+      {conversation ? (
+        <>
+          <button
+            type="button"
+            className="mobile-agent-back"
+            aria-label="返回会话列表"
+            onClick={onBack}
+          >
+            <span aria-hidden="true" />
+          </button>
+          <span className="mobile-agent-visitor-avatar" aria-hidden="true">
+            {initials(conversation.visitor_name || '访客')}
+          </span>
+          <div className="mobile-agent-title">
+            <strong>{conversation.visitor_name || '访客'}</strong>
+            <ConversationExpiryCountdown expiresAt={conversation.expires_at} />
+          </div>
+          <ConversationCommandControls
+            status={conversation.status}
+            transferTargets={transferTargets}
+            transferring={transferring}
+            onChangeStatus={onChangeStatus}
+            onTransfer={onTransfer}
+          />
+        </>
+      ) : (
+        <>
+          <div className="mobile-agent-profile">
+            <AgentAvatarControl
+              agentId={identity.id}
+              agentName={identity.name}
+            />
+            <div>
+              <strong>{identity.name}</strong>
+            </div>
+            <i className={`presence ${availability}`} />
+          </div>
+          <AgentActionToolbar
+            notificationState={notificationState}
+            notificationBusy={notificationBusy}
+            soundEnabled={soundEnabled}
+            onToggleNotifications={onToggleNotifications}
+            onToggleSound={onToggleSound}
+            onOpenStatistics={onOpenStatistics}
+            onLogout={onLogout}
+          />
+        </>
+      )}
+    </header>
+  );
+}
