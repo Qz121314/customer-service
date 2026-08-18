@@ -3,6 +3,7 @@ import { coreApp, ConversationRoom } from './core';
 import { clientApi } from './client-api';
 import { integrationApi } from './integration-api';
 import { adminConfigApi } from './admin-config-api';
+import { adminQuotaApi } from './admin-quota-api';
 import { agentApi } from './agent-api';
 import { agentAvatarApi } from './agent-avatar-api';
 import { mediaApi } from './media-api';
@@ -114,6 +115,7 @@ app.use('/api/agent/*', async (c, next) => {
   }
 });
 
+app.route('/', adminQuotaApi);
 app.route('/', adminConfigApi);
 app.route('/', mediaApi);
 app.route('/', agentAvatarApi);
