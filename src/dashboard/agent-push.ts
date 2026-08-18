@@ -12,16 +12,16 @@ type PushConfig = {
 
 export function hasAgentNotificationOpenIntent(): boolean {
   return (
-    new URLSearchParams(window.location.search).get(AGENT_NOTIFICATION_PARAM) ===
-    AGENT_NOTIFICATION_TARGET
+    new URLSearchParams(window.location.search).get(
+      AGENT_NOTIFICATION_PARAM,
+    ) === AGENT_NOTIFICATION_TARGET
   );
 }
 
 export function clearAgentNotificationOpenIntent(): void {
   const url = new URL(window.location.href);
   if (
-    url.searchParams.get(AGENT_NOTIFICATION_PARAM) !==
-    AGENT_NOTIFICATION_TARGET
+    url.searchParams.get(AGENT_NOTIFICATION_PARAM) !== AGENT_NOTIFICATION_TARGET
   ) {
     return;
   }
