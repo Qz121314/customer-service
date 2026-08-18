@@ -12,10 +12,15 @@ test('mobile agent inbox uses a stable app-style shell', () => {
   const entry = source('../src/dashboard/main.tsx');
 
   assert.ok(entry.includes("import './agent-mobile-inbox.css';"));
-  assert.ok(entry.indexOf("import './agent-mobile-inbox.css';") > entry.indexOf("import './agent-avatar.css';"));
+  assert.ok(
+    entry.indexOf("import './agent-mobile-inbox.css';") >
+      entry.indexOf("import './agent-avatar.css';"),
+  );
 
   assert.ok(css.includes('height: 60px;'));
-  assert.ok(css.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'));
+  assert.ok(
+    css.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
+  );
   assert.ok(css.includes('border-radius: 15px;'));
   assert.ok(css.includes('font-variant-numeric: tabular-nums;'));
   assert.ok(css.includes('.conversation-head-status'));
