@@ -16,6 +16,7 @@ import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { Metric } from './dashboard-ui';
 import { AgentAvatarControl } from './AgentAvatarControl';
+import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
 import { AgentActionToolbar } from './AgentWorkspaceChrome';
 
 export function AgentSidebar({
@@ -39,30 +40,39 @@ export function AgentSidebar({
   onOpenStatistics: () => void;
   onLogout: () => void;
 }) {
+  const [autoReplyOpen, setAutoReplyOpen] = useState(false);
+
   return (
-    <aside className="workspace-sidebar">
-      <div className="workspace-brand-lockup">
-        <div className="workspace-brand">CS</div>
-        <span>坐席中心</span>
-      </div>
-      <div className="agent-profile">
-        <AgentAvatarControl agentId={identity.id} agentName={identity.name} />
-        <div>
-          <strong>{identity.name}</strong>
-          <small>@{identity.username}</small>
+    <>
+      <aside className="workspace-sidebar">
+        <div className="workspace-brand-lockup">
+          <div className="workspace-brand">CS</div>
+          <span>坐席中心</span>
         </div>
-        <i className={`presence ${availability}`} />
-      </div>
-      <AgentActionToolbar
-        notificationState={notificationState}
-        notificationBusy={notificationBusy}
-        soundEnabled={soundEnabled}
-        onToggleNotifications={onToggleNotifications}
-        onToggleSound={onToggleSound}
-        onOpenStatistics={onOpenStatistics}
-        onLogout={onLogout}
+        <div className="agent-profile">
+          <AgentAvatarControl agentId={identity.id} agentName={identity.name} />
+          <div>
+            <strong>{identity.name}</strong>
+            <small>@{identity.username}</small>
+          </div>
+          <i className={`presence ${availability}`} />
+        </div>
+        <AgentActionToolbar
+          notificationState={notificationState}
+          notificationBusy={notificationBusy}
+          soundEnabled={soundEnabled}
+          onToggleNotifications={onToggleNotifications}
+          onToggleSound={onToggleSound}
+          onOpenAutoReply={() => setAutoReplyOpen(true)}
+          onOpenStatistics={onOpenStatistics}
+          onLogout={onLogout}
+        />
+      </aside>
+      <AgentAutoReplySettingsModal
+        open={autoReplyOpen}
+        onClose={() => setAutoReplyOpen(false)}
       />
-    </aside>
+    </>
   );
 }
 
