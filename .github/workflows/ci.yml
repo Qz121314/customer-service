@@ -54,7 +54,50 @@ jobs:
           Path('/tmp/agent-commercial-patch.py').write_text(script)
 
       - name: Run exact workspace patch
-        run: python /tmp/agent-commercial-patch.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python /tmp/agent-commercial-patch.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/dashboard/agent-mobile.css')
+          text = path.read_text()
+          old = """  .thread-actions {
+            grid-template-columns: 64px 34px;
+          }
+
+          .thread-head select {
+            width: 64px;
+            min-width: 64px;
+            padding-right: 20px;
+            padding-left: 8px;
+            background-position: right 6px center;
+            font-size: 9px;
+          }
+          """
+          new = """  .thread-actions {
+            grid-template-columns: auto auto 34px;
+          }
+
+          .thread-status,
+          .thread-status-action {
+            padding-inline: 6px;
+            font-size: 8px;
+          }
+
+          .thread-status {
+            min-width: 44px;
+          }
+
+          .thread-status-action {
+            min-width: 50px;
+          }
+          """
+          if text.count(old) != 1:
+              raise SystemExit(f'narrow mobile status block count={text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
 
       - name: Format changed files
         run: >-
