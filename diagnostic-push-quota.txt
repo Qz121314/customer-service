@@ -1,80 +1,15 @@
 exit=1
   ...
-# Subtest: current application protocols are not blocked
-ok 88 - current application protocols are not blocked
-  ---
-  duration_ms: 0.252281
-  type: 'test'
-  ...
 # Subtest: agent push keeps expired-subscription cleanup off the message hot path
-not ok 89 - agent push keeps expired-subscription cleanup off the message hot path
+ok 89 - agent push keeps expired-subscription cleanup off the message hot path
   ---
-  duration_ms: 2.482322
+  duration_ms: 1.190528
   type: 'test'
-  location: '/home/runner/work/customer-service/customer-service/test/push-media-hot-path-cost.test.mjs:13:1'
-  failureType: 'testCodeFailure'
-  error: |-
-    The input did not match the regular expression /subscription\.expiration_time > \?2/u. Input:
-    
-    'export async function sendAgentPushForConversation(\n' +
-      '  env: AgentPushBindings,\n' +
-      '  conversationId: string,\n' +
-      '): Promise<void> {\n' +
-      '  const now = Date.now();\n' +
-      '  const subscriptions = await env.DB.prepare(\n' +
-      '    `SELECT\n' +
-      '       subscription.endpoint,\n' +
-      '       subscription.expiration_time,\n' +
-      '       vapid.public_key,\n' +
-      '       vapid.private_jwk,\n' +
-      '       vapid.subject\n' +
-      '     FROM conversations conversation\n' +
-      '     JOIN agent_push_subscriptions subscription\n' +
-      '       ON subscription.agent_id = conversation.assigned_agent\n' +
-      '     JOIN visitor_push_vapid vapid\n' +
---
-      '  }\n' +
-      '\n' +
-      '  if (staleEndpoints.size > 0) {\n' +
-      '    await deleteAgentPushSubscriptions(env.DB, [...staleEndpoints]);\n' +
-      '  }\n' +
-      '}\n' +
-      '\n'
-    
-  code: 'ERR_ASSERTION'
-  name: 'AssertionError'
-  expected:
-  actual: |-
-    export async function sendAgentPushForConversation(
-      env: AgentPushBindings,
-      conversationId: string,
-    ): Promise<void> {
-      const now = Date.now();
-      const subscriptions = await env.DB.prepare(
-        `SELECT
-           subscription.endpoint,
-           subscription.expiration_time,
-           vapid.public_key,
-           vapid.private_jwk,
-           vapid.subject
-         FROM conversations conversation
-         JOIN agent_push_subscriptions subscription
-           ON subscription.agent_id = conversation.assigned_agent
-         JOIN visitor_push_vapid vapid
-           ON vapid.id = 'default'
-         WHERE conversation.id = ?1
---
-  stack: |-
-    TestContext.<anonymous> (file:///home/runner/work/customer-service/customer-service/test/push-media-hot-path-cost.test.mjs:22:10)
-    Test.runInAsyncScope (node:async_hooks:214:14)
-    Test.run (node:internal/test_runner/test:1047:25)
-    Test.start (node:internal/test_runner/test:944:17)
-    startSubtestAfterBootstrap (node:internal/test_runner/harness:296:17)
   ...
 # Subtest: visitor push resolves identity, subscription and VAPID in one D1 read
 not ok 90 - visitor push resolves identity, subscription and VAPID in one D1 read
   ---
-  duration_ms: 2.223612
+  duration_ms: 3.270486
   type: 'test'
   location: '/home/runner/work/customer-service/customer-service/test/push-media-hot-path-cost.test.mjs:25:1'
   failureType: 'testCodeFailure'
@@ -129,47 +64,67 @@ not ok 90 - visitor push resolves identity, subscription and VAPID in one D1 rea
            ON subscription.site_id = conversation.site_id
           AND subscription.visitor_external_id = visitor.external_id
 --
-# (Use `node --trace-warnings ...` to show where the warning was created)
-# Subtest: waiting recovery fills seat capacity in one bounded D1 batch
-ok 109 - waiting recovery fills seat capacity in one bounded D1 batch
+  ...
+# Subtest: visitor media completion reuses assignment state from the update batch
+ok 92 - visitor media completion reuses assignment state from the update batch
   ---
-  duration_ms: 41.270365
+  duration_ms: 0.240479
   type: 'test'
   ...
-# node:internal/modules/esm/resolve:275
-#     throw new ERR_MODULE_NOT_FOUND(
-#           ^
-# Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/home/runner/work/customer-service/customer-service/src/worker/assignment-broadcast' imported from /home/runner/work/customer-service/customer-service/src/worker/waiting-assignment.ts
-#     at finalizeResolution (node:internal/modules/esm/resolve:275:11)
-#     at moduleResolve (node:internal/modules/esm/resolve:861:10)
-#     at defaultResolve (node:internal/modules/esm/resolve:985:11)
-#     at \#cachedDefaultResolve (node:internal/modules/esm/loader:747:20)
-#     at ModuleLoader.resolve (node:internal/modules/esm/loader:724:38)
-#     at ModuleLoader.getModuleJobForImport (node:internal/modules/esm/loader:320:38)
-#     at ModuleJob._link (node:internal/modules/esm/module_job:182:49) {
-#   code: 'ERR_MODULE_NOT_FOUND',
-#   url: 'file:///home/runner/work/customer-service/customer-service/src/worker/assignment-broadcast'
-# }
-# Node.js v22.23.2
-# Subtest: test/waiting-paid-traffic-recovery.test.mjs
-not ok 53 - test/waiting-paid-traffic-recovery.test.mjs
+# Subtest: push delivery removes only terminal or explicitly expired subscriptions in one batch
+not ok 93 - push delivery removes only terminal or explicitly expired subscriptions in one batch
   ---
-  duration_ms: 94.288109
+  duration_ms: 10.231284
   type: 'test'
-  location: '/home/runner/work/customer-service/customer-service/test/waiting-paid-traffic-recovery.test.mjs:1:1'
+  location: '/home/runner/work/customer-service/customer-service/test/push-subscription-reliability.test.mjs:8:1'
   failureType: 'testCodeFailure'
-  exitCode: 1
-  signal: ~
-  error: 'test failed'
-  code: 'ERR_TEST_FAILURE'
-  ...
-1..110
-# tests 110
-# suites 0
-# pass 107
-# fail 3
-# cancelled 0
-# skipped 0
-# todo 0
-# duration_ms 2002.420861
-[ELIFECYCLE] Test failed. See above for more details.
+  error: |-
+    The input did not match the regular expression /subscription\.expiration_time <= now/u. Input:
+    
+    "import { sendDataLessPush, type VapidRow } from './visitor-push';\n" +
+      '\n' +
+      'type AgentPushBindings = {\n' +
+      '  DB: D1Database;\n' +
+      '};\n' +
+      '\n' +
+      'type AgentPushRow = VapidRow & {\n' +
+      '  endpoint: string;\n' +
+      '};\n' +
+      '\n' +
+      'export async function sendAgentPushForConversation(\n' +
+      '  env: AgentPushBindings,\n' +
+      '  conversationId: string,\n' +
+      '): Promise<void> {\n' +
+      '  const subscriptions = await env.DB.prepare(\n' +
+      '    `SELECT\n' +
+--
+      '       WHERE endpoint IN (\n' +
+      '         SELECT CAST(value AS TEXT) FROM json_each(?1)\n' +
+      '       )`,\n' +
+      '    )\n' +
+      '    .bind(JSON.stringify(endpoints))\n' +
+      '    .run();\n' +
+      '}\n'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    import { sendDataLessPush, type VapidRow } from './visitor-push';
+    
+    type AgentPushBindings = {
+      DB: D1Database;
+    };
+    
+    type AgentPushRow = VapidRow & {
+      endpoint: string;
+    };
+    
+    export async function sendAgentPushForConversation(
+      env: AgentPushBindings,
+      conversationId: string,
+    ): Promise<void> {
+      const subscriptions = await env.DB.prepare(
+        `SELECT
+           subscription.endpoint,
+           vapid.public_key,
