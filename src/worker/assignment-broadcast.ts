@@ -1,3 +1,5 @@
+import type { ConversationAutomationMessage } from './conversation-automation';
+
 type AssignmentBroadcastEnv = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
@@ -36,6 +38,7 @@ export async function broadcastWaitingAssignments(
   env: AssignmentBroadcastEnv,
   agentId: string,
   conversationIds: string[],
+  automationMessages: ConversationAutomationMessage[] = [],
 ): Promise<void> {
   if (conversationIds.length === 0) return;
 
@@ -47,8 +50,7 @@ export async function broadcastWaitingAssignments(
          c.product_cover_url, c.product_href, c.expires_at,
          c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
          c.created_at, v.external_id, v.display_name AS visitor_name,
-         (SELECT body FROM messages m WHERE m.conversation_id = c.id
-           ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+         c.last_message_preview AS last_message
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
@@ -62,33 +64,74 @@ export async function broadcastWaitingAssignments(
     loadAgentOverview(env.DB, agentId),
   ]);
 
-  const tasks: Promise<void>[] = [];
-  for (const conversation of conversations.results ?? []) {
-    if (conversation.external_id) {
-      tasks.push(
-        broadcastRoom(
-          env,
-          `client:${conversation.site_id}:${conversation.external_id}`,
-          {
-            type: 'conversation.assigned',
-            conversationId: conversation.id,
-            conversation: visitorConversationSummary(conversation),
-          },
-        ),
-      );
-    }
-
-    tasks.push(
-      broadcastRoom(env, `agent-inbox:${agentId}`, {
-        type: 'conversation.changed',
-        conversationId: conversation.id,
-        conversation: agentConversationSummary(conversation),
+  const messagesByConversation = new Map(
+    automationMessages.map((message) => [message.conversation_id, message]),
+  );
+  await Promise.all(
+    (conversations.results ?? []).map((conversation) =>
+      broadcastAssignment(
+        env,
+        agentId,
+        conversation,
         overview,
-      }),
+        messagesByConversation.get(conversation.id) ?? null,
+      ),
+    ),
+  );
+}
+
+async function broadcastAssignment(
+  env: AssignmentBroadcastEnv,
+  agentId: string,
+  conversation: AssignmentConversationRow,
+  overview: Record<string, unknown>,
+  automationMessage: ConversationAutomationMessage | null,
+): Promise<void> {
+  const assignmentUpdates: Promise<void>[] = [
+    broadcastRoom(env, `agent-inbox:${agentId}`, {
+      type: 'conversation.changed',
+      conversationId: conversation.id,
+      conversation: agentConversationSummary(conversation),
+      overview,
+    }),
+  ];
+  if (conversation.external_id) {
+    assignmentUpdates.push(
+      broadcastRoom(
+        env,
+        `client:${conversation.site_id}:${conversation.external_id}`,
+        {
+          type: 'conversation.assigned',
+          conversationId: conversation.id,
+          conversation: visitorConversationSummary(conversation),
+        },
+      ),
     );
   }
+  await Promise.all(assignmentUpdates);
 
-  await Promise.all(tasks);
+  if (!automationMessage) return;
+  const messageUpdates: Promise<void>[] = [
+    broadcastRoom(env, conversation.id, {
+      type: 'message',
+      message: conversationRoomMessage(automationMessage),
+    }),
+  ];
+  if (conversation.external_id) {
+    messageUpdates.push(
+      broadcastRoom(
+        env,
+        `client:${conversation.site_id}:${conversation.external_id}`,
+        {
+          type: 'message.created',
+          conversationId: conversation.id,
+          conversation: visitorConversationSummary(conversation),
+          message: clientRealtimeMessage(automationMessage),
+        },
+      ),
+    );
+  }
+  await Promise.all(messageUpdates);
 }
 
 async function loadAgentOverview(db: D1Database, agentId: string) {
@@ -172,6 +215,30 @@ function agentConversationSummary(conversation: AssignmentConversationRow) {
     expires_at: toIso(conversation.expires_at),
     visitor_name: conversation.visitor_name ?? null,
     last_message: conversation.last_message,
+  };
+}
+
+function conversationRoomMessage(message: ConversationAutomationMessage) {
+  return {
+    id: message.id,
+    conversation_id: message.conversation_id,
+    sender_type: message.sender_type,
+    sender_id: message.sender_id,
+    body: message.body,
+    read_by_visitor_at: message.read_by_visitor_at,
+    read_by_agent_at: message.read_by_agent_at,
+    created_at: message.created_at,
+  };
+}
+
+function clientRealtimeMessage(message: ConversationAutomationMessage) {
+  return {
+    id: message.id,
+    direction: 'agent',
+    body: message.body,
+    sentAt: toIso(message.created_at),
+    delivery: 'sent',
+    attachments: [],
   };
 }
 
