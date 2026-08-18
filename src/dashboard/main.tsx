@@ -4,6 +4,28 @@ import { App } from './App';
 
 const isAgentRoute = window.location.pathname.startsWith('/agent');
 const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
+const AGENT_HISTORY_KEY = '__customerServiceAgentView';
+
+type AgentThreadHistoryMarker = {
+  view: 'thread';
+  conversationId: string;
+};
+
+function readAgentThreadHistoryMarker(): AgentThreadHistoryMarker | null {
+  const state = window.history.state;
+  if (!state || typeof state !== 'object' || Array.isArray(state)) return null;
+  const marker = (state as Record<string, unknown>)[AGENT_HISTORY_KEY];
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return null;
+  const record = marker as Record<string, unknown>;
+  if (
+    record.view !== 'thread' ||
+    typeof record.conversationId !== 'string' ||
+    !record.conversationId
+  ) {
+    return null;
+  }
+  return { view: 'thread', conversationId: record.conversationId };
+}
 
 async function loadAgentStyles() {
   await import('./agent-foundation.css');
@@ -112,6 +134,94 @@ function installAgentVisualViewportSync() {
   scheduleGeometry();
 }
 
+function installAgentHistoryNavigation() {
+  const root = document.getElementById('root');
+  if (!root) return;
+
+  const staleMarker = readAgentThreadHistoryMarker();
+  if (staleMarker) {
+    const state = {
+      ...(window.history.state as Record<string, unknown>),
+    };
+    delete state[AGENT_HISTORY_KEY];
+    window.history.replaceState(state, '', window.location.href);
+  }
+
+  let frame = 0;
+  let replayConversationId: string | null = null;
+  let replayClickPending = false;
+  let historyBackPending = false;
+
+  const syncNavigation = () => {
+    frame = 0;
+    const marker = readAgentThreadHistoryMarker();
+    const shell = root.querySelector<HTMLElement>('.workspace-shell');
+    const threadOpen = shell?.classList.contains('is-thread-open') ?? false;
+
+    if (replayConversationId) {
+      if (!marker || marker.conversationId !== replayConversationId) {
+        replayConversationId = null;
+        replayClickPending = false;
+      } else if (threadOpen) {
+        replayConversationId = null;
+        replayClickPending = false;
+        historyBackPending = false;
+        return;
+      } else if (!replayClickPending) {
+        const row = [
+          ...root.querySelectorAll<HTMLButtonElement>(
+            '.conversation-row[data-conversation-id]',
+          ),
+        ].find(
+          (item) => item.dataset.conversationId === replayConversationId,
+        );
+        if (row) {
+          replayClickPending = true;
+          row.click();
+        }
+        return;
+      } else {
+        return;
+      }
+    }
+
+    if (!marker) {
+      historyBackPending = false;
+      if (threadOpen) {
+        root
+          .querySelector<HTMLButtonElement>('.thread-back-button')
+          ?.click();
+      }
+      return;
+    }
+
+    if (!threadOpen && !historyBackPending) {
+      historyBackPending = true;
+      window.history.back();
+    }
+  };
+
+  const scheduleNavigation = () => {
+    if (frame !== 0) window.cancelAnimationFrame(frame);
+    frame = window.requestAnimationFrame(syncNavigation);
+  };
+
+  window.addEventListener('popstate', () => {
+    historyBackPending = false;
+    replayClickPending = false;
+    replayConversationId = readAgentThreadHistoryMarker()?.conversationId ?? null;
+    scheduleNavigation();
+  });
+
+  const observer = new MutationObserver(scheduleNavigation);
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+}
+
 if (isAgentRoute && 'serviceWorker' in navigator) {
   window.addEventListener(
     'load',
@@ -131,7 +241,10 @@ async function bootstrap() {
       <App />
     </StrictMode>,
   );
-  if (isAgentRoute) installAgentVisualViewportSync();
+  if (isAgentRoute) {
+    installAgentVisualViewportSync();
+    installAgentHistoryNavigation();
+  }
 }
 
 void bootstrap();
