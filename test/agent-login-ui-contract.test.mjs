@@ -19,10 +19,13 @@ test('agent login stays focused and commercially styled', () => {
     'title="客服工作台" variant="agent"',
     'className="auth-form agent-auth-form"',
     'className="primary-button agent-login-button"',
+    'name="agent-account"',
+    'name="agent-access-key"',
     'autoComplete="off"',
     'autoComplete="new-password"',
-    'readOnly={!credentialsUnlocked}',
     'data-form-type="other"',
+    'data-1p-ignore="true"',
+    'data-lpignore="true"',
   ]) {
     assert.ok(agentLogin.includes(contract), contract);
   }
@@ -39,6 +42,7 @@ test('agent login stays focused and commercially styled', () => {
     'autoComplete="username"',
     'autoComplete="current-password"',
     'autoFocus',
+    'readOnly',
   ]) {
     assert.ok(!agentLogin.includes(removed), removed);
   }
