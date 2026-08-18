@@ -7,7 +7,7 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test('agent route isolates its styles and mobile UI has one owner', () => {
+test('agent route isolates styles and mobile UI has one visual owner', () => {
   const main = source('../src/dashboard/main.tsx');
   const workspace = source('../src/dashboard/agent-workspace.css');
   const mobile = source('../src/dashboard/agent-mobile.css');
@@ -39,16 +39,28 @@ test('agent route isolates its styles and mobile UI has one owner', () => {
   for (const contract of [
     '@media (max-width: 760px)',
     '.workspace-sidebar,\n  .thread-head',
+    '--mobile-accent: #5b5bd6;',
+    '--mobile-surface: #ffffff;',
+    '--mobile-line: #e7eaf0;',
     'height: 60px;',
-    'grid-template-columns: repeat(2, minmax(0, 1fr));',
-    '--agent-tech-panel: #111a2b;',
+    'grid-template-columns: repeat(4, minmax(0, 1fr));',
+    '.inbox-overview .metric + .metric::before',
     '.thread-actions',
-    'grid-template-columns: 72px 38px;',
+    'grid-template-columns: 70px 38px;',
     'grid-template-columns: 38px minmax(0, 1fr) 42px;',
     'env(safe-area-inset-bottom)',
     '@media (display-mode: standalone)',
   ]) {
     assert.ok(mobile.includes(contract), contract);
+  }
+
+  for (const legacyVisualLayer of [
+    '--agent-tech-',
+    'radial-gradient(',
+    'ui-monospace',
+    'SFMono-Regular',
+  ]) {
+    assert.equal(mobile.includes(legacyVisualLayer), false, legacyVisualLayer);
   }
 
   assert.equal(mobile.includes('quick-repl'), false);
