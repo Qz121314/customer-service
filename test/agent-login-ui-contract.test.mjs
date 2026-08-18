@@ -10,13 +10,24 @@ function source(path) {
 test('agent login stays focused and commercially styled', () => {
   const ui = source('../src/dashboard/dashboard-ui.tsx');
   const css = source('../src/dashboard/agent-foundation.css');
+  const agentLogin = ui.slice(
+    ui.indexOf('function AgentLogin'),
+    ui.indexOf('function AuthPage'),
+  );
 
   for (const contract of [
     'title="客服工作台" variant="agent"',
     'className="auth-form agent-auth-form"',
     'className="primary-button agent-login-button"',
+    'name="agent-account"',
+    'name="agent-access-key"',
+    'autoComplete="off"',
+    'autoComplete="new-password"',
+    'data-form-type="other"',
+    'data-1p-ignore="true"',
+    'data-lpignore="true"',
   ]) {
-    assert.ok(ui.includes(contract), contract);
+    assert.ok(agentLogin.includes(contract), contract);
   }
 
   for (const removed of [
@@ -25,6 +36,15 @@ test('agent login stays focused and commercially styled', () => {
     '返回管理中心',
   ]) {
     assert.ok(!ui.includes(removed), removed);
+  }
+
+  for (const removed of [
+    'autoComplete="username"',
+    'autoComplete="current-password"',
+    'autoFocus',
+    'readOnly',
+  ]) {
+    assert.ok(!agentLogin.includes(removed), removed);
   }
 
   for (const contract of [

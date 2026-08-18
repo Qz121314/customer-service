@@ -28,6 +28,10 @@ test('agent workspace exposes explicit connection states and delta recovery', as
   assert.match(app, /网络已断开 · 草稿已保存/u);
   assert.match(app, /连接中断 · 正在恢复/u);
   assert.match(app, /load\(true\)/u);
+  assert.match(
+    portal,
+    /\(unreadCountRef\.current\.get\(selectedId\) \?\? 0\) > 0/u,
+  );
   assert.match(api, /afterCreatedAt/u);
   assert.match(worker, /INVALID_MESSAGE_CURSOR/u);
   assert.match(media, /clientUploadId/u);
