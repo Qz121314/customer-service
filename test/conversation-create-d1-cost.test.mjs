@@ -36,6 +36,11 @@ test('CTA conversation start does not require a synthetic visitor message', () =
     "clientApi.post('/client/v1/conversations'",
     "clientApi.post('/client/v1/conversations/:id/messages'",
   );
+  const optionalMessageValidation = section(
+    route,
+    'if (messageFieldPresent || clientMessageFieldPresent)',
+    'if (!product)',
+  );
 
   assert.match(
     route,
@@ -46,10 +51,7 @@ test('CTA conversation start does not require a synthetic visitor message', () =
     route,
     /if \(messageFieldPresent \|\| clientMessageFieldPresent\)/u,
   );
-  assert.doesNotMatch(
-    route,
-    /if \(!clientMessageId\)[\s\S]{0,160}INVALID_CLIENT_MESSAGE_ID/u,
-  );
+  assert.match(optionalMessageValidation, /if \(!clientMessageId\)/u);
   assert.match(
     route,
     /if \(hasInitialMessage && clientMessageId && initialMessage\)/u,
@@ -90,7 +92,7 @@ test('assigned conversation start reuses the assignment lifecycle snapshot', () 
 
   assert.match(route, /const snapshots = await broadcastAssignments/u);
   assert.match(route, /conversation = snapshots\.find/u);
-  assert.match(route, /assignment\.newlyAssigned && assignment\.assignedAt/u);
+  assert.match(route, /assignment\?\.newlyAssigned && assignment\.assignedAt/u);
   const assignedBranch = section(
     route,
     'if (assignment?.newlyAssigned && assignment.assignedAt)',
