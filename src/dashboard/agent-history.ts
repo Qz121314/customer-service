@@ -5,6 +5,8 @@ type AgentThreadHistoryMarker = {
   conversationId: string;
 };
 
+type AgentThreadHistoryState = AgentThreadHistoryMarker | null;
+
 function historyStateRecord(): Record<string, unknown> {
   const state = window.history.state;
   return state && typeof state === 'object' && !Array.isArray(state)
@@ -12,9 +14,11 @@ function historyStateRecord(): Record<string, unknown> {
     : {};
 }
 
-export function readAgentThreadHistoryMarker(): AgentThreadHistoryMarker | null {
+export function readAgentThreadHistoryMarker(): AgentThreadHistoryState {
   const marker = historyStateRecord()[AGENT_HISTORY_KEY];
-  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return null;
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) {
+    return null;
+  }
   const record = marker as Record<string, unknown>;
   if (
     record.view !== 'thread' ||
