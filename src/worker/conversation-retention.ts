@@ -263,20 +263,47 @@ async function purgeReportingHistory(
 ): Promise<void> {
   // 12:00 UTC is 04:00/05:00 in Los Angeles, so UTC and reporting-local dates
   // are already aligned. Keep the current reporting day plus the prior 399.
-  await db
-    .prepare(
-      `DELETE FROM agent_daily_stats
-       WHERE site_id = 'default'
-         AND business_date < date(?1, '-399 days')`,
-    )
-    .bind(nowIso)
-    .run();
-  await db
-    .prepare(
-      `DELETE FROM agent_traffic_receipts
-       WHERE site_id = 'default'
-         AND business_date < date(?1, '-399 days')`,
-    )
-    .bind(nowIso)
-    .run();
+  // Archive only receipts that actually consumed paid quota. The three
+  // statements run in one D1 batch so a failed cleanup can never count an old
+  // receipt in the archive while also leaving that same receipt to be counted
+  // again on the next daily pass.
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE agents
+         SET traffic_quota_archived_used = traffic_quota_archived_used + (
+           SELECT COUNT(*)
+           FROM agent_traffic_receipts receipt
+           WHERE receipt.site_id = agents.site_id
+             AND receipt.agent_id = agents.id
+             AND receipt.quota_consumed = 1
+             AND receipt.business_date < date(?1, '-399 days')
+         ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE site_id = 'default'
+           AND EXISTS (
+             SELECT 1
+             FROM agent_traffic_receipts receipt
+             WHERE receipt.site_id = agents.site_id
+               AND receipt.agent_id = agents.id
+               AND receipt.quota_consumed = 1
+               AND receipt.business_date < date(?1, '-399 days')
+           )`,
+      )
+      .bind(nowIso),
+    db
+      .prepare(
+        `DELETE FROM agent_daily_stats
+         WHERE site_id = 'default'
+           AND business_date < date(?1, '-399 days')`,
+      )
+      .bind(nowIso),
+    db
+      .prepare(
+        `DELETE FROM agent_traffic_receipts
+         WHERE site_id = 'default'
+           AND business_date < date(?1, '-399 days')`,
+      )
+      .bind(nowIso),
+  ]);
 }
