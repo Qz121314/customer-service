@@ -16,7 +16,7 @@ test('desktop agent thread keeps compact commercial chat styling', async () => {
     ),
   ]);
 
-  assert.match(main, /import '\.\/agent-desktop\.css';/u);
+  assert.match(main, /import\('\.\/agent-desktop\.css'\)/u);
   assert.match(
     css,
     /\.workspace-shell \.thread-back-button \{\s*display: none;/u,
