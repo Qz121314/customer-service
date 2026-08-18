@@ -320,8 +320,8 @@ export function AgentEditorModal({
                         <div className="traffic-quota-history-row quota-ledger-warning">
                           <strong>核对异常</strong>
                           <span>
-                            总额 {quotaLedger.total}/{quotaLedger.expectedTotal} ·
-                            已用 {quotaLedger.used}/{quotaLedger.expectedUsed}
+                            总额 {quotaLedger.total}/{quotaLedger.expectedTotal}{' '}
+                            · 已用 {quotaLedger.used}/{quotaLedger.expectedUsed}
                           </span>
                           <time>请检查</time>
                         </div>

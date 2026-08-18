@@ -297,9 +297,7 @@ export async function updateAgent(
 export async function getAgentQuotaLedger(
   id: string,
 ): Promise<AgentQuotaLedgerPayload> {
-  return request(
-    `/api/admin/agents/${encodeURIComponent(id)}/quota-ledger`,
-  );
+  return request(`/api/admin/agents/${encodeURIComponent(id)}/quota-ledger`);
 }
 
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
