@@ -1,0 +1,44 @@
+name: Temporary format quota ledger
+
+on:
+  push:
+    branches:
+      - reliability/quota-ledger-reconciliation
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Format quota ledger files
+        run: |
+          pnpm exec prettier --write \
+            src/dashboard/AdminPortal.tsx \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/api.ts \
+            src/worker/admin-quota-api.ts
+      - name: Commit formatting
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/dashboard/AdminPortal.tsx \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/api.ts \
+            src/worker/admin-quota-api.ts
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Format quota ledger files"
+          git push origin HEAD:reliability/quota-ledger-reconciliation
