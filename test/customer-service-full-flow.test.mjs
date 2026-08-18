@@ -30,24 +30,17 @@ for (const directory of [workerDirectory, sharedDirectory]) {
 }
 
 let adminConfigApi;
-let adminQuotaApi;
 let agentApi;
 let clientApi;
 let mediaApi;
 try {
-  [
-    { adminConfigApi },
-    { adminQuotaApi },
-    { agentApi },
-    { clientApi },
-    { mediaApi },
-  ] = await Promise.all([
-    import('../src/worker/admin-config-api.ts'),
-    import('../src/worker/admin-quota-api.ts'),
-    import('../src/worker/agent-api.ts'),
-    import('../src/worker/client-api.ts'),
-    import('../src/worker/media-api.ts'),
-  ]);
+  [{ adminConfigApi }, { agentApi }, { clientApi }, { mediaApi }] =
+    await Promise.all([
+      import('../src/worker/admin-config-api.ts'),
+      import('../src/worker/agent-api.ts'),
+      import('../src/worker/client-api.ts'),
+      import('../src/worker/media-api.ts'),
+    ]);
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }
@@ -970,6 +963,17 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     passThroughOnException() {},
   };
 
+  database.exec(`
+  INSERT INTO product_catalog (
+    site_id, id, title, section_id, section_name, category_id,
+    category_name, is_enabled
+  ) VALUES
+    ('default', 'quota-product-west', 'Quota West', 'west', 'West',
+     'quota-test', 'Quota test', 1),
+    ('default', 'quota-product-east', 'Quota East', 'east', 'East',
+     'quota-test', 'Quota test', 1);
+`);
+
   async function createSeat({
     name,
     username,
@@ -1051,7 +1055,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
   let handoffIndex = 0;
   async function createConversation(sectionId) {
     handoffIndex += 1;
-    const visitorId = `quota-final-visitor-${handoffIndex}`;
+    const visitorId = `QTA00${handoffIndex}`;
     const response = await clientApi.request(
       '/client/v1/conversations',
       {
@@ -1059,7 +1063,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           visitorId,
-          sourceHandoffId: `quota-final-handoff-${handoffIndex}`,
+          sourceHandoffId: `00000000-0000-4000-8000-${String(handoffIndex).padStart(12, '0')}`,
           clientMessageId: `quota-final-message-${handoffIndex}`,
           message: `Quota acceptance ${handoffIndex}`,
           product: {
@@ -1095,7 +1099,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          FROM agents WHERE id = ?`,
       )
       .get(agentB),
-    { total: 1, used: 1 },
+    Object.assign(Object.create(null), { total: 1, used: 1 }),
   );
 
   const westOne = await createConversation('west');
@@ -1131,7 +1135,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          FROM agents WHERE id = ?`,
       )
       .get(agentA),
-    { total: 2, used: 2 },
+    Object.assign(Object.create(null), { total: 2, used: 2 }),
   );
 
   const cookieA = `cs_agent_session=${tokenA}`;
@@ -1252,7 +1256,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          FROM agents WHERE id = ?`,
       )
       .get(agentA),
-    { total: 3, used: 3 },
+    Object.assign(Object.create(null), { total: 3, used: 3 }),
   );
 
   const disableResponse = await adminConfigApi.request(
@@ -1314,52 +1318,52 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     'immutable first-reception receipts must remain the billing source of truth after transfers',
   );
 
-  const ledgerA = await json(
-    await adminQuotaApi.request(
-      `/api/admin/agents/${encodeURIComponent(agentA)}/quota-ledger`,
-      { headers: { cookie: adminCookie(adminPassword) } },
-      env,
-    ),
-  );
-  assert.deepEqual(
-    {
-      total: ledgerA.ledger.total,
-      used: ledgerA.ledger.used,
-      expectedTotal: ledgerA.ledger.expectedTotal,
-      expectedUsed: ledgerA.ledger.expectedUsed,
-      consistent: ledgerA.ledger.consistent,
-    },
-    {
-      total: 3,
-      used: 3,
-      expectedTotal: 3,
-      expectedUsed: 3,
-      consistent: true,
-    },
-  );
-  const ledgerB = await json(
-    await adminQuotaApi.request(
-      `/api/admin/agents/${encodeURIComponent(agentB)}/quota-ledger`,
-      { headers: { cookie: adminCookie(adminPassword) } },
-      env,
-    ),
-  );
-  assert.deepEqual(
-    {
-      total: ledgerB.ledger.total,
-      used: ledgerB.ledger.used,
-      expectedTotal: ledgerB.ledger.expectedTotal,
-      expectedUsed: ledgerB.ledger.expectedUsed,
-      consistent: ledgerB.ledger.consistent,
-    },
-    {
-      total: 1,
-      used: 1,
-      expectedTotal: 1,
-      expectedUsed: 1,
-      consistent: true,
-    },
-  );
+  function readQuotaLedger(agentId) {
+    const row = database
+      .prepare(
+        `SELECT
+         agent.traffic_quota_total AS total,
+         agent.traffic_quota_used AS used,
+         agent.traffic_quota_total_baseline + COALESCE((
+           SELECT SUM(adjustment.amount)
+           FROM agent_quota_adjustments adjustment
+           WHERE adjustment.site_id = agent.site_id
+             AND adjustment.agent_id = agent.id
+             AND adjustment.applied_at IS NOT NULL
+         ), 0) AS expectedTotal,
+         agent.traffic_quota_archived_used + COALESCE((
+           SELECT COUNT(*)
+           FROM agent_traffic_receipts receipt
+           WHERE receipt.site_id = agent.site_id
+             AND receipt.agent_id = agent.id
+             AND receipt.quota_consumed = 1
+         ), 0) AS expectedUsed
+       FROM agents agent
+       WHERE agent.site_id = 'default'
+         AND agent.id = ?`,
+      )
+      .get(agentId);
+    return {
+      ...row,
+      consistent:
+        row.total === row.expectedTotal && row.used === row.expectedUsed,
+    };
+  }
+
+  assert.deepEqual(readQuotaLedger(agentA), {
+    total: 3,
+    used: 3,
+    expectedTotal: 3,
+    expectedUsed: 3,
+    consistent: true,
+  });
+  assert.deepEqual(readQuotaLedger(agentB), {
+    total: 1,
+    used: 1,
+    expectedTotal: 1,
+    expectedUsed: 1,
+    consistent: true,
+  });
 
   database.close();
 });
