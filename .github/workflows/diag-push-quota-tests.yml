@@ -22,22 +22,15 @@ jobs:
         run: npm install --global pnpm@11.19.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Run focused tests
+      - name: Run full tests
         shell: bash
         run: |
           set +e
-          node --test \
-            test/agent-traffic-quota.test.mjs \
-            test/waiting-paid-traffic-recovery.test.mjs \
-            test/waiting-assignment-batch.test.mjs \
-            test/agent-daily-quota.test.mjs \
-            test/product-agent-routing.test.mjs \
-            test/push-subscription-reliability.test.mjs \
-            > /tmp/test.log 2>&1
+          pnpm test > /tmp/test.log 2>&1
           status=$?
           {
             echo "exit=$status"
-            grep -E -A14 -B6 'not ok|AssertionError|ERR_|error:|failureType|actual:|expected:' /tmp/test.log | tail -n 260
+            grep -E -A18 -B8 'not ok|AssertionError|ERR_|error:|failureType|actual:|expected:' /tmp/test.log | tail -n 320
           } > diagnostic-push-quota.txt
           exit 0
       - name: Commit diagnostic
@@ -49,5 +42,5 @@ jobs:
           if git diff --cached --quiet; then
             exit 0
           fi
-          git commit -m "Capture push quota test failure"
+          git commit -m "Capture full test failure"
           git push origin HEAD:reliability/push-quota-hardening
