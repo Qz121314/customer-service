@@ -24,33 +24,35 @@ jobs:
 
           agent_path = Path('src/worker/agent-api.ts')
           agent = agent_path.read_text()
-          old = '''  const result = await c.env.DB.prepare(
-            `UPDATE conversations
-             SET status = ?1, updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?2 AND assigned_agent = ?3
-               AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+          old = (
+              "  const result = await c.env.DB.prepare(\n"
+              "    `UPDATE conversations\n"
+              "     SET status = ?1, updated_at = CURRENT_TIMESTAMP\n"
+              "     WHERE id = ?2 AND assigned_agent = ?3\n"
+              "       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,\n"
+              "  )\n"
+              "    .bind(body.status, id, agent.id)\n"
+              "    .run();\n"
+              "  if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);\n"
           )
-            .bind(body.status, id, agent.id)
-            .run();
-          if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-          '''
-          new = '''  try {
-            const result = await c.env.DB.prepare(
-              `UPDATE conversations
-               SET status = ?1, updated_at = CURRENT_TIMESTAMP
-               WHERE id = ?2 AND assigned_agent = ?3
-                 AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
-            )
-              .bind(body.status, id, agent.id)
-              .run();
-            if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-          } catch (reason) {
-            if (String(reason).includes('CONVERSATION_REOPEN_CAPACITY')) {
-              return c.json({ error: 'CONVERSATION_REOPEN_CAPACITY' }, 409);
-            }
-            throw reason;
-          }
-          '''
+          new = (
+              "  try {\n"
+              "    const result = await c.env.DB.prepare(\n"
+              "      `UPDATE conversations\n"
+              "       SET status = ?1, updated_at = CURRENT_TIMESTAMP\n"
+              "       WHERE id = ?2 AND assigned_agent = ?3\n"
+              "         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,\n"
+              "    )\n"
+              "      .bind(body.status, id, agent.id)\n"
+              "      .run();\n"
+              "    if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);\n"
+              "  } catch (reason) {\n"
+              "    if (String(reason).includes('CONVERSATION_REOPEN_CAPACITY')) {\n"
+              "      return c.json({ error: 'CONVERSATION_REOPEN_CAPACITY' }, 409);\n"
+              "    }\n"
+              "    throw reason;\n"
+              "  }\n"
+          )
           if agent.count(old) != 1:
               raise SystemExit(f'agent-api patch target count={agent.count(old)}')
           agent_path.write_text(agent.replace(old, new))
