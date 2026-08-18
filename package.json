@@ -20,7 +20,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply customer-service-db --remote",
     "lint": "eslint .",
-    "format": "prettier --write src/dashboard/agent-foundation.css src/dashboard/agent-mobile.css src/dashboard/AgentWorkspaceChrome.tsx test/agent-mobile-layout-contract.test.mjs test/dashboard-ui-polish-contract.test.mjs && git diff -- src/dashboard/agent-foundation.css src/dashboard/agent-mobile.css src/dashboard/AgentWorkspaceChrome.tsx test/agent-mobile-layout-contract.test.mjs test/dashboard-ui-polish-contract.test.mjs",
+    "format": "prettier --check .",
     "format:write": "prettier --write .",
     "preflight": "pnpm format && pnpm lint && pnpm typecheck",
     "verify": "pnpm preflight && pnpm db:migrate:local && pnpm test && pnpm build && pnpm cf:check",
