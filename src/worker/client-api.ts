@@ -128,9 +128,7 @@ clientApi.get('/client/v1/conversations', async (c) => {
        c.section_name, c.category_id, c.category_name, c.product_title,
        c.product_cover_url, c.product_href, c.expires_at,
        c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-       c.created_at,
-       (SELECT body FROM messages m WHERE m.conversation_id = c.id
-         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+       c.created_at, c.last_message_preview AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
@@ -607,9 +605,8 @@ export async function broadcastClientConversationEvent(
        c.section_name, c.category_id, c.category_name, c.product_title,
        c.product_cover_url, c.product_href, c.expires_at,
        c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-       c.created_at, v.external_id, v.display_name AS visitor_name,
-       (SELECT body FROM messages m WHERE m.conversation_id = c.id
-         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+       c.created_at, c.last_message_preview AS last_message,
+       v.external_id, v.display_name AS visitor_name
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
@@ -1008,9 +1005,7 @@ async function ownedConversation(
        c.section_name, c.category_id, c.category_name, c.product_title,
        c.product_cover_url, c.product_href, c.expires_at,
        c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-       c.created_at,
-       (SELECT body FROM messages m WHERE m.conversation_id = c.id
-         ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+       c.created_at, c.last_message_preview AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
@@ -1107,11 +1102,11 @@ async function persistClientMessage(
       .prepare(
         `UPDATE conversations
        SET agent_unread_count = agent_unread_count + 1,
-           last_message_at = ?1, updated_at = ?1
-       WHERE id = ?2
-         AND EXISTS (SELECT 1 FROM messages WHERE id = ?3)`,
+           last_message_at = ?1, last_message_preview = ?2, updated_at = ?1
+       WHERE id = ?3
+         AND EXISTS (SELECT 1 FROM messages WHERE id = ?4)`,
       )
-      .bind(createdAt, input.conversationId, id),
+      .bind(createdAt, input.body, input.conversationId, id),
   ]);
 
   if (!inserted?.meta.changes) {

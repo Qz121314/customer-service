@@ -57,7 +57,15 @@ test('visitor text sends keep duplicate reads off the normal write path', () => 
   assert.doesNotMatch(route, /const existingMessage =/u);
   assert.match(route, /persistedMessage\.duplicate/u);
   assert.match(helper, /INSERT OR IGNORE INTO messages/u);
-  assert.match(helper, /AND EXISTS \(SELECT 1 FROM messages WHERE id = \?3\)/u);
+  assert.match(
+    helper,
+    /last_message_at = \?1, last_message_preview = \?2, updated_at = \?1/u,
+  );
+  assert.match(helper, /AND EXISTS \(SELECT 1 FROM messages WHERE id = \?4\)/u);
+  assert.match(
+    helper,
+    /\.bind\(createdAt, input\.body, input\.conversationId, id\)/u,
+  );
   assert.match(helper, /if \(!inserted\?\.meta\.changes\)/u);
   assert.match(helper, /const message: MessageRow = \{/u);
   assert.ok(

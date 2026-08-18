@@ -372,8 +372,7 @@ async function loadAgentInbox(
          c.category_name, c.product_title, c.product_cover_url, c.product_href,
          c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
          c.expires_at, v.display_name AS visitor_name,
-         (SELECT body FROM messages m WHERE m.conversation_id = c.id
-          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+         c.last_message_preview AS last_message
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.assigned_agent = ?1
@@ -418,8 +417,7 @@ async function loadAgentInbox(
            )
            ELSE 0
          END AS __closed_rank,
-         (SELECT body FROM messages m WHERE m.conversation_id = c.id
-          ORDER BY m.created_at DESC, m.id DESC LIMIT 1) AS last_message
+         c.last_message_preview AS last_message
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.assigned_agent = ?1
@@ -740,11 +738,12 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
          visitor_unread_count = visitor_unread_count + 1,
          agent_unread_count = 0,
          last_message_at = ?1,
+         last_message_preview = ?2,
          updated_at = ?1
-     WHERE id = ?2 AND assigned_agent = ?3
+     WHERE id = ?3 AND assigned_agent = ?4
        AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
   )
-    .bind(now, id, agent.id)
+    .bind(now, text, id, agent.id)
     .run();
   const message: MessageRow = {
     id: messageId,
