@@ -26,7 +26,7 @@ test('agent workspace exposes explicit connection states and delta recovery', as
   const app = `${portal}\n${panels}`;
 
   assert.match(app, /网络已断开 · 草稿已保存/u);
-  assert.match(app, /连接中断 · 正在恢复/u);
+  assert.match(app, /正在恢复连接/u);
   assert.match(app, /load\(true\)/u);
   assert.match(
     portal,
