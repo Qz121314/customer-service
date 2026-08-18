@@ -5,13 +5,26 @@ type AssignmentBroadcastEnv = {
 
 type ConversationStatus = 'open' | 'pending' | 'closed';
 
-type AssignmentConversationRow = {
+export type AssignmentVisitorMessage = {
+  id: string;
+  conversation_id: string;
+  sender_type: 'visitor';
+  sender_id: string;
+  body: string;
+  client_message_id: string | null;
+  read_by_visitor_at: null;
+  read_by_agent_at: null;
+  created_at: string;
+};
+
+export type AssignmentConversationSnapshot = {
   id: string;
   site_id: string;
   visitor_id: string;
   status: ConversationStatus;
   assigned_agent: string | null;
   agent_name: string | null;
+  agent_avatar_version: string | null;
   subject: string | null;
   group_id: string | null;
   product_id: string | null;
@@ -39,24 +52,26 @@ type AssignmentConversationRow = {
 /**
  * Broadcast one assignment lifecycle after the database assignment has committed.
  *
- * The database traffic/automation receipts decide whether this assignment is the
- * conversation's initial reception and whether a greeting exists. The caller only
- * supplies the assignment timestamp it used in the atomic assignment statement.
- * This keeps direct routing and waiting recovery on the same event semantics.
+ * The traffic/automation receipts decide whether this is the conversation's first
+ * effective reception and whether a greeting exists. An optional visitor message
+ * is carried through the same lifecycle when a legacy create request starts the
+ * conversation with text, preventing duplicate Inbox updates and duplicate tones.
  */
 export async function broadcastAssignments(
   env: AssignmentBroadcastEnv,
   agentId: string,
   conversationIds: string[],
   assignmentAt: string,
-): Promise<void> {
+  visitorMessages: AssignmentVisitorMessage[] = [],
+): Promise<AssignmentConversationSnapshot[]> {
   const ids = [...new Set(conversationIds.filter(Boolean))];
-  if (ids.length === 0) return;
+  if (ids.length === 0) return [];
 
   const [conversations, overview] = await Promise.all([
     env.DB.prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-         a.name AS agent_name, c.subject, c.group_id, c.product_id, c.section_id,
+         a.name AS agent_name, a.avatar_version AS agent_avatar_version,
+         c.subject, c.group_id, c.product_id, c.section_id,
          c.section_name, c.category_id, c.category_name, c.product_title,
          c.product_cover_url, c.product_href, c.expires_at,
          c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
@@ -83,24 +98,61 @@ export async function broadcastAssignments(
        ORDER BY c.last_message_at ASC, c.id ASC`,
     )
       .bind(JSON.stringify(ids), assignmentAt)
-      .all<AssignmentConversationRow>(),
+      .all<AssignmentConversationSnapshot>(),
     loadAgentOverview(env.DB, agentId),
   ]);
 
+  const snapshots = conversations.results ?? [];
+  const visitorMessagesByConversation = new Map(
+    visitorMessages.map((message) => [message.conversation_id, message]),
+  );
   await Promise.all(
-    (conversations.results ?? []).map((conversation) =>
-      broadcastAssignment(env, agentId, conversation, overview),
+    snapshots.map((conversation) =>
+      broadcastAssignment(
+        env,
+        agentId,
+        conversation,
+        overview,
+        visitorMessagesByConversation.get(conversation.id) ?? null,
+      ),
     ),
   );
+  return snapshots;
 }
 
 async function broadcastAssignment(
   env: AssignmentBroadcastEnv,
   agentId: string,
-  conversation: AssignmentConversationRow,
+  conversation: AssignmentConversationSnapshot,
   overview: Record<string, unknown>,
+  visitorMessage: AssignmentVisitorMessage | null,
 ): Promise<void> {
   const initialAssignment = conversation.initial_assignment === 1;
+
+  if (visitorMessage) {
+    const visitorMessageUpdates: Promise<void>[] = [
+      broadcastRoom(env, conversation.id, {
+        type: 'message',
+        message: conversationRoomMessage(visitorMessage),
+      }),
+    ];
+    if (conversation.external_id) {
+      visitorMessageUpdates.push(
+        broadcastRoom(
+          env,
+          `client:${conversation.site_id}:${conversation.external_id}`,
+          {
+            type: 'message.created',
+            conversationId: conversation.id,
+            conversation: visitorConversationSummary(conversation),
+            message: clientRealtimeMessage(visitorMessage),
+          },
+        ),
+      );
+    }
+    await Promise.all(visitorMessageUpdates);
+  }
+
   const assignmentUpdates: Promise<void>[] = [
     broadcastRoom(env, `agent-inbox:${agentId}`, {
       type: 'conversation.changed',
@@ -128,14 +180,14 @@ async function broadcastAssignment(
   const greeting = greetingMessage(conversation);
   if (!initialAssignment || !greeting) return;
 
-  const messageUpdates: Promise<void>[] = [
+  const greetingUpdates: Promise<void>[] = [
     broadcastRoom(env, conversation.id, {
       type: 'message',
       message: conversationRoomMessage(greeting),
     }),
   ];
   if (conversation.external_id) {
-    messageUpdates.push(
+    greetingUpdates.push(
       broadcastRoom(
         env,
         `client:${conversation.site_id}:${conversation.external_id}`,
@@ -148,7 +200,7 @@ async function broadcastAssignment(
       ),
     );
   }
-  await Promise.all(messageUpdates);
+  await Promise.all(greetingUpdates);
 }
 
 async function loadAgentOverview(db: D1Database, agentId: string) {
@@ -193,11 +245,16 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
   };
 }
 
-function visitorConversationSummary(conversation: AssignmentConversationRow) {
+function visitorConversationSummary(
+  conversation: AssignmentConversationSnapshot,
+) {
   return {
     id: conversation.id,
     agentName: conversation.agent_name,
-    agentAvatarUrl: null,
+    agentAvatarUrl:
+      conversation.assigned_agent && conversation.agent_avatar_version
+        ? `/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}?v=${encodeURIComponent(conversation.agent_avatar_version)}`
+        : null,
     productId: conversation.product_id ?? '',
     sectionId: conversation.section_id ?? '',
     productTitle: conversation.product_title ?? conversation.subject ?? '',
@@ -209,7 +266,7 @@ function visitorConversationSummary(conversation: AssignmentConversationRow) {
   };
 }
 
-function agentConversationSummary(conversation: AssignmentConversationRow) {
+function agentConversationSummary(conversation: AssignmentConversationSnapshot) {
   return {
     id: conversation.id,
     site_id: conversation.site_id,
@@ -247,8 +304,10 @@ type GreetingMessage = {
   created_at: string;
 };
 
+type AssignmentMessage = GreetingMessage | AssignmentVisitorMessage;
+
 function greetingMessage(
-  conversation: AssignmentConversationRow,
+  conversation: AssignmentConversationSnapshot,
 ): GreetingMessage | null {
   if (
     !conversation.assigned_agent ||
@@ -271,7 +330,7 @@ function greetingMessage(
   };
 }
 
-function conversationRoomMessage(message: GreetingMessage) {
+function conversationRoomMessage(message: AssignmentMessage) {
   return {
     id: message.id,
     conversation_id: message.conversation_id,
@@ -284,10 +343,10 @@ function conversationRoomMessage(message: GreetingMessage) {
   };
 }
 
-function clientRealtimeMessage(message: GreetingMessage) {
+function clientRealtimeMessage(message: AssignmentMessage) {
   return {
     id: message.id,
-    direction: 'agent',
+    direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
     sentAt: toIso(message.created_at),
     delivery: 'sent',
