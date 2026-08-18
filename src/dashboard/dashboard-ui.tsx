@@ -139,9 +139,6 @@ function AgentLogin({
   onPassword: (value: string) => void;
   onSubmit: (event: FormEvent) => void;
 }) {
-  const [credentialsUnlocked, setCredentialsUnlocked] = useState(false);
-  const unlockCredentials = () => setCredentialsUnlocked(true);
-
   return (
     <AuthPage title="客服工作台" variant="agent">
       <form
@@ -160,9 +157,6 @@ function AgentLogin({
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            readOnly={!credentialsUnlocked}
-            onFocus={unlockCredentials}
-            onPointerDown={unlockCredentials}
             data-1p-ignore="true"
             data-lpignore="true"
           />
@@ -175,9 +169,6 @@ function AgentLogin({
             value={password}
             onChange={(event) => onPassword(event.target.value)}
             autoComplete="new-password"
-            readOnly={!credentialsUnlocked}
-            onFocus={unlockCredentials}
-            onPointerDown={unlockCredentials}
             data-1p-ignore="true"
             data-lpignore="true"
           />
