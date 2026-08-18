@@ -108,6 +108,7 @@ async function createDatabase({ quotaEnabled = true, quotaTotal = 2 } = {}) {
     );
   `);
   database.exec(await read('../migrations/0023_agent_traffic_quotas.sql'));
+  database.exec(await read('../migrations/0033_new_traffic_limit_guard.sql'));
   database
     .prepare(
       `INSERT INTO agents (
@@ -182,7 +183,7 @@ test('seat quota is consumed once and exhausted seats stop receiving traffic', a
   assert.equal(
     await assignConversationAgent(d1(database), 'conversation-3'),
     null,
-    'an exhausted seat must be excluded from routing',
+    'an exhausted seat must be excluded from fresh routing',
   );
 
   database.exec(
@@ -210,6 +211,112 @@ test('seat quota is consumed once and exhausted seats stop receiving traffic', a
       )
       .get().count,
     3,
+  );
+});
+
+test('already-counted traffic recovers after daily and paid quota are exhausted', async () => {
+  const database = await createDatabase({ quotaTotal: 1 });
+  database.exec(`UPDATE agents SET daily_conversation_limit = 1`);
+  addConversation(database, 'conversation-paid');
+  addConversation(database, 'conversation-fresh');
+
+  assert.equal(
+    (await assignConversationAgent(d1(database), 'conversation-paid'))?.id,
+    'agent-a',
+  );
+  assert.equal(
+    database.prepare(`SELECT traffic_quota_used FROM agents`).get()
+      .traffic_quota_used,
+    1,
+  );
+  assert.equal(
+    database.prepare(`SELECT conversation_count FROM agent_daily_stats`).get()
+      .conversation_count,
+    1,
+  );
+
+  database.exec(`
+    UPDATE conversations
+    SET assigned_agent = NULL, assigned_at = NULL,
+        assigned_business_date = NULL, status = 'open'
+    WHERE id = 'conversation-paid';
+  `);
+
+  assert.equal(
+    (await assignConversationAgent(d1(database), 'conversation-paid'))?.id,
+    'agent-a',
+    'a paid conversation must recover without another new-traffic unit',
+  );
+  assert.equal(
+    database.prepare(`SELECT traffic_quota_used FROM agents`).get()
+      .traffic_quota_used,
+    1,
+  );
+  assert.equal(
+    database.prepare(`SELECT conversation_count FROM agent_daily_stats`).get()
+      .conversation_count,
+    1,
+  );
+  assert.equal(
+    await assignConversationAgent(d1(database), 'conversation-fresh'),
+    null,
+    'fresh traffic must remain blocked after the limits are exhausted',
+  );
+});
+
+test('database guard rejects fresh assignment that bypasses routing quota checks', async () => {
+  const database = await createDatabase({ quotaTotal: 1 });
+  addConversation(database, 'conversation-1');
+  addConversation(database, 'conversation-bypass');
+
+  assert.equal(
+    (await assignConversationAgent(d1(database), 'conversation-1'))?.id,
+    'agent-a',
+  );
+  const businessDate = database
+    .prepare(
+      `SELECT assigned_business_date AS business_date
+       FROM conversations WHERE id = 'conversation-1'`,
+    )
+    .get().business_date;
+
+  assert.throws(
+    () =>
+      database
+        .prepare(
+          `UPDATE conversations
+           SET assigned_agent = 'agent-a',
+               assigned_at = CURRENT_TIMESTAMP,
+               assigned_business_date = ?,
+               status = 'pending'
+           WHERE id = 'conversation-bypass'`,
+        )
+        .run(businessDate),
+    /AGENT_NEW_TRAFFIC_LIMIT_EXHAUSTED/u,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT assigned_agent FROM conversations
+         WHERE id = 'conversation-bypass'`,
+      )
+      .get().assigned_agent,
+    null,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM agent_traffic_receipts
+         WHERE conversation_id = 'conversation-bypass'`,
+      )
+      .get().count,
+    0,
+  );
+  assert.equal(
+    database.prepare(`SELECT traffic_quota_used FROM agents`).get()
+      .traffic_quota_used,
+    1,
   );
 });
 
