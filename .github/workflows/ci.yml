@@ -14,92 +14,96 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  format-agent-api:
+  validate-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check src/worker/agent-api.ts
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  format-client-api:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check src/worker/client-api.ts
 
-  format-media-store:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check src/worker/media-store.ts
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
 
-  format-preview-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check test/conversation-last-message-preview.test.mjs
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-  format-migration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm exec prettier --check migrations/0032_conversation_last_message_preview.sql
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
 
-  format-global-before-migrate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm format
+      - name: Format
+        run: pnpm format
 
-  format-global-after-migrate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:migrate:local
-      - run: pnpm format
+      - name: Lint
+        run: pnpm lint
 
-  format-global-ignore-unknown:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm install --global pnpm@11.19.0
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:migrate:local
-      - run: pnpm exec prettier --check . --ignore-unknown
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+
+      - name: Install browser smoke runtime
+        run: |
+          pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Smoke test agent UI in Chromium
+        env:
+          UI_SMOKE_BASE_URL: http://127.0.0.1:8787
+          UI_SMOKE_ADMIN_PASSWORD: ui-smoke-admin-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler dev --local --port 8787 \
+            --var ADMIN_PASSWORD:ui-smoke-admin-password \
+            --var ENVIRONMENT:ui-smoke \
+            --var APP_VERSION:ui-smoke \
+            > /tmp/ui-smoke-worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-worker.log
+            exit 1
+          fi
+
+          pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=github
+
+      - name: Deploy production to Cloudflare
+        id: deploy
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm deploy:cloudflare | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test production protocols
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+        run: pnpm smoke:production
