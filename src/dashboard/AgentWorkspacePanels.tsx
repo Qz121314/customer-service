@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AgentAvailability,
   AgentIdentity,
@@ -5,7 +6,12 @@ import type {
   Conversation,
 } from './api';
 import { rememberAgentConversationHistory } from './agent-history';
-import type { AgentNotificationState } from './agent-push';
+import {
+  clearAgentNotificationOpenIntent,
+  hasAgentNotificationOpenIntent,
+  isAgentNotificationOpenMessage,
+  type AgentNotificationState,
+} from './agent-push';
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { Metric } from './dashboard-ui';
@@ -101,6 +107,85 @@ export function AgentInboxPane({
   onToggleAvailability: () => void;
   onSelectConversation: (id: string) => void;
 }) {
+  const [notificationOpenPending, setNotificationOpenPending] = useState(() =>
+    hasAgentNotificationOpenIntent(),
+  );
+  const overviewRef = useRef(overview);
+  const notificationOverviewBaselineRef = useRef(overview);
+  const lastOverviewChangeAtRef = useRef(Date.now());
+
+  useEffect(() => {
+    overviewRef.current = overview;
+    lastOverviewChangeAtRef.current = Date.now();
+  }, [overview]);
+
+  const selectConversation = useCallback(
+    (conversationId: string) => {
+      rememberAgentConversationHistory(conversationId, Boolean(selectedId));
+      onSelectConversation(conversationId);
+    },
+    [onSelectConversation, selectedId],
+  );
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const openNotificationConversation = (event: MessageEvent) => {
+      if (!isAgentNotificationOpenMessage(event.data)) return;
+      notificationOverviewBaselineRef.current = overviewRef.current;
+      setNotificationOpenPending(true);
+    };
+    navigator.serviceWorker.addEventListener(
+      'message',
+      openNotificationConversation,
+    );
+    return () =>
+      navigator.serviceWorker.removeEventListener(
+        'message',
+        openNotificationConversation,
+      );
+  }, []);
+
+  useEffect(() => {
+    if (!notificationOpenPending || busy) return;
+    const inboxFresh =
+      overview !== notificationOverviewBaselineRef.current ||
+      Date.now() - lastOverviewChangeAtRef.current <= 1500;
+    if (!inboxFresh) return;
+
+    let resetInboxView = false;
+    if (filter !== 'all') {
+      onFilterChange('all');
+      resetInboxView = true;
+    }
+    if (searchQuery) {
+      onSearchChange('');
+      resetInboxView = true;
+    }
+    if (resetInboxView) return;
+
+    const target = [...visibleConversations]
+      .filter((conversation) => conversation.agent_unread_count > 0)
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.last_message_at || left.created_at);
+        const rightTime = Date.parse(right.last_message_at || right.created_at);
+        return rightTime - leftTime;
+      })[0];
+
+    setNotificationOpenPending(false);
+    clearAgentNotificationOpenIntent();
+    if (target) selectConversation(target.id);
+  }, [
+    busy,
+    filter,
+    notificationOpenPending,
+    onFilterChange,
+    onSearchChange,
+    overview,
+    searchQuery,
+    selectConversation,
+    visibleConversations,
+  ]);
+
   return (
     <section className="conversation-pane">
       <header className="conversation-head">
@@ -225,13 +310,7 @@ export function AgentInboxPane({
                 .filter(Boolean)
                 .join(' ')}
               data-conversation-id={conversation.id}
-              onClick={() => {
-                rememberAgentConversationHistory(
-                  conversation.id,
-                  Boolean(selectedId),
-                );
-                onSelectConversation(conversation.id);
-              }}
+              onClick={() => selectConversation(conversation.id)}
             >
               <span className="avatar small">
                 {initials(conversation.visitor_name || '访客')}

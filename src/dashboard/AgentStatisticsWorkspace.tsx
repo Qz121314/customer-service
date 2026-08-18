@@ -4,6 +4,7 @@ import {
   type AgentSelfMonthlyStats,
   getAgentSelfMonthlyStats,
 } from './api';
+import { isAgentNotificationOpenMessage } from './agent-push';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
@@ -48,6 +49,19 @@ export function AgentStatisticsModal({
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const closeForNotification = (event: MessageEvent) => {
+      if (isAgentNotificationOpenMessage(event.data)) onClose();
+    };
+    navigator.serviceWorker.addEventListener('message', closeForNotification);
+    return () =>
+      navigator.serviceWorker.removeEventListener(
+        'message',
+        closeForNotification,
+      );
   }, [onClose]);
 
   const countMap = useMemo(

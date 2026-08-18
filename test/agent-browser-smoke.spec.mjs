@@ -155,9 +155,10 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await page.getByRole('button', { name: '关闭', exact: true }).click();
 
   await page.setViewportSize({ width: 1366, height: 768 });
-  await page.getByRole('button', { name: /UI Smoke Product/u }).click();
+  await page.goto(url('/agent?notification=latest-unread'));
   const composer = page.getByPlaceholder('输入回复内容…');
   await expect(composer).toBeVisible();
+  await expect(page).toHaveURL(url('/agent'));
   await expect(page.getByLabel('会话状态')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 700 });
