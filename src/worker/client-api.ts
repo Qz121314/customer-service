@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
 import { assignConversationAgent } from './routing';
+import { broadcastWaitingAssignments } from './assignment-broadcast';
 import {
   consumeConversationCreationQuota,
   passesBurstLimit,
@@ -199,7 +200,10 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const visitorId = normalizeVisitorId(body?.visitorId);
   const sourceHandoffId = normalizeHandoffId(body?.sourceHandoffId);
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
-  const message = body?.message?.trim();
+  const initialMessage =
+    typeof body?.message === 'string' ? body.message.trim() : undefined;
+  const hasInitialMessageInput =
+    body?.clientMessageId !== undefined || body?.message !== undefined;
   const product = normalizeProduct(body?.product);
 
   if (!visitorId)
@@ -212,7 +216,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Source handoff ID is required and must be a UUID v4.',
     );
   }
-  if (!clientMessageId) {
+  if (hasInitialMessageInput && !clientMessageId) {
     return error(
       c,
       400,
@@ -220,7 +224,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Client message ID is invalid.',
     );
   }
-  if (!validMessage(message))
+  if (hasInitialMessageInput && !validMessage(initialMessage))
     return error(c, 400, 'INVALID_MESSAGE', 'Message is invalid.');
   if (!product)
     return error(c, 400, 'INVALID_PRODUCT', 'Product context is invalid.');
@@ -237,6 +241,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.site_id = ?1
          AND v.external_id = ?2
+         AND ?3 IS NOT NULL
          AND m.client_message_id = ?3
        LIMIT 1
      ),
@@ -369,28 +374,36 @@ clientApi.post('/client/v1/conversations', async (c) => {
     )
     .run();
 
-  const { message: createdMessage } = await persistClientMessage(c.env.DB, {
-    conversationId,
-    senderType: 'visitor',
-    senderId: visitor.id,
-    body: message!,
-    clientMessageId,
-  });
+  let createdMessage: MessageRow | null = null;
+  if (clientMessageId && initialMessage) {
+    createdMessage = (
+      await persistClientMessage(c.env.DB, {
+        conversationId,
+        senderType: 'visitor',
+        senderId: visitor.id,
+        body: initialMessage,
+        clientMessageId,
+      })
+    ).message;
+  }
 
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
 
-  await broadcastRoom(c.env, conversationId, {
-    type: 'message',
-    message: adminMessage(createdMessage),
-  });
-  const conversation = await broadcastClientConversationEvent(
-    c.env,
+  if (createdMessage) {
+    await broadcastRoom(c.env, conversationId, {
+      type: 'message',
+      message: adminMessage(createdMessage),
+    });
+  }
+  if (assignment) {
+    await broadcastWaitingAssignments(c.env, assignment.id, [conversationId]);
+  }
+
+  const conversation = await ownedConversation(
+    c.env.DB,
     conversationId,
-    'message.created',
-    {
-      message: clientMessage(createdMessage),
-    },
-    { includeOverview: Boolean(assignment) },
+    site.id,
+    visitorId,
   );
   if (!conversation) throw new Error('Conversation persistence failed');
 
@@ -462,11 +475,9 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     .bind(conversation.visitor_id)
     .run();
 
-  let assignmentChanged = false;
+  let assignment: Awaited<ReturnType<typeof assignConversationAgent>> = null;
   if (!conversation.assigned_agent) {
-    assignmentChanged = Boolean(
-      await assignConversationAgent(c.env.DB, conversation.id),
-    );
+    assignment = await assignConversationAgent(c.env.DB, conversation.id);
   }
   await broadcastRoom(c.env, conversation.id, {
     type: 'message',
@@ -477,8 +488,11 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     conversation.id,
     'message.created',
     { message: clientMessage(createdMessage) },
-    { includeOverview: assignmentChanged },
+    { includeOverview: Boolean(assignment) },
   );
+  if (assignment) {
+    await broadcastWaitingAssignments(c.env, assignment.id, [conversation.id]);
+  }
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
