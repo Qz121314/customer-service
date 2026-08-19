@@ -145,7 +145,6 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     name?: string;
     username?: string;
     password?: string;
-    productIds?: string[];
     routingScope?: unknown;
     maxActiveConversations?: number;
     dailyConversationLimit?: number;
@@ -165,11 +164,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     return c.json({ error: 'USERNAME_EXISTS' }, 409);
   }
 
-  const routingScope = await normalizeRoutingScope(
-    c.env.DB,
-    body?.routingScope,
-    body?.productIds ?? [],
-  );
+  const routingScope = await normalizeRoutingScope(c.env.DB, body?.routingScope);
   if (!routingScope) {
     return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
   }
@@ -289,7 +284,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     name?: string;
     username?: string;
     password?: string;
-    productIds?: string[];
     routingScope?: unknown;
     maxActiveConversations?: number;
     dailyConversationLimit?: number;
@@ -392,13 +386,9 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   }
 
   const routingScope =
-    body.routingScope === undefined && body.productIds === undefined
+    body.routingScope === undefined
       ? await currentRoutingScope(c.env.DB, id)
-      : await normalizeRoutingScope(
-          c.env.DB,
-          body.routingScope,
-          body.productIds ?? [],
-        );
+      : await normalizeRoutingScope(c.env.DB, body.routingScope);
   if (!routingScope) {
     return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
   }
@@ -510,7 +500,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
                updated_at = CURRENT_TIMESTAMP
            WHERE assigned_agent = ?1
              AND status IN ('open', 'pending')
-             AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+             AND expires_at > CURRENT_TIMESTAMP`,
       ).bind(id),
     );
   }
@@ -661,8 +651,6 @@ async function loadAgents(db: D1Database) {
       lastLoginAt: agent.last_login_at,
       lastSeenAt: agent.last_seen_at,
       hasPassword: Boolean(agent.password_hash && agent.password_salt),
-      productIds:
-        routingScope.type === 'product' ? routingScope.productIds : [],
       routingScope,
     };
   });
@@ -706,7 +694,7 @@ async function assignedActiveConversationIds(
        FROM conversations
        WHERE assigned_agent = ?1
          AND status IN ('open', 'pending')
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND expires_at > CURRENT_TIMESTAMP
        ORDER BY last_message_at ASC, id ASC`,
     )
     .bind(agentId)
@@ -784,25 +772,15 @@ function scopeFromRows(rows: ScopeRow[]): AgentRoutingScope {
 async function normalizeRoutingScope(
   db: D1Database,
   raw: unknown,
-  legacyProductIds: string[],
 ): Promise<AgentRoutingScope | null> {
-  if (raw === undefined) {
-    const productIds = normalizedIdentifiers(legacyProductIds);
-    if (!productIds.length) return { type: 'none' };
-    return (await allEnabledProductsExist(db, productIds))
-      ? { type: 'product', productIds }
-      : null;
-  }
+  if (raw === undefined) return { type: 'none' };
   if (!isRecord(raw) || typeof raw.type !== 'string') return null;
 
   if (raw.type === 'none') return { type: 'none' };
 
   if (raw.type === 'section') {
-    const legacySectionId = normalizeIdentifier(raw.sectionId);
-    const sectionIds = normalizedIdentifiers([
-      ...(Array.isArray(raw.sectionIds) ? raw.sectionIds : []),
-      legacySectionId,
-    ]);
+    if (!Array.isArray(raw.sectionIds)) return null;
+    const sectionIds = normalizedIdentifiers(raw.sectionIds);
     if (!sectionIds.length) return null;
     return (await allEnabledSectionsExist(db, sectionIds))
       ? { type: 'section', sectionIds }
