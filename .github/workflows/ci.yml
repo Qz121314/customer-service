@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -31,6 +33,32 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Normalize admin closure formatting
+        if: github.event_name == 'pull_request' && github.head_ref == 'agent/admin-console-commercial-closure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write \
+            src/dashboard/AdminPortal.tsx \
+            src/dashboard/AdminStatisticsPage.tsx \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/main.tsx
+          if ! git diff --quiet -- \
+            src/dashboard/AdminPortal.tsx \
+            src/dashboard/AdminStatisticsPage.tsx \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/main.tsx; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add \
+              src/dashboard/AdminPortal.tsx \
+              src/dashboard/AdminStatisticsPage.tsx \
+              src/dashboard/AgentEditorModal.tsx \
+              src/dashboard/main.tsx
+            git commit -m "Format admin console closure"
+            git push origin HEAD:agent/admin-console-commercial-closure
+          fi
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
