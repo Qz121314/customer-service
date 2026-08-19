@@ -26,11 +26,14 @@ import {
   presenceClass,
   statusLabel,
   relativeTime,
+  initials,
   message,
 } from './dashboard-runtime';
 import { UiIcon, AdminLogin, AdminSetup, Startup } from './dashboard-ui';
-import { AdminStatisticsModal } from './AdminStatisticsModal';
+import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
+
+type AdminView = AdminSection | 'statistics';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -82,8 +85,7 @@ export function AdminPortal() {
 function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
-  const [section, setSection] = useState<AdminSection>('agents');
-  const [statisticsOpen, setStatisticsOpen] = useState(false);
+  const [section, setSection] = useState<AdminView>('agents');
   const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
@@ -101,6 +103,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   >([]);
   const [quotaLedger, setQuotaLedger] = useState<AgentQuotaLedger | null>(null);
   const [quotaHistoryBusy, setQuotaHistoryBusy] = useState(false);
+  const [quotaHistoryError, setQuotaHistoryError] = useState('');
 
   const refresh = useCallback(async () => {
     const [nextAgents, nextProducts] = await Promise.all([
@@ -118,7 +121,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (!statisticsOpen) return;
+    if (section !== 'statistics') return;
     let active = true;
     setStatsError('');
     setStatsBusy(true);
@@ -135,16 +138,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return () => {
       active = false;
     };
-  }, [statisticsOpen, statsMonth]);
-
-  useEffect(() => {
-    if (!statisticsOpen) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setStatisticsOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [statisticsOpen]);
+  }, [section, statsMonth]);
 
   useEffect(() => {
     if (!editorOpen || saving) return;
@@ -154,33 +148,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [editorOpen, saving]);
-
-  useEffect(() => {
-    if (!editorOpen || !draft.id) {
-      setQuotaAdjustments([]);
-      setQuotaLedger(null);
-      setQuotaHistoryBusy(false);
-      return;
-    }
-    let active = true;
-    setQuotaLedger(null);
-    setQuotaHistoryBusy(true);
-    getAgentQuotaLedger(draft.id)
-      .then((result) => {
-        if (!active) return;
-        setQuotaAdjustments(result.adjustments);
-        setQuotaLedger(result.ledger);
-      })
-      .catch((reason) => {
-        if (active) setError(message(reason, '无法核对咨询额度账本'));
-      })
-      .finally(() => {
-        if (active) setQuotaHistoryBusy(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [editorOpen, draft.id]);
 
   const workspaceUrl = `${window.location.origin}/agent`;
   const onlineCount = agents.filter(
@@ -195,13 +162,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     ),
   ).size;
 
+  function resetQuotaLedgerState() {
+    setQuotaAdjustments([]);
+    setQuotaLedger(null);
+    setQuotaHistoryBusy(false);
+    setQuotaHistoryError('');
+  }
+
   function createNewAgent() {
     setDraft({
       ...emptyAgentDraft,
       trafficQuotaRequestId: crypto.randomUUID(),
     });
-    setQuotaAdjustments([]);
-    setQuotaLedger(null);
+    resetQuotaLedgerState();
     setEditorOpen(true);
     setError('');
   }
@@ -222,9 +195,24 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       trafficQuotaRequestId: crypto.randomUUID(),
       isEnabled: agent.isEnabled,
     });
-    setQuotaLedger(null);
+    resetQuotaLedgerState();
     setEditorOpen(true);
     setError('');
+  }
+
+  async function loadQuotaLedger() {
+    if (!draft.id || quotaHistoryBusy) return;
+    setQuotaHistoryBusy(true);
+    setQuotaHistoryError('');
+    try {
+      const result = await getAgentQuotaLedger(draft.id);
+      setQuotaAdjustments(result.adjustments);
+      setQuotaLedger(result.ledger);
+    } catch (reason) {
+      setQuotaHistoryError(message(reason, '无法核对咨询额度账本'));
+    } finally {
+      setQuotaHistoryBusy(false);
+    }
   }
 
   async function saveAgent(event: FormEvent) {
@@ -266,6 +254,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       }
       setEditorOpen(false);
       setDraft(emptyAgentDraft);
+      resetQuotaLedgerState();
       await refresh();
     } catch (reason) {
       setError(message(reason, '保存客服失败'));
@@ -284,11 +273,18 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
-  const sectionTitle = section === 'agents' ? '客服坐席' : '坐席工作台';
+  const sectionTitle =
+    section === 'agents'
+      ? '客服坐席'
+      : section === 'statistics'
+        ? '坐席流量'
+        : '坐席工作台';
   const sectionHint =
     section === 'agents'
-      ? '配置负责范围、同时会话上限、每日接待上限与累计咨询额度。'
-      : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
+      ? '集中管理客服账号、接待能力、咨询额度与分流负责范围。'
+      : section === 'statistics'
+        ? '按自然月核对每个客服首次实际接收的访客流量。'
+        : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
 
   return (
     <div className="admin-console">
@@ -303,7 +299,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <nav className="admin-nav" aria-label="客服管理导航">
           <button
             type="button"
-            className={section === 'agents' && !statisticsOpen ? 'active' : ''}
+            className={section === 'agents' ? 'active' : ''}
             onClick={() => setSection('agents')}
           >
             <span className="admin-nav-label">
@@ -314,11 +310,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
           <button
             type="button"
-            className={statisticsOpen ? 'active' : ''}
-            onClick={() => {
-              setStatsBusy(true);
-              setStatisticsOpen(true);
-            }}
+            className={section === 'statistics' ? 'active' : ''}
+            onClick={() => setSection('statistics')}
           >
             <span className="admin-nav-label">
               <UiIcon name="statistics" />
@@ -328,9 +321,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
           <button
             type="button"
-            className={
-              section === 'workspace' && !statisticsOpen ? 'active' : ''
-            }
+            className={section === 'workspace' ? 'active' : ''}
             onClick={() => setSection('workspace')}
           >
             <span className="admin-nav-label">
@@ -385,31 +376,30 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
         {section === 'agents' && (
           <div className="admin-agent-layout">
-            <section className="admin-stats">
+            <section className="admin-overview-strip" aria-label="客服概览">
               <div>
-                <span>客服总数</span>
                 <strong>{agents.length}</strong>
+                <span>客服总数</span>
               </div>
               <div>
-                <span>当前在线</span>
                 <strong>{onlineCount}</strong>
+                <span>当前在线</span>
               </div>
               <div>
-                <span>已启用账号</span>
                 <strong>{enabledCount}</strong>
+                <span>已启用账号</span>
               </div>
               <div>
-                <span>已覆盖产品</span>
                 <strong>{assignedProductCount}</strong>
+                <span>已覆盖产品</span>
               </div>
             </section>
+
             <section className="admin-table-card">
               <div className="admin-table-title">
                 <div>
                   <strong>客服账号列表</strong>
-                  <span>
-                    负责范围以动态分流规则保存，分区和分类后续新增产品会自动纳入
-                  </span>
+                  <span>分区和分类规则会自动覆盖后续新增产品</span>
                 </div>
               </div>
               {busy ? (
@@ -428,140 +418,150 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 </div>
               ) : (
                 <div className="admin-table-wrap">
-                  <table className="admin-table">
+                  <table className="admin-table admin-agent-table">
                     <thead>
                       <tr>
-                        <th>客服</th>
-                        <th>登录账号</th>
+                        <th>客服账号</th>
                         <th>负责范围</th>
                         <th>状态</th>
-                        <th>同时会话</th>
-                        <th>今日接待</th>
+                        <th>接待能力</th>
                         <th>咨询额度</th>
-                        <th>最后在线</th>
                         <th aria-label="操作" />
                       </tr>
                     </thead>
                     <tbody>
-                      {agents.map((agent) => (
-                        <tr key={agent.id}>
-                          <td>
-                            <div className="admin-agent-cell">
-                              <span
-                                className={`presence ${presenceClass(agent)}`}
-                              />
-                              <strong>{agent.name}</strong>
-                            </div>
-                          </td>
-                          <td>{agent.username || '—'}</td>
-                          <td>
-                            {(() => {
-                              const summary = agentScopeSummary(
-                                agent,
-                                products,
-                              );
-                              return (
-                                <div
-                                  className={`agent-scope-summary ${summary.tone}`}
-                                >
-                                  <strong>{summary.title}</strong>
-                                  <small>{summary.detail}</small>
-                                </div>
-                              );
-                            })()}
-                          </td>
-                          <td>
-                            <span
-                              className={`account-status ${presenceClass(agent)}`}
-                            >
-                              {agent.isEnabled
-                                ? statusLabel(agent.status)
-                                : '已停用'}
-                            </span>
-                          </td>
-                          <td>{agent.maxActiveConversations || '不限'}</td>
-                          <td>
-                            <div className="daily-quota-cell">
-                              <strong>
-                                {agent.todayConversationCount}
-                                <span>/</span>
-                                {agent.dailyConversationLimit || '∞'}
-                              </strong>
-                              {agent.dailyConversationLimit > 0 ? (
-                                <span
-                                  className={`quota-state ${
-                                    agent.todayConversationCount >=
-                                    agent.dailyConversationLimit
-                                      ? 'full'
-                                      : ''
-                                  }`}
-                                >
-                                  {agent.todayConversationCount >=
-                                  agent.dailyConversationLimit
-                                    ? '今日已满'
-                                    : `剩余 ${Math.max(
-                                        0,
-                                        agent.dailyConversationLimit -
-                                          agent.todayConversationCount,
-                                      )}`}
+                      {agents.map((agent) => {
+                        const summary = agentScopeSummary(agent, products);
+                        const dailyFull =
+                          agent.dailyConversationLimit > 0 &&
+                          agent.todayConversationCount >=
+                            agent.dailyConversationLimit;
+                        const dailyRemaining = Math.max(
+                          0,
+                          agent.dailyConversationLimit -
+                            agent.todayConversationCount,
+                        );
+                        return (
+                          <tr key={agent.id}>
+                            <td>
+                              <div className="admin-agent-cell">
+                                <span className="admin-agent-avatar">
+                                  {initials(agent.name)}
                                 </span>
-                              ) : (
-                                <span className="quota-state">不限</span>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            <div className="traffic-quota-cell">
-                              {agent.trafficQuotaEnabled ? (
-                                <>
-                                  <strong>
-                                    {agent.trafficQuotaRemaining}
-                                    <span> / {agent.trafficQuotaTotal}</span>
-                                  </strong>
-                                  <span
-                                    className={`quota-state ${
-                                      agent.trafficQuotaRemaining === 0
-                                        ? 'full'
-                                        : ''
-                                    }`}
-                                  >
-                                    {agent.trafficQuotaRemaining === 0
-                                      ? '额度已用完'
-                                      : `已用 ${agent.trafficQuotaUsed}`}
+                                <div className="admin-agent-identity">
+                                  <strong>{agent.name}</strong>
+                                  <small>
+                                    @{agent.username || '未设置账号'} ·{' '}
+                                    {agent.lastSeenAt
+                                      ? `最后在线 ${relativeTime(agent.lastSeenAt)}`
+                                      : '从未登录'}
+                                  </small>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <div
+                                className={`agent-scope-summary ${summary.tone}`}
+                              >
+                                <strong>{summary.title}</strong>
+                                <small>{summary.detail}</small>
+                              </div>
+                            </td>
+                            <td>
+                              <span
+                                className={`account-status ${presenceClass(agent)}`}
+                              >
+                                {agent.isEnabled
+                                  ? statusLabel(agent.status)
+                                  : '已停用'}
+                              </span>
+                            </td>
+                            <td>
+                              <div className="admin-capacity-cell">
+                                <strong>
+                                  {agent.todayConversationCount}
+                                  <span>
+                                    {' '}
+                                    / {agent.dailyConversationLimit || '∞'} 今日
                                   </span>
-                                </>
-                              ) : (
-                                <>
-                                  <strong>不限</strong>
-                                  <span className="quota-state">
-                                    未启用额度
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td>
-                            {agent.lastSeenAt
-                              ? relativeTime(agent.lastSeenAt)
-                              : '从未登录'}
-                          </td>
-                          <td>
-                            <button
-                              type="button"
-                              className="table-action"
-                              onClick={() => editAgent(agent)}
-                            >
-                              编辑
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                                </strong>
+                                <small className={dailyFull ? 'is-full' : ''}>
+                                  {dailyFull
+                                    ? '今日已达上限'
+                                    : `同时 ${
+                                        agent.maxActiveConversations || '不限'
+                                      } · ${
+                                        agent.dailyConversationLimit > 0
+                                          ? `今日剩余 ${dailyRemaining}`
+                                          : '每日不限'
+                                      }`}
+                                </small>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="traffic-quota-cell">
+                                {agent.trafficQuotaEnabled ? (
+                                  <>
+                                    <strong>
+                                      {agent.trafficQuotaRemaining}
+                                      <span>
+                                        {' '}
+                                        / {agent.trafficQuotaTotal} 剩余
+                                      </span>
+                                    </strong>
+                                    <small
+                                      className={
+                                        agent.trafficQuotaRemaining === 0
+                                          ? 'is-full'
+                                          : ''
+                                      }
+                                    >
+                                      {agent.trafficQuotaRemaining === 0
+                                        ? '额度已用完'
+                                        : `已用 ${agent.trafficQuotaUsed}`}
+                                    </small>
+                                  </>
+                                ) : (
+                                  <>
+                                    <strong>不限</strong>
+                                    <small>未启用累计额度</small>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                            <td>
+                              <button
+                                type="button"
+                                className="table-action"
+                                onClick={() => editAgent(agent)}
+                              >
+                                编辑
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
             </section>
           </div>
+        )}
+
+        {section === 'statistics' && (
+          <AdminStatisticsPage
+            agents={agents}
+            month={statsMonth}
+            stats={monthlyStats}
+            busy={statsBusy}
+            error={statsError}
+            onClearError={() => setStatsError('')}
+            onMonthChange={(month) => {
+              setStatsBusy(true);
+              setStatsMonth(month);
+            }}
+          />
         )}
 
         {section === 'workspace' && (
@@ -596,22 +596,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         )}
       </main>
 
-      {statisticsOpen && (
-        <AdminStatisticsModal
-          agents={agents}
-          month={statsMonth}
-          stats={monthlyStats}
-          busy={statsBusy}
-          error={statsError}
-          onClearError={() => setStatsError('')}
-          onMonthChange={(month) => {
-            setStatsBusy(true);
-            setStatsMonth(month);
-          }}
-          onClose={() => setStatisticsOpen(false)}
-        />
-      )}
-
       {editorOpen && (
         <AgentEditorModal
           draft={draft}
@@ -620,7 +604,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           quotaAdjustments={quotaAdjustments}
           quotaLedger={quotaLedger}
           quotaHistoryBusy={quotaHistoryBusy}
+          quotaHistoryError={quotaHistoryError}
           onDraftChange={setDraft}
+          onLoadQuotaLedger={() => void loadQuotaLedger()}
           onClose={() => {
             if (!saving) setEditorOpen(false);
           }}
