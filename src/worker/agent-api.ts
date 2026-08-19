@@ -283,7 +283,7 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
         `SELECT status, COUNT(*) AS count
        FROM conversations
        WHERE assigned_agent = ?1
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND expires_at > CURRENT_TIMESTAMP
        GROUP BY status`,
       )
       .bind(agentId)
@@ -310,7 +310,7 @@ async function loadTransferTargets(db: D1Database, agentId: string) {
        LEFT JOIN conversations load
          ON load.assigned_agent = a.id
         AND load.status IN ('open', 'pending')
-        AND COALESCE(load.expires_at, datetime(load.created_at, '+1 day')) > CURRENT_TIMESTAMP
+        AND load.expires_at > CURRENT_TIMESTAMP
        WHERE current.id = ?1
          AND a.is_enabled = 1
          AND a.status = 'online'
@@ -354,7 +354,7 @@ async function loadAgentInbox(
   if (filtered) {
     const shouldBoundClosed = requestedStatus === 'closed';
     const statement = db.prepare(
-      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject,
          c.product_id, c.section_id, c.section_name, c.category_id,
          c.category_name, c.product_title, c.product_cover_url, c.product_href,
          c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
@@ -364,7 +364,7 @@ async function loadAgentInbox(
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.assigned_agent = ?1
          AND c.status = ?2
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND c.expires_at > CURRENT_TIMESTAMP
        ORDER BY c.last_message_at DESC, c.id DESC
        LIMIT COALESCE(?3, -1)`,
     );
@@ -389,7 +389,7 @@ async function loadAgentInbox(
 
   const statement = db.prepare(
     `WITH ranked AS (
-       SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject, c.group_id,
+       SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject,
          c.product_id, c.section_id, c.section_name, c.category_id,
          c.category_name, c.product_title, c.product_cover_url, c.product_href,
          c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
@@ -408,7 +408,7 @@ async function loadAgentInbox(
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.assigned_agent = ?1
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND c.expires_at > CURRENT_TIMESTAMP
      )
      SELECT * FROM ranked
      WHERE status <> 'closed' OR __closed_rank <= ?2
@@ -602,7 +602,7 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
        WHERE m.id = ?1 AND m.conversation_id = ?2
          AND m.sender_type = 'visitor'
          AND c.assigned_agent = ?3
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND c.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
       .bind(requestedLastMessageId, id, agent.id)
@@ -619,7 +619,7 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
            SELECT 1
            FROM conversations c
            WHERE c.id = ?1 AND c.assigned_agent = ?4
-             AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+             AND c.expires_at > CURRENT_TIMESTAMP
          )
          AND (
            ?2 IS NULL
@@ -638,7 +638,7 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
        ),
        updated_at = CURRENT_TIMESTAMP
        WHERE id = ?1 AND assigned_agent = ?2
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+         AND expires_at > CURRENT_TIMESTAMP`,
     ).bind(id, agent.id),
   ]);
 
@@ -728,7 +728,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
          last_message_preview = ?2,
          updated_at = ?1
      WHERE id = ?3 AND assigned_agent = ?4
-       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+       AND expires_at > CURRENT_TIMESTAMP`,
   )
     .bind(now, text, id, agent.id)
     .run();
@@ -767,7 +767,7 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
       `UPDATE conversations
        SET status = ?1, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?2 AND assigned_agent = ?3
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+         AND expires_at > CURRENT_TIMESTAMP`,
     )
       .bind(body.status, id, agent.id)
       .run();
@@ -826,7 +826,7 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
        WHERE id = ?4
          AND assigned_agent = ?5
          AND status IN ('open', 'pending')
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND expires_at > CURRENT_TIMESTAMP
          AND EXISTS (
            SELECT 1
            FROM agents target
@@ -849,7 +849,7 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
                  FROM conversations load
                  WHERE load.assigned_agent = target.id
                    AND load.status IN ('open', 'pending')
-                   AND COALESCE(load.expires_at, datetime(load.created_at, '+1 day')) > CURRENT_TIMESTAMP
+                   AND load.expires_at > CURRENT_TIMESTAMP
                ) < target.max_active_conversations
              )
              AND (
@@ -903,7 +903,7 @@ agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
        WHERE id = ?1
          AND assigned_agent = ?2
          AND status IN ('open', 'pending')
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+         AND expires_at > CURRENT_TIMESTAMP`,
     )
       .bind(id, agent.id)
       .run();
@@ -994,7 +994,7 @@ async function assignedConversationForMessageWrite(
       `SELECT id, status
        FROM conversations
        WHERE id = ?1 AND assigned_agent = ?2
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(id, agentId)
@@ -1011,7 +1011,7 @@ async function assignedConversationForTransfer(
       `SELECT site_id, status
        FROM conversations
        WHERE id = ?1 AND assigned_agent = ?2
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(id, agentId)
@@ -1029,7 +1029,7 @@ async function assignedConversation(
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.id = ?1 AND c.assigned_agent = ?2
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND c.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(id, agentId)
