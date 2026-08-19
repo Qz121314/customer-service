@@ -25,6 +25,10 @@ test('agent mobile inbox keeps the header and metrics compact', () => {
   );
   assert.match(
     narrow,
+    /\.workspace-sidebar \.ghost-button,[\s\S]*?\.workspace-sidebar \.ghost-button\.full \{[^}]*width: 34px;[^}]*min-width: 34px;[^}]*height: 34px;[^}]*min-height: 34px;/s,
+  );
+  assert.match(
+    narrow,
     /\.agent-profile \.agent-avatar-button \{[^}]*width: 34px;[^}]*min-width: 34px;[^}]*height: 34px;[^}]*min-height: 34px;/s,
   );
   assert.match(
