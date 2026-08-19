@@ -164,7 +164,10 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     return c.json({ error: 'USERNAME_EXISTS' }, 409);
   }
 
-  const routingScope = await normalizeRoutingScope(c.env.DB, body?.routingScope);
+  const routingScope = await normalizeRoutingScope(
+    c.env.DB,
+    body?.routingScope,
+  );
   if (!routingScope) {
     return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
   }
