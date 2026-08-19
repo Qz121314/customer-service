@@ -50,6 +50,12 @@ const AUTH_LOGIN_PATHS = new Map([
   ['/api/auth/login', 'admin'],
   ['/api/agent/auth/login', 'agent'],
 ]);
+const PROTOCOL_NAMESPACE_PREFIXES = [
+  '/api',
+  '/client',
+  '/integration',
+  '/management',
+] as const;
 const AGENT_TEXT_MESSAGE_PATH =
   /^\/api\/agent\/conversations\/([^/]+)\/messages$/u;
 const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
@@ -154,18 +160,35 @@ app.route('/', agentPushApi);
 app.route('/', pushApi);
 app.route('/', clientApi);
 
-// Core owns only health, admin authentication, Durable Object implementation,
-// unknown API rejection, and static asset fallback.
+// Core owns health, admin authentication, Durable Object implementation,
+// unknown API rejection, and direct asset lookup. SPA shell fallback is kept
+// explicit below so protocol requests can never inherit an HTML 200 response.
 app.route('/', coreApp);
 
 export default {
-  fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
-    // This check runs before Hono and the Assets binding. Removed API paths can
-    // therefore never be rewritten to the SPA's index.html with HTTP 200.
-    if (isRemovedProtocolPath(new URL(request.url).pathname)) {
+  async fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
+    const pathname = new URL(request.url).pathname;
+
+    // Removed protocols are rejected before Hono and before any asset lookup.
+    if (isRemovedProtocolPath(pathname)) {
       return removedProtocolResponse();
     }
-    return app.fetch(request, env, ctx);
+
+    const response = await app.fetch(request, env, ctx);
+    if (
+      response.status !== 404 ||
+      isProtocolNamespacePath(pathname) ||
+      !isSpaNavigationRequest(request)
+    ) {
+      return response;
+    }
+
+    const shellUrl = new URL('/index.html', request.url);
+    const shellRequest = new Request(shellUrl, {
+      method: request.method,
+      headers: request.headers,
+    });
+    return env.ASSETS.fetch(shellRequest);
   },
   scheduled(
     _controller: ScheduledController,
@@ -180,6 +203,17 @@ export default {
   },
 };
 export { ConversationRoom };
+
+function isProtocolNamespacePath(pathname: string): boolean {
+  return PROTOCOL_NAMESPACE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+function isSpaNavigationRequest(request: Request): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false;
+  return (request.headers.get('Accept') ?? '').includes('text/html');
+}
 
 async function responseConversationId(
   response: Response,
