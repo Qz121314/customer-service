@@ -13,6 +13,7 @@ import { sendVisitorPushForConversation } from './visitor-push';
 import { sendAgentPushForConversation } from './agent-push';
 import { agentPushApi } from './agent-push-api';
 import { purgeExpiredConversations } from './conversation-retention';
+import { passesBurstLimit, requestSourceHash } from './abuse-control';
 import {
   isRemovedProtocolPath,
   removedProtocolResponse,
@@ -25,6 +26,7 @@ interface Bindings {
   CONVERSATION_ROOMS: DurableObjectNamespace;
   CONVERSATION_BURST_LIMITER: RateLimit;
   MEDIA_BURST_LIMITER: RateLimit;
+  AUTH_BURST_LIMITER?: RateLimit;
   ADMIN_PASSWORD?: string;
   INTEGRATION_VERIFY_TOKEN?: string;
   R2_ACCOUNT_ID?: string;
@@ -44,12 +46,38 @@ type MediaCompletePayload = {
 };
 
 const app = new Hono<AppEnv>();
+const AUTH_LOGIN_PATHS = new Map([
+  ['/api/auth/login', 'admin'],
+  ['/api/agent/auth/login', 'agent'],
+]);
 const AGENT_TEXT_MESSAGE_PATH =
   /^\/api\/agent\/conversations\/([^/]+)\/messages$/u;
 const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 const CLIENT_CONVERSATION_CREATE_PATH = /^\/client\/v1\/conversations$/u;
 const CLIENT_MESSAGE_PATH = /^\/client\/v1\/conversations\/([^/]+)\/messages$/u;
 const CLIENT_MEDIA_COMPLETE_PATH = /^\/client\/v1\/media\/[^/]+\/complete$/u;
+
+// Authentication is deliberately rate-limited before any D1 lookup or password
+// derivation. The Cloudflare Rate Limiter binding keeps this guard off D1's
+// write quota while protecting both administrator and agent login endpoints.
+app.use('*', async (c, next) => {
+  if (c.req.method === 'POST') {
+    const pathname = new URL(c.req.url).pathname;
+    const authScope = AUTH_LOGIN_PATHS.get(pathname);
+    if (authScope) {
+      const sourceHash = await requestSourceHash(c.req.raw, 'auth-login');
+      const allowed = await passesBurstLimit(
+        c.env.AUTH_BURST_LIMITER,
+        `${authScope}:${sourceHash}`,
+      );
+      if (!allowed) {
+        c.header('Retry-After', '60');
+        return c.json({ error: 'AUTH_RATE_LIMITED' }, 429);
+      }
+    }
+  }
+  await next();
+});
 
 app.route('/', integrationApi);
 
