@@ -54,17 +54,19 @@ Site / 产品页
 ```text
 React + Vite
       ↓
-Cloudflare Worker / Hono
+Cloudflare Static Assets + Worker / Hono
+      ├─ Static Assets：管理端 / 坐席端页面与构建资源
       ├─ D1：账号、会话、消息、路由、统计、额度
       ├─ R2：聊天图片、客服头像
       ├─ Durable Objects：会话和坐席实时 WebSocket
-      ├─ Rate Limiting：新建会话与媒体突发限制
+      ├─ Rate Limiting：登录、新建会话与媒体突发限制
       ├─ Web Push：访客 / 坐席后台通知
       └─ Cron：过期数据与孤立资源清理
 ```
 
 原则：
 
+- 静态 UI 资源保持 Assets-first；只有 `/api/*`、`/client/*`、`/integration/*` 等协议路径强制进入 Worker；
 - Worker 只承担必要协议和业务边界；
 - D1 热路径优先单条 SQL、批量 SQL、原子更新，避免逐项请求；
 - 前端能够本地完成的筛选、搜索和草稿不消耗 Worker / D1；
@@ -171,7 +173,7 @@ Content-Type: application/json
 
 ### 6.1 负责范围
 
-正式路由表为 `agent_routing_scopes`：
+正式路由表为 `agent_routing_scopes`，管理 API 只接受和返回统一的 `routingScope`，不再维护旧的顶层 `productIds` 或单 `sectionId` 兼容协议：
 
 | 范围     | 行为                                     |
 | -------- | ---------------------------------------- |
@@ -217,6 +219,8 @@ Content-Type: application/json
 ### 7.1 24 小时临时会话
 
 - 生命周期从创建时固定计算 24 小时；
+- `conversations.expires_at` 是运行时唯一权威到期字段，历史 NULL 数据由 migration 回填；
+- 热路径直接按 `expires_at` 查询，保留 `idx_conversations_expiry` 的索引价值；
 - 新消息不续期；
 - 到期后删除会话、消息、媒体记录和相关 R2 对象；
 - 无会话的过期临时访客随后删除；
@@ -265,8 +269,11 @@ Content-Type: application/json
 - 两类计数在同一条 D1 SQL 中原子消费，失败请求不会只消耗其中一个计数；
 - `sourceHandoffId` 和 `clientMessageId` 提供幂等保护。
 
+登录接口同样使用独立的 Cloudflare Rate Limiting binding。管理员和坐席登录在进入 D1 查询或坐席密码派生前先按来源限流，登录防刷本身不增加 D1 计数写入。
+
 资源策略：
 
+- 静态页面、JS、CSS 和图标默认直接由 Static Assets 提供，不为普通 UI 资源执行 Worker；
 - Inbox 一次返回会话概览、额度摘要和可转接坐席；
 - 状态筛选、搜索、未读优先在浏览器本地完成；
 - 输入草稿完全本地化；
@@ -288,9 +295,19 @@ Content-Type: application/json
 - 孤立 / 失败媒体由有界后台清理处理；
 - 客户端头像读取接口允许跨域缓存使用。
 
+聊天媒体优先使用浏览器直传 R2。生产环境配置以下 Secret 后，Worker 只负责创建约 5 分钟有效的预签名上传地址：
+
+```text
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+```
+
+`R2_BUCKET_NAME` 可选，未设置时使用 `customer-service-media`。如果直传凭证缺失，系统会回退到 Worker proxy upload，功能仍可用，但正式部署应优先配置直传以减少 Worker 数据路径。
+
 ## 10. 实时连接与通知
 
-- 会话实时通道：Durable Object + WebSocket；
+- 会话实时通道：Durable Object + WebSocket Hibernation；
 - 坐席 Inbox 有独立实时连接；
 - WebSocket 断开后使用递增退避和 jitter 自动恢复；
 - 浏览器重新可见或网络恢复时会执行一次状态恢复；
@@ -381,7 +398,7 @@ pnpm db:migrate:remote
 pnpm deploy:cloudflare
 ```
 
-生产部署由 GitHub Actions 在 `main` 上自动执行。
+生产部署由 GitHub Actions 在 `main` 上自动执行。聊天媒体建议在生产环境同时配置第 9 节的 R2 S3 凭证，以确保使用 direct upload 而不是 Worker proxy fallback。
 
 ## 14. CI 验收
 
@@ -420,7 +437,8 @@ Chromium UI smoke 覆盖关键易回归路径：
 - 旧路由表已经通过后续 migration 删除；
 - 旧 D1 快捷回复表已经删除；
 - 快捷回复兼容 view 再由后续 migration 删除；
-- 客服头像字段通过独立 migration 增加。
+- 客服头像字段通过独立 migration 增加；
+- `0037_finalize_conversation_expiry.sql` 最终回填历史 NULL `expires_at`，运行时统一使用权威到期字段。
 
 新变更只继续追加新的序号 migration，保证生产数据库升级路径稳定。
 
@@ -432,7 +450,7 @@ Chromium UI smoke 覆盖关键易回归路径：
 2. 少 Worker 请求、少 D1 热读写、少 R2 垃圾对象；
 3. 能批量就不逐项请求；
 4. 能在浏览器安全完成的便利功能不放到服务器；
-5. PC 和手机共享业务逻辑，但响应式样式边界明确；
+5. PC 和手机共享业务逻辑，但响应式样式边界明确；管理端与坐席端样式分别维护，不交叉覆盖；
 6. 不再通过不断追加 CSS 补丁层解决 UI 问题；
 7. 不引入本项目实际用不到的企业级复杂度；
 8. 每次上线都必须通过自动化构建、协议和关键 UI 验收。
