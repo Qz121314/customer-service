@@ -1,0 +1,549 @@
+name: One-shot agent mobile inbox redesign
+
+on:
+  push:
+    branches: [ui/agent-mobile-inbox-redesign]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ui/agent-mobile-inbox-redesign
+      - name: Redesign mobile agent inbox
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/dashboard/agent-mobile.css')
+          css = path.read_text()
+
+          def replace_once(pattern: str, replacement: str, label: str):
+              global css
+              css, count = re.subn(pattern, replacement, css, count=1, flags=re.M | re.S)
+              if count != 1:
+                  raise SystemExit(f'failed to patch {label}: {count}')
+
+          replace_once(
+              r'^  \.workspace-sidebar,\n  \.thread-head \{.*?^  \}',
+              '''  .workspace-sidebar,
+          .thread-head {
+            box-sizing: border-box;
+            width: 100%;
+            min-width: 0;
+            border: 0;
+            border-bottom: 1px solid var(--mobile-line);
+            background: rgba(255, 255, 255, 0.985);
+            box-shadow: 0 1px 0 rgba(17, 24, 39, 0.025);
+            backdrop-filter: blur(18px) saturate(1.04);
+          }
+
+          .thread-head {
+            height: 60px;
+            min-height: 60px;
+          }''',
+              'shared mobile header',
+          )
+          replace_once(
+              r'^  \.workspace-sidebar \{.*?^  \}',
+              '''  .workspace-sidebar {
+            position: relative;
+            z-index: 40;
+            display: flex;
+            width: 100%;
+            height: 52px;
+            min-height: 52px;
+            flex-direction: row;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px 6px 12px;
+          }''',
+              'mobile agent bar',
+          )
+          replace_once(
+              r'^  \.agent-profile \{.*?^  \}',
+              '''  .agent-profile {
+            position: relative;
+            min-width: 0;
+            max-width: min(34vw, 132px);
+            flex: 1 1 auto;
+            grid-template-columns: 34px minmax(0, 1fr);
+            gap: 8px;
+            margin: 0;
+            padding: 0;
+            border: 0;
+          }''',
+              'mobile agent profile',
+          )
+          replace_once(
+              r'^  \.agent-profile \.agent-avatar-button \{.*?^  \}',
+              '''  .agent-profile .agent-avatar-button {
+            width: 34px;
+            min-width: 34px;
+            height: 34px;
+            min-height: 34px;
+            border-radius: 11px;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
+          }''',
+              'mobile agent avatar',
+          )
+          replace_once(
+              r'^  \.agent-profile strong \{.*?^  \}',
+              '''  .agent-profile strong {
+            overflow: hidden;
+            color: var(--mobile-text);
+            font-size: 13px;
+            font-weight: 730;
+            letter-spacing: -0.02em;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }''',
+              'mobile agent name',
+          )
+          replace_once(
+              r'^  \.agent-profile \.presence \{.*?^  \}',
+              '''  .agent-profile .presence {
+            position: absolute;
+            bottom: -1px;
+            left: 25px;
+            width: 8px;
+            height: 8px;
+            margin: 0;
+            border: 2px solid var(--mobile-surface);
+            box-sizing: content-box;
+          }''',
+              'mobile agent presence',
+          )
+          replace_once(
+              r'^  \.workspace-sidebar-actions \{.*?^  \}',
+              '''  .workspace-sidebar-actions {
+            display: grid;
+            flex: 0 0 auto;
+            grid-template-columns: repeat(5, 30px);
+            gap: 1px;
+            margin: 0 0 0 auto;
+            padding: 0;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+          }''',
+              'mobile toolbar',
+          )
+          replace_once(
+              r'^  \.workspace-sidebar \.ghost-button,\n  \.workspace-sidebar \.ghost-button\.full \{.*?^  \}',
+              '''  .workspace-sidebar .ghost-button,
+          .workspace-sidebar .ghost-button.full {
+            position: relative;
+            display: grid;
+            width: 30px;
+            min-width: 30px;
+            height: 30px;
+            min-height: 30px;
+            place-items: center;
+            margin: 0;
+            padding: 0;
+            border: 0;
+            border-radius: 9px;
+            color: #66707d;
+            background: transparent;
+            box-shadow: none;
+          }''',
+              'mobile toolbar buttons',
+          )
+          replace_once(
+              r'^  \.workspace-sidebar \.ghost-button \.ui-icon \{.*?^  \}',
+              '''  .workspace-sidebar .ghost-button .ui-icon {
+            width: 17px;
+            height: 17px;
+          }''',
+              'mobile toolbar icons',
+          )
+          replace_once(
+              r'^  \.workspace-notification-button\.is-enabled::after,\n  \.workspace-sound-button\.is-enabled::after \{.*?^  \}',
+              '''  .workspace-notification-button.is-enabled::after,
+          .workspace-sound-button.is-enabled::after {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            width: 4px;
+            height: 4px;
+            border: 2px solid var(--mobile-surface);
+            border-radius: 50%;
+            background: var(--mobile-accent);
+            content: '';
+            box-sizing: content-box;
+          }''',
+              'mobile toolbar enabled dot',
+          )
+          replace_once(
+              r'^  \.conversation-pane \{.*?^  \}',
+              '''  .conversation-pane {
+            display: flex;
+            width: 100%;
+            height: calc(100dvh - 52px - env(safe-area-inset-top));
+            min-height: 0;
+            border: 0;
+            background: var(--mobile-canvas);
+          }''',
+              'mobile inbox viewport',
+          )
+          replace_once(
+              r'^  \.conversation-head \{.*?^  \}',
+              '''  .conversation-head {
+            min-height: 42px;
+            padding: 6px 12px 4px;
+            border-bottom: 0;
+            background: var(--mobile-canvas);
+          }''',
+              'mobile inbox heading',
+          )
+          replace_once(
+              r'^  \.conversation-head h1 \{.*?^  \}',
+              '''  .conversation-head h1 {
+            margin: 0;
+            color: var(--mobile-text);
+            font-size: 18px;
+            font-weight: 780;
+            letter-spacing: -0.035em;
+            line-height: 1.08;
+          }''',
+              'mobile inbox title',
+          )
+          replace_once(
+              r'^  \.conversation-head-status \{.*?^  \}',
+              '''  .conversation-head-status {
+            gap: 4px;
+          }''',
+              'mobile inbox statuses',
+          )
+          replace_once(
+              r'^  \.availability-pill,\n  \.connection-status \{.*?^  \}',
+              '''  .availability-pill,
+          .connection-status {
+            min-height: 24px;
+            border-radius: 999px;
+            font-weight: 680;
+          }''',
+              'mobile status pills',
+          )
+          replace_once(
+              r'^  \.availability-pill \{.*?^  \}',
+              '''  .availability-pill {
+            padding: 0 8px;
+            border: 1px solid #dcefe7;
+            color: #267d5d;
+            background: #eff9f5;
+            font-size: 9px;
+          }''',
+              'mobile availability pill',
+          )
+          replace_once(
+              r'^  \.connection-status \{.*?^  \}',
+              '''  .connection-status {
+            padding: 0 7px;
+            border: 1px solid var(--mobile-line);
+            color: var(--mobile-muted);
+            background: rgba(255, 255, 255, 0.74);
+            font-size: 0;
+          }''',
+              'mobile realtime pill',
+          )
+          replace_once(
+              r'^  \.inbox-overview \{.*?^  \}',
+              '''  .inbox-overview {
+            display: grid;
+            min-height: 44px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0;
+            margin: 0 12px 7px;
+            overflow: hidden;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+          }''',
+              'compact mobile metrics',
+          )
+          replace_once(
+              r'^  \.inbox-overview \.metric \{.*?^  \}',
+              '''  .inbox-overview .metric {
+            position: relative;
+            display: flex;
+            min-width: 0;
+            min-height: 44px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            padding: 4px 4px;
+            border: 0;
+            background: transparent;
+            text-align: center;
+          }''',
+              'compact mobile metric cells',
+          )
+          replace_once(
+              r'^  \.inbox-overview \.metric \+ \.metric::before \{.*?^  \}',
+              '''  .inbox-overview .metric + .metric::before {
+            position: absolute;
+            top: 9px;
+            bottom: 9px;
+            left: 0;
+            width: 1px;
+            background: var(--mobile-line-strong);
+            content: '';
+          }''',
+              'compact metric separators',
+          )
+          replace_once(
+              r'^  \.inbox-overview \.metric strong \{.*?^  \}',
+              '''  .inbox-overview .metric strong {
+            order: 1;
+            overflow: hidden;
+            max-width: 100%;
+            color: var(--mobile-text);
+            font-size: 15px;
+            font-weight: 760;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }''',
+              'compact metric values',
+          )
+          replace_once(
+              r'^  \.inbox-overview \.metric span \{.*?^  \}',
+              '''  .inbox-overview .metric span {
+            order: 2;
+            overflow: hidden;
+            max-width: 100%;
+            color: var(--mobile-muted);
+            font-size: 8px;
+            font-weight: 620;
+            letter-spacing: 0;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }''',
+              'compact metric labels',
+          )
+          replace_once(
+              r'^  \.filters \{.*?^  \}',
+              '''  .filters {
+            display: grid;
+            min-height: 34px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 2px;
+            margin: 0 10px 7px;
+            padding: 2px;
+            overflow: visible;
+            border: 0;
+            border-radius: 11px;
+            background: #e9edf2;
+          }''',
+              'mobile filters',
+          )
+          replace_once(
+              r'^  \.filter \{.*?^  \}',
+              '''  .filter {
+            width: 100%;
+            min-width: 0;
+            min-height: 30px;
+            padding: 0 5px;
+            border-radius: 9px;
+            color: #6d7683;
+            background: transparent;
+            font-size: 9px;
+            font-weight: 660;
+          }''',
+              'mobile filter buttons',
+          )
+          replace_once(
+              r'^  \.inbox-tools \{.*?^  \}',
+              '''  .inbox-tools {
+            min-height: 44px;
+            gap: 6px;
+            padding: 0 10px 7px;
+            border-bottom: 1px solid var(--mobile-line);
+            background: var(--mobile-canvas);
+          }''',
+              'mobile inbox tools',
+          )
+          replace_once(
+              r'^  \.inbox-search,\n  \.unread-first-toggle \{.*?^  \}',
+              '''  .inbox-search,
+          .unread-first-toggle {
+            min-height: 36px;
+            border: 1px solid var(--mobile-line-strong);
+            border-radius: 11px;
+            background: var(--mobile-surface);
+            box-shadow: none;
+          }''',
+              'mobile search controls',
+          )
+          replace_once(
+              r'^  \.inbox-search \{.*?^  \}',
+              '''  .inbox-search {
+            height: 36px;
+            color: #8d96a2;
+          }''',
+              'mobile search',
+          )
+          replace_once(
+              r'^  \.inbox-search input \{.*?^  \}',
+              '''  .inbox-search input {
+            height: 34px;
+            padding-right: 9px;
+            color: #272c34;
+            font-size: 12px;
+          }''',
+              'mobile search input',
+          )
+          replace_once(
+              r'^  \.unread-first-toggle \{.*?^  \}',
+              '''  .unread-first-toggle {
+            min-width: 66px;
+            padding: 0 8px;
+            color: #6f7885;
+            font-size: 9px;
+            font-weight: 680;
+          }''',
+              'mobile unread control',
+          )
+          replace_once(
+              r'^  \.conversation-row \{.*?^  \}',
+              '''  .conversation-row {
+            position: relative;
+            min-height: 66px;
+            gap: 9px;
+            padding: 8px 12px;
+            border-bottom: 1px solid #f0f2f5;
+            background: var(--mobile-surface);
+            transition: background 120ms ease;
+          }''',
+              'mobile conversation row',
+          )
+          replace_once(
+              r'^  \.conversation-row \.avatar\.small \{.*?^  \}',
+              '''  .conversation-row .avatar.small {
+            width: 40px;
+            min-width: 40px;
+            height: 40px;
+            min-height: 40px;
+            border-radius: 12px;
+            color: #596372;
+            background: #eef1f4;
+            font-weight: 720;
+          }''',
+              'mobile visitor avatar',
+          )
+
+          marker = '@media (max-width: 390px) {'
+          before, narrow = css.split(marker, 1)
+          narrow, count = re.subn(
+              r'^  \.workspace-sidebar \{.*?^  \}',
+              '''  .workspace-sidebar {
+            gap: 4px;
+            padding-inline: 8px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow sidebar')
+          narrow, count = re.subn(
+              r'^  \.agent-profile \{.*?^  \}',
+              '''  .agent-profile {
+            max-width: 104px;
+            grid-template-columns: 32px minmax(0, 1fr);
+            gap: 6px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow profile')
+          narrow, count = re.subn(
+              r'^  \.agent-profile \.agent-avatar-button \{.*?^  \}',
+              '''  .agent-profile .agent-avatar-button {
+            width: 32px;
+            min-width: 32px;
+            height: 32px;
+            min-height: 32px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow avatar')
+          narrow, count = re.subn(
+              r'^  \.agent-profile \.presence \{.*?^  \}',
+              '''  .agent-profile .presence {
+            left: 23px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow presence')
+          narrow, count = re.subn(
+              r'^  \.workspace-sidebar-actions \{.*?^  \}',
+              '''  .workspace-sidebar-actions {
+            grid-template-columns: repeat(5, 28px);
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow toolbar')
+          narrow, count = re.subn(
+              r'^  \.workspace-sidebar \.ghost-button,\n  \.workspace-sidebar \.ghost-button\.full \{.*?^  \}',
+              '''  .workspace-sidebar .ghost-button,
+          .workspace-sidebar .ghost-button.full {
+            width: 28px;
+            min-width: 28px;
+            height: 28px;
+            min-height: 28px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow toolbar buttons')
+          narrow, count = re.subn(
+              r'^  \.conversation-head h1 \{.*?^  \}',
+              '''  .conversation-head h1 {
+            font-size: 17px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow title')
+          narrow, count = re.subn(
+              r'^  \.inbox-overview \.metric strong \{.*?^  \}',
+              '''  .inbox-overview .metric strong {
+            font-size: 14px;
+          }''',
+              narrow,
+              count=1,
+              flags=re.M | re.S,
+          )
+          if count != 1: raise SystemExit('failed narrow metrics')
+
+          path.write_text(before + marker + narrow)
+          PY
+          rm .github/workflows/one-shot-agent-mobile-redesign.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Redesign compact agent mobile inbox'
+          git push origin HEAD:ui/agent-mobile-inbox-redesign
