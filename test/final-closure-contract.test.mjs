@@ -16,8 +16,8 @@ test('Cloudflare closure keeps static assets asset-first and login abuse off D1'
   assert.ok(wrangler.includes('"/api/*"'));
   assert.ok(wrangler.includes('"/client/*"'));
   assert.ok(wrangler.includes('"/integration/*"'));
-  assert.ok(wrangler.includes('"/management"'));
-  assert.ok(wrangler.includes('"/management/*"'));
+  assert.ok(wrangler.includes('"/management/v1"'));
+  assert.ok(wrangler.includes('"/management/v1/*"'));
   assert.ok(wrangler.includes('"AUTH_BURST_LIMITER"'));
   assert.ok(entry.includes('AUTH_BURST_LIMITER?: RateLimit'));
   assert.ok(entry.includes("'/api/auth/login'"));
