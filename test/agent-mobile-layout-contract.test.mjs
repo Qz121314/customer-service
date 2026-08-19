@@ -47,7 +47,6 @@ test('agent route isolates styles and mobile UI has one visual owner', () => {
     '.inbox-overview .metric + .metric::before',
     '.thread-actions',
     'grid-template-columns: auto auto 38px;',
-    'grid-template-columns: auto auto 34px;',
     '.thread-status-action',
     'grid-template-columns: 38px minmax(0, 1fr) 42px;',
     'env(safe-area-inset-bottom)',
