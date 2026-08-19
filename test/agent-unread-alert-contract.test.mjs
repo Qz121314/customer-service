@@ -6,7 +6,10 @@ import { URL } from 'node:url';
 test('agent unread reminders use a dedicated red alert treatment', async () => {
   const [main, css] = await Promise.all([
     readFile(new URL('../src/dashboard/main.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/dashboard/agent-unread.css', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/dashboard/agent-unread.css', import.meta.url),
+      'utf8',
+    ),
   ]);
 
   assert.match(
