@@ -51,8 +51,6 @@
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
-    height: 60px;
-    min-height: 60px;
     border: 0;
     border-bottom: 1px solid var(--mobile-line);
     background: rgba(255, 255, 255, 0.985);
@@ -60,14 +58,22 @@
     backdrop-filter: blur(18px) saturate(1.04);
   }
 
+  .thread-head {
+    height: 60px;
+    min-height: 60px;
+  }
+
   .workspace-sidebar {
     position: relative;
     z-index: 40;
     display: flex;
+    width: 100%;
+    height: 52px;
+    min-height: 52px;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
-    padding: 8px 10px 8px 12px;
+    gap: 6px;
+    padding: 6px 10px 6px 12px;
   }
 
   .workspace-brand-lockup {
@@ -77,22 +83,22 @@
   .agent-profile {
     position: relative;
     min-width: 0;
-    max-width: min(42vw, 166px);
+    max-width: min(34vw, 132px);
     flex: 1 1 auto;
-    grid-template-columns: 38px minmax(0, 1fr);
-    gap: 9px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
     margin: 0;
     padding: 0;
     border: 0;
   }
 
   .agent-profile .agent-avatar-button {
-    width: 38px;
-    min-width: 38px;
-    height: 38px;
-    min-height: 38px;
-    border-radius: 13px;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 11px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
   }
 
   .agent-profile > div {
@@ -102,7 +108,7 @@
   .agent-profile strong {
     overflow: hidden;
     color: var(--mobile-text);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 730;
     letter-spacing: -0.02em;
     text-overflow: ellipsis;
@@ -115,10 +121,10 @@
 
   .agent-profile .presence {
     position: absolute;
-    bottom: 0;
-    left: 29px;
-    width: 9px;
-    height: 9px;
+    bottom: -1px;
+    left: 25px;
+    width: 8px;
+    height: 8px;
     margin: 0;
     border: 2px solid var(--mobile-surface);
     box-sizing: content-box;
@@ -127,13 +133,13 @@
   .workspace-sidebar-actions {
     display: grid;
     flex: 0 0 auto;
-    grid-template-columns: repeat(4, 34px);
-    gap: 2px;
+    grid-template-columns: repeat(5, 34px);
+    gap: 1px;
     margin: 0 0 0 auto;
-    padding: 3px;
-    border: 1px solid var(--mobile-line);
-    border-radius: var(--mobile-radius-md);
-    background: var(--mobile-surface-subtle);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .workspace-sidebar .ghost-button,
@@ -148,8 +154,8 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: 10px;
-    color: #68717f;
+    border-radius: 9px;
+    color: #66707d;
     background: transparent;
     box-shadow: none;
   }
@@ -159,8 +165,8 @@
   }
 
   .workspace-sidebar .ghost-button .ui-icon {
-    width: 18px;
-    height: 18px;
+    width: 17px;
+    height: 17px;
   }
 
   .workspace-sidebar .ghost-button:active {
@@ -176,10 +182,10 @@
   .workspace-notification-button.is-enabled::after,
   .workspace-sound-button.is-enabled::after {
     position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 5px;
-    height: 5px;
+    top: 3px;
+    right: 3px;
+    width: 4px;
+    height: 4px;
     border: 2px solid var(--mobile-surface);
     border-radius: 50%;
     background: var(--mobile-accent);
@@ -190,7 +196,7 @@
   .conversation-pane {
     display: flex;
     width: 100%;
-    height: calc(100dvh - 60px - env(safe-area-inset-top));
+    height: calc(100dvh - 52px - env(safe-area-inset-top));
     min-height: 0;
     border: 0;
     background: var(--mobile-canvas);
@@ -214,8 +220,8 @@
   }
 
   .conversation-head {
-    min-height: 56px;
-    padding: 9px 12px 7px;
+    min-height: 42px;
+    padding: 6px 12px 4px;
     border-bottom: 0;
     background: var(--mobile-canvas);
   }
@@ -227,10 +233,10 @@
   .conversation-head h1 {
     margin: 0;
     color: var(--mobile-text);
-    font-size: 21px;
+    font-size: 18px;
     font-weight: 780;
-    letter-spacing: -0.04em;
-    line-height: 1.1;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
   }
 
   .unread-total {
@@ -241,22 +247,22 @@
   }
 
   .conversation-head-status {
-    gap: 5px;
+    gap: 4px;
   }
 
   .availability-pill,
   .connection-status {
-    min-height: 28px;
+    min-height: 24px;
     border-radius: 999px;
     font-weight: 680;
   }
 
   .availability-pill {
-    padding: 0 9px;
+    padding: 0 8px;
     border: 1px solid #dcefe7;
     color: #267d5d;
     background: #eff9f5;
-    font-size: 10px;
+    font-size: 9px;
   }
 
   .availability-pill.is-busy {
@@ -266,10 +272,10 @@
   }
 
   .connection-status {
-    padding: 0 8px;
+    padding: 0 7px;
     border: 1px solid var(--mobile-line);
     color: var(--mobile-muted);
-    background: rgba(255, 255, 255, 0.78);
+    background: rgba(255, 255, 255, 0.74);
     font-size: 0;
   }
 
@@ -301,27 +307,27 @@
 
   .inbox-overview {
     display: grid;
-    min-height: 66px;
+    min-height: 44px;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0;
-    margin: 0 10px 9px;
+    margin: 0 12px 7px;
     overflow: hidden;
-    border: 1px solid var(--mobile-line);
-    border-radius: var(--mobile-radius-lg);
-    background: var(--mobile-surface);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .inbox-overview .metric {
     position: relative;
     display: flex;
     min-width: 0;
-    min-height: 64px;
+    min-height: 44px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    padding: 8px 5px;
+    gap: 3px;
+    padding: 4px 4px;
     border: 0;
     background: transparent;
     text-align: center;
@@ -329,11 +335,11 @@
 
   .inbox-overview .metric + .metric::before {
     position: absolute;
-    top: 14px;
-    bottom: 14px;
+    top: 9px;
+    bottom: 9px;
     left: 0;
     width: 1px;
-    background: var(--mobile-line);
+    background: var(--mobile-line-strong);
     content: '';
   }
 
@@ -342,10 +348,10 @@
     overflow: hidden;
     max-width: 100%;
     color: var(--mobile-text);
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 760;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.035em;
+    letter-spacing: -0.03em;
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -356,7 +362,7 @@
     overflow: hidden;
     max-width: 100%;
     color: var(--mobile-muted);
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 620;
     letter-spacing: 0;
     text-overflow: ellipsis;
@@ -365,15 +371,15 @@
 
   .filters {
     display: grid;
-    min-height: 38px;
+    min-height: 34px;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 2px;
-    margin: 0 10px 9px;
-    padding: 3px;
+    margin: 0 10px 7px;
+    padding: 2px;
     overflow: visible;
-    border: 1px solid var(--mobile-line);
-    border-radius: 13px;
-    background: #eceff3;
+    border: 0;
+    border-radius: 11px;
+    background: #e9edf2;
   }
 
   .filter {
@@ -384,7 +390,7 @@
     border-radius: 9px;
     color: #6d7683;
     background: transparent;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 660;
   }
 
@@ -395,24 +401,24 @@
   }
 
   .inbox-tools {
-    min-height: 50px;
-    gap: 7px;
-    padding: 0 10px 9px;
+    min-height: 44px;
+    gap: 6px;
+    padding: 0 10px 7px;
     border-bottom: 1px solid var(--mobile-line);
     background: var(--mobile-canvas);
   }
 
   .inbox-search,
   .unread-first-toggle {
-    min-height: 40px;
+    min-height: 36px;
     border: 1px solid var(--mobile-line-strong);
-    border-radius: 13px;
+    border-radius: 11px;
     background: var(--mobile-surface);
     box-shadow: none;
   }
 
   .inbox-search {
-    height: 40px;
+    height: 36px;
     color: #8d96a2;
   }
 
@@ -428,17 +434,17 @@
   }
 
   .inbox-search input {
-    height: 38px;
-    padding-right: 10px;
+    height: 34px;
+    padding-right: 9px;
     color: #272c34;
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .unread-first-toggle {
-    min-width: 70px;
-    padding: 0 9px;
+    min-width: 66px;
+    padding: 0 8px;
     color: #6f7885;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 680;
   }
 
@@ -457,9 +463,9 @@
 
   .conversation-row {
     position: relative;
-    min-height: 72px;
-    gap: 10px;
-    padding: 9px 12px;
+    min-height: 66px;
+    gap: 9px;
+    padding: 8px 12px;
     border-bottom: 1px solid #f0f2f5;
     background: var(--mobile-surface);
     transition: background 120ms ease;
@@ -486,11 +492,11 @@
   }
 
   .conversation-row .avatar.small {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
-    border-radius: 13px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    border-radius: 12px;
     color: #596372;
     background: #eef1f4;
     font-weight: 720;
@@ -1107,37 +1113,37 @@
 
 @media (max-width: 390px) {
   .workspace-sidebar {
-    gap: 6px;
+    gap: 4px;
     padding-inline: 8px;
   }
 
   .agent-profile {
-    max-width: 118px;
-    grid-template-columns: 36px minmax(0, 1fr);
-    gap: 7px;
+    max-width: 104px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 6px;
   }
 
   .agent-profile .agent-avatar-button {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
-    min-height: 36px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
   }
 
   .agent-profile .presence {
-    left: 27px;
+    left: 25px;
   }
 
   .workspace-sidebar-actions {
-    grid-template-columns: repeat(4, 32px);
+    grid-template-columns: repeat(5, 34px);
   }
 
   .workspace-sidebar .ghost-button,
   .workspace-sidebar .ghost-button.full {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
   }
 
   .conversation-head {
@@ -1145,7 +1151,7 @@
   }
 
   .conversation-head h1 {
-    font-size: 20px;
+    font-size: 17px;
   }
 
   .inbox-overview,
@@ -1154,7 +1160,7 @@
   }
 
   .inbox-overview .metric strong {
-    font-size: 16px;
+    font-size: 14px;
   }
 
   .inbox-overview .metric span {
