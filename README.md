@@ -146,6 +146,8 @@ Site 管理员只配置：
 验证 Token
 ```
 
+Customer Service 侧对应的 Cloudflare Secret 名称是 `INTEGRATION_VERIFY_TOKEN`。Site 保存的验证 Token 必须与这个 Secret 完全一致。
+
 验证：
 
 ```http
@@ -314,6 +316,7 @@ R2_SECRET_ACCESS_KEY
 - 浏览器重新可见或网络恢复时会执行一次状态恢复；
 - 前台可以播放提示音；
 - 后台使用 Web Push；
+- Web Push 的 VAPID 配置由系统在 D1 中按需生成和保存，不需要额外配置 VAPID Secret；
 - 通知发送失败不会改变消息事务结果。
 
 ## 11. PWA
@@ -399,7 +402,22 @@ pnpm db:migrate:remote
 pnpm deploy:cloudflare
 ```
 
-生产部署由 GitHub Actions 在 `main` 上自动执行。聊天媒体建议在生产环境同时配置第 9 节的 R2 S3 凭证，以确保使用 direct upload 而不是 Worker proxy fallback。
+生产部署至少需要配置以下 Cloudflare Secret：
+
+```text
+ADMIN_PASSWORD
+INTEGRATION_VERIFY_TOKEN
+```
+
+为了让聊天图片走浏览器直传 R2、减少 Worker 数据路径，生产环境建议同时配置：
+
+```text
+R2_ACCOUNT_ID
+R2_ACCESS_KEY_ID
+R2_SECRET_ACCESS_KEY
+```
+
+`R2_BUCKET_NAME` 可选。生产部署由 GitHub Actions 在 `main` 上自动执行。
 
 ## 14. CI 验收
 
