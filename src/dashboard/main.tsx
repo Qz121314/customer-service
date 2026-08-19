@@ -30,6 +30,7 @@ async function loadAdminStyles() {
   await import('./ui-polish.css');
   await import('./agent-editor.css');
   await import('./agent-avatar.css');
+  await import('./admin-commercial.css');
 }
 
 async function loadRouteStyles() {
