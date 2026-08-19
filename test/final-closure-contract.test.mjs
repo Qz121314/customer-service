@@ -7,22 +7,25 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test('Cloudflare closure keeps static assets asset-first and login abuse off D1', () => {
-  const wrangler = source('../wrangler.jsonc');
-  const entry = source('../src/worker/entry.ts');
+test(
+  'Cloudflare closure keeps static assets asset-first and login abuse off D1',
+  () => {
+    const wrangler = source('../wrangler.jsonc');
+    const entry = source('../src/worker/entry.ts');
 
-  assert.ok(!wrangler.includes('"run_worker_first": true'));
-  assert.ok(wrangler.includes('"run_worker_first": ['));
-  assert.ok(wrangler.includes('"/api/*"'));
-  assert.ok(wrangler.includes('"/client/*"'));
-  assert.ok(wrangler.includes('"/integration/*"'));
-  assert.ok(wrangler.includes('"AUTH_BURST_LIMITER"'));
-  assert.ok(entry.includes('AUTH_BURST_LIMITER?: RateLimit'));
-  assert.ok(entry.includes("'/api/auth/login'"));
-  assert.ok(entry.includes("'/api/agent/auth/login'"));
-  assert.ok(entry.includes("requestSourceHash(c.req.raw, 'auth-login')"));
-  assert.ok(entry.includes("{ error: 'AUTH_RATE_LIMITED' }"));
-});
+    assert.ok(!wrangler.includes('"run_worker_first": true'));
+    assert.ok(wrangler.includes('"run_worker_first": ['));
+    assert.ok(wrangler.includes('"/api/*"'));
+    assert.ok(wrangler.includes('"/client/*"'));
+    assert.ok(wrangler.includes('"/integration/*"'));
+    assert.ok(wrangler.includes('"AUTH_BURST_LIMITER"'));
+    assert.ok(entry.includes('AUTH_BURST_LIMITER?: RateLimit'));
+    assert.ok(entry.includes("'/api/auth/login'"));
+    assert.ok(entry.includes("'/api/agent/auth/login'"));
+    assert.ok(entry.includes("requestSourceHash(c.req.raw, 'auth-login')"));
+    assert.ok(entry.includes("{ error: 'AUTH_RATE_LIMITED' }"));
+  },
+);
 
 test('routing contract has one canonical request and response shape', () => {
   const admin = source('../src/worker/admin-config-api.ts');
@@ -63,7 +66,9 @@ test('conversation hot paths use authoritative indexed expiry', () => {
     assert.ok(!runtime.includes(expression), expression);
   }
 
-  const migration = source('../migrations/0037_finalize_conversation_expiry.sql');
+  const migration = source(
+    '../migrations/0037_finalize_conversation_expiry.sql',
+  );
   assert.ok(migration.includes('WHERE expires_at IS NULL'));
   assert.ok(migration.includes('idx_conversations_expiry'));
 });
