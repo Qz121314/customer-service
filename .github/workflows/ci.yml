@@ -54,9 +54,26 @@ jobs:
         run: pnpm cf:check
 
       - name: Install browser smoke runtime
+        shell: bash
         run: |
-          pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
-          pnpm exec playwright install --with-deps chromium
+          set -euo pipefail
+          for attempt in 1 2; do
+            if timeout --kill-after=30s 420s bash -c '
+              set -euo pipefail
+              pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
+              pnpm exec playwright install --with-deps chromium
+            '; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 2 ]; then
+              echo "::error::Chromium smoke runtime installation failed after two bounded attempts."
+              exit 1
+            fi
+
+            echo "::warning::Chromium smoke runtime installation timed out or failed; retrying once."
+            sleep 5
+          done
 
       - name: Smoke test agent UI in Chromium
         env:
