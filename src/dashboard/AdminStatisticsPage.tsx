@@ -3,7 +3,7 @@ import type { AgentAccount, AgentMonthlyStats } from './api';
 import { initials, presenceClass, statusLabel } from './dashboard-runtime';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 
-export function AdminStatisticsModal({
+export function AdminStatisticsPage({
   agents,
   month,
   stats,
@@ -11,7 +11,6 @@ export function AdminStatisticsModal({
   error,
   onClearError,
   onMonthChange,
-  onClose,
 }: {
   agents: AgentAccount[];
   month: string;
@@ -20,55 +19,22 @@ export function AdminStatisticsModal({
   error: string;
   onClearError: () => void;
   onMonthChange: (month: string) => void;
-  onClose: () => void;
 }) {
   return (
-    <div
-      className="modal-backdrop admin-statistics-backdrop"
-      onMouseDown={onClose}
-    >
-      <section
-        className="admin-statistics-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="admin-statistics-title"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="admin-statistics-modal-head">
-          <div>
-            <span className="eyebrow">流量账本</span>
-            <h2 id="admin-statistics-title">坐席接待流量</h2>
-            <p>按客服查看首次实际接收的访客流量，转接和重新排队不重复计数。</p>
-          </div>
-          <button
-            type="button"
-            className="modal-close"
-            aria-label="关闭坐席流量"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </header>
-        <div className="admin-statistics-modal-body">
-          {error && (
-            <button
-              type="button"
-              className="notice error"
-              onClick={onClearError}
-            >
-              {error}
-            </button>
-          )}
-          <MonthlyAgentStatistics
-            agents={agents}
-            month={month}
-            stats={stats}
-            busy={busy}
-            onMonthChange={onMonthChange}
-          />
-        </div>
-      </section>
-    </div>
+    <section className="admin-statistics-page">
+      {error && (
+        <button type="button" className="notice error" onClick={onClearError}>
+          {error}
+        </button>
+      )}
+      <MonthlyAgentStatistics
+        agents={agents}
+        month={month}
+        stats={stats}
+        busy={busy}
+        onMonthChange={onMonthChange}
+      />
+    </section>
   );
 }
 
@@ -128,11 +94,11 @@ function MonthlyAgentStatistics({
   }, [agents, selectedAgentId]);
 
   return (
-    <section className="statistics-panel">
+    <section className="statistics-panel admin-statistics-workspace">
       <div className="statistics-toolbar">
         <div>
-          <strong>按坐席核对流量</strong>
-          <span>选择客服坐席，查看每天首次实际接收的访客流量</span>
+          <strong>流量对账</strong>
+          <span>按客服查看每个自然月首次实际接收的访客会话</span>
         </div>
         <label>
           <span>月份</span>
@@ -143,6 +109,7 @@ function MonthlyAgentStatistics({
           />
         </label>
       </div>
+
       {selectedAgent ? (
         <div className="statistics-seat-layout">
           <aside className="statistics-seat-sidebar">
@@ -216,7 +183,7 @@ function MonthlyAgentStatistics({
               <header>
                 <div>
                   <strong>每日接待流量</strong>
-                  <span>每个访客会话只在首次进入坐席时计 1 次</span>
+                  <span>同一会话只在首次进入客服时计 1 次</span>
                 </div>
                 <small>完整月份 · {days.length} 天</small>
               </header>
@@ -240,12 +207,11 @@ function MonthlyAgentStatistics({
           <span>创建客服账号后，这里会按坐席显示每日接待数量。</span>
         </div>
       )}
-      <p className="statistics-note">
+
+      <p className="statistics-note admin-statistics-note">
         每日上限按 America/Los_Angeles 自然日计算；流量账本独立于 24
-        小时聊天记录保存并保留 400 天。每个统计周期对应一个完整自然月，自动展示
-        28、29、30 或 31 天。“可逐笔对账”表示同时带有 Site
-        分发编号的流量；旧数据和直接调用客服 API
-        的会话仍计入接待总数，但不计入对账覆盖率。
+        小时聊天记录保存并保留 400 天。可逐笔对账表示该流量带有 Site
+        分发编号；旧数据和直接调用客服 API 的会话仍计入接待总数。
       </p>
     </section>
   );

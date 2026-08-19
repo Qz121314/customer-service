@@ -15,7 +15,9 @@ export function AgentEditorModal({
   quotaAdjustments,
   quotaLedger,
   quotaHistoryBusy,
+  quotaHistoryError,
   onDraftChange,
+  onLoadQuotaLedger,
   onClose,
   onSubmit,
 }: {
@@ -25,7 +27,9 @@ export function AgentEditorModal({
   quotaAdjustments: AgentQuotaAdjustment[];
   quotaLedger: AgentQuotaLedger | null;
   quotaHistoryBusy: boolean;
+  quotaHistoryError: string;
   onDraftChange: (draft: AgentDraft) => void;
+  onLoadQuotaLedger: () => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -294,27 +298,35 @@ export function AgentEditorModal({
                 {draft.id ? (
                   <div className="traffic-quota-history">
                     <div className="traffic-quota-history-head">
-                      <strong>额度账本</strong>
-                      <span
-                        className={
-                          quotaLedger?.consistent
-                            ? 'is-ok'
-                            : quotaLedger
-                              ? 'is-warning'
-                              : undefined
-                        }
-                      >
-                        {quotaHistoryBusy
-                          ? '正在核对'
-                          : quotaLedger?.consistent
-                            ? '账本已核对'
-                            : quotaLedger
-                              ? '账本需检查'
-                              : '进入编辑时读取'}
-                      </span>
+                      <div>
+                        <strong>额度账本</strong>
+                        <small>仅在需要核对时读取</small>
+                      </div>
+                      {quotaLedger ? (
+                        <span
+                          className={
+                            quotaLedger.consistent ? 'is-ok' : 'is-warning'
+                          }
+                        >
+                          {quotaLedger.consistent ? '账本已核对' : '账本需检查'}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="traffic-quota-load"
+                          disabled={quotaHistoryBusy}
+                          onClick={onLoadQuotaLedger}
+                        >
+                          {quotaHistoryBusy ? '读取中…' : '查看记录'}
+                        </button>
+                      )}
                     </div>
                     {quotaHistoryBusy ? (
                       <p>正在读取…</p>
+                    ) : quotaHistoryError ? (
+                      <p className="traffic-quota-history-error">
+                        {quotaHistoryError}
+                      </p>
                     ) : quotaLedger && !quotaLedger.consistent ? (
                       <div className="traffic-quota-history-list">
                         <div className="traffic-quota-history-row quota-ledger-warning">
@@ -326,7 +338,7 @@ export function AgentEditorModal({
                           <time>请检查</time>
                         </div>
                       </div>
-                    ) : quotaAdjustments.length ? (
+                    ) : quotaLedger && quotaAdjustments.length ? (
                       <div className="traffic-quota-history-list">
                         {quotaAdjustments.map((adjustment) => (
                           <div
@@ -346,8 +358,12 @@ export function AgentEditorModal({
                           </div>
                         ))}
                       </div>
-                    ) : (
+                    ) : quotaLedger ? (
                       <p>账本正常，暂无追加记录</p>
+                    ) : (
+                      <p className="traffic-quota-history-hint">
+                        不查看时不会额外读取账本数据
+                      </p>
                     )}
                   </div>
                 ) : null}

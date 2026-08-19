@@ -10,7 +10,7 @@ const adminConfig = read('../src/worker/admin-config-api.ts');
 const adminPortal = read('../src/dashboard/AdminPortal.tsx');
 const editor = read('../src/dashboard/AgentEditorModal.tsx');
 
-test('quota reconciliation is one on-demand D1 read and stays off admin bootstrap', () => {
+test('quota reconciliation is one explicit D1 read and stays off admin bootstrap', () => {
   assert.match(quotaApi, /\/api\/admin\/agents\/:id\/quota-ledger/u);
   assert.equal((quotaApi.match(/c\.env\.DB\.prepare\(/gu) ?? []).length, 1);
   assert.match(quotaApi, /traffic_quota_total_baseline/u);
@@ -25,8 +25,15 @@ test('quota reconciliation is one on-demand D1 read and stays off admin bootstra
   assert.doesNotMatch(loadAgents, /agent_traffic_receipts/u);
   assert.doesNotMatch(loadAgents, /agent_quota_adjustments/u);
 
-  assert.match(adminPortal, /if \(!editorOpen \|\| !draft\.id\)/u);
+  assert.match(adminPortal, /async function loadQuotaLedger\(\)/u);
   assert.match(adminPortal, /getAgentQuotaLedger\(draft\.id\)/u);
+  assert.doesNotMatch(
+    adminPortal,
+    /useEffect\(\(\) => \{[\s\S]{0,500}getAgentQuotaLedger/u,
+  );
+  assert.match(editor, /onLoadQuotaLedger/u);
+  assert.match(editor, /quotaHistoryBusy\s*\?\s*'读取中…'\s*:\s*'查看记录'/u);
+  assert.match(editor, /不查看时不会额外读取账本数据/u);
 });
 
 test('admin copy separates daily reception limits from cumulative consultation quota', () => {

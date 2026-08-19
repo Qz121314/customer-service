@@ -34,21 +34,21 @@ test('agent statistics opens inside the workspace instead of navigating away', (
   assert.ok(mobileStyles.includes('.workspace-sidebar-actions'));
 });
 
-test('admin statistics opens as a modal with a wrapped day grid', () => {
+test('admin statistics opens as a first-class page with a wrapped day grid', () => {
   const portal = source('../src/dashboard/AdminPortal.tsx');
-  const statistics = source('../src/dashboard/AdminStatisticsModal.tsx');
+  const statistics = source('../src/dashboard/AdminStatisticsPage.tsx');
+  const styles = source('../src/dashboard/admin-commercial.css');
   const app = `${portal}\n${statistics}`;
-  const styles = source('../src/dashboard/cloud-service-ui.css');
 
-  assert.ok(app.includes('setStatisticsOpen(true)'));
-  assert.ok(app.includes('className="admin-statistics-modal"'));
-  assert.ok(app.includes('aria-labelledby="admin-statistics-title"'));
-  assert.ok(app.includes('aria-label="选择客服坐席"'));
-  assert.ok(app.includes('className="statistics-seat-layout"'));
-  assert.ok(app.includes('className="statistics-seat-detail"'));
-  assert.ok(app.includes('className="statistics-day-grid"'));
-  assert.ok(!app.includes("setSection('statistics')"));
-  assert.ok(!app.includes('className="statistics-table"'));
-  assert.ok(styles.includes('grid-template-columns: 220px minmax(0, 1fr)'));
-  assert.ok(styles.includes('grid-template-columns: repeat(10'));
+  assert.ok(portal.includes("setSection('statistics')"));
+  assert.ok(portal.includes("section === 'statistics'"));
+  assert.ok(portal.includes('<AdminStatisticsPage'));
+  assert.ok(statistics.includes('className="admin-statistics-page"'));
+  assert.ok(statistics.includes('aria-label="选择客服坐席"'));
+  assert.ok(statistics.includes('className="statistics-seat-layout"'));
+  assert.ok(statistics.includes('className="statistics-seat-detail"'));
+  assert.ok(statistics.includes('className="statistics-day-grid"'));
+  assert.ok(!app.includes('className="admin-statistics-modal"'));
+  assert.ok(!statistics.includes('aria-modal="true"'));
+  assert.ok(styles.includes('.admin-statistics-page .statistics-seat-layout'));
 });

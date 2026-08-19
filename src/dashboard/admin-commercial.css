@@ -1,0 +1,285 @@
+/* Admin console commercial closure.
+ * This layer is intentionally admin-only and loaded after the legacy dashboard
+ * styles. It reduces report-like density without changing business behaviour.
+ */
+
+.admin-overview-strip {
+  min-height: 58px;
+  margin-bottom: 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 11px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
+}
+
+.admin-overview-strip > div {
+  min-width: 0;
+  padding: 10px 14px;
+  border-right: 1px solid #edf0f3;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.admin-overview-strip > div:last-child {
+  border-right: 0;
+}
+
+.admin-overview-strip strong {
+  color: #171b24;
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: -0.035em;
+}
+
+.admin-overview-strip span {
+  min-width: 0;
+  overflow: hidden;
+  color: #7a8290;
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-table.admin-agent-table {
+  min-width: 940px;
+  table-layout: fixed;
+}
+
+.admin-agent-table th:nth-child(1) {
+  width: 20%;
+}
+
+.admin-agent-table th:nth-child(2) {
+  width: 28%;
+}
+
+.admin-agent-table th:nth-child(3) {
+  width: 11%;
+}
+
+.admin-agent-table th:nth-child(4) {
+  width: 17%;
+}
+
+.admin-agent-table th:nth-child(5) {
+  width: 17%;
+}
+
+.admin-agent-table th:nth-child(6) {
+  width: 7%;
+}
+
+.admin-agent-table td {
+  height: 66px;
+  padding-block: 10px;
+}
+
+.admin-agent-cell {
+  min-width: 0;
+}
+
+.admin-agent-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border: 1px solid #e4e7ec;
+  border-radius: 9px;
+  background: #f7f8fa;
+  color: #475467;
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  font-weight: 780;
+}
+
+.admin-agent-identity {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-agent-identity strong,
+.admin-agent-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-agent-identity strong {
+  color: #1b1f27;
+  font-size: 13px;
+}
+
+.admin-agent-identity small {
+  color: #8a919c;
+  font-size: 10px;
+  font-weight: 550;
+}
+
+.admin-capacity-cell,
+.traffic-quota-cell {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-capacity-cell strong,
+.traffic-quota-cell strong {
+  color: #343a45;
+  font-size: 12px;
+  font-weight: 740;
+  white-space: nowrap;
+}
+
+.admin-capacity-cell strong span,
+.traffic-quota-cell strong span {
+  color: #8b919c;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.admin-capacity-cell small,
+.traffic-quota-cell small {
+  overflow: hidden;
+  color: #8b919c;
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-capacity-cell small.is-full,
+.traffic-quota-cell small.is-full {
+  color: #b54708;
+  font-weight: 700;
+}
+
+.admin-statistics-page {
+  min-width: 0;
+}
+
+.admin-statistics-page > .notice {
+  max-width: none;
+  margin: 0 0 12px;
+}
+
+.admin-statistics-workspace {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-statistics-page .statistics-toolbar {
+  min-height: 64px;
+  padding: 12px 15px;
+  border: 1px solid #e4e7ec;
+  border-radius: 11px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
+}
+
+.admin-statistics-page .statistics-seat-layout {
+  min-height: 500px;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
+}
+
+.admin-statistics-page .statistics-note.admin-statistics-note {
+  margin: 0;
+  padding: 0 2px;
+  color: #858c97;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.traffic-quota-history-head > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.traffic-quota-history-head > div small {
+  color: #8b919c;
+  font-size: 9px;
+  font-weight: 550;
+}
+
+.traffic-quota-load {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #d8dde5;
+  border-radius: 8px;
+  background: #fff;
+  color: #475467;
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.traffic-quota-load:hover:not(:disabled) {
+  border-color: #f3a381;
+  color: #c2410c;
+  background: #fff8f5;
+}
+
+.traffic-quota-load:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.traffic-quota-history-hint,
+.traffic-quota-history-error {
+  margin: 0;
+  padding: 9px 0 1px;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.traffic-quota-history-hint {
+  color: #8b919c;
+}
+
+.traffic-quota-history-error {
+  color: #b42318;
+  font-weight: 650;
+}
+
+@media (max-width: 1100px) {
+  .admin-overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-overview-strip > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .admin-overview-strip > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #edf0f3;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-overview-strip {
+    min-height: 0;
+  }
+
+  .admin-overview-strip > div {
+    min-height: 48px;
+    padding: 8px 10px;
+  }
+
+  .admin-overview-strip strong {
+    font-size: 16px;
+  }
+
+  .admin-statistics-page .statistics-toolbar {
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-statistics-page .statistics-seat-layout {
+    min-height: 0;
+  }
+}
