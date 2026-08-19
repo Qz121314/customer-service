@@ -86,6 +86,33 @@ async function expectCenteredDialog(page) {
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 1);
 }
 
+async function expectMobileThreadGeometry(page) {
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+
+  const primaryAction = page.locator('.thread-status-action');
+  await expect(primaryAction).toBeVisible();
+  const primaryActionBox = await primaryAction.boundingBox();
+  expect(primaryActionBox?.height ?? 0).toBeGreaterThanOrEqual(38);
+
+  const transferAction = page.locator('.transfer-menu > summary');
+  await expect(transferAction).toBeVisible();
+  const transferActionBox = await transferAction.boundingBox();
+  expect(transferActionBox?.width ?? 0).toBeGreaterThanOrEqual(38);
+  expect(transferActionBox?.height ?? 0).toBeGreaterThanOrEqual(38);
+
+  const productContext = page.locator('.conversation-context-card');
+  await expect(productContext).toBeVisible();
+  const productContextBox = await productContext.boundingBox();
+  expect(productContextBox).not.toBeNull();
+  if (productContextBox && viewport) {
+    expect(productContextBox.x).toBeGreaterThanOrEqual(0);
+    expect(productContextBox.x + productContextBox.width).toBeLessThanOrEqual(
+      viewport.width + 1,
+    );
+  }
+}
+
 async function mobileComposerGeometry(page) {
   return page.evaluate(() => {
     const browser = globalThis;
@@ -188,6 +215,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await page.setViewportSize({ width: 390, height: 700 });
   const mobileComposer = page.getByPlaceholder('输入回复内容…');
   await mobileComposer.focus();
+  await expectMobileThreadGeometry(page);
   const composerBox = await mobileComposer.boundingBox();
   const viewport = page.viewportSize();
   expect(composerBox).not.toBeNull();
@@ -234,6 +262,39 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(backButton).toBeHidden();
   await expect(mobileComposer).toBeHidden();
+
+  const inboxGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const sidebar = browser.document.querySelector('.workspace-sidebar');
+    const pane = browser.document.querySelector('.conversation-pane');
+    if (
+      !(sidebar instanceof browser.HTMLElement) ||
+      !(pane instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const paneRect = pane.getBoundingClientRect();
+    return {
+      viewportHeight: browser.innerHeight,
+      sidebarHeight: sidebarRect.height,
+      paneHeight: paneRect.height,
+      paneBottom: paneRect.bottom,
+    };
+  });
+  expect(inboxGeometry).not.toBeNull();
+  if (inboxGeometry) {
+    expect(Math.abs(inboxGeometry.sidebarHeight - 52)).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        inboxGeometry.paneHeight -
+          (inboxGeometry.viewportHeight - inboxGeometry.sidebarHeight),
+      ),
+    ).toBeLessThanOrEqual(2);
+    expect(inboxGeometry.paneBottom).toBeLessThanOrEqual(
+      inboxGeometry.viewportHeight + 1,
+    );
+  }
 
   await page.evaluate(() => globalThis.history.forward());
   await expect(mobileComposer).toBeVisible();
