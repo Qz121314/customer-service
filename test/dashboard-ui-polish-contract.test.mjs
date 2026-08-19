@@ -23,21 +23,21 @@ test('admin polish stays on the admin route while agent styles are isolated', ()
     polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
   );
   assert.ok(polish.includes('overflow-y: auto;'));
-  assert.ok(polish.includes('max-width: none;'));
   assert.equal(workspace.includes('@media (max-width: 760px)'), false);
   assert.equal(workspace.includes('@media (min-width: 761px)'), false);
 });
 
-test('dashboard second polish pass keeps dense admin controls and a 360px fallback', () => {
+test('admin polish contains no agent workspace override layer', () => {
   const polish = source('../src/dashboard/ui-polish.css');
 
-  assert.ok(polish.includes('min-height: 74px;'));
-  assert.ok(polish.includes('width: min(100%, 920px);'));
-  assert.ok(polish.includes('max-width: min(64%, 620px);'));
-  assert.ok(
-    polish.includes('grid-template-columns: repeat(4, minmax(0, 1fr));'),
-  );
-  assert.ok(polish.includes('@media (max-width: 360px)'));
-  assert.ok(polish.includes("content: '↗';"));
-  assert.ok(polish.includes('border-radius: 50%;'));
+  assert.ok(polish.includes('Admin-only layout refinement layer'));
+  assert.ok(polish.includes('.admin-content'));
+  assert.ok(polish.includes('.agent-editor-form'));
+  assert.ok(polish.includes('.traffic-quota-editor'));
+  assert.ok(!polish.includes('.workspace-shell'));
+  assert.ok(!polish.includes('.thread-head'));
+  assert.ok(!polish.includes('.conversation-row'));
+  assert.ok(!polish.includes('.messages'));
+  assert.ok(!polish.includes('.composer'));
+  assert.ok(!polish.includes('.availability-pill'));
 });
