@@ -10,10 +10,7 @@ test('runtime does not mount the legacy chat application', () => {
   assert.match(entry, /from ['"]\.\/core['"]/u);
   assert.match(entry, /from ['"]\.\/protocol-boundary['"]/u);
   assert.match(entry, /async fetch\(request: Request, env: Bindings/u);
-  assert.match(
-    entry,
-    /const pathname = new URL\(request\.url\)\.pathname;/u,
-  );
+  assert.match(entry, /const pathname = new URL\(request\.url\)\.pathname;/u);
   assert.match(entry, /isRemovedProtocolPath\(pathname\)/u);
   assert.match(entry, /return removedProtocolResponse\(\)/u);
 });
