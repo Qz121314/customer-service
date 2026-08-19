@@ -23,11 +23,7 @@ export function AdminStatisticsPage({
   return (
     <section className="admin-statistics-page">
       {error && (
-        <button
-          type="button"
-          className="notice error"
-          onClick={onClearError}
-        >
+        <button type="button" className="notice error" onClick={onClearError}>
           {error}
         </button>
       )}
@@ -150,7 +146,9 @@ function MonthlyAgentStatistics({
           <section className="statistics-seat-detail" aria-live="polite">
             <header className="statistics-seat-head">
               <div className="statistics-agent-identity">
-                <span className="avatar small">{initials(selectedAgent.name)}</span>
+                <span className="avatar small">
+                  {initials(selectedAgent.name)}
+                </span>
                 <div>
                   <span>当前坐席</span>
                   <strong>{selectedAgent.name}</strong>
