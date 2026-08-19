@@ -7,7 +7,7 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-test('Cloudflare closure keeps static assets asset-first and login abuse off D1', () => {
+test('Cloudflare closure keeps static assets asset-first and protocol fallback explicit', () => {
   const wrangler = source('../wrangler.jsonc');
   const entry = source('../src/worker/entry.ts');
 
@@ -18,6 +18,12 @@ test('Cloudflare closure keeps static assets asset-first and login abuse off D1'
   assert.ok(wrangler.includes('"/integration/*"'));
   assert.ok(wrangler.includes('"/management/v1"'));
   assert.ok(wrangler.includes('"/management/v1/*"'));
+  assert.ok(wrangler.includes('"not_found_handling": "none"'));
+  assert.ok(!wrangler.includes('"single-page-application"'));
+  assert.ok(entry.includes('PROTOCOL_NAMESPACE_PREFIXES'));
+  assert.ok(entry.includes('isProtocolNamespacePath(pathname)'));
+  assert.ok(entry.includes('!isSpaNavigationRequest(request)'));
+  assert.ok(entry.includes("new URL('/index.html', request.url)"));
   assert.ok(wrangler.includes('"AUTH_BURST_LIMITER"'));
   assert.ok(entry.includes('AUTH_BURST_LIMITER?: RateLimit'));
   assert.ok(entry.includes("'/api/auth/login'"));
