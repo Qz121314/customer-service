@@ -35,6 +35,10 @@ test('agent mobile inbox keeps the header and metrics compact', () => {
     mobile,
     /\.inbox-overview \.metric \{[^}]*min-height: 44px;[^}]*padding: 4px 4px;/s,
   );
+  assert.match(
+    mobile,
+    /\.inbox-tools \{[^}]*min-height: 44px;[^}]*padding: 0 10px 7px;/s,
+  );
 
   assert.equal(
     mobile.includes('grid-template-columns: repeat(4, 34px);'),
