@@ -98,7 +98,7 @@ export async function assignConversationAgent(
           AND p.id = c.product_id
          WHERE c.id = ?1
            AND c.assigned_agent IS NULL
-           AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+           AND c.expires_at > CURRENT_TIMESTAMP
          LIMIT 1
        ),
        matching AS (
@@ -132,7 +132,7 @@ export async function assignConversationAgent(
          JOIN matching m ON m.agent_id = c.assigned_agent
          JOIN context ctx ON ctx.site_id = c.site_id
          WHERE c.status IN ('open', 'pending')
-           AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+           AND c.expires_at > CURRENT_TIMESTAMP
          GROUP BY c.assigned_agent
        ),
        candidate AS (
@@ -185,7 +185,7 @@ export async function assignConversationAgent(
            updated_at = ?2
        WHERE id = ?1
          AND assigned_agent IS NULL
-         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND expires_at > CURRENT_TIMESTAMP
          AND EXISTS (SELECT 1 FROM candidate)
        RETURNING assigned_agent AS id,
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name,

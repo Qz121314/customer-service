@@ -43,7 +43,6 @@ type ConversationRow = {
   agent_name: string | null;
   agent_avatar_version: string | null;
   subject: string | null;
-  group_id: string | null;
   product_id: string | null;
   section_id: string | null;
   section_name: string | null;
@@ -128,17 +127,17 @@ clientApi.get('/client/v1/conversations', async (c) => {
 
   const result = await c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject, c.group_id, c.product_id, c.section_id,
-       c.section_name, c.category_id, c.category_name, c.product_title,
-       c.product_cover_url, c.product_href, c.expires_at,
-       c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-       c.created_at, c.last_message_preview AS last_message
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+       c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+       c.last_message_at, c.created_at, c.last_message_preview AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
      WHERE c.site_id = ?1
        AND v.external_id = ?2
-       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+       AND c.expires_at > CURRENT_TIMESTAMP
      ORDER BY c.last_message_at DESC, c.id DESC
      LIMIT 100`,
   )
@@ -641,11 +640,11 @@ export async function broadcastClientConversationEvent(
 ): Promise<ConversationRow | null> {
   const conversation = await env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject, c.group_id, c.product_id, c.section_id,
-       c.section_name, c.category_id, c.category_name, c.product_title,
-       c.product_cover_url, c.product_href, c.expires_at,
-       c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-       c.created_at, c.last_message_preview AS last_message,
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+       c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+       c.last_message_at, c.created_at, c.last_message_preview AS last_message,
        v.external_id, v.display_name AS visitor_name
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
@@ -726,7 +725,7 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
        FROM agents a
        LEFT JOIN conversations c
          ON c.assigned_agent = a.id
-        AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+        AND c.expires_at > CURRENT_TIMESTAMP
        WHERE a.id = ?1
        GROUP BY c.status, a.traffic_quota_enabled,
          a.traffic_quota_total, a.traffic_quota_used`,
@@ -767,7 +766,6 @@ function agentConversationSummary(
     visitor_id: conversation.visitor_id,
     status: conversation.status,
     subject: conversation.subject,
-    group_id: conversation.group_id,
     product_id: conversation.product_id,
     section_id: conversation.section_id,
     section_name: conversation.section_name,
@@ -1023,7 +1021,7 @@ async function ownedConversationForMessageWrite(
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND c.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(conversationId, siteId, visitorId)
@@ -1041,16 +1039,16 @@ async function ownedConversation(
   return db
     .prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject, c.group_id, c.product_id, c.section_id,
-       c.section_name, c.category_id, c.category_name, c.product_title,
-       c.product_cover_url, c.product_href, c.expires_at,
-       c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
-       c.created_at, c.last_message_preview AS last_message
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+       c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+       c.last_message_at, c.created_at, c.last_message_preview AS last_message
      FROM conversations c
      JOIN visitors v ON v.id = c.visitor_id
      LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
      WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
-       AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+       AND c.expires_at > CURRENT_TIMESTAMP
      LIMIT 1`,
     )
     .bind(conversationId, siteId, visitorId)

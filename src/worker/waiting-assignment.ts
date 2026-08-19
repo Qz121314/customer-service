@@ -42,7 +42,7 @@ export async function assignWaitingConversations(
            WHERE active.site_id = a.site_id
              AND active.assigned_agent = a.id
              AND active.status IN ('open', 'pending')
-             AND COALESCE(active.expires_at, datetime(active.created_at, '+1 day')) > CURRENT_TIMESTAMP
+             AND active.expires_at > CURRENT_TIMESTAMP
          ) AS active_count,
          COALESCE((
            SELECT daily.conversation_count
@@ -101,7 +101,7 @@ export async function assignWaitingConversations(
            c.requeue_excluded_agent_id IS NULL
            OR c.requeue_excluded_agent_id <> ?1
          )
-         AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
+         AND c.expires_at > CURRENT_TIMESTAMP
          AND EXISTS (
            SELECT 1
            FROM agent_routing_scopes ars
@@ -150,7 +150,7 @@ export async function assignWaitingConversations(
      WHERE id IN (SELECT id FROM waiting)
        AND assigned_agent IS NULL
        AND status IN ('open', 'pending')
-       AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
+       AND expires_at > CURRENT_TIMESTAMP
      RETURNING id`,
   )
     .bind(agentId, limit, businessDate, now)
