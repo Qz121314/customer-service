@@ -121,7 +121,6 @@ export type Conversation = {
   visitor_id: string;
   status: 'open' | 'pending' | 'closed';
   subject: string | null;
-  group_id: string | null;
   product_id: string | null;
   section_id: string | null;
   section_name: string | null;
@@ -187,13 +186,8 @@ export type TransferTarget = {
   max_active_conversations: number;
 };
 
-type AdminBootstrapAgent = Omit<AgentAccount, 'routingScope'> & {
-  productIds?: string[];
-  routingScope?: AgentRoutingScope;
-};
-
 type AdminBootstrapPayload = {
-  agents: AdminBootstrapAgent[];
+  agents: AgentAccount[];
   products: ProductCatalogItem[];
 };
 
@@ -201,6 +195,7 @@ let adminBootstrapRequest: Promise<AdminBootstrapPayload> | null = null;
 
 const errorMessages: Record<string, string> = {
   INVALID_CREDENTIALS: '账号或密码错误',
+  AUTH_RATE_LIMITED: '登录尝试过于频繁，请稍后再试',
   UNAUTHORIZED: '登录已失效，请重新登录',
   ADMIN_NOT_CONFIGURED: '管理员密码尚未配置',
   NOT_FOUND: '请求的内容不存在',
@@ -247,13 +242,7 @@ export async function adminLogout(): Promise<void> {
 
 export async function getAgents(): Promise<AgentAccount[]> {
   const response = await getAdminBootstrap();
-  return response.agents.map((agent) => ({
-    ...agent,
-    routingScope: normalizeRoutingScope(
-      agent.routingScope,
-      agent.productIds ?? [],
-    ),
-  }));
+  return response.agents;
 }
 
 export async function createAgent(input: {
@@ -468,43 +457,6 @@ async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
     if (adminBootstrapRequest === requestPromise) adminBootstrapRequest = null;
   });
   return requestPromise;
-}
-
-function normalizeRoutingScope(
-  scope: AgentRoutingScope | undefined,
-  fallbackProductIds: string[],
-): AgentRoutingScope {
-  if (scope?.type === 'section') {
-    const legacySectionId = (scope as { sectionId?: string }).sectionId;
-    const sectionIds = [
-      ...new Set(
-        [
-          ...(Array.isArray(scope.sectionIds) ? scope.sectionIds : []),
-          legacySectionId,
-        ].filter((id): id is string => Boolean(id)),
-      ),
-    ];
-    return sectionIds.length
-      ? { type: 'section', sectionIds }
-      : { type: 'none' };
-  }
-  if (scope?.type === 'category' && scope.sectionId) {
-    return {
-      type: 'category',
-      sectionId: scope.sectionId,
-      categoryIds: [...new Set(scope.categoryIds.filter(Boolean))],
-    };
-  }
-  if (scope?.type === 'product') {
-    return {
-      type: 'product',
-      productIds: [...new Set(scope.productIds.filter(Boolean))],
-    };
-  }
-  const legacyProductIds = [...new Set(fallbackProductIds.filter(Boolean))];
-  return legacyProductIds.length
-    ? { type: 'product', productIds: legacyProductIds }
-    : { type: 'none' };
 }
 
 function openSocket(path: string, keepAlive = false): WebSocket {
