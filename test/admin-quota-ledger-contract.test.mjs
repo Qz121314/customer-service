@@ -32,7 +32,7 @@ test('quota reconciliation is one explicit D1 read and stays off admin bootstrap
     /useEffect\(\(\) => \{[\s\S]{0,500}getAgentQuotaLedger/u,
   );
   assert.match(editor, /onLoadQuotaLedger/u);
-  assert.match(editor, />查看记录</u);
+  assert.match(editor, />\s*查看记录</u);
   assert.match(editor, /不查看时不会额外读取账本数据/u);
 });
 
