@@ -337,10 +337,10 @@ test('admin can save multiple whole-section routing rules in one request', async
     INSERT INTO visitors (id, site_id, token_hash)
     VALUES ('quota-waiting-visitor', 'default', 'quota-waiting-token');
     INSERT INTO conversations (
-      id, site_id, visitor_id, status, product_id, section_id
+      id, site_id, visitor_id, status, product_id, section_id, expires_at
     ) VALUES (
       'quota-waiting-conversation', 'default', 'quota-waiting-visitor',
-      'open', 'product-west', 'west'
+      'open', 'product-west', 'west', datetime('now', '+1 day')
     );
   `);
   const retryRooms = fakeRooms();
