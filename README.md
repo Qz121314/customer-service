@@ -66,7 +66,8 @@ Cloudflare Static Assets + Worker / Hono
 
 原则：
 
-- 静态 UI 资源保持 Assets-first；只有 `/api/*`、`/client/*`、`/integration/*` 等协议路径强制进入 Worker；
+- 静态 UI 资源保持 Assets-first，不把所有请求都改成 `run_worker_first: true`；只有 `/api/*`、`/client/*`、`/integration/*` 和已移除协议的 `/management/v1*` 等必要协议路径优先进入 Worker；
+- Static Assets 使用 `not_found_handling: none`。普通 GET / HEAD 页面导航只有在 Worker 返回 404 且请求明确接受 HTML 时，才显式回退到 `/index.html`；API、Client、Integration、Management 等协议命名空间不会继承 SPA 的 HTTP 200 fallback；
 - Worker 只承担必要协议和业务边界；
 - D1 热路径优先单条 SQL、批量 SQL、原子更新，避免逐项请求；
 - 前端能够本地完成的筛选、搜索和草稿不消耗 Worker / D1；
@@ -426,7 +427,9 @@ Chromium UI smoke 覆盖关键易回归路径：
 - 会话状态和回复输入区；
 - 手机窄屏输入区不越界。
 
-生产 Smoke 继续验证 Health、Integration v1、移除的旧协议、Client CORS、REST 和 WebSocket。
+生产 Smoke 继续验证 Health、Integration v1、Client CORS、REST 和 WebSocket，并严格要求已经移除的旧 public / management 协议保持 HTTP 404，不能被 SPA fallback 重新包装成 HTML 200。
+
+Pull Request 全绿只代表可以合并；真正的发布完成条件是 `main` 上 Cloudflare production deploy 和 production protocol smoke 同样全部成功。
 
 ## 15. Migration 原则
 
@@ -453,4 +456,5 @@ Chromium UI smoke 覆盖关键易回归路径：
 5. PC 和手机共享业务逻辑，但响应式样式边界明确；管理端与坐席端样式分别维护，不交叉覆盖；
 6. 不再通过不断追加 CSS 补丁层解决 UI 问题；
 7. 不引入本项目实际用不到的企业级复杂度；
-8. 每次上线都必须通过自动化构建、协议和关键 UI 验收。
+8. 每次上线都必须通过自动化构建、协议和关键 UI 验收；
+9. 项目进入收口维护阶段后，默认优先修复真实缺陷、集成问题、成本回归和可观测性问题，不再为了“功能看起来更多”继续扩展范围。
