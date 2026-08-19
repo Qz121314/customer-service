@@ -36,7 +36,26 @@ jobs:
         run: pnpm db:migrate:local
 
       - name: Format
-        run: pnpm format
+        id: format
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write .
+          git diff -- . > prettier.patch
+          if [ -s prettier.patch ]; then
+            echo "Prettier changed these files:"
+            git diff --name-only
+            exit 1
+          fi
+
+      - name: Upload Prettier diagnostic
+        if: failure() && steps.format.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: prettier-diagnostic
+          path: prettier.patch
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Lint
         run: pnpm lint
