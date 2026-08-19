@@ -95,8 +95,7 @@ function installAgentVisualViewportSync() {
         shell
           .querySelector<HTMLElement>('.workspace-sidebar')
           ?.getBoundingClientRect().height || 52;
-      conversationPane.style.height =
-        `calc(100% - ${Math.round(sidebarHeight)}px)`;
+      conversationPane.style.height = `calc(100% - ${Math.round(sidebarHeight)}px)`;
     }
 
     const threadPane = shell.querySelector<HTMLElement>('.thread-pane');
