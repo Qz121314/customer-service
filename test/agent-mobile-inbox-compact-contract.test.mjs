@@ -17,11 +17,15 @@ test('agent mobile inbox keeps the header and metrics compact', () => {
   );
   assert.match(
     mobile,
-    /\.workspace-sidebar-actions \{[^}]*grid-template-columns: repeat\(5, 30px\);[^}]*border: 0;[^}]*background: transparent;/s,
+    /\.workspace-sidebar-actions \{[^}]*grid-template-columns: repeat\(5, 34px\);[^}]*border: 0;[^}]*background: transparent;/s,
   );
   assert.match(
     narrow,
-    /\.workspace-sidebar-actions \{[^}]*grid-template-columns: repeat\(5, 28px\);/s,
+    /\.workspace-sidebar-actions \{[^}]*grid-template-columns: repeat\(5, 34px\);/s,
+  );
+  assert.match(
+    narrow,
+    /\.agent-profile \.agent-avatar-button \{[^}]*width: 34px;[^}]*min-width: 34px;[^}]*height: 34px;[^}]*min-height: 34px;/s,
   );
   assert.match(
     mobile,

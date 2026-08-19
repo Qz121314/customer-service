@@ -133,7 +133,7 @@
   .workspace-sidebar-actions {
     display: grid;
     flex: 0 0 auto;
-    grid-template-columns: repeat(5, 30px);
+    grid-template-columns: repeat(5, 34px);
     gap: 1px;
     margin: 0 0 0 auto;
     padding: 0;
@@ -146,10 +146,10 @@
   .workspace-sidebar .ghost-button.full {
     position: relative;
     display: grid;
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
-    min-height: 30px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
     place-items: center;
     margin: 0;
     padding: 0;
@@ -1119,31 +1119,31 @@
 
   .agent-profile {
     max-width: 104px;
-    grid-template-columns: 32px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr);
     gap: 6px;
   }
 
   .agent-profile .agent-avatar-button {
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
   }
 
   .agent-profile .presence {
-    left: 23px;
+    left: 25px;
   }
 
   .workspace-sidebar-actions {
-    grid-template-columns: repeat(5, 28px);
+    grid-template-columns: repeat(5, 34px);
   }
 
   .workspace-sidebar .ghost-button,
   .workspace-sidebar .ghost-button.full {
-    width: 28px;
-    min-width: 28px;
-    height: 28px;
-    min-height: 28px;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
   }
 
   .conversation-head {
