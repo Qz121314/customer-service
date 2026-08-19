@@ -131,25 +131,99 @@
     color: #7be0b2;
   }
 
+  .workspace-shell .conversation-pane {
+    border-right-color: #dfe3e8;
+  }
+
+  .workspace-shell .conversation-head {
+    min-height: 76px;
+    padding: 13px 14px;
+    background: #fff;
+  }
+
+  .workspace-shell .conversation-head h1 {
+    font-size: 19px;
+    line-height: 1.18;
+    letter-spacing: -0.025em;
+  }
+
   .workspace-shell .conversation-head .eyebrow {
+    margin-bottom: 4px;
     color: #5f6876;
+  }
+
+  .workspace-shell .conversation-head-status {
+    gap: 6px;
+  }
+
+  .workspace-shell .availability-pill {
+    min-height: 32px;
+    padding: 0 9px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
   }
 
   .workspace-shell .connection-status {
     color: #596473;
+    font-size: 9px;
+    font-weight: 650;
+    white-space: nowrap;
+  }
+
+  .workspace-shell .inbox-overview {
+    min-height: 58px;
+    padding: 7px 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    border-bottom: 1px solid #e4e8ee;
+    background: #fff;
+  }
+
+  .workspace-shell .inbox-overview .metric {
+    min-height: 44px;
+    gap: 2px;
+    padding: 5px 7px;
+    border: 0;
+    border-radius: 7px;
+    background: #f7f8fa;
+    box-shadow: none;
+  }
+
+  .workspace-shell .inbox-overview .metric strong {
+    color: #22262d;
+    font-size: 17px;
+    line-height: 1;
   }
 
   .workspace-shell .inbox-overview .metric span {
     color: #616b79;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  .workspace-shell .filters {
+    min-height: 43px;
+    gap: 5px;
+    padding: 6px 9px;
+    border-bottom: 1px solid #eceff3;
+    background: #fff;
   }
 
   .workspace-shell .filter {
+    min-height: 29px;
+    padding: 0 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
     color: #596372;
+    font-size: 11px;
     font-weight: 650;
   }
 
   .workspace-shell .filter:hover {
     color: #252b35;
+    background: #f5f6f8;
   }
 
   .workspace-shell .filter.active {
@@ -158,8 +232,40 @@
     color: #403bb6;
   }
 
+  .workspace-shell .inbox-tools {
+    min-height: 48px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    padding: 7px 9px;
+    border-bottom: 1px solid #e8ebef;
+    background: #fff;
+  }
+
+  .workspace-shell .inbox-search {
+    min-height: 34px;
+    border: 1px solid #dfe4ea;
+    border-radius: 9px;
+    color: #687384;
+    background: #f8fafc;
+  }
+
+  .workspace-shell .inbox-search:focus-within {
+    border-color: #c8c7ef;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.07);
+  }
+
   .workspace-shell .inbox-search svg {
+    width: 15px;
+    height: 15px;
+    margin-left: 9px;
     stroke: #687384;
+  }
+
+  .workspace-shell .inbox-search input {
+    height: 32px;
+    padding: 0 8px;
+    font-size: 11px;
   }
 
   .workspace-shell .inbox-search input::placeholder {
@@ -167,24 +273,98 @@
   }
 
   .workspace-shell .unread-first-toggle {
+    min-height: 34px;
+    padding: 0 9px;
+    border: 1px solid #dfe4ea;
+    border-radius: 9px;
+    background: #fff;
     color: #4f5968;
+    font-size: 10px;
+    font-weight: 650;
   }
 
   .workspace-shell .unread-first-toggle:hover,
   .workspace-shell .unread-first-toggle.is-active {
+    border-color: #d7d5ff;
+    background: #f0efff;
     color: #403bb6;
+  }
+
+  .workspace-shell .conversation-list {
+    flex: 1 1 auto;
+    background: #fff;
+  }
+
+  .workspace-shell .conversation-row {
+    min-height: 74px;
+    gap: 9px;
+    padding: 10px 12px 9px;
+    border-bottom: 1px solid #f0f1f3;
+    background: #fff;
+  }
+
+  .workspace-shell .conversation-row:hover,
+  .workspace-shell .conversation-row.selected {
+    background: #f7f8fa;
+  }
+
+  .workspace-shell .conversation-row.unread {
+    background: #fbfbff;
+    box-shadow: inset 3px 0 0 var(--agent-accent);
+  }
+
+  .workspace-shell .conversation-row.unread:hover,
+  .workspace-shell .conversation-row.unread.selected {
+    background: #f5f5ff;
+  }
+
+  .workspace-shell .conversation-row .avatar.small {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+
+  .workspace-shell .conversation-copy {
+    gap: 2px;
+  }
+
+  .workspace-shell .conversation-copy > span:first-child {
+    min-height: 18px;
+  }
+
+  .workspace-shell .conversation-copy strong {
+    color: #20242b;
+    font-size: 13px;
+    line-height: 1.3;
   }
 
   .workspace-shell .conversation-copy time {
     color: #737d8b;
+    font-size: 10px;
+    line-height: 1.35;
   }
 
   .workspace-shell .conversation-copy small {
     color: #697382;
+    font-size: 10px;
+    line-height: 1.35;
   }
 
   .workspace-shell .conversation-copy p {
     color: #4e5866;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .workspace-shell .unread-badge {
+    min-width: 18px;
+    padding: 3px 6px;
+    border-radius: 999px;
+    background: var(--agent-accent);
+    color: #fff;
+    font-size: 8px;
+    line-height: 1;
   }
 
   .workspace-shell .thread-head p,
