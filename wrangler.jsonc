@@ -19,8 +19,8 @@
       "/api/*",
       "/client/*",
       "/integration/*",
-      "/management",
-      "/management/*"
+      "/management/v1",
+      "/management/v1/*",
     ],
   },
   "d1_databases": [
