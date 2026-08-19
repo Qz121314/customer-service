@@ -21,7 +21,9 @@ test('admin UI presents dynamic routing scopes instead of expanded product lists
   assert.ok(runtime.includes('整个分区'));
   assert.ok(runtime.includes('动态覆盖'));
   assert.ok(!admin.includes('<th>负责产品</th>'));
-  assert.ok(api.includes('routingScope: normalizeRoutingScope('));
+  assert.ok(api.includes('routingScope: AgentRoutingScope;'));
+  assert.ok(api.includes('body: JSON.stringify(input)'));
+  assert.ok(!api.includes('normalizeRoutingScope('));
   assert.ok(styles.includes('width: min(780px, 100%)'));
   assert.ok(visualStyles.includes('width: min(1200px, 100%)'));
   assert.ok(
