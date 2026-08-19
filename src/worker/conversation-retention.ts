@@ -54,8 +54,8 @@ export async function purgeExpiredConversations(
     const expired = await env.DB.prepare(
       `SELECT id
        FROM conversations
-       WHERE datetime(COALESCE(expires_at, datetime(created_at, '+1 day'))) <= datetime(?1)
-       ORDER BY COALESCE(expires_at, datetime(created_at, '+1 day')) ASC, id ASC
+       WHERE expires_at <= ?1
+       ORDER BY expires_at ASC, id ASC
        LIMIT ?2`,
     )
       .bind(nowIso, DELETE_BATCH_SIZE)
