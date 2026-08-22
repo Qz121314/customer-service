@@ -75,6 +75,7 @@ export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
   excludedAgentId: string | null = null,
+  preferredAgentId: string | null = null,
 ): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -171,6 +172,7 @@ export async function assignConversationAgent(
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
+           CASE WHEN ?5 <> '' AND a.id = ?5 THEN 0 ELSE 1 END ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
@@ -191,7 +193,13 @@ export async function assignConversationAgent(
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name,
          site_id`,
     )
-    .bind(conversationId, now, businessDate, excludedAgentId ?? '')
+    .bind(
+      conversationId,
+      now,
+      businessDate,
+      excludedAgentId ?? '',
+      preferredAgentId ?? '',
+    )
     .first<AgentAssignmentRow>();
   if (!assignment) return assignedAgent(db, conversationId);
 

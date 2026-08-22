@@ -110,6 +110,18 @@ export async function purgeExpiredConversations(
     )
       .bind(nowIso)
       .run();
+    await env.DB.prepare(
+      `DELETE FROM conversation_creation_quota_receipts
+       WHERE rowid IN (
+         SELECT rowid
+         FROM conversation_creation_quota_receipts
+         WHERE datetime(expires_at) <= datetime(?1)
+         ORDER BY expires_at ASC
+         LIMIT 1000
+       )`,
+    )
+      .bind(nowIso)
+      .run();
   }
   if (
     now.getUTCHours() === REPORTING_HISTORY_CLEANUP_UTC_HOUR &&

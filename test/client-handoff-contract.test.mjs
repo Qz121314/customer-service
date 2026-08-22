@@ -149,16 +149,21 @@ function setup({ greetingEnabled, greetingText = null }) {
   return database;
 }
 
-async function startConversation(database, rooms, sourceHandoffId) {
+async function startConversation(
+  database,
+  rooms,
+  sourceHandoffId,
+  overrides = {},
+) {
   return clientApi.request(
     '/client/v1/conversations',
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        visitorId: 'ABC123',
+        visitorId: overrides.visitorId ?? 'ABC123',
         sourceHandoffId,
-        product,
+        product: overrides.product ?? product,
       }),
     },
     {
@@ -242,6 +247,205 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
         event.payload.conversation.agent_unread_count === 1,
     ),
   );
+
+  database.close();
+});
+
+test('same visitor and product reuse one assigned conversation for two hours', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+
+  const first = await startConversation(
+    database,
+    rooms,
+    '33333333-3333-4333-8333-333333333333',
+  );
+  const firstValue = await first.json();
+  const repeated = await startConversation(
+    database,
+    rooms,
+    '44444444-4444-4444-8444-444444444444',
+  );
+  const repeatedValue = await repeated.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(repeated.status, 200);
+  assert.equal(repeatedValue.conversation.id, firstValue.conversation.id);
+  assert.equal(repeatedValue.conversation.agentName, 'CTA Agent');
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    1,
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'`,
+      'traffic_quota_used',
+    ),
+    1,
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM conversation_source_handoffs
+       WHERE conversation_id = ?`,
+      'count',
+      firstValue.conversation.id,
+    ),
+    2,
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COUNT(*) AS count FROM conversation_creation_quota_receipts',
+      'count',
+    ),
+    1,
+  );
+
+  database.close();
+});
+
+test('different products keep independent conversations', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const otherProduct = {
+    ...product,
+    id: 'product-2',
+    title: 'Product 2',
+    href: '/sections/west/products/product-2/',
+  };
+
+  const first = await startConversation(
+    database,
+    rooms,
+    '55555555-5555-4555-8555-555555555555',
+  );
+  const firstValue = await first.json();
+  const second = await startConversation(
+    database,
+    rooms,
+    '66666666-6666-4666-8666-666666666666',
+    { product: otherProduct },
+  );
+  const secondValue = await second.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(second.status, 201);
+  assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    2,
+  );
+
+  database.close();
+});
+
+test('a fresh closed conversation keeps its eligible agent preference', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const first = await startConversation(
+    database,
+    rooms,
+    '77777777-7777-4777-8777-777777777777',
+  );
+  const firstValue = await first.json();
+
+  database
+    .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
+    .run(firstValue.conversation.id);
+  database.exec(`
+    INSERT INTO agents (
+      id, site_id, name, username, password_hash, password_salt,
+      status, is_enabled, last_seen_at, max_active_conversations,
+      daily_conversation_limit, traffic_quota_enabled,
+      traffic_quota_total, traffic_quota_used
+    ) VALUES (
+      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
+      'online', 1, CURRENT_TIMESTAMP, 0,
+      0, 1, 10, 0
+    );
+    INSERT INTO agent_routing_scopes (
+      site_id, agent_id, scope_type, section_id, category_id, product_id,
+      is_enabled
+    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
+  `);
+
+  const second = await startConversation(
+    database,
+    rooms,
+    '88888888-8888-4888-8888-888888888888',
+  );
+  const secondValue = await second.json();
+
+  assert.equal(second.status, 201);
+  assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
+  assert.equal(secondValue.conversation.agentName, 'CTA Agent');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'`,
+      'traffic_quota_used',
+    ),
+    2,
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT traffic_quota_used FROM agents WHERE id = 'aaa-agent'`,
+      'traffic_quota_used',
+    ),
+    0,
+  );
+
+  database.close();
+});
+
+test('after two hours a fresh start returns to normal routing', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const first = await startConversation(
+    database,
+    rooms,
+    '99999999-9999-4999-8999-999999999999',
+  );
+  const firstValue = await first.json();
+
+  database
+    .prepare(
+      `UPDATE conversations
+       SET last_message_at = datetime('now', '-3 hours')
+       WHERE id = ?`,
+    )
+    .run(firstValue.conversation.id);
+  database.exec(`
+    INSERT INTO agents (
+      id, site_id, name, username, password_hash, password_salt,
+      status, is_enabled, last_seen_at, max_active_conversations,
+      daily_conversation_limit, traffic_quota_enabled,
+      traffic_quota_total, traffic_quota_used
+    ) VALUES (
+      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
+      'online', 1, CURRENT_TIMESTAMP, 0,
+      0, 1, 10, 0
+    );
+    INSERT INTO agent_routing_scopes (
+      site_id, agent_id, scope_type, section_id, category_id, product_id,
+      is_enabled
+    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
+  `);
+
+  const second = await startConversation(
+    database,
+    rooms,
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  );
+  const secondValue = await second.json();
+
+  assert.equal(second.status, 201);
+  assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
+  assert.equal(secondValue.conversation.agentName, 'AAA Agent');
 
   database.close();
 });

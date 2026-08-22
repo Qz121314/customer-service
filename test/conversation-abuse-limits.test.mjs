@@ -20,6 +20,15 @@ function createDatabase() {
     ),
   );
   database.exec(readFileSync(migration, 'utf8'));
+  database.exec(`
+    CREATE TABLE conversation_creation_quota_receipts (
+      site_id TEXT NOT NULL,
+      reuse_key TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (site_id, reuse_key)
+    );
+  `);
   return database;
 }
 
@@ -163,4 +172,37 @@ test('source fingerprint stores no raw address and edge limiter is optional', as
     await passesBurstLimit({ limit: async () => ({ success: false }) }, 'key'),
     false,
   );
+});
+
+test('one CTA reuse key consumes creation quota only once', async () => {
+  const database = createDatabase();
+  const db = d1(database);
+  const now = new Date('2026-08-15T12:00:00.000Z');
+  const input = {
+    siteId: 'default',
+    visitorId: 'ABC123',
+    sourceHash: 'source-a',
+    now,
+    idempotencyKey: 'same-product-start',
+    idempotencyExpiresAt: '2026-08-15T14:00:00.000Z',
+  };
+
+  assert.deepEqual(await consumeConversationCreationQuota(db, input), {
+    allowed: true,
+  });
+  assert.deepEqual(await consumeConversationCreationQuota(db, input), {
+    allowed: true,
+  });
+  assert.equal(acceptedCount(database, 'visitor:ABC123'), 1);
+  assert.equal(acceptedCount(database, 'source:source-a'), 1);
+  assert.equal(
+    database
+      .prepare(
+        'SELECT COUNT(*) AS count FROM conversation_creation_quota_receipts',
+      )
+      .get().count,
+    1,
+  );
+
+  database.close();
 });
