@@ -75,7 +75,6 @@ export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
   excludedAgentId: string | null = null,
-  preferredAgentId: string | null = null,
 ): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -86,9 +85,11 @@ export async function assignConversationAgent(
            c.site_id,
            c.product_id,
            COALESCE(c.section_id, p.section_id) AS section_id,
-           COALESCE(c.category_id, p.category_id) AS category_id,
-           c.requeue_excluded_agent_id,
-           EXISTS (
+            COALESCE(c.category_id, p.category_id) AS category_id,
+            c.requeue_excluded_agent_id,
+            c.cta_affinity_agent_id,
+            c.cta_affinity_expires_at,
+            EXISTS (
              SELECT 1
              FROM agent_traffic_receipts receipt
              WHERE receipt.conversation_id = c.id
@@ -149,6 +150,11 @@ export async function assignConversationAgent(
          WHERE a.is_enabled = 1
            AND (?4 = '' OR a.id <> ?4)
            AND (
+             ctx.cta_affinity_agent_id IS NULL
+             OR ctx.cta_affinity_expires_at <= CURRENT_TIMESTAMP
+             OR a.id = ctx.cta_affinity_agent_id
+           )
+           AND (
              ctx.requeue_excluded_agent_id IS NULL
              OR a.id <> ctx.requeue_excluded_agent_id
            )
@@ -172,7 +178,6 @@ export async function assignConversationAgent(
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
-           CASE WHEN ?5 <> '' AND a.id = ?5 THEN 0 ELSE 1 END ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
@@ -193,13 +198,7 @@ export async function assignConversationAgent(
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name,
          site_id`,
     )
-    .bind(
-      conversationId,
-      now,
-      businessDate,
-      excludedAgentId ?? '',
-      preferredAgentId ?? '',
-    )
+    .bind(conversationId, now, businessDate, excludedAgentId ?? '')
     .first<AgentAssignmentRow>();
   if (!assignment) return assignedAgent(db, conversationId);
 
