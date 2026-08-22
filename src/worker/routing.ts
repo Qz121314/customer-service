@@ -151,7 +151,7 @@ export async function assignConversationAgent(
            AND (?4 = '' OR a.id <> ?4)
            AND (
              ctx.cta_affinity_agent_id IS NULL
-             OR ctx.cta_affinity_expires_at <= CURRENT_TIMESTAMP
+             OR datetime(ctx.cta_affinity_expires_at) <= CURRENT_TIMESTAMP
              OR a.id = ctx.cta_affinity_agent_id
            )
            AND (
