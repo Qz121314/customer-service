@@ -287,8 +287,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.site_id = ?1
          AND v.external_id = ?2
-         AND c.product_id = ?6
-         AND (c.start_reuse_key = ?5 OR c.product_id = ?6)
+         AND c.product_id = ?5
        ORDER BY
          CASE
            WHEN c.status IN ('open', 'pending')
@@ -320,7 +319,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       visitorId,
       clientMessageId,
       sourceHandoffId,
-      reuseKey,
       product.id,
     )
     .first<{
@@ -389,7 +387,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const reuseIsActive =
     reuseIsFresh &&
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
-  let preferredAgentId =
+  const preferredAgentId =
     reuseIsFresh && !reuseIsActive
       ? (replay?.reuse_assigned_agent ?? null)
       : null;
@@ -444,25 +442,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
-  if (
-    replay?.reuse_start_reuse_key === reuseKey &&
-    replay.reuse_conversation_id
-  ) {
-    await c.env.DB.prepare(
-      `UPDATE conversations
-       SET start_reuse_key = NULL
-       WHERE id = ?1
-         AND site_id = ?2
-         AND start_reuse_key = ?3
-         AND (
-           status = 'closed'
-           OR expires_at <= CURRENT_TIMESTAMP
-           OR last_message_at <= datetime('now', '-2 hours')
-         )`,
-    )
-      .bind(replay.reuse_conversation_id, site.id, reuseKey)
-      .run();
-  }
+  const startClaimKey = replay?.reuse_conversation_id
+    ? await nextConversationReuseKey(
+        reuseKey,
+        replay.reuse_conversation_id,
+      )
+    : reuseKey;
 
   const sourceHash = await requestSourceHash(c.req.raw, visitorId);
   if (
@@ -485,7 +470,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     visitorId,
     sourceHash,
     now: quotaNow,
-    idempotencyKey: reuseKey,
+    idempotencyKey: startClaimKey,
     idempotencyExpiresAt: new Date(
       quotaNow.getTime() + CONVERSATION_REUSE_HOURS * 60 * 60 * 1000,
     ).toISOString(),
@@ -531,7 +516,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       product.coverUrl,
       product.href,
       sourceHandoffId,
-      reuseKey,
+      startClaimKey,
       expiresAt,
       now,
     )
@@ -542,7 +527,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       c.env.DB,
       site.id,
       visitorId,
-      reuseKey,
+      startClaimKey,
     );
     if (!conversation) {
       const handoffOwner = await sourceHandoffOwner(
@@ -1234,6 +1219,21 @@ async function conversationReuseKey(
   ).join('');
 }
 
+async function nextConversationReuseKey(
+  reuseKey: string,
+  previousConversationId: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(
+      `cta-reuse-next-v1\n${reuseKey}\n${previousConversationId}`,
+    ),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
 type SourceHandoffOwner = {
   conversationId: string;
   externalId: string;
@@ -1246,12 +1246,24 @@ async function sourceHandoffOwner(
 ): Promise<SourceHandoffOwner | null> {
   return db
     .prepare(
-      `SELECT h.conversation_id AS conversationId,
-         v.external_id AS externalId
-       FROM conversation_source_handoffs h
-       JOIN conversations c ON c.id = h.conversation_id
-       JOIN visitors v ON v.id = c.visitor_id
-       WHERE h.site_id = ?1 AND h.source_handoff_id = ?2
+      `SELECT conversationId, externalId
+       FROM (
+         SELECT h.conversation_id AS conversationId,
+           v.external_id AS externalId,
+           0 AS priority
+         FROM conversation_source_handoffs h
+         JOIN conversations c ON c.id = h.conversation_id
+         JOIN visitors v ON v.id = c.visitor_id
+         WHERE h.site_id = ?1 AND h.source_handoff_id = ?2
+         UNION ALL
+         SELECT c.id AS conversationId,
+           v.external_id AS externalId,
+           1 AS priority
+         FROM conversations c
+         JOIN visitors v ON v.id = c.visitor_id
+         WHERE c.site_id = ?1 AND c.source_handoff_id = ?2
+       )
+       ORDER BY priority ASC
        LIMIT 1`,
     )
     .bind(siteId, sourceHandoffId)
