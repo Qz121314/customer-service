@@ -71,6 +71,8 @@ function createDatabase() {
       assigned_at TEXT,
       assigned_business_date TEXT,
       requeue_excluded_agent_id TEXT,
+      cta_affinity_agent_id TEXT,
+      cta_affinity_expires_at TEXT,
       status TEXT NOT NULL,
       expires_at TEXT,
       created_at TEXT NOT NULL,
