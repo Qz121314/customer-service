@@ -314,13 +314,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
        (SELECT expires_at FROM reuse_match) AS reuse_expires_at,
        (SELECT start_reuse_key FROM reuse_match) AS reuse_start_reuse_key`,
   )
-    .bind(
-      site.id,
-      visitorId,
-      clientMessageId,
-      sourceHandoffId,
-      product.id,
-    )
+    .bind(site.id, visitorId, clientMessageId, sourceHandoffId, product.id)
     .first<{
       message_conversation_id: string | null;
       handoff_conversation_id: string | null;
@@ -383,7 +377,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     replay?.reuse_last_message_at &&
     replay.reuse_expires_at &&
     isAfterReuseBoundary(replay.reuse_last_message_at) &&
-    new Date(replay.reuse_expires_at).getTime() > Date.now();
+    new Date(toIso(replay.reuse_expires_at) ?? '').getTime() > Date.now();
   const reuseIsActive =
     reuseIsFresh &&
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
@@ -443,10 +437,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
 
   const startClaimKey = replay?.reuse_conversation_id
-    ? await nextConversationReuseKey(
-        reuseKey,
-        replay.reuse_conversation_id,
-      )
+    ? await nextConversationReuseKey(reuseKey, replay.reuse_conversation_id)
     : reuseKey;
 
   const sourceHash = await requestSourceHash(c.req.raw, visitorId);
@@ -586,12 +577,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       clientMessageId,
     });
     return c.json({
-      conversation: await conversationDetail(
-        c.env.DB,
-        conversation,
-        30,
-        null,
-      ),
+      conversation: await conversationDetail(c.env.DB, conversation, 30, null),
     });
   }
 
@@ -1194,12 +1180,108 @@ async function ensureVisitor(
   return visitor;
 }
 
+async function resolveIdentity(
+  db: D1Database,
+  conversationId: string,
+  input: { visitorId?: string | null; projectId?: string | null },
+): Promise<
+  | {
+      ok: true;
+      site: SiteRow;
+      visitorId: string;
+      conversation: ConversationRow;
+    }
+  | { ok: false; status: 400 | 404; code: string; message: string }
+> {
+  const visitorId = normalizeVisitorId(input.visitorId);
+  if (!visitorId) {
+    return {
+      ok: false,
+      status: 400,
+      code: 'INVALID_VISITOR_ID',
+      message: 'Visitor ID is invalid.',
+    };
+  }
+  const site = await findSite(db, normalizeProjectId(input.projectId));
+  if (!site) {
+    return {
+      ok: false,
+      status: 404,
+      code: 'PROJECT_NOT_FOUND',
+      message: 'Project was not found.',
+    };
+  }
+  const conversation = await ownedConversation(
+    db,
+    conversationId,
+    site.id,
+    visitorId,
+  );
+  if (!conversation) {
+    return {
+      ok: false,
+      status: 404,
+      code: 'CONVERSATION_NOT_FOUND',
+      message: 'Conversation was not found.',
+    };
+  }
+  return { ok: true, site, visitorId, conversation };
+}
+
+async function ownedConversationForMessageWrite(
+  db: D1Database,
+  conversationId: string,
+  siteId: string,
+  visitorId: string,
+): Promise<Pick<
+  ConversationRow,
+  'id' | 'visitor_id' | 'status' | 'assigned_agent'
+> | null> {
+  return db
+    .prepare(
+      `SELECT c.id, c.visitor_id, c.status, c.assigned_agent
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
+         AND c.expires_at > CURRENT_TIMESTAMP
+       LIMIT 1`,
+    )
+    .bind(conversationId, siteId, visitorId)
+    .first<
+      Pick<ConversationRow, 'id' | 'visitor_id' | 'status' | 'assigned_agent'>
+    >();
+}
+
+async function ownedConversation(
+  db: D1Database,
+  conversationId: string,
+  siteId: string,
+  visitorId: string,
+): Promise<ConversationRow | null> {
+  return db
+    .prepare(
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+       c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+       c.last_message_at, c.created_at, c.last_message_preview AS last_message
+     FROM conversations c
+     JOIN visitors v ON v.id = c.visitor_id
+     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+     WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
+       AND c.expires_at > CURRENT_TIMESTAMP
+     LIMIT 1`,
+    )
+    .bind(conversationId, siteId, visitorId)
+    .first<ConversationRow>();
+}
+
 function isAfterReuseBoundary(value: string): boolean {
-  const timestamp = new Date(value).getTime();
+  const timestamp = new Date(toIso(value) ?? '').getTime();
   return (
     Number.isFinite(timestamp) &&
-    timestamp >
-      Date.now() - CONVERSATION_REUSE_HOURS * 60 * 60 * 1000
+    timestamp > Date.now() - CONVERSATION_REUSE_HOURS * 60 * 60 * 1000
   );
 }
 
@@ -1383,103 +1465,6 @@ async function continueReusedConversationStart(
       input.visitorId,
     )) ?? conversation
   );
-}
-
-async function resolveIdentity(
-  db: D1Database,
-  conversationId: string,
-  input: { visitorId?: string | null; projectId?: string | null },
-): Promise<
-  | {
-      ok: true;
-      site: SiteRow;
-      visitorId: string;
-      conversation: ConversationRow;
-    }
-  | { ok: false; status: 400 | 404; code: string; message: string }
-> {
-  const visitorId = normalizeVisitorId(input.visitorId);
-  if (!visitorId) {
-    return {
-      ok: false,
-      status: 400,
-      code: 'INVALID_VISITOR_ID',
-      message: 'Visitor ID is invalid.',
-    };
-  }
-  const site = await findSite(db, normalizeProjectId(input.projectId));
-  if (!site) {
-    return {
-      ok: false,
-      status: 404,
-      code: 'PROJECT_NOT_FOUND',
-      message: 'Project was not found.',
-    };
-  }
-  const conversation = await ownedConversation(
-    db,
-    conversationId,
-    site.id,
-    visitorId,
-  );
-  if (!conversation) {
-    return {
-      ok: false,
-      status: 404,
-      code: 'CONVERSATION_NOT_FOUND',
-      message: 'Conversation was not found.',
-    };
-  }
-  return { ok: true, site, visitorId, conversation };
-}
-
-async function ownedConversationForMessageWrite(
-  db: D1Database,
-  conversationId: string,
-  siteId: string,
-  visitorId: string,
-): Promise<Pick<
-  ConversationRow,
-  'id' | 'visitor_id' | 'status' | 'assigned_agent'
-> | null> {
-  return db
-    .prepare(
-      `SELECT c.id, c.visitor_id, c.status, c.assigned_agent
-       FROM conversations c
-       JOIN visitors v ON v.id = c.visitor_id
-       WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
-         AND c.expires_at > CURRENT_TIMESTAMP
-       LIMIT 1`,
-    )
-    .bind(conversationId, siteId, visitorId)
-    .first<
-      Pick<ConversationRow, 'id' | 'visitor_id' | 'status' | 'assigned_agent'>
-    >();
-}
-
-async function ownedConversation(
-  db: D1Database,
-  conversationId: string,
-  siteId: string,
-  visitorId: string,
-): Promise<ConversationRow | null> {
-  return db
-    .prepare(
-      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
-       c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
-       c.last_message_at, c.created_at, c.last_message_preview AS last_message
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
-     WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
-       AND c.expires_at > CURRENT_TIMESTAMP
-     LIMIT 1`,
-    )
-    .bind(conversationId, siteId, visitorId)
-    .first<ConversationRow>();
 }
 
 function conversationSummary(conversation: ConversationRow) {
