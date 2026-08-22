@@ -100,6 +100,7 @@ type NormalizedProduct = {
 
 const CLIENT_MESSAGE_LIMIT = 4000;
 const VISITOR_LIFETIME_HOURS = 24;
+const CONVERSATION_REUSE_HOURS = 2;
 
 export const clientApi = new Hono<ClientEnv>();
 
@@ -239,9 +240,11 @@ clientApi.post('/client/v1/conversations', async (c) => {
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
-  // Start idempotency is anchored by sourceHandoffId. The optional message match
-  // keeps the legacy create-with-message protocol retry-safe without making a
-  // visitor message mandatory for the new CTA-driven conversation start.
+  const reuseKey = await conversationReuseKey(site.id, visitorId, product.id);
+
+  // A source handoff still has permanent retry idempotency. A separate reuse
+  // match coalesces fresh CTA starts for the same visitor + product for two
+  // hours, even though each click intentionally has a different handoff ID.
   const replay = await c.env.DB.prepare(
     `WITH message_match AS (
        SELECT m.conversation_id
@@ -254,22 +257,82 @@ clientApi.post('/client/v1/conversations', async (c) => {
        LIMIT 1
      ),
      handoff_match AS (
+       SELECT h.conversation_id, v.external_id
+       FROM conversation_source_handoffs h
+       JOIN conversations c ON c.id = h.conversation_id
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE h.site_id = ?1 AND h.source_handoff_id = ?4
+       UNION ALL
        SELECT c.id AS conversation_id, v.external_id
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
-       WHERE c.site_id = ?1 AND c.source_handoff_id = ?4
+       WHERE c.site_id = ?1
+         AND c.source_handoff_id = ?4
+         AND NOT EXISTS (
+           SELECT 1
+           FROM conversation_source_handoffs h
+           WHERE h.site_id = ?1 AND h.source_handoff_id = ?4
+         )
+       LIMIT 1
+     ),
+     reuse_match AS (
+       SELECT
+         c.id AS conversation_id,
+         c.status,
+         c.assigned_agent,
+         c.last_message_at,
+         c.expires_at,
+         c.start_reuse_key
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.site_id = ?1
+         AND v.external_id = ?2
+         AND c.product_id = ?6
+         AND (c.start_reuse_key = ?5 OR c.product_id = ?6)
+       ORDER BY
+         CASE
+           WHEN c.status IN ('open', 'pending')
+             AND c.expires_at > CURRENT_TIMESTAMP
+             AND c.last_message_at > datetime('now', '-2 hours')
+             THEN 0
+           WHEN c.expires_at > CURRENT_TIMESTAMP
+             AND c.last_message_at > datetime('now', '-2 hours')
+             THEN 1
+           ELSE 2
+         END,
+         c.last_message_at DESC,
+         c.id DESC
        LIMIT 1
      )
      SELECT
        (SELECT conversation_id FROM message_match) AS message_conversation_id,
        (SELECT conversation_id FROM handoff_match) AS handoff_conversation_id,
-       (SELECT external_id FROM handoff_match) AS handoff_external_id`,
+       (SELECT external_id FROM handoff_match) AS handoff_external_id,
+       (SELECT conversation_id FROM reuse_match) AS reuse_conversation_id,
+       (SELECT status FROM reuse_match) AS reuse_status,
+       (SELECT assigned_agent FROM reuse_match) AS reuse_assigned_agent,
+       (SELECT last_message_at FROM reuse_match) AS reuse_last_message_at,
+       (SELECT expires_at FROM reuse_match) AS reuse_expires_at,
+       (SELECT start_reuse_key FROM reuse_match) AS reuse_start_reuse_key`,
   )
-    .bind(site.id, visitorId, clientMessageId, sourceHandoffId)
+    .bind(
+      site.id,
+      visitorId,
+      clientMessageId,
+      sourceHandoffId,
+      reuseKey,
+      product.id,
+    )
     .first<{
       message_conversation_id: string | null;
       handoff_conversation_id: string | null;
       handoff_external_id: string | null;
+      reuse_conversation_id: string | null;
+      reuse_status: ConversationStatus | null;
+      reuse_assigned_agent: string | null;
+      reuse_last_message_at: string | null;
+      reuse_expires_at: string | null;
+      reuse_start_reuse_key: string | null;
     }>();
 
   if (replay?.message_conversation_id) {
@@ -318,6 +381,89 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
+  const reuseIsFresh =
+    replay?.reuse_last_message_at &&
+    replay.reuse_expires_at &&
+    isAfterReuseBoundary(replay.reuse_last_message_at) &&
+    new Date(replay.reuse_expires_at).getTime() > Date.now();
+  const reuseIsActive =
+    reuseIsFresh &&
+    (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
+  let preferredAgentId =
+    reuseIsFresh && !reuseIsActive
+      ? (replay?.reuse_assigned_agent ?? null)
+      : null;
+
+  if (reuseIsActive && replay?.reuse_conversation_id) {
+    let conversation = await ownedConversation(
+      c.env.DB,
+      replay.reuse_conversation_id,
+      site.id,
+      visitorId,
+    );
+    if (conversation) {
+      const handoffOwner = await rememberSourceHandoff(
+        c.env.DB,
+        site.id,
+        sourceHandoffId,
+        conversation.id,
+      );
+      if (handoffOwner.externalId !== visitorId) {
+        return error(
+          c,
+          409,
+          'SOURCE_HANDOFF_ALREADY_USED',
+          'Source handoff ID was already used.',
+        );
+      }
+      if (handoffOwner.conversationId !== conversation.id) {
+        conversation = await ownedConversation(
+          c.env.DB,
+          handoffOwner.conversationId,
+          site.id,
+          visitorId,
+        );
+      }
+      if (conversation) {
+        conversation = await continueReusedConversationStart(c.env, {
+          conversation,
+          siteId: site.id,
+          visitorId,
+          initialMessage,
+          clientMessageId,
+        });
+        return c.json({
+          conversation: await conversationDetail(
+            c.env.DB,
+            conversation,
+            30,
+            null,
+          ),
+        });
+      }
+    }
+  }
+
+  if (
+    replay?.reuse_start_reuse_key === reuseKey &&
+    replay.reuse_conversation_id
+  ) {
+    await c.env.DB.prepare(
+      `UPDATE conversations
+       SET start_reuse_key = NULL
+       WHERE id = ?1
+         AND site_id = ?2
+         AND start_reuse_key = ?3
+         AND (
+           status = 'closed'
+           OR expires_at <= CURRENT_TIMESTAMP
+           OR last_message_at <= datetime('now', '-2 hours')
+         )`,
+    )
+      .bind(replay.reuse_conversation_id, site.id, reuseKey)
+      .run();
+  }
+
   const sourceHash = await requestSourceHash(c.req.raw, visitorId);
   if (
     !(await passesBurstLimit(
@@ -333,10 +479,16 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Please wait before starting another conversation.',
     );
   }
+  const quotaNow = new Date();
   const creationQuota = await consumeConversationCreationQuota(c.env.DB, {
     siteId: site.id,
     visitorId,
     sourceHash,
+    now: quotaNow,
+    idempotencyKey: reuseKey,
+    idempotencyExpiresAt: new Date(
+      quotaNow.getTime() + CONVERSATION_REUSE_HOURS * 60 * 60 * 1000,
+    ).toISOString(),
   });
   if (!creationQuota.allowed) {
     c.header('Retry-After', String(creationQuota.retryAfterSeconds));
@@ -350,17 +502,19 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const now = new Date().toISOString();
   const expiresAt = conversationExpiresAt(now);
 
-  await c.env.DB.prepare(
-    `INSERT INTO conversations (
+  const inserted = await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO conversations (
        id, site_id, visitor_id, status, subject,
        product_id, section_id, section_name, category_id, category_name,
        product_title, product_cover_url, product_href,
-       source_handoff_id, expires_at, last_message_at, created_at, updated_at
+       source_handoff_id, start_reuse_key, expires_at,
+       last_message_at, created_at, updated_at
      ) VALUES (
        ?1, ?2, ?3, 'open', ?4,
        ?5, ?6, ?7, ?8, ?9,
        ?10, ?11, ?12,
-       ?13, ?14, ?15, ?15, ?15
+       ?13, ?14, ?15,
+       ?16, ?16, ?16
      )`,
   )
     .bind(
@@ -377,10 +531,102 @@ clientApi.post('/client/v1/conversations', async (c) => {
       product.coverUrl,
       product.href,
       sourceHandoffId,
+      reuseKey,
       expiresAt,
       now,
     )
     .run();
+
+  if (Number(inserted.meta?.changes ?? 0) !== 1) {
+    let conversation = await ownedConversationByReuseKey(
+      c.env.DB,
+      site.id,
+      visitorId,
+      reuseKey,
+    );
+    if (!conversation) {
+      const handoffOwner = await sourceHandoffOwner(
+        c.env.DB,
+        site.id,
+        sourceHandoffId,
+      );
+      if (handoffOwner?.externalId !== visitorId) {
+        return error(
+          c,
+          409,
+          'SOURCE_HANDOFF_ALREADY_USED',
+          'Source handoff ID was already used.',
+        );
+      }
+      if (handoffOwner) {
+        conversation = await ownedConversation(
+          c.env.DB,
+          handoffOwner.conversationId,
+          site.id,
+          visitorId,
+        );
+      }
+    }
+    if (!conversation) throw new Error('Conversation start claim failed');
+
+    const handoffOwner = await rememberSourceHandoff(
+      c.env.DB,
+      site.id,
+      sourceHandoffId,
+      conversation.id,
+    );
+    if (handoffOwner.externalId !== visitorId) {
+      return error(
+        c,
+        409,
+        'SOURCE_HANDOFF_ALREADY_USED',
+        'Source handoff ID was already used.',
+      );
+    }
+    if (handoffOwner.conversationId !== conversation.id) {
+      conversation = await ownedConversation(
+        c.env.DB,
+        handoffOwner.conversationId,
+        site.id,
+        visitorId,
+      );
+    }
+    if (!conversation) throw new Error('Conversation replay failed');
+
+    conversation = await continueReusedConversationStart(c.env, {
+      conversation,
+      siteId: site.id,
+      visitorId,
+      initialMessage,
+      clientMessageId,
+    });
+    return c.json({
+      conversation: await conversationDetail(
+        c.env.DB,
+        conversation,
+        30,
+        null,
+      ),
+    });
+  }
+
+  const handoffOwner = await rememberSourceHandoff(
+    c.env.DB,
+    site.id,
+    sourceHandoffId,
+    conversationId,
+  );
+  if (
+    handoffOwner.externalId !== visitorId ||
+    handoffOwner.conversationId !== conversationId
+  ) {
+    return error(
+      c,
+      409,
+      'SOURCE_HANDOFF_ALREADY_USED',
+      'Source handoff ID was already used.',
+    );
+  }
 
   let createdMessage: MessageRow | null = null;
   if (hasInitialMessage && clientMessageId && initialMessage) {
@@ -394,7 +640,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
     createdMessage = persisted.message;
   }
 
-  const assignment = await assignConversationAgent(c.env.DB, conversationId);
+  const assignment = await assignConversationAgent(
+    c.env.DB,
+    conversationId,
+    null,
+    preferredAgentId,
+  );
   let conversation: ConversationRow | null = null;
 
   if (assignment?.newlyAssigned && assignment.assignedAt) {
@@ -956,6 +1207,170 @@ async function ensureVisitor(
   const visitor = result.results?.[0];
   if (!visitor) throw new Error('Visitor persistence failed');
   return visitor;
+}
+
+function isAfterReuseBoundary(value: string): boolean {
+  const timestamp = new Date(value).getTime();
+  return (
+    Number.isFinite(timestamp) &&
+    timestamp >
+      Date.now() - CONVERSATION_REUSE_HOURS * 60 * 60 * 1000
+  );
+}
+
+async function conversationReuseKey(
+  siteId: string,
+  visitorId: string,
+  productId: string,
+): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(
+      `cta-reuse-v1\n${siteId}\n${visitorId}\n${productId}`,
+    ),
+  );
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+type SourceHandoffOwner = {
+  conversationId: string;
+  externalId: string;
+};
+
+async function sourceHandoffOwner(
+  db: D1Database,
+  siteId: string,
+  sourceHandoffId: string,
+): Promise<SourceHandoffOwner | null> {
+  return db
+    .prepare(
+      `SELECT h.conversation_id AS conversationId,
+         v.external_id AS externalId
+       FROM conversation_source_handoffs h
+       JOIN conversations c ON c.id = h.conversation_id
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE h.site_id = ?1 AND h.source_handoff_id = ?2
+       LIMIT 1`,
+    )
+    .bind(siteId, sourceHandoffId)
+    .first<SourceHandoffOwner>();
+}
+
+async function rememberSourceHandoff(
+  db: D1Database,
+  siteId: string,
+  sourceHandoffId: string,
+  conversationId: string,
+): Promise<SourceHandoffOwner> {
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO conversation_source_handoffs (
+         site_id, source_handoff_id, conversation_id
+       ) VALUES (?1, ?2, ?3)`,
+    )
+    .bind(siteId, sourceHandoffId, conversationId)
+    .run();
+
+  const owner = await sourceHandoffOwner(db, siteId, sourceHandoffId);
+  if (!owner) throw new Error('Source handoff persistence failed');
+  return owner;
+}
+
+async function ownedConversationByReuseKey(
+  db: D1Database,
+  siteId: string,
+  visitorId: string,
+  reuseKey: string,
+): Promise<ConversationRow | null> {
+  return db
+    .prepare(
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+       c.product_id, c.section_id, c.section_name, c.category_id,
+       c.category_name, c.product_title, c.product_cover_url, c.product_href,
+       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+       c.last_message_at, c.created_at, c.last_message_preview AS last_message
+     FROM conversations c
+     JOIN visitors v ON v.id = c.visitor_id
+     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+     WHERE c.site_id = ?1
+       AND v.external_id = ?2
+       AND c.start_reuse_key = ?3
+       AND c.expires_at > CURRENT_TIMESTAMP
+     LIMIT 1`,
+    )
+    .bind(siteId, visitorId, reuseKey)
+    .first<ConversationRow>();
+}
+
+async function continueReusedConversationStart(
+  env: ClientBindings,
+  input: {
+    conversation: ConversationRow;
+    siteId: string;
+    visitorId: string;
+    initialMessage: string | null;
+    clientMessageId: string | null;
+  },
+): Promise<ConversationRow> {
+  let conversation = input.conversation;
+  let createdMessage: MessageRow | null = null;
+
+  if (input.initialMessage && input.clientMessageId) {
+    const persisted = await persistClientMessage(env.DB, {
+      conversationId: conversation.id,
+      senderType: 'visitor',
+      senderId: conversation.visitor_id,
+      body: input.initialMessage,
+      clientMessageId: input.clientMessageId,
+    });
+    if (!persisted.duplicate) {
+      createdMessage = persisted.message;
+      await env.DB.prepare(
+        'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
+      )
+        .bind(conversation.visitor_id)
+        .run();
+    }
+  }
+
+  const assignment = !conversation.assigned_agent
+    ? await assignConversationAgent(env.DB, conversation.id)
+    : null;
+  if (assignment?.newlyAssigned && assignment.assignedAt) {
+    const snapshots = await broadcastAssignments(
+      env,
+      assignment.id,
+      [conversation.id],
+      assignment.assignedAt,
+      createdMessage ? [assignmentVisitorMessage(createdMessage)] : [],
+    );
+    conversation =
+      snapshots.find((item) => item.id === conversation.id) ?? conversation;
+  } else if (createdMessage) {
+    await broadcastRoom(env, conversation.id, {
+      type: 'message',
+      message: adminMessage(createdMessage),
+    });
+    conversation =
+      (await broadcastClientConversationEvent(
+        env,
+        conversation.id,
+        'message.created',
+        { message: clientMessage(createdMessage) },
+      )) ?? conversation;
+  }
+
+  return (
+    (await ownedConversation(
+      env.DB,
+      conversation.id,
+      input.siteId,
+      input.visitorId,
+    )) ?? conversation
+  );
 }
 
 async function resolveIdentity(
