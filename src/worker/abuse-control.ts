@@ -62,8 +62,16 @@ export async function consumeConversationCreationQuota(
   const visitorKey = `visitor:${input.visitorId}`;
   const sourceKey = `source:${input.sourceHash}`;
   const idempotencyKey = input.idempotencyKey?.trim() ?? '';
-  const idempotencyExpiresAt =
-    input.idempotencyExpiresAt?.trim() || expiresAt;
+  const idempotencyExpiresAt = input.idempotencyExpiresAt?.trim() || expiresAt;
+  const idempotencyGuard = idempotencyKey
+    ? `AND NOT EXISTS (
+         SELECT 1
+         FROM conversation_creation_quota_receipts receipt
+         WHERE receipt.site_id = ?1
+           AND receipt.reuse_key = ?8
+           AND datetime(receipt.expires_at) > datetime(?6)
+       )`
+    : '';
 
   // SQLite evaluates eligibility and updates both counters in one statement.
   // An active idempotency receipt makes a repeated CTA start a no-op. When a
@@ -99,16 +107,7 @@ export async function consumeConversationCreationQuota(
        SELECT ?1, subjects.subject_key, 1, ?6, ?7, ?6
        FROM subjects
        WHERE (SELECT total_count = eligible_count FROM eligibility)
-         AND (
-           ?8 = ''
-           OR NOT EXISTS (
-             SELECT 1
-             FROM conversation_creation_quota_receipts receipt
-             WHERE receipt.site_id = ?1
-               AND receipt.reuse_key = ?8
-               AND datetime(receipt.expires_at) > datetime(?6)
-           )
-         )
+         ${idempotencyGuard}
        ON CONFLICT(site_id, subject_key) DO UPDATE SET
          accepted_count = CASE
            WHEN datetime(expires_at) <= datetime(excluded.window_started_at) THEN 1
@@ -134,7 +133,7 @@ export async function consumeConversationCreationQuota(
       SOURCE_CONVERSATION_LIMIT,
       nowIso,
       expiresAt,
-      idempotencyKey,
+      ...(idempotencyKey ? [idempotencyKey] : []),
     );
 
   let consumedChanges = 0;
@@ -154,12 +153,7 @@ export async function consumeConversationCreationQuota(
            WHERE datetime(conversation_creation_quota_receipts.expires_at)
              <= datetime(excluded.created_at)`,
         )
-        .bind(
-          input.siteId,
-          idempotencyKey,
-          idempotencyExpiresAt,
-          nowIso,
-        ),
+        .bind(input.siteId, idempotencyKey, idempotencyExpiresAt, nowIso),
     ]);
     consumedChanges = Number(consumed.meta?.changes ?? 0);
 
