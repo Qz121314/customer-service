@@ -342,7 +342,7 @@ test('different products keep independent conversations', async () => {
   database.close();
 });
 
-test('a fresh closed conversation keeps its eligible agent preference', async () => {
+test('a fresh closed conversation stays hard-bound to its agent', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -398,6 +398,87 @@ test('a fresh closed conversation keeps its eligible agent preference', async ()
     ),
     0,
   );
+
+  database.close();
+});
+
+test('hard affinity waits for the bound agent instead of falling back', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const first = await startConversation(
+    database,
+    rooms,
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  );
+  const firstValue = await first.json();
+
+  database
+    .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
+    .run(firstValue.conversation.id);
+  database.exec(`
+    UPDATE agents
+    SET status = 'offline'
+    WHERE id = 'cta-agent';
+
+    INSERT INTO agents (
+      id, site_id, name, username, password_hash, password_salt,
+      status, is_enabled, last_seen_at, max_active_conversations,
+      daily_conversation_limit, traffic_quota_enabled,
+      traffic_quota_total, traffic_quota_used
+    ) VALUES (
+      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
+      'online', 1, CURRENT_TIMESTAMP, 0,
+      0, 1, 10, 0
+    );
+    INSERT INTO agent_routing_scopes (
+      site_id, agent_id, scope_type, section_id, category_id, product_id,
+      is_enabled
+    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
+  `);
+
+  const waiting = await startConversation(
+    database,
+    rooms,
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  );
+  const waitingValue = await waiting.json();
+  const waitingRow = database
+    .prepare(
+      `SELECT assigned_agent, cta_affinity_agent_id
+       FROM conversations
+       WHERE id = ?`,
+    )
+    .get(waitingValue.conversation.id);
+
+  assert.equal(waiting.status, 201);
+  assert.equal(waitingValue.conversation.status, 'waiting');
+  assert.equal(waitingValue.conversation.agentName, null);
+  assert.equal(waitingRow.assigned_agent, null);
+  assert.equal(waitingRow.cta_affinity_agent_id, 'cta-agent');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT traffic_quota_used FROM agents WHERE id = 'aaa-agent'`,
+      'traffic_quota_used',
+    ),
+    0,
+  );
+
+  database.exec(`
+    UPDATE agents
+    SET status = 'online', last_seen_at = CURRENT_TIMESTAMP
+    WHERE id = 'cta-agent';
+  `);
+  const resumed = await startConversation(
+    database,
+    rooms,
+    'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  );
+  const resumedValue = await resumed.json();
+
+  assert.equal(resumed.status, 200);
+  assert.equal(resumedValue.conversation.id, waitingValue.conversation.id);
+  assert.equal(resumedValue.conversation.agentName, 'CTA Agent');
 
   database.close();
 });

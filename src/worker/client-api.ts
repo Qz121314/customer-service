@@ -281,8 +281,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
          c.status,
          c.assigned_agent,
          c.last_message_at,
-         c.expires_at,
-         c.start_reuse_key
+         c.expires_at
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.site_id = ?1
@@ -311,8 +310,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
        (SELECT status FROM reuse_match) AS reuse_status,
        (SELECT assigned_agent FROM reuse_match) AS reuse_assigned_agent,
        (SELECT last_message_at FROM reuse_match) AS reuse_last_message_at,
-       (SELECT expires_at FROM reuse_match) AS reuse_expires_at,
-       (SELECT start_reuse_key FROM reuse_match) AS reuse_start_reuse_key`,
+       (SELECT expires_at FROM reuse_match) AS reuse_expires_at`,
   )
     .bind(site.id, visitorId, clientMessageId, sourceHandoffId, product.id)
     .first<{
@@ -324,7 +322,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       reuse_assigned_agent: string | null;
       reuse_last_message_at: string | null;
       reuse_expires_at: string | null;
-      reuse_start_reuse_key: string | null;
     }>();
 
   if (replay?.message_conversation_id) {
@@ -381,9 +378,13 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const reuseIsActive =
     reuseIsFresh &&
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
-  const preferredAgentId =
+  const affinityAgentId =
     reuseIsFresh && !reuseIsActive
       ? (replay?.reuse_assigned_agent ?? null)
+      : null;
+  const affinityExpiresAt =
+    affinityAgentId && replay?.reuse_last_message_at
+      ? addHours(replay.reuse_last_message_at, CONVERSATION_REUSE_HOURS)
       : null;
 
   if (reuseIsActive && replay?.reuse_conversation_id) {
@@ -483,14 +484,16 @@ clientApi.post('/client/v1/conversations', async (c) => {
        id, site_id, visitor_id, status, subject,
        product_id, section_id, section_name, category_id, category_name,
        product_title, product_cover_url, product_href,
-       source_handoff_id, start_reuse_key, expires_at,
+       source_handoff_id, start_reuse_key,
+       cta_affinity_agent_id, cta_affinity_expires_at, expires_at,
        last_message_at, created_at, updated_at
      ) VALUES (
        ?1, ?2, ?3, 'open', ?4,
        ?5, ?6, ?7, ?8, ?9,
        ?10, ?11, ?12,
-       ?13, ?14, ?15,
-       ?16, ?16, ?16
+       ?13, ?14,
+       ?15, ?16, ?17,
+       ?18, ?18, ?18
      )`,
   )
     .bind(
@@ -508,6 +511,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
       product.href,
       sourceHandoffId,
       startClaimKey,
+      affinityAgentId,
+      affinityExpiresAt,
       expiresAt,
       now,
     )
@@ -611,12 +616,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     createdMessage = persisted.message;
   }
 
-  const assignment = await assignConversationAgent(
-    c.env.DB,
-    conversationId,
-    null,
-    preferredAgentId,
-  );
+  const assignment = await assignConversationAgent(c.env.DB, conversationId);
   let conversation: ConversationRow | null = null;
 
   if (assignment?.newlyAssigned && assignment.assignedAt) {

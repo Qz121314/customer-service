@@ -71,6 +71,8 @@ function createDatabase() {
       assigned_at TEXT,
       assigned_business_date TEXT,
       requeue_excluded_agent_id TEXT,
+      cta_affinity_agent_id TEXT,
+      cta_affinity_expires_at TEXT,
       status TEXT NOT NULL,
       expires_at TEXT,
       created_at TEXT NOT NULL,
@@ -303,6 +305,48 @@ test('conversation without a routing scope remains waiting', async () => {
   );
 
   assert.equal(assignment, null);
+  database.close();
+});
+
+test('active CTA affinity blocks fallback until its expiry', async () => {
+  const database = createDatabase();
+  addAgent(database, { id: 'agent-a', status: 'offline' });
+  addAgent(database, { id: 'agent-b' });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
+  addConversation(database, 'protected-conversation', 'product-1');
+  database.exec(`
+    UPDATE conversations
+    SET cta_affinity_agent_id = 'agent-a',
+        cta_affinity_expires_at = datetime('now', '+2 hours')
+    WHERE id = 'protected-conversation';
+  `);
+
+  assert.equal(
+    await assignConversationAgent(d1(database), 'protected-conversation'),
+    null,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT assigned_agent FROM conversations
+         WHERE id = 'protected-conversation'`,
+      )
+      .get().assigned_agent,
+    null,
+  );
+
+  database.exec(`
+    UPDATE conversations
+    SET cta_affinity_expires_at = datetime('now', '-1 second')
+    WHERE id = 'protected-conversation';
+  `);
+  const released = await assignConversationAgent(
+    d1(database),
+    'protected-conversation',
+  );
+  assert.equal(released?.id, 'agent-b');
+
   database.close();
 });
 
