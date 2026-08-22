@@ -52,6 +52,8 @@ export async function consumeConversationCreationQuota(
     visitorId: string;
     sourceHash: string;
     now?: Date;
+    idempotencyKey?: string;
+    idempotencyExpiresAt?: string;
   },
 ): Promise<ConversationLimitResult> {
   const now = input.now ?? new Date();
@@ -59,11 +61,15 @@ export async function consumeConversationCreationQuota(
   const expiresAt = new Date(now.getTime() + WINDOW_MS).toISOString();
   const visitorKey = `visitor:${input.visitorId}`;
   const sourceKey = `source:${input.sourceHash}`;
+  const idempotencyKey = input.idempotencyKey?.trim() ?? '';
+  const idempotencyExpiresAt =
+    input.idempotencyExpiresAt?.trim() || expiresAt;
 
   // SQLite evaluates eligibility and updates both counters in one statement.
-  // If either subject is already at its active-window limit, the INSERT SELECT
-  // produces no rows, so neither counter is consumed by a rejected creation.
-  const consumed = await db
+  // An active idempotency receipt makes a repeated CTA start a no-op. When a
+  // receipt is new, its insert shares the same atomic D1 batch as both counters,
+  // so concurrent starts can never consume the quota twice.
+  const consumeStatement = db
     .prepare(
       `WITH subjects(subject_key, subject_limit) AS (
          SELECT ?2, ?4
@@ -93,6 +99,16 @@ export async function consumeConversationCreationQuota(
        SELECT ?1, subjects.subject_key, 1, ?6, ?7, ?6
        FROM subjects
        WHERE (SELECT total_count = eligible_count FROM eligibility)
+         AND (
+           ?8 = ''
+           OR NOT EXISTS (
+             SELECT 1
+             FROM conversation_creation_quota_receipts receipt
+             WHERE receipt.site_id = ?1
+               AND receipt.reuse_key = ?8
+               AND datetime(receipt.expires_at) > datetime(?6)
+           )
+         )
        ON CONFLICT(site_id, subject_key) DO UPDATE SET
          accepted_count = CASE
            WHEN datetime(expires_at) <= datetime(excluded.window_started_at) THEN 1
@@ -108,8 +124,7 @@ export async function consumeConversationCreationQuota(
              THEN excluded.expires_at
            ELSE expires_at
          END,
-         updated_at = excluded.updated_at
-       RETURNING subject_key`,
+         updated_at = excluded.updated_at`,
     )
     .bind(
       input.siteId,
@@ -119,10 +134,55 @@ export async function consumeConversationCreationQuota(
       SOURCE_CONVERSATION_LIMIT,
       nowIso,
       expiresAt,
-    )
-    .all<{ subject_key: string }>();
+      idempotencyKey,
+    );
 
-  if ((consumed.results ?? []).length === 2) return { allowed: true };
+  let consumedChanges = 0;
+  if (idempotencyKey) {
+    const [consumed] = await db.batch([
+      consumeStatement,
+      db
+        .prepare(
+          `INSERT INTO conversation_creation_quota_receipts (
+             site_id, reuse_key, expires_at, created_at
+           )
+           SELECT ?1, ?2, ?3, ?4
+           WHERE changes() = 2
+           ON CONFLICT(site_id, reuse_key) DO UPDATE SET
+             expires_at = excluded.expires_at,
+             created_at = excluded.created_at
+           WHERE datetime(conversation_creation_quota_receipts.expires_at)
+             <= datetime(excluded.created_at)`,
+        )
+        .bind(
+          input.siteId,
+          idempotencyKey,
+          idempotencyExpiresAt,
+          nowIso,
+        ),
+    ]);
+    consumedChanges = Number(consumed.meta?.changes ?? 0);
+
+    if (consumedChanges !== 2) {
+      const receipt = await db
+        .prepare(
+          `SELECT reuse_key
+           FROM conversation_creation_quota_receipts
+           WHERE site_id = ?1
+             AND reuse_key = ?2
+             AND datetime(expires_at) > datetime(?3)
+           LIMIT 1`,
+        )
+        .bind(input.siteId, idempotencyKey, nowIso)
+        .first<string>('reuse_key');
+      if (receipt) return { allowed: true };
+    }
+  } else {
+    const consumed = await consumeStatement.run();
+    consumedChanges = Number(consumed.meta?.changes ?? 0);
+  }
+
+  if (consumedChanges === 2) return { allowed: true };
 
   const limits = await db
     .prepare(
