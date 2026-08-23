@@ -61,15 +61,12 @@ function assignmentResult(
  * Routing is scope-native: product, section and category scopes are the only
  * assignment source. Candidate selection and the conversation write happen in
  * the same SQLite UPDATE statement, so concurrent requests cannot both pass a
- * stale capacity check before writing. Active load is balanced first; today's
- * accepted count is a secondary fairness signal; last_assigned_at and id make
- * equal-load ordering deterministic.
- *
- * A conversation with cta_affinity_agent_id belongs to the same fixed 24-hour
- * service cycle as its previous thread. While that conversation is unexpired,
- * automatic routing may only return it to the bound agent. The conversation's
- * expires_at is the single lifecycle boundary; there is no separate affinity
- * timer.
+ * stale capacity check before writing. Within a fixed 24-hour service cycle the
+ * current cycle owner is preferred when that seat is still eligible. Conversion
+ * continuity never blocks service, though: when that seat is offline, paused,
+ * disabled, stale, full or quota-limited, the best other eligible seat is chosen
+ * immediately. The successful seat becomes the cycle owner for subsequent
+ * routing decisions.
  *
  * Daily and paid traffic limits apply only before the conversation has its
  * immutable traffic receipt. Requeues of already-counted traffic can recover
@@ -155,10 +152,6 @@ export async function assignConversationAgent(
          WHERE a.is_enabled = 1
            AND (?4 = '' OR a.id <> ?4)
            AND (
-             ctx.cta_affinity_agent_id IS NULL
-             OR a.id = ctx.cta_affinity_agent_id
-           )
-           AND (
              ctx.requeue_excluded_agent_id IS NULL
              OR a.id <> ctx.requeue_excluded_agent_id
            )
@@ -182,6 +175,11 @@ export async function assignConversationAgent(
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
+           CASE
+             WHEN ctx.cta_affinity_agent_id IS NOT NULL
+              AND a.id = ctx.cta_affinity_agent_id THEN 0
+             ELSE 1
+           END ASC,
            COALESCE(load.active_count, 0) ASC,
            COALESCE(daily.conversation_count, 0) ASC,
            COALESCE(a.last_assigned_at, '') ASC,
@@ -190,6 +188,7 @@ export async function assignConversationAgent(
        )
        UPDATE conversations
        SET assigned_agent = (SELECT id FROM candidate),
+           cta_affinity_agent_id = (SELECT id FROM candidate),
            assigned_at = ?2,
            assigned_business_date = ?3,
            status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
@@ -204,7 +203,28 @@ export async function assignConversationAgent(
     )
     .bind(conversationId, now, businessDate, excludedAgentId ?? '')
     .first<AgentAssignmentRow>();
-  if (!assignment) return assignedAgent(db, conversationId);
+
+  if (!assignment) {
+    const existing = await assignedAgent(db, conversationId);
+    if (existing) return existing;
+
+    // No seat can currently accept the conversion. Release the preference so
+    // waiting recovery can give the conversation to whichever eligible seat
+    // becomes available first instead of waiting specifically for the old seat.
+    await db
+      .prepare(
+        `UPDATE conversations
+         SET cta_affinity_agent_id = NULL,
+             updated_at = ?2
+         WHERE id = ?1
+           AND assigned_agent IS NULL
+           AND cta_affinity_agent_id IS NOT NULL
+           AND expires_at > CURRENT_TIMESTAMP`,
+      )
+      .bind(conversationId, now)
+      .run();
+    return null;
+  }
 
   await db
     .prepare(
