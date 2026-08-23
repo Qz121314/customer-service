@@ -398,7 +398,10 @@ test('a closed thread keeps the same agent and the same service-cycle expiry', a
   assert.equal(second.status, 201);
   assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
   assert.equal(secondValue.conversation.agentName, 'CTA Agent');
-  assert.equal(secondValue.conversation.expiresAt, firstValue.conversation.expiresAt);
+  assert.equal(
+    secondValue.conversation.expiresAt,
+    firstValue.conversation.expiresAt,
+  );
   assert.equal(
     scalar(
       database,
@@ -458,7 +461,10 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
   assert.equal(waitingValue.conversation.agentName, null);
   assert.equal(waitingRow.assigned_agent, null);
   assert.equal(waitingRow.cta_affinity_agent_id, 'cta-agent');
-  assert.equal(waitingValue.conversation.expiresAt, firstValue.conversation.expiresAt);
+  assert.equal(
+    waitingValue.conversation.expiresAt,
+    firstValue.conversation.expiresAt,
+  );
   assert.equal(
     scalar(
       database,
@@ -520,7 +526,10 @@ test('after the 24-hour service cycle expires routing starts fresh', async () =>
   assert.equal(second.status, 201);
   assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
   assert.equal(secondValue.conversation.agentName, 'AAA Agent');
-  assert.notEqual(secondValue.conversation.expiresAt, firstValue.conversation.expiresAt);
+  assert.notEqual(
+    secondValue.conversation.expiresAt,
+    firstValue.conversation.expiresAt,
+  );
 
   database.close();
 });
