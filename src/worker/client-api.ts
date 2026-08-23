@@ -1,6 +1,9 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
-import { conversationExpiresAt } from './conversation-retention';
+import {
+  CONVERSATION_LIFETIME_HOURS,
+  conversationExpiresAt,
+} from './conversation-retention';
 import { assignConversationAgent } from './routing';
 import {
   broadcastAssignments,
@@ -99,8 +102,6 @@ type NormalizedProduct = {
 };
 
 const CLIENT_MESSAGE_LIMIT = 4000;
-const VISITOR_LIFETIME_HOURS = 24;
-const CONVERSATION_REUSE_HOURS = 2;
 
 export const clientApi = new Hono<ClientEnv>();
 
@@ -242,9 +243,10 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   const reuseKey = await conversationReuseKey(site.id, visitorId, product.id);
 
-  // A source handoff still has permanent retry idempotency. A separate reuse
-  // match coalesces fresh CTA starts for the same visitor + product for two
-  // hours, even though each click intentionally has a different handoff ID.
+  // A source handoff still has permanent retry idempotency. Same visitor +
+  // product conversations now share one fixed service-cycle boundary: while an
+  // unexpired thread is active it is reused; after closure a fresh thread may be
+  // created but it inherits the same expires_at and the previous assigned seat.
   const replay = await c.env.DB.prepare(
     `WITH message_match AS (
        SELECT m.conversation_id
@@ -280,25 +282,16 @@ clientApi.post('/client/v1/conversations', async (c) => {
          c.id AS conversation_id,
          c.status,
          c.assigned_agent,
-         c.last_message_at,
          c.expires_at
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.site_id = ?1
          AND v.external_id = ?2
          AND c.product_id = ?5
+         AND c.expires_at > CURRENT_TIMESTAMP
        ORDER BY
-         CASE
-           WHEN c.status IN ('open', 'pending')
-             AND c.expires_at > CURRENT_TIMESTAMP
-             AND c.last_message_at > datetime('now', '-2 hours')
-             THEN 0
-           WHEN c.expires_at > CURRENT_TIMESTAMP
-             AND c.last_message_at > datetime('now', '-2 hours')
-             THEN 1
-           ELSE 2
-         END,
-         c.last_message_at DESC,
+         CASE WHEN c.status IN ('open', 'pending') THEN 0 ELSE 1 END,
+         c.created_at DESC,
          c.id DESC
        LIMIT 1
      )
@@ -309,7 +302,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
        (SELECT conversation_id FROM reuse_match) AS reuse_conversation_id,
        (SELECT status FROM reuse_match) AS reuse_status,
        (SELECT assigned_agent FROM reuse_match) AS reuse_assigned_agent,
-       (SELECT last_message_at FROM reuse_match) AS reuse_last_message_at,
        (SELECT expires_at FROM reuse_match) AS reuse_expires_at`,
   )
     .bind(site.id, visitorId, clientMessageId, sourceHandoffId, product.id)
@@ -320,7 +312,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       reuse_conversation_id: string | null;
       reuse_status: ConversationStatus | null;
       reuse_assigned_agent: string | null;
-      reuse_last_message_at: string | null;
       reuse_expires_at: string | null;
     }>();
 
@@ -370,22 +361,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
   }
 
-  const reuseIsFresh =
-    replay?.reuse_last_message_at &&
-    replay.reuse_expires_at &&
-    isAfterReuseBoundary(replay.reuse_last_message_at) &&
-    new Date(toIso(replay.reuse_expires_at) ?? '').getTime() > Date.now();
   const reuseIsActive =
-    reuseIsFresh &&
+    Boolean(replay?.reuse_conversation_id) &&
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
-  const affinityAgentId =
-    reuseIsFresh && !reuseIsActive
-      ? (replay?.reuse_assigned_agent ?? null)
-      : null;
-  const affinityExpiresAt =
-    affinityAgentId && replay?.reuse_last_message_at
-      ? addHours(replay.reuse_last_message_at, CONVERSATION_REUSE_HOURS)
-      : null;
+  const affinityAgentId = reuseIsActive
+    ? null
+    : (replay?.reuse_assigned_agent ?? null);
+  const serviceCycleExpiresAt = replay?.reuse_expires_at
+    ? toIso(replay.reuse_expires_at)
+    : null;
 
   if (reuseIsActive && replay?.reuse_conversation_id) {
     let conversation = await ownedConversation(
@@ -456,16 +440,17 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Please wait before starting another conversation.',
     );
   }
+
   const quotaNow = new Date();
+  const now = quotaNow.toISOString();
+  const expiresAt = serviceCycleExpiresAt ?? conversationExpiresAt(quotaNow);
   const creationQuota = await consumeConversationCreationQuota(c.env.DB, {
     siteId: site.id,
     visitorId,
     sourceHash,
     now: quotaNow,
     idempotencyKey: startClaimKey,
-    idempotencyExpiresAt: new Date(
-      quotaNow.getTime() + CONVERSATION_REUSE_HOURS * 60 * 60 * 1000,
-    ).toISOString(),
+    idempotencyExpiresAt: expiresAt,
   });
   if (!creationQuota.allowed) {
     c.header('Retry-After', String(creationQuota.retryAfterSeconds));
@@ -476,8 +461,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const expiresAt = conversationExpiresAt(now);
 
   const inserted = await c.env.DB.prepare(
     `INSERT OR IGNORE INTO conversations (
@@ -485,15 +468,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
        product_id, section_id, section_name, category_id, category_name,
        product_title, product_cover_url, product_href,
        source_handoff_id, start_reuse_key,
-       cta_affinity_agent_id, cta_affinity_expires_at, expires_at,
+       cta_affinity_agent_id, expires_at,
        last_message_at, created_at, updated_at
      ) VALUES (
        ?1, ?2, ?3, 'open', ?4,
        ?5, ?6, ?7, ?8, ?9,
        ?10, ?11, ?12,
        ?13, ?14,
-       ?15, ?16, ?17,
-       ?18, ?18, ?18
+       ?15, ?16,
+       ?17, ?17, ?17
      )`,
   )
     .bind(
@@ -512,7 +495,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       sourceHandoffId,
       startClaimKey,
       affinityAgentId,
-      affinityExpiresAt,
       expiresAt,
       now,
     )
@@ -1277,14 +1259,6 @@ async function ownedConversation(
     .first<ConversationRow>();
 }
 
-function isAfterReuseBoundary(value: string): boolean {
-  const timestamp = new Date(toIso(value) ?? '').getTime();
-  return (
-    Number.isFinite(timestamp) &&
-    timestamp > Date.now() - CONVERSATION_REUSE_HOURS * 60 * 60 * 1000
-  );
-}
-
 async function conversationReuseKey(
   siteId: string,
   visitorId: string,
@@ -1513,7 +1487,7 @@ async function conversationDetail(
     createdAt: toIso(conversation.created_at)!,
     expiresAt: toIso(
       conversation.expires_at ??
-        addHours(conversation.created_at, VISITOR_LIFETIME_HOURS),
+        addHours(conversation.created_at, CONVERSATION_LIFETIME_HOURS),
     )!,
     messages: page.map(clientMessage),
     nextMessageCursor: hasMore && page.length > 0 ? page[0].created_at : null,
