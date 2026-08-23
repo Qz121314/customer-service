@@ -10,13 +10,19 @@ const statistics = read('../src/dashboard/AdminStatisticsPage.tsx');
 const styles = read('../src/dashboard/admin-commercial.css');
 const main = read('../src/dashboard/main.tsx');
 
-test('admin primary navigation uses stable pages instead of a statistics modal', () => {
-  assert.match(admin, /type AdminView = AdminSection \| 'statistics'/u);
+test('admin primary navigation keeps management pages focused and workspace separate', () => {
+  assert.match(admin, /type AdminView = 'agents' \| 'statistics'/u);
   assert.match(admin, /section === 'statistics'/u);
   assert.match(admin, /<AdminStatisticsPage/u);
+  assert.doesNotMatch(admin, /section === 'workspace'/u);
   assert.doesNotMatch(admin, /statisticsOpen/u);
   assert.doesNotMatch(admin, /AdminStatisticsModal/u);
+  assert.match(admin, /<span>客服账号<\/span>/u);
+  assert.match(admin, /<span>流量统计<\/span>/u);
+  assert.match(admin, /href="\/agent"/u);
   assert.match(statistics, /className="admin-statistics-page"/u);
+  assert.match(statistics, /statistics-global-summary/u);
+  assert.match(statistics, /statistics-footnote/u);
   assert.doesNotMatch(statistics, /modal-backdrop/u);
 });
 
@@ -43,8 +49,23 @@ test('admin agent list groups operational information into six compact columns',
   assert.match(styles, /min-width: 940px/u);
 });
 
+test('agent search and status filtering stay client-side on already loaded data', () => {
+  assert.match(admin, /const \[agentSearch, setAgentSearch\]/u);
+  assert.match(admin, /const \[agentFilter, setAgentFilter\]/u);
+  assert.match(admin, /const visibleAgents = useMemo/u);
+  assert.match(admin, /visibleAgents\.map/u);
+  assert.match(admin, /agentIsLimited/u);
+  assert.match(admin, /admin-list-toolbar/u);
+  assert.match(admin, /admin-agent-search/u);
+  assert.match(admin, /admin-agent-filters/u);
+  assert.match(styles, /\.admin-list-toolbar/u);
+  assert.match(styles, /\.admin-agent-filters/u);
+  assert.doesNotMatch(admin, /getAgents\([^)]/u);
+});
+
 test('commercial admin styles stay out of the agent workspace bundle', () => {
   assert.match(main, /await import\('\.\/admin-commercial\.css'\)/u);
+  assert.doesNotMatch(main, /ui-polish\.css/u);
   const agentStyles = main.slice(
     main.indexOf('async function loadAgentStyles'),
     main.indexOf('async function loadAdminStyles'),
