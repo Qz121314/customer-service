@@ -95,7 +95,7 @@ function fakeRooms() {
   };
 }
 
-function insertAgent(database, id, name) {
+function insertAgent(database, id, name, status = 'online') {
   database
     .prepare(
       `INSERT INTO agents (
@@ -105,11 +105,11 @@ function insertAgent(database, id, name) {
          traffic_quota_total, traffic_quota_used
        ) VALUES (
          ?, 'default', ?, ?, 'hash', 'salt',
-         'online', 1, CURRENT_TIMESTAMP, 0,
+         ?, 1, CURRENT_TIMESTAMP, 0,
          0, 1, 20, 0
        )`,
     )
-    .run(id, name, id);
+    .run(id, name, id, status);
   database
     .prepare(
       `INSERT INTO agent_routing_scopes (
@@ -137,11 +137,11 @@ test('legacy affinity deadline is removed from the conversation schema', () => {
   database.close();
 });
 
-test('waiting recovery honors 24-hour affinity and manual requeue can override it', async () => {
+test('waiting recovery favors conversion availability over the previous cycle owner', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
-  insertAgent(database, 'bound-agent', 'Bound Agent');
-  insertAgent(database, 'other-agent', 'Other Agent');
+  insertAgent(database, 'previous-agent', 'Previous Agent', 'offline');
+  insertAgent(database, 'available-agent', 'Available Agent');
 
   database.exec(`
     INSERT INTO visitors (
@@ -154,8 +154,8 @@ test('waiting recovery honors 24-hour affinity and manual requeue can override i
       id, site_id, visitor_id, status, product_id, section_id,
       product_title, cta_affinity_agent_id, expires_at, last_message_at
     ) VALUES (
-      'protected-conversation', 'default', 'visitor-1', 'open',
-      'product-1', 'west', 'Product 1', 'bound-agent',
+      'waiting-conversation', 'default', 'visitor-1', 'open',
+      'product-1', 'west', 'Product 1', 'previous-agent',
       datetime('now', '+1 day'), CURRENT_TIMESTAMP
     );
   `);
@@ -165,47 +165,23 @@ test('waiting recovery honors 24-hour affinity and manual requeue can override i
     CONVERSATION_ROOMS: fakeRooms(),
   };
 
-  const stolen = await assignWaitingConversations(env, 'other-agent');
-  assert.deepEqual(stolen, []);
-  assert.equal(
-    database
-      .prepare(
-        `SELECT assigned_agent FROM conversations
-         WHERE id = 'protected-conversation'`,
-      )
-      .get().assigned_agent,
-    null,
-  );
+  const recovered = await assignWaitingConversations(env, 'available-agent');
+  assert.deepEqual(recovered, ['waiting-conversation']);
 
-  const recovered = await assignWaitingConversations(env, 'bound-agent');
-  assert.deepEqual(recovered, ['protected-conversation']);
-
-  database.exec(`
-    UPDATE conversations
-    SET assigned_agent = NULL,
-        assigned_at = NULL,
-        assigned_business_date = NULL,
-        status = 'open'
-    WHERE id = 'protected-conversation';
-  `);
-
-  const released = database
+  const row = database
     .prepare(
-      `SELECT cta_affinity_agent_id, requeue_excluded_agent_id
+      `SELECT assigned_agent, cta_affinity_agent_id
        FROM conversations
-       WHERE id = 'protected-conversation'`,
+       WHERE id = 'waiting-conversation'`,
     )
     .get();
-  assert.equal(released.cta_affinity_agent_id, null);
-  assert.equal(released.requeue_excluded_agent_id, 'bound-agent');
-
-  const reassigned = await assignWaitingConversations(env, 'other-agent');
-  assert.deepEqual(reassigned, ['protected-conversation']);
+  assert.equal(row.assigned_agent, 'available-agent');
+  assert.equal(row.cta_affinity_agent_id, 'available-agent');
 
   database.close();
 });
 
-test('explicit ownership transfer becomes the new cycle affinity', () => {
+test('manual requeue still excludes the previous seat until another seat accepts it', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   insertAgent(database, 'agent-a', 'Agent A');
@@ -223,8 +199,64 @@ test('explicit ownership transfer becomes the new cycle affinity', () => {
       product_title, assigned_agent, cta_affinity_agent_id,
       expires_at, last_message_at
     ) VALUES (
-      'transfer-conversation', 'default', 'visitor-2', 'pending',
+      'requeue-conversation', 'default', 'visitor-2', 'pending',
       'product-2', 'west', 'Product 2', 'agent-a', 'agent-a',
+      datetime('now', '+1 day'), CURRENT_TIMESTAMP
+    );
+
+    UPDATE conversations
+    SET assigned_agent = NULL,
+        assigned_at = NULL,
+        assigned_business_date = NULL,
+        status = 'open'
+    WHERE id = 'requeue-conversation';
+  `);
+
+  const released = database
+    .prepare(
+      `SELECT cta_affinity_agent_id, requeue_excluded_agent_id
+       FROM conversations
+       WHERE id = 'requeue-conversation'`,
+    )
+    .get();
+  assert.equal(released.cta_affinity_agent_id, null);
+  assert.equal(released.requeue_excluded_agent_id, 'agent-a');
+
+  const rejected = await assignWaitingConversations(
+    { DB: d1(database), CONVERSATION_ROOMS: fakeRooms() },
+    'agent-a',
+  );
+  assert.deepEqual(rejected, []);
+
+  const reassigned = await assignWaitingConversations(
+    { DB: d1(database), CONVERSATION_ROOMS: fakeRooms() },
+    'agent-b',
+  );
+  assert.deepEqual(reassigned, ['requeue-conversation']);
+
+  database.close();
+});
+
+test('explicit ownership transfer becomes the new cycle preference', () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  insertAgent(database, 'agent-a', 'Agent A');
+  insertAgent(database, 'agent-b', 'Agent B');
+
+  database.exec(`
+    INSERT INTO visitors (
+      id, site_id, token_hash, external_id, expires_at
+    ) VALUES (
+      'visitor-3', 'default', 'token-3', 'GHI789', datetime('now', '+1 day')
+    );
+
+    INSERT INTO conversations (
+      id, site_id, visitor_id, status, product_id, section_id,
+      product_title, assigned_agent, cta_affinity_agent_id,
+      expires_at, last_message_at
+    ) VALUES (
+      'transfer-conversation', 'default', 'visitor-3', 'pending',
+      'product-3', 'west', 'Product 3', 'agent-a', 'agent-a',
       datetime('now', '+1 day'), CURRENT_TIMESTAMP
     );
 
