@@ -150,7 +150,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [editorOpen, saving]);
 
-  const workspaceUrl = `${window.location.origin}/agent`;
   const onlineCount = agents.filter(
     (agent) => agent.isEnabled && agent.status === 'online',
   ).length;
