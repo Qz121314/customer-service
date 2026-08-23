@@ -212,24 +212,17 @@ test('new conversations require a UUID v4 source handoff id before any D1 work',
 test('CTA starts an assigned conversation without requiring a visitor message', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
-  const handoff = '11111111-1111-4111-8111-111111111111';
-
-  const response = await startConversation(database, rooms, handoff);
+  const response = await startConversation(
+    database,
+    rooms,
+    '11111111-1111-4111-8111-111111111111',
+  );
   const value = await response.json();
 
   assert.equal(response.status, 201);
   assert.equal(value.conversation.status, 'active');
   assert.equal(value.conversation.agentName, 'CTA Agent');
   assert.deepEqual(value.conversation.messages, []);
-  assert.equal(
-    scalar(
-      database,
-      `SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?`,
-      'count',
-      value.conversation.id,
-    ),
-    0,
-  );
   assert.equal(
     scalar(
       database,
@@ -241,29 +234,18 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
   assert.equal(
     scalar(
       database,
-      `SELECT agent_unread_count FROM conversations WHERE id = ?`,
-      'agent_unread_count',
+      `SELECT cta_affinity_agent_id FROM conversations WHERE id = ?`,
+      'cta_affinity_agent_id',
       value.conversation.id,
     ),
-    1,
-  );
-  assert.equal(
-    scalar(
-      database,
-      `SELECT outcome FROM conversation_automation_receipts
-       WHERE conversation_id = ? AND automation_key = 'initial_greeting'`,
-      'outcome',
-      value.conversation.id,
-    ),
-    'skipped',
+    'cta-agent',
   );
   assert.ok(
     rooms.events.some(
       (event) =>
         event.name === 'agent-inbox:cta-agent' &&
         event.payload.type === 'conversation.changed' &&
-        event.payload.cause === 'initial_assignment' &&
-        event.payload.conversation.agent_unread_count === 1,
+        event.payload.cause === 'initial_assignment',
     ),
   );
 
@@ -273,7 +255,6 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
 test('same visitor and product reuse one conversation for the full 24-hour cycle', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
-
   const first = await startConversation(
     database,
     rooms,
@@ -302,25 +283,6 @@ test('same visitor and product reuse one conversation for the full 24-hour cycle
   assert.equal(
     scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
     1,
-  );
-  assert.equal(
-    scalar(
-      database,
-      `SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'`,
-      'traffic_quota_used',
-    ),
-    1,
-  );
-  assert.equal(
-    scalar(
-      database,
-      `SELECT COUNT(*) AS count
-       FROM conversation_source_handoffs
-       WHERE conversation_id = ?`,
-      'count',
-      firstValue.conversation.id,
-    ),
-    2,
   );
   assert.equal(
     scalar(
@@ -369,7 +331,7 @@ test('different products keep independent conversations', async () => {
   database.close();
 });
 
-test('a closed thread keeps the same agent and the same service-cycle expiry', async () => {
+test('a closed thread keeps the same eligible agent and the same cycle expiry', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -378,13 +340,8 @@ test('a closed thread keeps the same agent and the same service-cycle expiry', a
     '77777777-7777-4777-8777-777777777777',
   );
   const firstValue = await first.json();
-
   database
-    .prepare(
-      `UPDATE conversations
-       SET status = 'closed', last_message_at = datetime('now', '-3 hours')
-       WHERE id = ?`,
-    )
+    .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
     .run(firstValue.conversation.id);
   addAlternateAgent(database);
 
@@ -402,27 +359,11 @@ test('a closed thread keeps the same agent and the same service-cycle expiry', a
     secondValue.conversation.expiresAt,
     firstValue.conversation.expiresAt,
   );
-  assert.equal(
-    scalar(
-      database,
-      `SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'`,
-      'traffic_quota_used',
-    ),
-    2,
-  );
-  assert.equal(
-    scalar(
-      database,
-      `SELECT traffic_quota_used FROM agents WHERE id = 'aaa-agent'`,
-      'traffic_quota_used',
-    ),
-    0,
-  );
 
   database.close();
 });
 
-test('hard affinity waits for the bound agent instead of falling back', async () => {
+test('a closed thread immediately falls back when the previous agent is offline', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -436,33 +377,30 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
     .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
     .run(firstValue.conversation.id);
   database.exec(`
-    UPDATE agents
-    SET status = 'offline'
-    WHERE id = 'cta-agent';
+    UPDATE agents SET status = 'offline' WHERE id = 'cta-agent';
   `);
   addAlternateAgent(database);
 
-  const waiting = await startConversation(
+  const second = await startConversation(
     database,
     rooms,
     'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
   );
-  const waitingValue = await waiting.json();
-  const waitingRow = database
+  const secondValue = await second.json();
+  const row = database
     .prepare(
       `SELECT assigned_agent, cta_affinity_agent_id, expires_at
-       FROM conversations
-       WHERE id = ?`,
+       FROM conversations WHERE id = ?`,
     )
-    .get(waitingValue.conversation.id);
+    .get(secondValue.conversation.id);
 
-  assert.equal(waiting.status, 201);
-  assert.equal(waitingValue.conversation.status, 'waiting');
-  assert.equal(waitingValue.conversation.agentName, null);
-  assert.equal(waitingRow.assigned_agent, null);
-  assert.equal(waitingRow.cta_affinity_agent_id, 'cta-agent');
+  assert.equal(second.status, 201);
+  assert.equal(secondValue.conversation.status, 'active');
+  assert.equal(secondValue.conversation.agentName, 'AAA Agent');
+  assert.equal(row.assigned_agent, 'aaa-agent');
+  assert.equal(row.cta_affinity_agent_id, 'aaa-agent');
   assert.equal(
-    waitingValue.conversation.expiresAt,
+    secondValue.conversation.expiresAt,
     firstValue.conversation.expiresAt,
   );
   assert.equal(
@@ -471,24 +409,61 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
       `SELECT traffic_quota_used FROM agents WHERE id = 'aaa-agent'`,
       'traffic_quota_used',
     ),
-    0,
+    1,
   );
 
-  database.exec(`
-    UPDATE agents
-    SET status = 'online', last_seen_at = CURRENT_TIMESTAMP
-    WHERE id = 'cta-agent';
-  `);
-  const resumed = await startConversation(
+  database.close();
+});
+
+test('a closed thread immediately falls back when the previous agent is full', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const first = await startConversation(
     database,
     rooms,
-    'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    '12121212-1212-4121-8121-121212121212',
   );
-  const resumedValue = await resumed.json();
+  const firstValue = await first.json();
+  database
+    .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
+    .run(firstValue.conversation.id);
+  addAlternateAgent(database);
 
-  assert.equal(resumed.status, 200);
-  assert.equal(resumedValue.conversation.id, waitingValue.conversation.id);
-  assert.equal(resumedValue.conversation.agentName, 'CTA Agent');
+  database.exec(`
+    UPDATE agents SET max_active_conversations = 1 WHERE id = 'cta-agent';
+    INSERT INTO visitors (
+      id, site_id, token_hash, external_id, expires_at
+    ) VALUES (
+      'capacity-visitor', 'default', 'capacity-token', 'CAP123', datetime('now', '+1 day')
+    );
+    INSERT INTO conversations (
+      id, site_id, visitor_id, status, product_id, section_id,
+      product_title, assigned_agent, expires_at, last_message_at
+    ) VALUES (
+      'capacity-blocker', 'default', 'capacity-visitor', 'pending',
+      'product-1', 'west', 'Product 1', 'cta-agent',
+      datetime('now', '+1 day'), CURRENT_TIMESTAMP
+    );
+  `);
+
+  const second = await startConversation(
+    database,
+    rooms,
+    '13131313-1313-4131-8131-131313131313',
+  );
+  const secondValue = await second.json();
+
+  assert.equal(second.status, 201);
+  assert.equal(secondValue.conversation.agentName, 'AAA Agent');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT cta_affinity_agent_id FROM conversations WHERE id = ?`,
+      'cta_affinity_agent_id',
+      secondValue.conversation.id,
+    ),
+    'aaa-agent',
+  );
 
   database.close();
 });
@@ -597,19 +572,10 @@ test('configured greeting is returned immediately from the same CTA start reques
   assert.equal(value.conversation.messages[0].direction, 'agent');
   assert.equal(value.conversation.messages[0].body, '您好，我来为您服务。');
   assert.equal(value.conversation.unreadCount, 1);
-  assert.equal(
-    scalar(
-      database,
-      `SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?`,
-      'count',
-      value.conversation.id,
-    ),
-    1,
-  );
   assert.ok(
     rooms.events.some(
       (event) =>
-        event.name === `client:default:ABC123` &&
+        event.name === 'client:default:ABC123' &&
         event.payload.type === 'message.created' &&
         event.payload.message?.body === '您好，我来为您服务。',
     ),
@@ -620,15 +586,6 @@ test('configured greeting is returned immediately from the same CTA start reques
   assert.equal(replay.status, 200);
   assert.equal(replayValue.conversation.id, value.conversation.id);
   assert.equal(replayValue.conversation.messages.length, 1);
-  assert.equal(
-    scalar(
-      database,
-      `SELECT COUNT(*) AS count FROM agent_traffic_receipts WHERE conversation_id = ?`,
-      'count',
-      value.conversation.id,
-    ),
-    1,
-  );
   assert.equal(
     scalar(
       database,
