@@ -59,16 +59,23 @@ function MonthlyAgentStatistics({
     }
     return map;
   }, [stats]);
-  const days =
-    stats?.month === month ? stats.days : calendarMonthPeriod(month).days;
-  const agentTotals = new Map(
-    agents.map((agent) => [
-      agent.id,
-      days.reduce(
-        (sum, day) => sum + (countMap.get(`${agent.id}:${day}`) ?? 0),
-        0,
+  const days = useMemo(
+    () =>
+      stats?.month === month ? stats.days : calendarMonthPeriod(month).days,
+    [month, stats],
+  );
+  const agentTotals = useMemo(
+    () =>
+      new Map(
+        agents.map((agent) => [
+          agent.id,
+          days.reduce(
+            (sum, day) => sum + (countMap.get(`${agent.id}:${day}`) ?? 0),
+            0,
+          ),
+        ]),
       ),
-    ]),
+    [agents, countMap, days],
   );
   const selectedAgent =
     agents.find((agent) => agent.id === selectedAgentId) ?? agents[0] ?? null;
@@ -82,6 +89,20 @@ function MonthlyAgentStatistics({
     : 0;
   const selectedCoverage = selectedTotal
     ? `${Math.min(100, (selectedHandoffCount / selectedTotal) * 100).toFixed(1)}%`
+    : '0%';
+  const monthlyTotal = [...agentTotals.values()].reduce(
+    (sum, count) => sum + count,
+    0,
+  );
+  const monthlyHandoffTotal = (stats?.handoffCounts ?? []).reduce(
+    (sum, item) => sum + item.count,
+    0,
+  );
+  const activeAgentCount = [...agentTotals.values()].filter(
+    (count) => count > 0,
+  ).length;
+  const overallCoverage = monthlyTotal
+    ? `${Math.min(100, (monthlyHandoffTotal / monthlyTotal) * 100).toFixed(1)}%`
     : '0%';
 
   useEffect(() => {
@@ -97,11 +118,11 @@ function MonthlyAgentStatistics({
     <section className="statistics-panel admin-statistics-workspace">
       <div className="statistics-toolbar">
         <div>
-          <strong>流量对账</strong>
-          <span>按客服查看每个自然月首次实际接收的访客会话</span>
+          <strong>月度流量对账</strong>
+          <span>同一会话只在首次进入客服时计入一次有效接待</span>
         </div>
         <label>
-          <span>月份</span>
+          <span>统计月份</span>
           <input
             type="month"
             value={month}
@@ -109,6 +130,25 @@ function MonthlyAgentStatistics({
           />
         </label>
       </div>
+
+      <section className="statistics-global-summary" aria-label="月度流量概览">
+        <div>
+          <span>本月总接待</span>
+          <strong>{busy ? '—' : monthlyTotal}</strong>
+        </div>
+        <div>
+          <span>有流量坐席</span>
+          <strong>{busy ? '—' : activeAgentCount}</strong>
+        </div>
+        <div>
+          <span>可逐笔对账</span>
+          <strong>{busy ? '—' : monthlyHandoffTotal}</strong>
+        </div>
+        <div>
+          <span>总体覆盖率</span>
+          <strong>{busy ? '—' : overallCoverage}</strong>
+        </div>
+      </section>
 
       {selectedAgent ? (
         <div className="statistics-seat-layout">
@@ -183,7 +223,7 @@ function MonthlyAgentStatistics({
               <header>
                 <div>
                   <strong>每日接待流量</strong>
-                  <span>同一会话只在首次进入客服时计 1 次</span>
+                  <span>自然日维度展示当前坐席的首次有效接待</span>
                 </div>
                 <small>完整月份 · {days.length} 天</small>
               </header>
@@ -208,11 +248,14 @@ function MonthlyAgentStatistics({
         </div>
       )}
 
-      <p className="statistics-note admin-statistics-note">
-        每日上限按 America/Los_Angeles 自然日计算；流量账本独立于 24
-        小时聊天记录保存并保留 400 天。可逐笔对账表示该流量带有 Site
-        分发编号；旧数据和直接调用客服 API 的会话仍计入接待总数。
-      </p>
+      <details className="statistics-footnote">
+        <summary>统计口径说明</summary>
+        <p>
+          每日上限按 America/Los_Angeles 自然日计算；流量账本独立于 24
+          小时聊天记录保存并保留 400 天。可逐笔对账表示该流量带有 Site
+          分发编号；旧数据和直接调用客服 API 的会话仍计入接待总数。
+        </p>
+      </details>
     </section>
   );
 }
