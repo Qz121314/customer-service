@@ -149,6 +149,25 @@ function setup({ greetingEnabled, greetingText = null }) {
   return database;
 }
 
+function addAlternateAgent(database) {
+  database.exec(`
+    INSERT INTO agents (
+      id, site_id, name, username, password_hash, password_salt,
+      status, is_enabled, last_seen_at, max_active_conversations,
+      daily_conversation_limit, traffic_quota_enabled,
+      traffic_quota_total, traffic_quota_used
+    ) VALUES (
+      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
+      'online', 1, CURRENT_TIMESTAMP, 0,
+      0, 1, 10, 0
+    );
+    INSERT INTO agent_routing_scopes (
+      site_id, agent_id, scope_type, section_id, category_id, product_id,
+      is_enabled
+    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
+  `);
+}
+
 async function startConversation(
   database,
   rooms,
@@ -251,7 +270,7 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
   database.close();
 });
 
-test('same visitor and product reuse one assigned conversation for two hours', async () => {
+test('same visitor and product reuse one conversation for the full 24-hour cycle', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
 
@@ -261,6 +280,14 @@ test('same visitor and product reuse one assigned conversation for two hours', a
     '33333333-3333-4333-8333-333333333333',
   );
   const firstValue = await first.json();
+  database
+    .prepare(
+      `UPDATE conversations
+       SET last_message_at = datetime('now', '-3 hours')
+       WHERE id = ?`,
+    )
+    .run(firstValue.conversation.id);
+
   const repeated = await startConversation(
     database,
     rooms,
@@ -342,7 +369,7 @@ test('different products keep independent conversations', async () => {
   database.close();
 });
 
-test('a fresh closed conversation stays hard-bound to its agent', async () => {
+test('a closed thread keeps the same agent and the same service-cycle expiry', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -353,24 +380,13 @@ test('a fresh closed conversation stays hard-bound to its agent', async () => {
   const firstValue = await first.json();
 
   database
-    .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
+    .prepare(
+      `UPDATE conversations
+       SET status = 'closed', last_message_at = datetime('now', '-3 hours')
+       WHERE id = ?`,
+    )
     .run(firstValue.conversation.id);
-  database.exec(`
-    INSERT INTO agents (
-      id, site_id, name, username, password_hash, password_salt,
-      status, is_enabled, last_seen_at, max_active_conversations,
-      daily_conversation_limit, traffic_quota_enabled,
-      traffic_quota_total, traffic_quota_used
-    ) VALUES (
-      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
-      'online', 1, CURRENT_TIMESTAMP, 0,
-      0, 1, 10, 0
-    );
-    INSERT INTO agent_routing_scopes (
-      site_id, agent_id, scope_type, section_id, category_id, product_id,
-      is_enabled
-    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
-  `);
+  addAlternateAgent(database);
 
   const second = await startConversation(
     database,
@@ -382,6 +398,7 @@ test('a fresh closed conversation stays hard-bound to its agent', async () => {
   assert.equal(second.status, 201);
   assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
   assert.equal(secondValue.conversation.agentName, 'CTA Agent');
+  assert.equal(secondValue.conversation.expiresAt, firstValue.conversation.expiresAt);
   assert.equal(
     scalar(
       database,
@@ -419,22 +436,8 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
     UPDATE agents
     SET status = 'offline'
     WHERE id = 'cta-agent';
-
-    INSERT INTO agents (
-      id, site_id, name, username, password_hash, password_salt,
-      status, is_enabled, last_seen_at, max_active_conversations,
-      daily_conversation_limit, traffic_quota_enabled,
-      traffic_quota_total, traffic_quota_used
-    ) VALUES (
-      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
-      'online', 1, CURRENT_TIMESTAMP, 0,
-      0, 1, 10, 0
-    );
-    INSERT INTO agent_routing_scopes (
-      site_id, agent_id, scope_type, section_id, category_id, product_id,
-      is_enabled
-    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
   `);
+  addAlternateAgent(database);
 
   const waiting = await startConversation(
     database,
@@ -444,7 +447,7 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
   const waitingValue = await waiting.json();
   const waitingRow = database
     .prepare(
-      `SELECT assigned_agent, cta_affinity_agent_id
+      `SELECT assigned_agent, cta_affinity_agent_id, expires_at
        FROM conversations
        WHERE id = ?`,
     )
@@ -455,6 +458,7 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
   assert.equal(waitingValue.conversation.agentName, null);
   assert.equal(waitingRow.assigned_agent, null);
   assert.equal(waitingRow.cta_affinity_agent_id, 'cta-agent');
+  assert.equal(waitingValue.conversation.expiresAt, firstValue.conversation.expiresAt);
   assert.equal(
     scalar(
       database,
@@ -483,7 +487,7 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
   database.close();
 });
 
-test('after two hours a fresh start returns to normal routing', async () => {
+test('after the 24-hour service cycle expires routing starts fresh', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -496,26 +500,15 @@ test('after two hours a fresh start returns to normal routing', async () => {
   database
     .prepare(
       `UPDATE conversations
-       SET last_message_at = datetime('now', '-3 hours')
+       SET status = 'closed', expires_at = datetime('now', '-1 second')
        WHERE id = ?`,
     )
     .run(firstValue.conversation.id);
   database.exec(`
-    INSERT INTO agents (
-      id, site_id, name, username, password_hash, password_salt,
-      status, is_enabled, last_seen_at, max_active_conversations,
-      daily_conversation_limit, traffic_quota_enabled,
-      traffic_quota_total, traffic_quota_used
-    ) VALUES (
-      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
-      'online', 1, CURRENT_TIMESTAMP, 0,
-      0, 1, 10, 0
-    );
-    INSERT INTO agent_routing_scopes (
-      site_id, agent_id, scope_type, section_id, category_id, product_id,
-      is_enabled
-    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
+    UPDATE conversation_creation_quota_receipts
+    SET expires_at = datetime('now', '-1 second');
   `);
+  addAlternateAgent(database);
 
   const second = await startConversation(
     database,
@@ -527,6 +520,54 @@ test('after two hours a fresh start returns to normal routing', async () => {
   assert.equal(second.status, 201);
   assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
   assert.equal(secondValue.conversation.agentName, 'AAA Agent');
+  assert.notEqual(secondValue.conversation.expiresAt, firstValue.conversation.expiresAt);
+
+  database.close();
+});
+
+test('an expired active thread cannot block a new cycle before cron cleanup', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const first = await startConversation(
+    database,
+    rooms,
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+  );
+  const firstValue = await first.json();
+
+  database
+    .prepare(
+      `UPDATE conversations
+       SET expires_at = datetime('now', '-1 second')
+       WHERE id = ?`,
+    )
+    .run(firstValue.conversation.id);
+  database.exec(`
+    UPDATE conversation_creation_quota_receipts
+    SET expires_at = datetime('now', '-1 second');
+  `);
+  addAlternateAgent(database);
+
+  const second = await startConversation(
+    database,
+    rooms,
+    'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  );
+  const secondValue = await second.json();
+
+  assert.equal(second.status, 201);
+  assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
+  assert.equal(secondValue.conversation.agentName, 'AAA Agent');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT start_reuse_key IS NULL AS released
+       FROM conversations WHERE id = ?`,
+      'released',
+      firstValue.conversation.id,
+    ),
+    1,
+  );
 
   database.close();
 });
