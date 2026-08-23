@@ -66,7 +66,11 @@ for (const requiredStep of [
   );
 }
 
-assert.match(preCommit, /pnpm\s+preflight/u, 'pre-commit must run pnpm preflight');
+assert.match(
+  preCommit,
+  /pnpm\s+preflight/u,
+  'pre-commit must run pnpm preflight',
+);
 assert.match(prePush, /pnpm\s+verify/u, 'pre-push must run pnpm verify');
 
 assert.match(
@@ -90,7 +94,9 @@ assert.match(
   'engineering contract must preserve the Worker/D1 request-budget principle',
 );
 
-const executableContracts = testFiles.filter((name) => name.endsWith('.test.mjs'));
+const executableContracts = testFiles.filter((name) =>
+  name.endsWith('.test.mjs'),
+);
 assert.ok(
   executableContracts.length > 0,
   'repository must keep executable contracts in test/',
