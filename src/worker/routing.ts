@@ -65,6 +65,12 @@ function assignmentResult(
  * accepted count is a secondary fairness signal; last_assigned_at and id make
  * equal-load ordering deterministic.
  *
+ * A conversation with cta_affinity_agent_id belongs to the same fixed 24-hour
+ * service cycle as its previous thread. While that conversation is unexpired,
+ * automatic routing may only return it to the bound agent. The conversation's
+ * expires_at is the single lifecycle boundary; there is no separate affinity
+ * timer.
+ *
  * Daily and paid traffic limits apply only before the conversation has its
  * immutable traffic receipt. Requeues of already-counted traffic can recover
  * without consuming or requiring another unit of new-traffic quota. A manually
@@ -85,11 +91,10 @@ export async function assignConversationAgent(
            c.site_id,
            c.product_id,
            COALESCE(c.section_id, p.section_id) AS section_id,
-            COALESCE(c.category_id, p.category_id) AS category_id,
-            c.requeue_excluded_agent_id,
-            c.cta_affinity_agent_id,
-            c.cta_affinity_expires_at,
-            EXISTS (
+           COALESCE(c.category_id, p.category_id) AS category_id,
+           c.requeue_excluded_agent_id,
+           c.cta_affinity_agent_id,
+           EXISTS (
              SELECT 1
              FROM agent_traffic_receipts receipt
              WHERE receipt.conversation_id = c.id
@@ -151,7 +156,6 @@ export async function assignConversationAgent(
            AND (?4 = '' OR a.id <> ?4)
            AND (
              ctx.cta_affinity_agent_id IS NULL
-             OR datetime(ctx.cta_affinity_expires_at) <= CURRENT_TIMESTAMP
              OR a.id = ctx.cta_affinity_agent_id
            )
            AND (
