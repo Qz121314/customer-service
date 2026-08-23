@@ -25,7 +25,10 @@ export async function assignWaitingConversations(
   // another daily/new-traffic unit. Fresh traffic then fills only the remaining
   // active capacity allowed by today's and the paid traffic quota. A conversation
   // manually returned to routing stays excluded from its previous seat until a
-  // different seat actually accepts it.
+  // different seat actually accepts it. A 24-hour service-cycle affinity is a
+  // hard automatic-routing constraint here as well as in immediate assignment,
+  // so another seat can never steal a protected waiting conversation on login or
+  // heartbeat.
   const assigned = await env.DB.prepare(
     `WITH agent_state AS (
        SELECT
@@ -97,6 +100,10 @@ export async function assignWaitingConversations(
        WHERE c.site_id = (SELECT site_id FROM agent_state)
          AND c.assigned_agent IS NULL
          AND c.status IN ('open', 'pending')
+         AND (
+           c.cta_affinity_agent_id IS NULL
+           OR c.cta_affinity_agent_id = ?1
+         )
          AND (
            c.requeue_excluded_agent_id IS NULL
            OR c.requeue_excluded_agent_id <> ?1
