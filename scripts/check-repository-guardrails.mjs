@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 
-const [packageText, engineeringContract, preCommit, prePush, ciWorkflow, testFiles] =
-  await Promise.all([
-    readFile('package.json', 'utf8'),
-    readFile('AGENTS.md', 'utf8'),
-    readFile('.githooks/pre-commit', 'utf8'),
-    readFile('.githooks/pre-push', 'utf8'),
-    readFile('.github/workflows/ci.yml', 'utf8'),
-    readdir('test'),
-  ]);
+const [
+  packageText,
+  engineeringContract,
+  preCommit,
+  prePush,
+  ciWorkflow,
+  testFiles,
+] = await Promise.all([
+  readFile('package.json', 'utf8'),
+  readFile('AGENTS.md', 'utf8'),
+  readFile('.githooks/pre-commit', 'utf8'),
+  readFile('.githooks/pre-push', 'utf8'),
+  readFile('.github/workflows/ci.yml', 'utf8'),
+  readdir('test'),
+]);
 
 const packageJson = JSON.parse(packageText);
 const scripts = packageJson.scripts ?? {};
