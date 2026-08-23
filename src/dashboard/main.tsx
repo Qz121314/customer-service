@@ -29,7 +29,6 @@ async function loadAdminStyles() {
   await import('./media-view.css');
   await import('./agent-statistics.css');
   await import('./cloud-service-ui.css');
-  await import('./ui-polish.css');
   await import('./agent-editor.css');
   await import('./agent-avatar.css');
   await import('./admin-commercial.css');
