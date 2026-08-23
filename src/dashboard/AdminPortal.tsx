@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AgentAccount,
   AgentQuotaAdjustment,
@@ -17,7 +17,6 @@ import {
 } from './api';
 import {
   LoadState,
-  AdminSection,
   AgentDraft,
   emptyAgentDraft,
   CHAT_TIME_ZONE,
@@ -33,7 +32,8 @@ import { UiIcon, AdminLogin, AdminSetup, Startup } from './dashboard-ui';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 
-type AdminView = AdminSection | 'statistics';
+type AdminView = 'agents' | 'statistics';
+type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -86,11 +86,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [section, setSection] = useState<AdminView>('agents');
+  const [agentSearch, setAgentSearch] = useState('');
+  const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
   const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
   const [statsMonth, setStatsMonth] = useState(() => currentBusinessMonth());
   const [monthlyStats, setMonthlyStats] = useState<AgentMonthlyStats | null>(
@@ -154,6 +155,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     (agent) => agent.isEnabled && agent.status === 'online',
   ).length;
   const enabledCount = agents.filter((agent) => agent.isEnabled).length;
+  const disabledCount = agents.length - enabledCount;
+  const limitedCount = agents.filter(agentIsLimited).length;
   const assignedProductCount = new Set(
     agents.flatMap((agent) =>
       productsForScope(agent.routingScope, products).map(
@@ -161,6 +164,25 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       ),
     ),
   ).size;
+
+  const visibleAgents = useMemo(() => {
+    const keyword = agentSearch.trim().toLocaleLowerCase();
+    return agents.filter((agent) => {
+      const matchesSearch =
+        !keyword ||
+        `${agent.name} ${agent.username ?? ''}`
+          .toLocaleLowerCase()
+          .includes(keyword);
+      if (!matchesSearch) return false;
+
+      if (agentFilter === 'online') {
+        return agent.isEnabled && agent.status === 'online';
+      }
+      if (agentFilter === 'limited') return agentIsLimited(agent);
+      if (agentFilter === 'disabled') return !agent.isEnabled;
+      return true;
+    });
+  }, [agentFilter, agentSearch, agents]);
 
   function resetQuotaLedgerState() {
     setQuotaAdjustments([]);
@@ -263,28 +285,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
-  async function copyWorkspaceUrl() {
-    try {
-      await navigator.clipboard.writeText(workspaceUrl);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setError('无法复制链接，请手动复制。');
-    }
-  }
-
-  const sectionTitle =
-    section === 'agents'
-      ? '客服坐席'
-      : section === 'statistics'
-        ? '坐席流量'
-        : '坐席工作台';
+  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';
   const sectionHint =
     section === 'agents'
-      ? '集中管理客服账号、接待能力、咨询额度与分流负责范围。'
-      : section === 'statistics'
-        ? '按自然月核对每个客服首次实际接收的访客流量。'
-        : '员工统一使用这个地址登录聊天工作台，管理后台本身不处理访客会话。';
+      ? '管理登录身份、接待能力、咨询额度和产品负责范围。搜索与筛选均在本地完成。'
+      : '按自然月核对客服首次实际接收的有效咨询流量。';
 
   return (
     <div className="admin-console">
@@ -315,27 +320,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           >
             <span className="admin-nav-label">
               <UiIcon name="statistics" />
-              <span>坐席流量</span>
+              <span>流量统计</span>
             </span>
             <small>自然月</small>
-          </button>
-          <button
-            type="button"
-            className={section === 'workspace' ? 'active' : ''}
-            onClick={() => setSection('workspace')}
-          >
-            <span className="admin-nav-label">
-              <UiIcon name="workspace" />
-              <span>坐席工作台</span>
-            </span>
-            <small>员工入口</small>
           </button>
         </nav>
         <div className="admin-sidebar-foot">
           <a href="/agent" target="_blank" rel="noreferrer">
             <span>
               <UiIcon name="external" />
-              打开坐席工作台
+              坐席工作台
             </span>
           </a>
           <button type="button" onClick={() => void onLogout()}>
@@ -398,10 +392,50 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <section className="admin-table-card">
               <div className="admin-table-title">
                 <div>
-                  <strong>客服账号列表</strong>
+                  <strong>客服账号</strong>
                   <span>分区和分类规则会自动覆盖后续新增产品</span>
                 </div>
+                <span className="admin-table-total">
+                  {visibleAgents.length === agents.length
+                    ? `${agents.length} 个账号`
+                    : `显示 ${visibleAgents.length} / ${agents.length}`}
+                </span>
               </div>
+
+              <div className="admin-list-toolbar">
+                <label className="admin-agent-search">
+                  <span>搜索</span>
+                  <input
+                    type="search"
+                    value={agentSearch}
+                    onChange={(event) => setAgentSearch(event.target.value)}
+                    placeholder="姓名或登录账号"
+                    aria-label="搜索客服姓名或登录账号"
+                  />
+                </label>
+                <div className="admin-agent-filters" aria-label="客服状态筛选">
+                  {(
+                    [
+                      ['all', '全部', agents.length],
+                      ['online', '在线', onlineCount],
+                      ['limited', '受限', limitedCount],
+                      ['disabled', '停用', disabledCount],
+                    ] as const
+                  ).map(([value, label, count]) => (
+                    <button
+                      type="button"
+                      key={value}
+                      className={agentFilter === value ? 'active' : ''}
+                      aria-pressed={agentFilter === value}
+                      onClick={() => setAgentFilter(value)}
+                    >
+                      <span>{label}</span>
+                      <small>{count}</small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {busy ? (
                 <div className="empty-state">正在加载客服账号…</div>
               ) : agents.length === 0 ? (
@@ -414,6 +448,21 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                     onClick={createNewAgent}
                   >
                     新增客服
+                  </button>
+                </div>
+              ) : visibleAgents.length === 0 ? (
+                <div className="empty-state admin-empty admin-filter-empty">
+                  <strong>没有匹配的客服</strong>
+                  <span>调整搜索内容或状态筛选即可恢复列表。</span>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      setAgentSearch('');
+                      setAgentFilter('all');
+                    }}
+                  >
+                    清除筛选
                   </button>
                 </div>
               ) : (
@@ -430,7 +479,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {agents.map((agent) => {
+                      {visibleAgents.map((agent) => {
                         const summary = agentScopeSummary(agent, products);
                         const dailyFull =
                           agent.dailyConversationLimit > 0 &&
@@ -563,37 +612,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             }}
           />
         )}
-
-        {section === 'workspace' && (
-          <section className="workspace-access-card">
-            <div className="workspace-access-icon">CS</div>
-            <div className="workspace-access-copy">
-              <span>员工统一入口</span>
-              <h2>客服坐席工作台</h2>
-              <p>
-                所有客服员工访问同一个地址，再使用管理员创建的登录账号和密码进入自己的聊天工作台。
-              </p>
-              <div className="workspace-url-row">
-                <code>{workspaceUrl}</code>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => void copyWorkspaceUrl()}
-                >
-                  {copied ? '已复制' : '复制链接'}
-                </button>
-                <a
-                  className="primary-button"
-                  href="/agent"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  打开工作台
-                </a>
-              </div>
-            </div>
-          </section>
-        )}
       </main>
 
       {editorOpen && (
@@ -615,6 +633,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       )}
     </div>
   );
+}
+
+function agentIsLimited(agent: AgentAccount): boolean {
+  if (!agent.isEnabled) return false;
+  const dailyFull =
+    agent.dailyConversationLimit > 0 &&
+    agent.todayConversationCount >= agent.dailyConversationLimit;
+  const trafficExhausted =
+    agent.trafficQuotaEnabled && agent.trafficQuotaRemaining <= 0;
+  return dailyFull || trafficExhausted;
 }
 
 function currentBusinessMonth(): string {
