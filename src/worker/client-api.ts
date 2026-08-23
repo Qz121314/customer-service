@@ -366,7 +366,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
   const affinityAgentId = reuseIsActive
     ? null
-    : (replay?.reuse_assigned_agent ?? null);
+    : replay?.reuse_assigned_agent ?? null;
   const serviceCycleExpiresAt = replay?.reuse_expires_at
     ? toIso(replay.reuse_expires_at)
     : null;
