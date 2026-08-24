@@ -50,29 +50,6 @@
   gap: 10px;
 }
 
-.agent-statistics-head-actions label {
-  min-height: 38px;
-  padding: 0 10px;
-  border: 1px solid #dfe1e6;
-  border-radius: 9px;
-  background: #f8f8f9;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #777c86;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.agent-statistics-head-actions input {
-  min-width: 128px;
-  border: 0;
-  background: transparent;
-  color: #2f3239;
-  outline: none;
-  font: inherit;
-}
-
 .agent-statistics-dialog-body {
   min-height: 0;
   padding: 20px;
@@ -222,8 +199,7 @@
   }
 
   .agent-statistics-dialog-head .eyebrow,
-  .agent-statistics-dialog-head p,
-  .agent-statistics-head-actions label > span {
+  .agent-statistics-dialog-head p {
     display: none;
   }
 
@@ -242,21 +218,6 @@
   .agent-statistics-head-actions {
     flex: 0 0 auto;
     gap: 5px;
-  }
-
-  .agent-statistics-head-actions label {
-    min-height: 34px;
-    padding: 0 7px;
-    border-color: #e2e4e8;
-    border-radius: 9px;
-    background: #f7f8fa;
-  }
-
-  .agent-statistics-head-actions input {
-    width: 104px;
-    min-width: 104px;
-    color: #505762;
-    font-size: 10px;
   }
 
   .agent-statistics-head-actions .modal-close {
@@ -436,12 +397,6 @@
 
   .agent-statistics-dialog-head h2 {
     font-size: 15px;
-  }
-
-  .agent-statistics-head-actions input {
-    width: 94px;
-    min-width: 94px;
-    font-size: 9px;
   }
 
   .agent-statistics-summary > div {

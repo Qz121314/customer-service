@@ -44,6 +44,35 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   await expect(page.getByText('产品流量分布', { exact: true })).toBeVisible();
   await expect(page.locator('.product-traffic-analysis')).toBeVisible();
 
+  const monthPicker = page.getByRole('button', {
+    name: /选择统计月份/u,
+  });
+  await monthPicker.click();
+  const monthDialog = page.getByRole('dialog', { name: '选择统计月份' });
+  await expect(monthDialog).toBeVisible();
+  const monthPickerGeometry = await monthDialog.evaluate((element) => {
+    const browser = globalThis;
+    const style = browser.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return {
+      background: style.backgroundColor,
+      borderRadius: Number.parseFloat(style.borderRadius),
+      width: rect.width,
+      withinViewport:
+        rect.left >= 0 &&
+        rect.top >= 0 &&
+        rect.right <= browser.innerWidth &&
+        rect.bottom <= browser.innerHeight,
+    };
+  });
+  expect(monthPickerGeometry.background).toBe('rgb(255, 255, 255)');
+  expect(monthPickerGeometry.borderRadius).toBeGreaterThanOrEqual(18);
+  expect(monthPickerGeometry.width).toBeGreaterThanOrEqual(280);
+  expect(monthPickerGeometry.withinViewport).toBeTruthy();
+  await expect(monthDialog.getByRole('button', { name: '8月' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(monthDialog).toBeHidden();
+
   const geometry = await page.evaluate(() => {
     const browser = globalThis;
     const root = browser.document.scrollingElement;
@@ -225,4 +254,11 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     page.getByRole('dialog', { name: /UI Admin Smoke Agent · 接待统计/u }),
   ).toBeVisible();
   await expect(page.getByText('每日接待', { exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: /选择统计月份/u })
+    .last()
+    .click();
+  await expect(
+    page.getByRole('dialog', { name: '选择统计月份' }),
+  ).toBeVisible();
 });

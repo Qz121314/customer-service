@@ -13,6 +13,7 @@ async function loadAgentStyles() {
   await import('./agent-foundation.css');
   await import('./media-view.css');
   await import('./agent-statistics.css');
+  await import('./month-picker.css');
   await import('./agent-auto-reply.css');
   await import('./agent-avatar.css');
   await import('./agent-workspace.css');
@@ -29,6 +30,7 @@ async function loadAdminStyles() {
   await import('./chat-dialogue.css');
   await import('./media-view.css');
   await import('./agent-statistics.css');
+  await import('./month-picker.css');
   await import('./cloud-service-ui.css');
   await import('./agent-editor.css');
   await import('./agent-avatar.css');

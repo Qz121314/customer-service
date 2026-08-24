@@ -6,6 +6,7 @@ import {
 } from './api';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { CHAT_TIME_ZONE, message } from './dashboard-runtime';
+import { MonthPicker } from './MonthPicker';
 
 export function AdminAgentStatisticsModal({
   agent,
@@ -78,14 +79,7 @@ export function AdminAgentStatisticsModal({
             <p>只统计每天首次有效接待的会话，不展示产品归因。</p>
           </div>
           <div className="agent-statistics-head-actions">
-            <label>
-              <span>月份</span>
-              <input
-                type="month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-              />
-            </label>
+            <MonthPicker value={month} onChange={setMonth} label="月份" />
             <button
               type="button"
               className="modal-close"
