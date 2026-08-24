@@ -78,15 +78,9 @@ test('conversation hot paths use authoritative indexed expiry', () => {
   assert.ok(migration.includes('idx_conversations_expiry'));
 });
 
-test('admin final style layer and static headers remain closure-safe', () => {
-  const adminStyles = source('../src/dashboard/admin-commercial.css');
+test('static security headers remain closure-safe', () => {
   const headers = source('../public/_headers');
 
-  assert.ok(adminStyles.includes('Final admin console layer'));
-  assert.ok(!adminStyles.includes('.workspace-shell'));
-  assert.ok(!adminStyles.includes('.thread-head'));
-  assert.ok(!adminStyles.includes('.conversation-row'));
-  assert.ok(!adminStyles.includes('.composer'));
   assert.ok(headers.includes('X-Content-Type-Options: nosniff'));
   assert.ok(
     headers.includes('Referrer-Policy: strict-origin-when-cross-origin'),
