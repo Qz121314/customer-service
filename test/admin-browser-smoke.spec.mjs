@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
@@ -145,6 +146,11 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   if (geometry.seatOverflowY !== 'hidden') {
     violations.push(`seat overflow-y=${geometry.seatOverflowY}`);
   }
+
+  writeFileSync(
+    '/tmp/admin-viewport-geometry.json',
+    `${JSON.stringify({ geometry, violations }, null, 2)}\n`,
+  );
 
   expect(
     violations,
