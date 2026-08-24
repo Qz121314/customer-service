@@ -3,6 +3,15 @@ import type { AgentAccount, AgentMonthlyStats } from './api';
 import { initials, presenceClass, statusLabel } from './dashboard-runtime';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 
+const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+
+function calendarStartOffset(month: string) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  if (!year || !monthNumber) return 0;
+  const weekday = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
+  return (weekday + 6) % 7;
+}
+
 export function AdminStatisticsPage({
   agents,
   month,
@@ -64,6 +73,7 @@ function MonthlyAgentStatistics({
       stats?.month === month ? stats.days : calendarMonthPeriod(month).days,
     [month, stats],
   );
+  const calendarOffset = useMemo(() => calendarStartOffset(month), [month]);
   const agentTotals = useMemo(
     () =>
       new Map(
@@ -104,6 +114,23 @@ function MonthlyAgentStatistics({
   const overallCoverage = monthlyTotal
     ? `${Math.min(100, (monthlyHandoffTotal / monthlyTotal) * 100).toFixed(1)}%`
     : '0%';
+  const selectedDailyCounts = selectedAgent
+    ? days.map((day) => ({
+        day,
+        count: countMap.get(`${selectedAgent.id}:${day}`) ?? 0,
+      }))
+    : [];
+  const activeDayCount = selectedDailyCounts.filter(
+    (item) => item.count > 0,
+  ).length;
+  const peakDay = selectedDailyCounts.reduce(
+    (peak, item) => (item.count > peak.count ? item : peak),
+    { day: 0, count: 0 },
+  );
+  const maxDailyCount = selectedDailyCounts.reduce(
+    (max, item) => Math.max(max, item.count),
+    0,
+  );
 
   useEffect(() => {
     if (agents.length === 0) {
@@ -117,11 +144,12 @@ function MonthlyAgentStatistics({
   return (
     <section className="statistics-panel admin-statistics-workspace">
       <div className="statistics-toolbar">
-        <div>
-          <strong>月度流量对账</strong>
-          <span>同一会话只在首次进入客服时计入一次有效接待</span>
+        <div className="statistics-toolbar-copy">
+          <span>月度对账</span>
+          <strong>流量总览</strong>
+          <small>按客服首次有效接待统计</small>
         </div>
-        <label>
+        <label className="statistics-month-control">
           <span>统计月份</span>
           <input
             type="month"
@@ -155,10 +183,10 @@ function MonthlyAgentStatistics({
           <aside className="statistics-seat-sidebar">
             <header>
               <div>
-                <strong>客服坐席</strong>
-                <span>{agents.length} 个账号</span>
+                <span>坐席列表</span>
+                <strong>客服账号</strong>
               </div>
-              <small>本月接待</small>
+              <small>{agents.length}</small>
             </header>
             <nav aria-label="选择客服坐席">
               {agents.map((agent) => {
@@ -204,7 +232,7 @@ function MonthlyAgentStatistics({
               </span>
             </header>
 
-            <div className="statistics-summary">
+            <div className="statistics-seat-metrics">
               <div>
                 <span>本月接待</span>
                 <strong>{busy ? '—' : selectedTotal}</strong>
@@ -217,26 +245,63 @@ function MonthlyAgentStatistics({
                 <span>对账覆盖率</span>
                 <strong>{busy ? '—' : selectedCoverage}</strong>
               </div>
+              <div>
+                <span>活跃天数</span>
+                <strong>{busy ? '—' : activeDayCount}</strong>
+              </div>
             </div>
 
             <div className="statistics-day-section">
               <header>
                 <div>
+                  <span>日历视图</span>
                   <strong>每日接待流量</strong>
-                  <span>自然日维度展示当前坐席的首次有效接待</span>
                 </div>
-                <small>完整月份 · {days.length} 天</small>
+                <small className="statistics-peak-chip">
+                  {busy
+                    ? '峰值 —'
+                    : peakDay.count
+                      ? `峰值 ${peakDay.count} · ${peakDay.day} 日`
+                      : '本月暂无流量'}
+                </small>
               </header>
-              <div className="statistics-day-grid">
-                {days.map((day) => {
-                  const value = countMap.get(`${selectedAgent.id}:${day}`) ?? 0;
-                  return (
-                    <div key={day} className={value ? 'has-value' : ''}>
-                      <span>{day} 日</span>
-                      <strong>{busy ? '·' : value || '—'}</strong>
-                    </div>
-                  );
-                })}
+
+              <div className="statistics-calendar">
+                <div className="statistics-calendar-weekdays" aria-hidden="true">
+                  {WEEKDAY_LABELS.map((label) => (
+                    <span key={label}>{label}</span>
+                  ))}
+                </div>
+                <div className="statistics-calendar-grid">
+                  {Array.from({ length: calendarOffset }, (_, index) => (
+                    <span
+                      key={`offset-${index}`}
+                      className="statistics-day-spacer"
+                      aria-hidden="true"
+                    />
+                  ))}
+                  {selectedDailyCounts.map(({ day, count }) => {
+                    const ratio = maxDailyCount ? count / maxDailyCount : 0;
+                    const level =
+                      count === 0
+                        ? 0
+                        : ratio >= 0.75
+                          ? 3
+                          : ratio >= 0.4
+                            ? 2
+                            : 1;
+                    return (
+                      <div
+                        key={day}
+                        className={`statistics-day-cell level-${level}`}
+                        aria-label={`${day} 日，${count} 次接待`}
+                      >
+                        <span>{day}</span>
+                        <strong>{busy ? '·' : count || ''}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </section>
