@@ -32,18 +32,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Format admin UI capture
-        run: pnpm exec prettier --write src/dashboard/AgentEditorModal.tsx src/dashboard/product-assignment.css
-
-      - name: Upload formatted admin UI
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-admin-ui
-          path: |
-            src/dashboard/AgentEditorModal.tsx
-            src/dashboard/product-assignment.css
-          if-no-files-found: error
-
       - name: Repository guardrails
         run: pnpm guardrails
 
