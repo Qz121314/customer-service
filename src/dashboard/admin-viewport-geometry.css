@@ -12,6 +12,8 @@
   .admin-content,
   .admin-statistics-page,
   .admin-statistics-workspace,
+  .admin-statistics-page .statistics-global-summary,
+  .admin-statistics-page .statistics-kpi-card,
   .admin-statistics-page .statistics-seat-layout,
   .admin-statistics-page .statistics-seat-sidebar,
   .admin-statistics-page .statistics-seat-detail {
@@ -45,12 +47,105 @@
 
   .admin-statistics-page,
   .admin-statistics-workspace,
+  .admin-statistics-page .statistics-global-summary,
   .admin-statistics-page .statistics-seat-layout,
   .admin-statistics-page .statistics-seat-sidebar,
   .admin-statistics-page .statistics-seat-detail {
     width: 100%;
     max-width: none;
     overflow: hidden;
+  }
+
+  /* Desktop information architecture:
+   * hero across the top, a narrow vertical KPI rail on the left, and the
+   * operational seat/trend canvas on the right. The four global KPIs never
+   * compete for horizontal space with the chart again.
+   */
+  .admin-statistics-workspace {
+    grid-template-columns: clamp(184px, 13.5vw, 214px) minmax(0, 1fr);
+    grid-template-rows: 46px minmax(0, 1fr);
+    column-gap: 9px;
+    row-gap: 7px;
+  }
+
+  .admin-statistics-page .statistics-hero {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .admin-statistics-page .statistics-global-summary {
+    grid-column: 1;
+    grid-row: 2;
+    height: 100%;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+    align-content: stretch;
+  }
+
+  .admin-statistics-page .statistics-kpi-card {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 12px 13px 11px;
+    border-radius: 11px;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    align-content: start;
+    gap: 5px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card::after {
+    width: 44px;
+    height: 44px;
+    border-radius: 0 0 0 44px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card .statistics-kpi-label {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > strong {
+    align-self: start;
+    font-size: clamp(25px, 2vw, 31px);
+    line-height: 0.96;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > small {
+    align-self: end;
+    overflow: visible;
+    font-size: 8px;
+    line-height: 1.35;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-primary > strong {
+    font-size: clamp(28px, 2.2vw, 34px);
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-coverage {
+    padding-bottom: 14px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-coverage > small {
+    padding-bottom: 7px;
+  }
+
+  .admin-statistics-page .statistics-kpi-progress {
+    right: 13px;
+    bottom: 9px;
+    left: 13px;
+    height: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-layout {
+    grid-column: 2;
+    grid-row: 2;
+    height: 100%;
+    min-height: 0;
   }
 
   .admin-statistics-page .statistics-seat-sidebar {
