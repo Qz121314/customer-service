@@ -1,6 +1,5 @@
 /* Admin agent editor
  * Management-only form: credentials, capacity, quota and routing scope.
- * Personal profile controls belong to the agent workspace.
  */
 
 .modal-backdrop:has(.agent-modal) {
@@ -13,7 +12,7 @@
 
 .agent-modal {
   display: flex;
-  width: min(1180px, calc(100vw - 32px));
+  width: min(1220px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
   flex-direction: column;
   overflow: hidden;
@@ -27,13 +26,13 @@
   position: relative;
   z-index: 3;
   display: flex;
-  min-height: 68px;
+  min-height: 62px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e6e9ef;
+  padding: 11px 16px;
+  border-bottom: 1px solid #e4e8ee;
   background: #fff;
 }
 
@@ -46,46 +45,32 @@
 
 .agent-editor-kicker {
   display: inline-flex;
-  min-height: 26px;
+  min-height: 28px;
   flex: 0 0 auto;
   align-items: center;
-  padding: 0 8px;
-  border: 1px solid #e2e6ec;
+  padding: 0 9px;
+  border: 1px solid #d9dfe7;
   border-radius: 7px;
-  color: #667085;
+  color: #475467;
   background: #f8f9fb;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 760;
-  letter-spacing: 0.04em;
-}
-
-.agent-editor-title-block > div:last-child {
-  min-width: 0;
+  letter-spacing: 0.02em;
 }
 
 .agent-editor-title-block h2 {
   margin: 0;
-  color: #172033;
-  font-size: 1.05rem;
-  font-weight: 780;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.agent-editor-title-block p {
-  margin: 3px 0 0;
-  overflow: hidden;
-  color: #667085;
-  font-size: 0.72rem;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #101828;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 .agent-modal .modal-close {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
@@ -95,7 +80,7 @@
   color: #667085;
   background: transparent;
   cursor: pointer;
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   line-height: 1;
 }
 
@@ -121,10 +106,10 @@
   display: grid;
   min-height: 0;
   flex: 1 1 auto;
-  grid-template-columns: 390px minmax(0, 1fr);
+  grid-template-columns: 420px minmax(0, 1fr);
   align-items: start;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
   overflow: auto;
   overscroll-behavior: contain;
   background: #f6f7f9;
@@ -132,86 +117,71 @@
 
 .agent-editor-workspace-card {
   min-width: 0;
-  border: 1px solid #e1e5eb;
+  border: 1px solid #dde3ea;
   border-radius: 11px;
   background: #fff;
-  box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 4%);
 }
 
-.agent-editor-settings-pane {
+.agent-editor-settings-pane,
+.agent-editor-routing-pane {
   overflow: hidden;
 }
 
 .agent-editor-section {
-  padding: 12px;
+  padding: 14px;
 }
 
 .agent-editor-section + .agent-editor-section {
-  border-top: 1px solid #eceff3;
+  border-top: 1px solid #e9edf2;
 }
 
 .agent-editor-section-head,
 .agent-editor-routing-head,
 .traffic-quota-history-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
 .agent-editor-section-head {
-  margin-bottom: 10px;
+  margin-bottom: 11px;
 }
 
-.agent-editor-section-head > div,
-.agent-editor-routing-head > div,
-.traffic-quota-history-head > div {
-  min-width: 0;
-}
-
-.agent-editor-section-head strong,
-.agent-editor-routing-head strong,
-.traffic-quota-history-head strong {
+.agent-editor-section-head > strong,
+.agent-editor-routing-head > strong,
+.traffic-quota-history-head > strong {
   display: block;
-  color: #243047;
-  font-size: 0.76rem;
-  font-weight: 760;
+  color: #1d2939;
+  font-size: 0.86rem;
+  font-weight: 780;
   line-height: 1.25;
-}
-
-.agent-editor-section-head small,
-.agent-editor-routing-head small,
-.traffic-quota-history-head small {
-  display: block;
-  margin-top: 3px;
-  color: #7b8494;
-  font-size: 0.67rem;
-  line-height: 1.35;
 }
 
 .agent-editor-section-hint {
   flex: 0 0 auto;
-  color: #8b95a5;
-  font-size: 0.65rem;
-  font-weight: 680;
+  color: #667085;
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .agent-editor-account-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 9px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .agent-editor-field {
   display: grid;
   min-width: 0;
-  gap: 5px;
+  gap: 6px;
 }
 
 .agent-editor-field > span {
   color: #344054;
-  font-size: 0.7rem;
-  font-weight: 720;
+  font-size: 0.78rem;
+  font-weight: 730;
   line-height: 1.2;
 }
 
@@ -225,14 +195,14 @@
 .agent-editor-number-field input,
 .traffic-quota-presets input {
   width: 100%;
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 10px;
-  border: 1px solid #cfd5df;
+  border: 1px solid #cbd2dc;
   border-radius: 8px;
-  color: #172033;
+  color: #101828;
   background: #fff;
   box-shadow: none;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   outline: 0;
   transition:
     border-color 120ms ease,
@@ -242,59 +212,46 @@
 
 .agent-editor-field input::placeholder,
 .traffic-quota-presets input::placeholder {
-  color: #9aa3b2;
+  color: #98a2b3;
 }
 
 .agent-editor-field input:hover,
 .agent-editor-number-field input:hover,
 .traffic-quota-presets input:hover {
-  border-color: #b8c0cc;
+  border-color: #aeb7c4;
 }
 
 .agent-editor-field input:focus,
 .agent-editor-number-field input:focus,
 .traffic-quota-presets input:focus {
-  border-color: #ff9a76;
+  border-color: #ff8b62;
   box-shadow: 0 0 0 3px rgb(255 90 31 / 10%);
 }
 
 .agent-editor-status-row {
   display: flex;
-  min-height: 46px;
+  min-height: 44px;
   grid-column: 1 / -1;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 7px 9px;
-  border: 1px solid #e2e6ec;
+  padding: 8px 10px;
+  border: 1px solid #dde3ea;
   border-radius: 8px;
   background: #fbfcfd;
 }
 
-.agent-editor-status-row > span {
-  min-width: 0;
-}
-
-.agent-editor-status-row strong {
-  display: block;
+.agent-editor-status-row > strong {
   color: #344054;
-  font-size: 0.71rem;
+  font-size: 0.78rem;
   font-weight: 740;
-}
-
-.agent-editor-status-row small {
-  display: block;
-  margin-top: 2px;
-  color: #7b8494;
-  font-size: 0.65rem;
-  line-height: 1.3;
 }
 
 .agent-modal .switch-control {
   position: relative;
   display: inline-flex;
-  width: 34px;
-  height: 20px;
+  width: 36px;
+  height: 22px;
   flex: 0 0 auto;
   cursor: pointer;
 }
@@ -309,8 +266,8 @@
 
 .agent-modal .switch-control > span {
   position: relative;
-  width: 34px;
-  height: 20px;
+  width: 36px;
+  height: 22px;
   border-radius: 999px;
   background: #c9d0da;
   transition: background 140ms ease;
@@ -320,8 +277,8 @@
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 2px rgb(15 23 42 / 18%);
@@ -344,48 +301,38 @@
 .agent-editor-capacity-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 9px;
 }
 
 .agent-editor-number-field {
   display: flex;
   min-width: 0;
+  min-height: 56px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 9px;
-  border: 1px solid #e2e6ec;
+  padding: 9px 10px;
+  border: 1px solid #dde3ea;
   border-radius: 8px;
   background: #fff;
 }
 
-.agent-editor-number-field > span {
+.agent-editor-number-field > strong {
   min-width: 0;
-}
-
-.agent-editor-number-field strong {
-  display: block;
   color: #344054;
-  font-size: 0.7rem;
+  font-size: 0.77rem;
   font-weight: 740;
-}
-
-.agent-editor-number-field small {
-  display: block;
-  margin-top: 2px;
-  color: #8490a1;
-  font-size: 0.62rem;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .agent-editor-number-field > div {
   position: relative;
-  width: 82px;
-  flex: 0 0 82px;
+  width: 86px;
+  flex: 0 0 86px;
 }
 
 .agent-editor-number-field input {
-  padding-right: 27px;
+  padding-right: 28px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -394,8 +341,8 @@
   position: absolute;
   top: 50%;
   right: 9px;
-  color: #98a2b3;
-  font-size: 0.65rem;
+  color: #667085;
+  font-size: 0.69rem;
   font-style: normal;
   pointer-events: none;
   transform: translateY(-50%);
@@ -405,34 +352,34 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   overflow: hidden;
-  border: 1px solid #e2e6ec;
+  border: 1px solid #dde3ea;
   border-radius: 8px;
   background: #fbfcfd;
 }
 
 .traffic-quota-summary > div {
   min-width: 0;
-  padding: 8px 9px;
+  padding: 9px 10px;
 }
 
 .traffic-quota-summary > div + div {
-  border-left: 1px solid #e8ebf0;
+  border-left: 1px solid #e4e8ee;
 }
 
 .traffic-quota-summary span {
   display: block;
-  color: #7b8494;
-  font-size: 0.62rem;
-  font-weight: 650;
+  color: #667085;
+  font-size: 0.68rem;
+  font-weight: 680;
   line-height: 1.2;
 }
 
 .traffic-quota-summary strong {
   display: block;
-  margin-top: 4px;
-  color: #172033;
-  font-size: 0.9rem;
-  font-weight: 780;
+  margin-top: 5px;
+  color: #101828;
+  font-size: 1.05rem;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
@@ -440,55 +387,44 @@
 .traffic-quota-topup {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  align-items: end;
-  gap: 9px;
-  margin-top: 9px;
-}
-
-.traffic-quota-topup-label {
-  padding-bottom: 2px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
 }
 
 .traffic-quota-topup-label span {
   display: block;
   color: #344054;
-  font-size: 0.69rem;
-  font-weight: 730;
-}
-
-.traffic-quota-topup-label small {
-  display: block;
-  margin-top: 2px;
-  color: #8a94a6;
-  font-size: 0.61rem;
+  font-size: 0.75rem;
+  font-weight: 740;
 }
 
 .traffic-quota-presets {
   display: grid;
-  grid-template-columns: repeat(3, 58px) minmax(108px, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(3, 62px) minmax(112px, 1fr);
+  gap: 6px;
   justify-content: end;
 }
 
 .traffic-quota-presets > button {
-  min-height: 36px;
+  min-height: 38px;
   padding: 0 8px;
-  border: 1px solid #cfd5df;
+  border: 1px solid #cbd2dc;
   border-radius: 8px;
-  color: #475467;
+  color: #344054;
   background: #fff;
   cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 730;
+  font-size: 0.78rem;
+  font-weight: 740;
 }
 
 .traffic-quota-presets > button:not(:disabled):hover {
-  border-color: #b8c0cc;
+  border-color: #aeb7c4;
   background: #f8f9fb;
 }
 
 .traffic-quota-presets > button.is-active {
-  border-color: #ffb095;
+  border-color: #ffad8f;
   color: #b43e12;
   background: #fff4ef;
 }
@@ -503,44 +439,40 @@
   top: 50%;
   left: 9px;
   z-index: 1;
-  color: #8a94a6;
-  font-size: 0.61rem;
+  color: #667085;
+  font-size: 0.68rem;
   pointer-events: none;
   transform: translateY(-50%);
 }
 
 .traffic-quota-presets input {
-  padding-left: 48px;
+  padding-left: 50px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .agent-editor-quota-note {
-  margin: 8px 0 0;
-  color: #768195;
-  font-size: 0.63rem;
+  margin: 9px 0 0;
+  color: #667085;
+  font-size: 0.68rem;
   line-height: 1.45;
 }
 
 .traffic-quota-history {
-  margin-top: 9px;
-  padding-top: 9px;
-  border-top: 1px solid #eceff3;
-}
-
-.traffic-quota-history-head {
-  align-items: center;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e9edf2;
 }
 
 .traffic-quota-history-head > span,
 .traffic-quota-load {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 29px;
   flex: 0 0 auto;
   align-items: center;
-  padding: 0 8px;
+  padding: 0 9px;
   border-radius: 7px;
-  font-size: 0.65rem;
+  font-size: 0.69rem;
   font-weight: 720;
 }
 
@@ -556,7 +488,7 @@
 
 .traffic-quota-load {
   border: 1px solid #d5dae2;
-  color: #475467;
+  color: #344054;
   background: #fff;
   cursor: pointer;
 }
@@ -568,8 +500,8 @@
 
 .traffic-quota-history > p {
   margin: 7px 0 0;
-  color: #8490a1;
-  font-size: 0.64rem;
+  color: #667085;
+  font-size: 0.68rem;
   line-height: 1.4;
 }
 
@@ -585,15 +517,15 @@
 
 .traffic-quota-history-row {
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 32px;
-  padding: 5px 7px;
+  min-height: 34px;
+  padding: 5px 8px;
   border: 1px solid #e7eaf0;
   border-radius: 7px;
   background: #fbfcfd;
-  font-size: 0.64rem;
+  font-size: 0.68rem;
 }
 
 .traffic-quota-history-row strong {
@@ -619,57 +551,39 @@
   background: #fffaeb;
 }
 
-.agent-editor-routing-pane {
-  padding: 0;
-  overflow: hidden;
-}
-
 .agent-editor-routing-head {
-  min-height: 54px;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid #e8ebf0;
-  background: #fbfcfd;
-}
-
-.agent-editor-routing-head > span {
-  flex: 0 0 auto;
-  color: #8490a1;
-  font-size: 0.63rem;
+  min-height: 50px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e4e8ee;
+  background: #fff;
 }
 
 .agent-editor-footer {
   display: flex;
-  min-height: 54px;
+  min-height: 56px;
   flex: 0 0 auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: flex-end;
   padding: 9px 12px;
   border-top: 1px solid #e2e6ec;
   background: #fff;
 }
 
-.agent-editor-save-note {
-  color: #8a94a6;
-  font-size: 0.65rem;
-}
-
 .agent-editor-footer-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 
 .agent-editor-footer .primary-button,
 .agent-editor-footer .secondary-button {
-  min-width: 76px;
-  min-height: 34px;
-  padding: 0 12px;
+  min-width: 84px;
+  min-height: 36px;
+  padding: 0 14px;
   border-radius: 8px;
   box-shadow: none;
-  font-size: 0.74rem;
-  font-weight: 730;
+  font-size: 0.8rem;
+  font-weight: 740;
 }
 
 .agent-editor-footer .primary-button {
@@ -690,9 +604,9 @@
   opacity: 0.58;
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1080px) {
   .agent-modal {
-    width: min(900px, calc(100vw - 24px));
+    width: min(920px, calc(100vw - 24px));
     max-height: calc(100dvh - 24px);
   }
 
@@ -715,14 +629,11 @@
   }
 
   .agent-editor-header {
-    min-height: 60px;
+    min-height: 58px;
     padding: 9px 11px;
   }
 
-  .agent-editor-kicker,
-  .agent-editor-title-block p,
-  .agent-editor-save-note,
-  .agent-editor-routing-head > span {
+  .agent-editor-kicker {
     display: none;
   }
 
@@ -754,7 +665,6 @@
   }
 
   .agent-editor-footer {
-    justify-content: flex-end;
     padding: 8px;
   }
 
@@ -769,6 +679,10 @@
 }
 
 @media (max-width: 420px) {
+  .agent-editor-section {
+    padding: 12px;
+  }
+
   .traffic-quota-summary {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -779,6 +693,6 @@
   }
 
   .agent-editor-number-field {
-    align-items: flex-end;
+    align-items: center;
   }
 }
