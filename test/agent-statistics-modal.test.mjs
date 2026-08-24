@@ -33,6 +33,8 @@ test('admin product traffic remains a page and seat traffic opens from the accou
   assert.ok(portal.includes("section === 'statistics'"));
   assert.ok(portal.includes('<AdminStatisticsPage'));
   assert.ok(statistics.includes('产品流量分布'));
+  assert.ok(statistics.includes('product-traffic-bento'));
+  assert.ok(statistics.includes('product-quality-card'));
   assert.ok(!statistics.includes('选择客服坐席'));
   assert.ok(portal.includes('setStatisticsAgent(agent)'));
   assert.ok(portal.includes('<AdminAgentStatisticsModal'));

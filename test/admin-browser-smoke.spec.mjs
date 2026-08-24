@@ -52,20 +52,28 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
       '.product-traffic-workspace',
     );
     const layout = browser.document.querySelector('.product-traffic-analysis');
+    const hero = browser.document.querySelector('.product-traffic-hero');
+    const productKpi = browser.document.querySelector(
+      '.product-kpi-card.is-products',
+    );
     const distribution = browser.document.querySelector(
       '.product-distribution-card',
     );
     const ranking = browser.document.querySelector('.product-ranking-card');
     const trend = browser.document.querySelector('.product-trend-card');
+    const quality = browser.document.querySelector('.product-quality-card');
 
     if (
       !root ||
       !(content instanceof browser.HTMLElement) ||
       !(workspace instanceof browser.HTMLElement) ||
       !(layout instanceof browser.HTMLElement) ||
+      !(hero instanceof browser.HTMLElement) ||
+      !(productKpi instanceof browser.HTMLElement) ||
       !(distribution instanceof browser.HTMLElement) ||
       !(ranking instanceof browser.HTMLElement) ||
-      !(trend instanceof browser.HTMLElement)
+      !(trend instanceof browser.HTMLElement) ||
+      !(quality instanceof browser.HTMLElement)
     ) {
       return null;
     }
@@ -73,9 +81,12 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     const contentRect = content.getBoundingClientRect();
     const workspaceRect = workspace.getBoundingClientRect();
     const layoutRect = layout.getBoundingClientRect();
+    const heroRect = hero.getBoundingClientRect();
+    const productKpiRect = productKpi.getBoundingClientRect();
     const distributionRect = distribution.getBoundingClientRect();
     const rankingRect = ranking.getBoundingClientRect();
     const trendRect = trend.getBoundingClientRect();
+    const qualityRect = quality.getBoundingClientRect();
 
     return {
       innerWidth: browser.innerWidth,
@@ -94,10 +105,19 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
       layoutWidth: layoutRect.width,
       layoutHeight: layoutRect.height,
       layoutOverflowX: browser.getComputedStyle(layout).overflowX,
+      heroWidth: heroRect.width,
+      productKpiWidth: productKpiRect.width,
       distributionHeight: distributionRect.height,
+      distributionWidth: distributionRect.width,
       rankingHeight: rankingRect.height,
+      rankingWidth: rankingRect.width,
       trendHeight: trendRect.height,
+      trendWidth: trendRect.width,
       trendBottom: trendRect.bottom,
+      qualityWidth: qualityRect.width,
+      cardRadius: Number.parseFloat(
+        browser.getComputedStyle(hero).borderRadius,
+      ),
     };
   });
 
@@ -133,17 +153,29 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   if (geometry.layoutOverflowX !== 'hidden') {
     violations.push(`analysis overflow-x=${geometry.layoutOverflowX}`);
   }
+  if (geometry.cardRadius < 18) {
+    violations.push('bento cards lack high-fidelity rounded geometry');
+  }
+  if (geometry.heroWidth <= geometry.productKpiWidth * 1.8) {
+    violations.push('hero and KPI cards lack bento size contrast');
+  }
   if (Math.abs(geometry.distributionHeight - geometry.rankingHeight) > 1) {
     violations.push('product distribution and ranking heights diverge');
   }
   if (geometry.distributionHeight > 220) {
     violations.push('product summary cards waste vertical space');
   }
+  if (geometry.rankingWidth <= geometry.distributionWidth * 1.5) {
+    violations.push('distribution and ranking lack bento width contrast');
+  }
   if (geometry.trendHeight < 150) {
     violations.push('daily trend is not readable');
   }
   if (geometry.trendBottom > geometry.contentBottom + 1) {
     violations.push('daily trend is clipped below content');
+  }
+  if (geometry.trendWidth <= geometry.qualityWidth * 2.4) {
+    violations.push('trend and quality cards lack bento width contrast');
   }
 
   writeFileSync(
