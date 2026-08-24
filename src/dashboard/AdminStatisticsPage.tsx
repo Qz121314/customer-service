@@ -8,7 +8,7 @@ const CHART_LEFT = 42;
 const CHART_RIGHT = 18;
 const CHART_TOP = 18;
 const CHART_BOTTOM = 32;
-const PRODUCTS_PER_PAGE = 6;
+const PRODUCTS_PER_PAGE = 4;
 const DISTRIBUTION_COLORS = [
   '#5b5ce2',
   '#7c6cf2',

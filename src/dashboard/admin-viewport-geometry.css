@@ -46,6 +46,14 @@
   .product-traffic-analysis {
     width: 100%;
     max-width: none;
-    overflow: hidden;
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 1101px) {
+  .admin-statistics-page,
+  .product-traffic-workspace,
+  .product-traffic-analysis {
+    overflow-y: hidden;
   }
 }

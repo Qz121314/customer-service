@@ -48,18 +48,34 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     const browser = globalThis;
     const root = browser.document.scrollingElement;
     const content = browser.document.querySelector('.admin-content');
+    const workspace = browser.document.querySelector(
+      '.product-traffic-workspace',
+    );
     const layout = browser.document.querySelector('.product-traffic-analysis');
+    const distribution = browser.document.querySelector(
+      '.product-distribution-card',
+    );
+    const ranking = browser.document.querySelector('.product-ranking-card');
+    const trend = browser.document.querySelector('.product-trend-card');
 
     if (
       !root ||
       !(content instanceof browser.HTMLElement) ||
-      !(layout instanceof browser.HTMLElement)
+      !(workspace instanceof browser.HTMLElement) ||
+      !(layout instanceof browser.HTMLElement) ||
+      !(distribution instanceof browser.HTMLElement) ||
+      !(ranking instanceof browser.HTMLElement) ||
+      !(trend instanceof browser.HTMLElement)
     ) {
       return null;
     }
 
     const contentRect = content.getBoundingClientRect();
+    const workspaceRect = workspace.getBoundingClientRect();
     const layoutRect = layout.getBoundingClientRect();
+    const distributionRect = distribution.getBoundingClientRect();
+    const rankingRect = ranking.getBoundingClientRect();
+    const trendRect = trend.getBoundingClientRect();
 
     return {
       innerWidth: browser.innerWidth,
@@ -74,9 +90,14 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
         .overflowY,
       contentRight: contentRect.right,
       contentBottom: contentRect.bottom,
+      workspaceBottom: workspaceRect.bottom,
       layoutWidth: layoutRect.width,
       layoutHeight: layoutRect.height,
       layoutOverflowX: browser.getComputedStyle(layout).overflowX,
+      distributionHeight: distributionRect.height,
+      rankingHeight: rankingRect.height,
+      trendHeight: trendRect.height,
+      trendBottom: trendRect.bottom,
     };
   });
 
@@ -103,11 +124,26 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   if (geometry.contentBottom > geometry.innerHeight + 1) {
     violations.push('admin content exceeds viewport height');
   }
+  if (geometry.workspaceBottom > geometry.contentBottom + 1) {
+    violations.push('product traffic workspace is clipped below content');
+  }
   if (!(geometry.layoutWidth > 900 && geometry.layoutHeight > 250)) {
     violations.push('product traffic analysis is not the primary workspace');
   }
   if (geometry.layoutOverflowX !== 'hidden') {
     violations.push(`analysis overflow-x=${geometry.layoutOverflowX}`);
+  }
+  if (Math.abs(geometry.distributionHeight - geometry.rankingHeight) > 1) {
+    violations.push('product distribution and ranking heights diverge');
+  }
+  if (geometry.distributionHeight > 220) {
+    violations.push('product summary cards waste vertical space');
+  }
+  if (geometry.trendHeight < 150) {
+    violations.push('daily trend is not readable');
+  }
+  if (geometry.trendBottom > geometry.contentBottom + 1) {
+    violations.push('daily trend is clipped below content');
   }
 
   writeFileSync(
@@ -121,9 +157,35 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   ).toEqual([]);
 
   await page.getByRole('button', { name: /客服账号/u }).click();
-  await page
+  const agentRow = page
     .getByRole('row')
     .filter({ hasText: 'UI Admin Smoke Agent' })
+    .first();
+  const rowActions = agentRow.locator('.admin-agent-actions');
+  await expect(rowActions).toBeVisible();
+  const actionGeometry = await rowActions.evaluate((element) => {
+    const browser = globalThis;
+    const buttons = [...element.querySelectorAll('button')];
+    return {
+      direction: browser.getComputedStyle(element).flexDirection,
+      buttons: buttons.map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          width: rect.width,
+          height: rect.height,
+          whiteSpace: browser.getComputedStyle(button).whiteSpace,
+        };
+      }),
+    };
+  });
+  expect(actionGeometry.direction).toBe('row');
+  expect(actionGeometry.buttons).toHaveLength(2);
+  for (const button of actionGeometry.buttons) {
+    expect(button.width).toBeGreaterThanOrEqual(44);
+    expect(button.height).toBeGreaterThanOrEqual(30);
+    expect(button.whiteSpace).toBe('nowrap');
+  }
+  await agentRow
     .getByRole('button', { name: '统计', exact: true })
     .first()
     .click();
