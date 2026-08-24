@@ -115,7 +115,10 @@ export function AgentEditorModal({
                         draft.id ? '留空表示不修改' : '至少 4 个字符'
                       }
                       onChange={(event) =>
-                        onDraftChange({ ...draft, password: event.target.value })
+                        onDraftChange({
+                          ...draft,
+                          password: event.target.value,
+                        })
                       }
                     />
                   </label>
@@ -286,7 +289,8 @@ export function AgentEditorModal({
                 </div>
 
                 <p className="agent-editor-quota-note">
-                  每个会话首次有效接待只扣 1 次。每日接待上限按天重置；咨询额度按累计总量计算。转接、重新排队和恢复同一会话不会重复扣减。
+                  每个会话首次有效接待只扣 1
+                  次。每日接待上限按天重置；咨询额度按累计总量计算。转接、重新排队和恢复同一会话不会重复扣减。
                 </p>
 
                 {draft.id ? (
@@ -302,9 +306,7 @@ export function AgentEditorModal({
                             quotaLedger.consistent ? 'is-ok' : 'is-warning'
                           }
                         >
-                          {quotaLedger.consistent
-                            ? '账本已核对'
-                            : '账本需检查'}
+                          {quotaLedger.consistent ? '账本已核对' : '账本需检查'}
                         </span>
                       ) : (
                         <button
@@ -329,9 +331,9 @@ export function AgentEditorModal({
                         <div className="traffic-quota-history-row quota-ledger-warning">
                           <strong>核对异常</strong>
                           <span>
-                            总额度 {quotaLedger.total}/{quotaLedger.expectedTotal}{' '}
-                            · 已使用额度 {quotaLedger.used}/
-                            {quotaLedger.expectedUsed}
+                            总额度 {quotaLedger.total}/
+                            {quotaLedger.expectedTotal} · 已使用额度{' '}
+                            {quotaLedger.used}/{quotaLedger.expectedUsed}
                           </span>
                           <time>请检查</time>
                         </div>

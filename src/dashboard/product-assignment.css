@@ -281,8 +281,10 @@
 
 .product-assignment-toolbar {
   display: grid;
-  grid-template-columns:
-    minmax(170px, 1.35fr) minmax(110px, 0.8fr) minmax(110px, 0.8fr);
+  grid-template-columns: minmax(170px, 1.35fr) minmax(110px, 0.8fr) minmax(
+      110px,
+      0.8fr
+    );
   gap: 6px;
 }
 
