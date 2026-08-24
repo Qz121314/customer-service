@@ -17,7 +17,7 @@ function createDatabase() {
   return database;
 }
 
-test('daily agent stats survive conversation retention and prune beyond 45 business days', () => {
+test('legacy daily stats migration survives conversation retention', () => {
   const database = createDatabase();
 
   database

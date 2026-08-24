@@ -74,6 +74,18 @@ function createRetentionDatabase() {
     );
     CREATE INDEX idx_agent_traffic_receipts_month
       ON agent_traffic_receipts(site_id, business_date, agent_id);
+    CREATE TABLE conversation_traffic_receipts (
+      conversation_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      business_date TEXT NOT NULL,
+      product_id TEXT,
+      product_title TEXT,
+      agent_id TEXT,
+      agent_name TEXT,
+      started_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_conversation_traffic_receipts_date
+      ON conversation_traffic_receipts(site_id, business_date);
 
     INSERT INTO sites (id) VALUES ('default');
   `);
@@ -237,25 +249,31 @@ test('reporting history cleanup archives paid usage before pruning receipts', as
     INSERT INTO agent_daily_stats (
       site_id, agent_id, business_date, conversation_count
     ) VALUES
-      ('default', 'old-agent', '2025-07-12', 1),
-      ('default', 'boundary-agent', '2025-07-13', 1);
+      ('default', 'old-agent', '2026-05-18', 1),
+      ('default', 'boundary-agent', '2026-05-19', 1);
     INSERT INTO agent_traffic_receipts (
       conversation_id, site_id, agent_id, business_date, quota_consumed
     ) VALUES
-      ('old-receipt', 'default', 'old-agent', '2025-07-12', 1),
-      ('unlimited-old-receipt', 'default', 'unlimited-agent', '2025-07-12', -1),
-      ('boundary-receipt', 'default', 'boundary-agent', '2025-07-13', 1);
+      ('old-receipt', 'default', 'old-agent', '2026-05-18', 1),
+      ('unlimited-old-receipt', 'default', 'unlimited-agent', '2026-05-18', -1),
+      ('boundary-receipt', 'default', 'boundary-agent', '2026-05-19', 1);
+    INSERT INTO conversation_traffic_receipts (
+      conversation_id, site_id, business_date, started_at
+    ) VALUES
+      ('old-conversation', 'default', '2026-05-18', '2026-05-18T08:00:00Z'),
+      ('boundary-conversation', 'default', '2026-05-19', '2026-05-19T08:00:00Z');
   `);
 
   await purgeExpiredConversations(env, new Date('2026-08-16T12:00:00.000Z'));
 
   assert.equal(rowCount(database, 'agent_daily_stats'), 1);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 1);
+  assert.equal(rowCount(database, 'conversation_traffic_receipts'), 1);
   assert.equal(
     database
       .prepare('SELECT business_date FROM agent_daily_stats LIMIT 1')
       .get().business_date,
-    '2025-07-13',
+    '2026-05-19',
   );
   assert.equal(
     database
@@ -284,23 +302,29 @@ test('reporting history cleanup archives paid usage before pruning receipts', as
       )
       .get().used,
     0,
-    'the 400-day boundary must remain in retained detail',
+    'the 90-day boundary must remain in retained detail',
   );
 
   database.exec(`
     INSERT INTO agents (id, site_id) VALUES ('late-old-agent', 'default');
     INSERT INTO agent_daily_stats (
       site_id, agent_id, business_date, conversation_count
-    ) VALUES ('default', 'late-old-agent', '2025-07-12', 1);
+    ) VALUES ('default', 'late-old-agent', '2026-05-18', 1);
     INSERT INTO agent_traffic_receipts (
       conversation_id, site_id, agent_id, business_date, quota_consumed
-    ) VALUES ('late-old-receipt', 'default', 'late-old-agent', '2025-07-12', 1);
+    ) VALUES ('late-old-receipt', 'default', 'late-old-agent', '2026-05-18', 1);
+    INSERT INTO conversation_traffic_receipts (
+      conversation_id, site_id, business_date, started_at
+    ) VALUES (
+      'late-old-conversation', 'default', '2026-05-18', '2026-05-18T08:00:00Z'
+    );
   `);
 
   await purgeExpiredConversations(env, new Date('2026-08-16T12:01:00.000Z'));
 
   assert.equal(rowCount(database, 'agent_daily_stats'), 2);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 2);
+  assert.equal(rowCount(database, 'conversation_traffic_receipts'), 2);
   assert.equal(
     database
       .prepare(

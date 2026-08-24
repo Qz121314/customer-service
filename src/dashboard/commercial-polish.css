@@ -1,0 +1,372 @@
+:root {
+  --cs-accent: #625bdd;
+  --cs-accent-strong: #514ac8;
+  --cs-accent-soft: #f1f0ff;
+  --cs-ink: #1d222c;
+  --cs-muted: #767e8b;
+  --cs-line: #e0e4ea;
+  --cs-canvas: #f2f3f6;
+  --cs-panel: #fff;
+  --cs-radius-card: 16px;
+  --cs-shadow-card:
+    0 1px 2px rgb(15 23 42 / 3%), 0 14px 36px rgb(15 23 42 / 4%);
+}
+
+button,
+input,
+select,
+textarea {
+  accent-color: var(--cs-accent);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgb(98 91 221 / 16%);
+  outline-offset: 2px;
+}
+
+.admin-console,
+.workspace-shell {
+  color: var(--cs-ink);
+}
+
+/* Admin shell */
+.admin-console {
+  background:
+    radial-gradient(circle at 82% -10%, rgb(119 110 232 / 5%), transparent 34%),
+    var(--cs-canvas);
+}
+
+.admin-sidebar {
+  border-right-color: rgb(255 255 255 / 6%);
+  color: #f7f8fb;
+  background:
+    radial-gradient(circle at 30% 0%, rgb(104 96 229 / 17%), transparent 28%),
+    #17191f;
+}
+
+.admin-brand {
+  border-bottom-color: rgb(255 255 255 / 8%);
+}
+
+.admin-brand > span {
+  border: 1px solid rgb(157 149 255 / 32%);
+  background: linear-gradient(145deg, #6d66e5, #544dcc);
+  box-shadow:
+    0 8px 22px rgb(72 64 190 / 25%),
+    inset 0 1px 0 rgb(255 255 255 / 18%);
+}
+
+.admin-brand strong {
+  color: #fff;
+}
+
+.admin-brand small {
+  color: rgb(255 255 255 / 48%);
+}
+
+.admin-nav button {
+  border: 1px solid transparent;
+  color: rgb(255 255 255 / 64%);
+}
+
+.admin-nav button:hover {
+  border-color: rgb(255 255 255 / 6%);
+  color: #fff;
+  background: rgb(255 255 255 / 6%);
+}
+
+.admin-nav button.active {
+  border-color: rgb(255 255 255 / 10%);
+  color: #fff;
+  background: linear-gradient(
+    135deg,
+    rgb(109 102 229 / 34%),
+    rgb(88 81 207 / 22%)
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 8%),
+    0 7px 20px rgb(0 0 0 / 12%);
+}
+
+.admin-sidebar-foot a,
+.admin-sidebar-foot button {
+  border-color: transparent;
+  color: rgb(255 255 255 / 62%);
+  background: transparent;
+}
+
+.admin-sidebar-foot a:hover,
+.admin-sidebar-foot button:hover {
+  border-color: rgb(255 255 255 / 7%);
+  color: #fff;
+  background: rgb(255 255 255 / 6%);
+}
+
+.admin-content-head h1 {
+  color: var(--cs-ink);
+  font-weight: 800;
+}
+
+.admin-overview-strip > div,
+.admin-table-card,
+.agent-editor-workspace-card,
+.agent-statistics-dialog,
+.agent-statistics-card {
+  border-color: var(--cs-line);
+  box-shadow: var(--cs-shadow-card);
+}
+
+.admin-agent-layout .admin-overview-strip > div,
+.admin-agent-layout .admin-table-card {
+  border-radius: var(--cs-radius-card);
+}
+
+.admin-agent-layout .admin-agent-table tbody tr {
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.admin-agent-layout .admin-agent-table tbody tr:hover,
+.admin-agent-layout .admin-agent-table tbody tr:focus-within {
+  background: #fafaff;
+  box-shadow: inset 3px 0 0 rgb(98 91 221 / 62%);
+}
+
+.admin-agent-actions {
+  min-width: 116px;
+  padding: 3px;
+  border: 1px solid #e4e6ec;
+  border-radius: 10px;
+  background: #f7f8fa;
+  gap: 3px;
+}
+
+.admin-agent-actions .table-action {
+  min-width: 52px;
+  min-height: 30px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.admin-agent-actions .table-action::after {
+  display: none;
+}
+
+.admin-agent-actions .statistics-action,
+.admin-agent-actions .statistics-action:hover {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(145deg, #6b64e5, #5750cf);
+  box-shadow: 0 3px 9px rgb(87 80 207 / 20%);
+}
+
+.admin-agent-actions .table-action:not(.statistics-action):hover {
+  color: #303640;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 8%);
+}
+
+/* Agent editor: one restrained scroll owner with a commercial scrollbar. */
+.modal-backdrop:has(.agent-modal) {
+  background: rgb(12 15 23 / 58%);
+  backdrop-filter: blur(12px) saturate(0.9);
+}
+
+.agent-modal {
+  border-radius: 22px;
+  box-shadow:
+    0 36px 110px rgb(8 12 24 / 34%),
+    0 2px 10px rgb(8 12 24 / 12%);
+}
+
+.agent-editor-header {
+  min-height: 70px;
+  padding-inline: 20px;
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(16px);
+}
+
+.agent-editor-layout {
+  padding: 14px;
+  gap: 14px;
+  background:
+    radial-gradient(circle at 86% -10%, rgb(98 91 221 / 5%), transparent 32%),
+    #f2f3f6;
+  scrollbar-color: rgb(91 96 110 / 28%) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.agent-editor-layout::-webkit-scrollbar,
+.admin-table-wrap::-webkit-scrollbar,
+.conversation-list::-webkit-scrollbar,
+.messages::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.agent-editor-layout::-webkit-scrollbar-track,
+.admin-table-wrap::-webkit-scrollbar-track,
+.conversation-list::-webkit-scrollbar-track,
+.messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-editor-layout::-webkit-scrollbar-thumb,
+.admin-table-wrap::-webkit-scrollbar-thumb,
+.conversation-list::-webkit-scrollbar-thumb,
+.messages::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgb(91 96 110 / 28%);
+  background-clip: padding-box;
+}
+
+.agent-editor-workspace-card {
+  border-radius: 16px;
+  box-shadow:
+    0 1px 2px rgb(15 23 42 / 3%),
+    0 12px 30px rgb(15 23 42 / 4%);
+}
+
+.agent-editor-field input,
+.agent-editor-number-field input,
+.traffic-quota-presets input,
+.product-picker-toolbar input,
+.product-picker-toolbar select {
+  border-radius: 11px;
+}
+
+.agent-editor-footer {
+  min-height: 64px;
+  padding-inline: 18px;
+  background: rgb(255 255 255 / 96%);
+  backdrop-filter: blur(16px);
+}
+
+.agent-editor-footer .primary-button {
+  border-color: var(--cs-accent);
+  background: linear-gradient(145deg, #6b64e5, #5750cf);
+  box-shadow: 0 7px 16px rgb(87 80 207 / 18%);
+}
+
+.agent-editor-footer .primary-button:not(:disabled):hover {
+  border-color: var(--cs-accent-strong);
+  background: linear-gradient(145deg, #756eea, #5d56d5);
+}
+
+/* Agent workspace */
+.workspace-shell {
+  --agent-accent: var(--cs-accent);
+  --agent-accent-strong: var(--cs-accent-strong);
+  --agent-line: #e1e5eb;
+  --agent-shell: #f4f5f8;
+  --agent-thread: #f1f3f6;
+}
+
+@media (min-width: 761px) {
+  body:has(.workspace-shell) {
+    background:
+      radial-gradient(circle at 82% 4%, rgb(111 102 229 / 9%), transparent 34%),
+      #e9ecf1;
+  }
+
+  .workspace-shell {
+    border-color: #d7dce4;
+    border-radius: 22px;
+    box-shadow:
+      0 28px 80px rgb(27 35 51 / 16%),
+      0 2px 8px rgb(27 35 51 / 6%);
+  }
+
+  .workspace-shell .workspace-sidebar {
+    border-right-color: rgb(255 255 255 / 6%);
+    background:
+      radial-gradient(circle at 50% 0%, rgb(101 93 224 / 18%), transparent 28%),
+      #17191f;
+  }
+
+  .workspace-shell .workspace-brand {
+    border: 1px solid rgb(151 143 255 / 30%);
+    background: linear-gradient(145deg, #6d66e5, #544dcc);
+    box-shadow: 0 8px 22px rgb(72 64 190 / 24%);
+  }
+
+  .workspace-shell .conversation-head,
+  .workspace-shell .thread-head {
+    background: rgb(255 255 255 / 96%);
+    backdrop-filter: blur(14px);
+  }
+
+  .workspace-shell .conversation-row {
+    margin: 3px 6px;
+    width: calc(100% - 12px);
+    border: 1px solid transparent;
+    border-radius: 12px;
+  }
+
+  .workspace-shell .conversation-row:hover {
+    border-color: #e8e9ef;
+    background: #f8f8fb;
+  }
+
+  .workspace-shell .conversation-row.selected,
+  .workspace-shell .conversation-row.selected:hover {
+    border-color: #dedbff;
+    background: #f1f0ff;
+    box-shadow: inset 3px 0 0 var(--agent-accent);
+  }
+
+  .workspace-shell .conversation-context-card {
+    border-radius: 14px;
+    box-shadow: 0 8px 22px rgb(15 23 42 / 5%);
+  }
+
+  .workspace-shell .composer {
+    border-top-color: #dde1e8;
+    background: rgb(247 248 250 / 97%);
+    backdrop-filter: blur(14px);
+  }
+}
+
+.conversation-list,
+.messages,
+.admin-table-wrap {
+  scrollbar-color: rgb(91 96 110 / 24%) transparent;
+  scrollbar-width: thin;
+}
+
+.workspace-shell .primary-button,
+.workspace-shell .unread-total,
+.workspace-shell .composer-foot .primary-button {
+  background-color: var(--cs-accent);
+}
+
+@media (max-width: 760px) {
+  .agent-modal {
+    border-radius: 0;
+  }
+
+  .agent-editor-layout {
+    scrollbar-gutter: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

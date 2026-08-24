@@ -163,6 +163,33 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await seedConversationAndAgent(page);
   await loginAgent(page);
 
+  const desktopVisuals = await page.evaluate(() => {
+    const browser = globalThis;
+    const shell = browser.document.querySelector('.workspace-shell');
+    const sidebar = browser.document.querySelector('.workspace-sidebar');
+    const row = browser.document.querySelector('.conversation-row');
+    if (
+      !(shell instanceof browser.HTMLElement) ||
+      !(sidebar instanceof browser.HTMLElement) ||
+      !(row instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    return {
+      shellRadius: Number.parseFloat(
+        browser.getComputedStyle(shell).borderRadius,
+      ),
+      sidebarBackground: browser.getComputedStyle(sidebar).backgroundColor,
+      rowRadius: Number.parseFloat(browser.getComputedStyle(row).borderRadius),
+    };
+  });
+  expect(desktopVisuals).not.toBeNull();
+  if (desktopVisuals) {
+    expect(desktopVisuals.shellRadius).toBeGreaterThanOrEqual(20);
+    expect(desktopVisuals.sidebarBackground).toBe('rgb(23, 25, 31)');
+    expect(desktopVisuals.rowRadius).toBeGreaterThanOrEqual(10);
+  }
+
   const autoReplyButton = page.getByRole('button', {
     name: '打开自动回复设置',
   });

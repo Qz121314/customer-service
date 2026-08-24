@@ -3,13 +3,13 @@ import {
   AgentAccount,
   AgentQuotaAdjustment,
   AgentQuotaLedger,
-  ProductTrafficMonthlyStats,
   ProductCatalogItem,
+  TrafficOverviewStats,
   adminLogin,
   adminLogout,
   createAgent,
   getAdminSession,
-  getProductTrafficStats,
+  getTrafficOverviewStats,
   getAgentQuotaLedger,
   getAgents,
   getProductCatalog,
@@ -35,6 +35,7 @@ import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
 
 type AdminView = 'agents' | 'statistics';
 type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
+type TrafficRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -94,9 +95,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [statsMonth, setStatsMonth] = useState(() => currentBusinessMonth());
-  const [monthlyStats, setMonthlyStats] =
-    useState<ProductTrafficMonthlyStats | null>(null);
+  const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
+  const [trafficStats, setTrafficStats] = useState<TrafficOverviewStats | null>(
+    null,
+  );
   const [statisticsAgent, setStatisticsAgent] = useState<AgentAccount | null>(
     null,
   );
@@ -108,6 +110,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [quotaLedger, setQuotaLedger] = useState<AgentQuotaLedger | null>(null);
   const [quotaHistoryBusy, setQuotaHistoryBusy] = useState(false);
   const [quotaHistoryError, setQuotaHistoryError] = useState('');
+  const trafficPeriod = useMemo(
+    () => trafficRangePeriod(trafficRange),
+    [trafficRange],
+  );
 
   const refresh = useCallback(async () => {
     const [nextAgents, nextProducts] = await Promise.all([
@@ -129,12 +135,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     let active = true;
     setStatsError('');
     setStatsBusy(true);
-    getProductTrafficStats(statsMonth)
+    getTrafficOverviewStats(trafficPeriod.from, trafficPeriod.to)
       .then((result) => {
-        if (active) setMonthlyStats(result);
+        if (active) setTrafficStats(result);
       })
       .catch((reason) => {
-        if (active) setStatsError(message(reason, '无法加载产品流量'));
+        if (active) setStatsError(message(reason, '无法加载流量统计'));
       })
       .finally(() => {
         if (active) setStatsBusy(false);
@@ -142,7 +148,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return () => {
       active = false;
     };
-  }, [section, statsMonth]);
+  }, [section, trafficPeriod.from, trafficPeriod.to]);
 
   useEffect(() => {
     if (!editorOpen || saving) return;
@@ -612,14 +618,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         {section === 'statistics' && (
           <AdminStatisticsPage
             products={products}
-            month={statsMonth}
-            stats={monthlyStats}
+            range={trafficRange}
+            stats={trafficStats}
             busy={statsBusy}
             error={statsError}
             onClearError={() => setStatsError('')}
-            onMonthChange={(month) => {
+            onRangeChange={(range) => {
               setStatsBusy(true);
-              setStatsMonth(month);
+              setTrafficRange(range);
             }}
           />
         )}
@@ -662,14 +668,35 @@ function agentIsLimited(agent: AgentAccount): boolean {
   return dailyFull || trafficExhausted;
 }
 
-function currentBusinessMonth(): string {
+function currentBusinessDate(): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: CHAT_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
+    day: '2-digit',
   }).formatToParts(new Date());
   const values = Object.fromEntries(
     parts.map((part) => [part.type, part.value]),
   );
-  return `${values.year}-${values.month}`;
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function shiftBusinessDate(date: string, days: number): string {
+  const value = new Date(`${date}T00:00:00.000Z`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return value.toISOString().slice(0, 10);
+}
+
+function trafficRangePeriod(range: TrafficRange): {
+  from: string;
+  to: string;
+} {
+  const today = currentBusinessDate();
+  if (range === 'yesterday') {
+    const yesterday = shiftBusinessDate(today, -1);
+    return { from: yesterday, to: yesterday };
+  }
+  const days =
+    range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 1;
+  return { from: shiftBusinessDate(today, -(days - 1)), to: today };
 }

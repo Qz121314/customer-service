@@ -1,7 +1,7 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
-import { assignConversationAgent } from './routing';
+import { assignConversationAgent, routingBusinessDate } from './routing';
 import {
   broadcastAssignments,
   type AssignmentVisitorMessage,
@@ -477,6 +477,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
   const now = new Date().toISOString();
+  const businessDate = routingBusinessDate(new Date(now));
   const expiresAt = conversationExpiresAt(now);
 
   const inserted = await c.env.DB.prepare(
@@ -485,15 +486,17 @@ clientApi.post('/client/v1/conversations', async (c) => {
        product_id, section_id, section_name, category_id, category_name,
        product_title, product_cover_url, product_href,
        source_handoff_id, start_reuse_key,
-       cta_affinity_agent_id, cta_affinity_expires_at, expires_at,
+       cta_affinity_agent_id, cta_affinity_expires_at,
+       started_business_date, expires_at,
        last_message_at, created_at, updated_at
      ) VALUES (
        ?1, ?2, ?3, 'open', ?4,
        ?5, ?6, ?7, ?8, ?9,
        ?10, ?11, ?12,
        ?13, ?14,
-       ?15, ?16, ?17,
-       ?18, ?18, ?18
+       ?15, ?16,
+       ?17, ?18,
+       ?19, ?19, ?19
      )`,
   )
     .bind(
@@ -513,6 +516,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       startClaimKey,
       affinityAgentId,
       affinityExpiresAt,
+      businessDate,
       expiresAt,
       now,
     )

@@ -11,8 +11,8 @@
   .admin-sidebar,
   .admin-content,
   .admin-statistics-page,
-  .product-traffic-workspace,
-  .product-traffic-analysis {
+  .traffic-overview,
+  .traffic-overview-grid {
     box-sizing: border-box;
     min-width: 0;
   }
@@ -42,8 +42,8 @@
   }
 
   .admin-statistics-page,
-  .product-traffic-workspace,
-  .product-traffic-analysis {
+  .traffic-overview,
+  .traffic-overview-grid {
     width: 100%;
     max-width: none;
     overflow-x: hidden;
@@ -52,8 +52,8 @@
 
 @media (min-width: 1101px) {
   .admin-statistics-page,
-  .product-traffic-workspace,
-  .product-traffic-analysis {
+  .traffic-overview,
+  .traffic-overview-grid {
     overflow-y: hidden;
   }
 }

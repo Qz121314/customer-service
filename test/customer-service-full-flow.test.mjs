@@ -522,19 +522,34 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(trafficReceipt.product_id, 'product-e2e');
   assert.equal(trafficReceipt.product_title, 'Product E2E');
 
+  const conversationTrafficReceipt = database
+    .prepare(
+      `SELECT product_id, product_title, agent_id, agent_name, business_date
+       FROM conversation_traffic_receipts
+       WHERE conversation_id = ?`,
+    )
+    .get(conversationId);
+  assert.equal(conversationTrafficReceipt.product_id, 'product-e2e');
+  assert.equal(conversationTrafficReceipt.product_title, 'Product E2E');
+  assert.equal(conversationTrafficReceipt.agent_id, 'agent-e2e');
+  assert.equal(conversationTrafficReceipt.agent_name, 'Agent E2E');
+
   const statisticsMonth = trafficReceipt.business_date.slice(0, 7);
-  const productStatsResponse = await adminConfigApi.request(
-    `/api/admin/product-stats?month=${statisticsMonth}`,
+  const trafficStatsResponse = await adminConfigApi.request(
+    `/api/admin/traffic-stats?from=${conversationTrafficReceipt.business_date}&to=${conversationTrafficReceipt.business_date}`,
     { headers: { cookie: adminCookie('admin-password') } },
     env,
   );
-  assert.equal(productStatsResponse.status, 200);
-  const productStats = await json(productStatsResponse);
-  assert.deepEqual(productStats.rows, [
+  assert.equal(trafficStatsResponse.status, 200);
+  const trafficStats = await json(trafficStatsResponse);
+  assert.equal(trafficStats.total, 1);
+  assert.deepEqual(trafficStats.agents, [
+    { agentId: 'agent-e2e', agentName: 'Agent E2E', count: 1 },
+  ]);
+  assert.deepEqual(trafficStats.products, [
     {
       productId: 'product-e2e',
       productTitle: 'Product E2E',
-      day: Number(trafficReceipt.business_date.slice(-2)),
       count: 1,
     },
   ]);

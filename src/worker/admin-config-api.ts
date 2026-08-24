@@ -89,42 +89,74 @@ adminConfigApi.get('/api/admin/agents', async (c) => {
   return c.json({ agents: await loadAgents(c.env.DB) });
 });
 
-adminConfigApi.get('/api/admin/product-stats', async (c) => {
+adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const month = normalizeMonth(c.req.query('month'));
-  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
-  const period = calendarMonthPeriod(month);
+  const requestedFrom = normalizeReportingDate(c.req.query('from'));
+  const requestedTo = normalizeReportingDate(c.req.query('to'));
+  if (!requestedFrom || !requestedTo || requestedFrom > requestedTo) {
+    return c.json({ error: 'INVALID_REPORTING_RANGE' }, 400);
+  }
   const retainedFrom = reportingRetentionCutoff();
+  const today = reportingBusinessDate();
+  const from = requestedFrom < retainedFrom ? retainedFrom : requestedFrom;
+  const to = requestedTo > today ? today : requestedTo;
+  if (from > to) return c.json({ error: 'REPORTING_RANGE_EXPIRED' }, 400);
   const result = await c.env.DB.prepare(
-    `SELECT product_id,
-       MAX(NULLIF(TRIM(product_title), '')) AS product_title,
-       CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
+    `WITH scoped AS MATERIALIZED (
+       SELECT product_id, product_title, agent_id, agent_name
+       FROM conversation_traffic_receipts
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     )
+     SELECT 'summary' AS dimension,
+       NULL AS item_id,
+       NULL AS item_name,
        COUNT(*) AS count
-     FROM agent_traffic_receipts
-     WHERE site_id = 'default'
-       AND business_date >= ?1
-       AND business_date <= ?2
-       AND business_date >= ?3
-     GROUP BY product_id, business_date
-     ORDER BY product_id ASC, business_date ASC`,
+     FROM scoped
+     UNION ALL
+     SELECT 'agent' AS dimension,
+       COALESCE(agent_id, '__pending__') AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
+       COUNT(*) AS count
+     FROM scoped
+     GROUP BY agent_id
+     UNION ALL
+     SELECT 'product' AS dimension,
+       COALESCE(product_id, '__unknown__') AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
+       COUNT(*) AS count
+     FROM scoped
+     GROUP BY product_id
+     ORDER BY dimension ASC, count DESC, item_name ASC`,
   )
-    .bind(period.start, period.end, retainedFrom)
+    .bind(from, to)
     .all<{
-      product_id: string | null;
-      product_title: string | null;
-      day: number;
+      dimension: 'summary' | 'agent' | 'product';
+      item_id: string | null;
+      item_name: string | null;
       count: number;
     }>();
+  const rows = result.results ?? [];
 
   return c.json({
-    month,
-    days: period.days,
-    rows: (result.results ?? []).map((row) => ({
-      productId: row.product_id,
-      productTitle: row.product_title,
-      day: Number(row.day),
-      count: Number(row.count),
-    })),
+    from,
+    to,
+    total: Number(rows.find((row) => row.dimension === 'summary')?.count ?? 0),
+    agents: rows
+      .filter((row) => row.dimension === 'agent')
+      .map((row) => ({
+        agentId: row.item_id === '__pending__' ? null : row.item_id,
+        agentName: row.item_name ?? '待接待',
+        count: Number(row.count),
+      })),
+    products: rows
+      .filter((row) => row.dimension === 'product')
+      .map((row) => ({
+        productId: row.item_id === '__unknown__' ? null : row.item_id,
+        productTitle: row.item_name ?? '未知产品',
+        count: Number(row.count),
+      })),
     retainedFrom,
   });
 });
@@ -1075,6 +1107,16 @@ function normalizeMonth(value?: string): string | null {
   return /^\d{4}-(0[1-9]|1[0-2])$/u.test(month) ? month : null;
 }
 
+function normalizeReportingDate(value?: string): string | null {
+  const date = value?.trim() ?? '';
+  if (!/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/u.test(date)) return null;
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== date
+    ? null
+    : date;
+}
+
 function reportingBusinessDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: REPORTING_TIME_ZONE,
@@ -1091,7 +1133,7 @@ function reportingBusinessDate(now = new Date()): string {
 function reportingRetentionCutoff(now = new Date()): string {
   const today = reportingBusinessDate(now);
   const date = new Date(`${today}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() - 399);
+  date.setUTCDate(date.getUTCDate() - 89);
   return date.toISOString().slice(0, 10);
 }
 
