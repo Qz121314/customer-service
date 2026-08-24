@@ -19,8 +19,8 @@ async function loadAgentStyles() {
   await import('./agent-desktop.css');
   await import('./agent-desktop-composer.css');
   await import('./agent-mobile.css');
-  await import('./agent-unread.css');
   await import('./agent-thread.css');
+  await import('./agent-state.css');
 }
 
 async function loadAdminStyles() {
