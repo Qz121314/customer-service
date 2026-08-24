@@ -113,20 +113,41 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   expect(geometry).not.toBeNull();
   if (!geometry) return;
 
-  console.log('ADMIN_VIEWPORT_GEOMETRY', JSON.stringify(geometry));
+  const violations = [];
 
-  expect(geometry.rootScrollWidth).toBeLessThanOrEqual(
-    geometry.rootClientWidth + 1,
-  );
-  expect(geometry.rootScrollHeight).toBeLessThanOrEqual(
-    geometry.rootClientHeight + 1,
-  );
-  expect(geometry.htmlOverflowX).toBe('hidden');
-  expect(geometry.htmlOverflowY).toBe('hidden');
-  expect(geometry.contentRight).toBeLessThanOrEqual(geometry.innerWidth + 1);
-  expect(geometry.contentBottom).toBeLessThanOrEqual(geometry.innerHeight + 1);
-  expect(geometry.seatWidth).toBeGreaterThan(geometry.layoutWidth * 0.95);
-  expect(geometry.seatHeight).toBeLessThan(100);
-  expect(geometry.seatOverflowX).toBe('hidden');
-  expect(geometry.seatOverflowY).toBe('hidden');
+  if (geometry.rootScrollWidth > geometry.rootClientWidth + 1) {
+    violations.push('document horizontal overflow');
+  }
+  if (geometry.rootScrollHeight > geometry.rootClientHeight + 1) {
+    violations.push('document vertical overflow');
+  }
+  if (geometry.htmlOverflowX !== 'hidden') {
+    violations.push(`html overflow-x=${geometry.htmlOverflowX}`);
+  }
+  if (geometry.htmlOverflowY !== 'hidden') {
+    violations.push(`html overflow-y=${geometry.htmlOverflowY}`);
+  }
+  if (geometry.contentRight > geometry.innerWidth + 1) {
+    violations.push('admin content exceeds viewport width');
+  }
+  if (geometry.contentBottom > geometry.innerHeight + 1) {
+    violations.push('admin content exceeds viewport height');
+  }
+  if (!(geometry.seatWidth > geometry.layoutWidth * 0.95)) {
+    violations.push('seat selector is not full width');
+  }
+  if (!(geometry.seatHeight < 100)) {
+    violations.push('seat selector is not horizontal/compact');
+  }
+  if (geometry.seatOverflowX !== 'hidden') {
+    violations.push(`seat overflow-x=${geometry.seatOverflowX}`);
+  }
+  if (geometry.seatOverflowY !== 'hidden') {
+    violations.push(`seat overflow-y=${geometry.seatOverflowY}`);
+  }
+
+  expect(
+    violations,
+    `ADMIN_VIEWPORT_GEOMETRY ${JSON.stringify(geometry)}`,
+  ).toEqual([]);
 });
