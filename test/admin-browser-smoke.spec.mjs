@@ -48,6 +48,10 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     const browser = globalThis;
     const root = browser.document.scrollingElement;
     const content = browser.document.querySelector('.admin-content');
+    const summary = browser.document.querySelector('.statistics-global-summary');
+    const kpiCards = [
+      ...browser.document.querySelectorAll('.statistics-kpi-card'),
+    ];
     const layout = browser.document.querySelector('.statistics-seat-layout');
     const seatSelector = browser.document.querySelector(
       '.statistics-seat-sidebar',
@@ -56,6 +60,9 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     if (
       !root ||
       !(content instanceof browser.HTMLElement) ||
+      !(summary instanceof browser.HTMLElement) ||
+      kpiCards.length !== 4 ||
+      kpiCards.some((card) => !(card instanceof browser.HTMLElement)) ||
       !(layout instanceof browser.HTMLElement) ||
       !(seatSelector instanceof browser.HTMLElement)
     ) {
@@ -63,6 +70,8 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     }
 
     const contentRect = content.getBoundingClientRect();
+    const summaryRect = summary.getBoundingClientRect();
+    const cardRects = kpiCards.map((card) => card.getBoundingClientRect());
     const layoutRect = layout.getBoundingClientRect();
     const seatRect = seatSelector.getBoundingClientRect();
 
@@ -79,6 +88,19 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
         .overflowY,
       contentRight: contentRect.right,
       contentBottom: contentRect.bottom,
+      summaryLeft: summaryRect.left,
+      summaryRight: summaryRect.right,
+      summaryWidth: summaryRect.width,
+      summaryHeight: summaryRect.height,
+      cardRects: cardRects.map((rect) => ({
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+      })),
+      layoutLeft: layoutRect.left,
       layoutWidth: layoutRect.width,
       seatWidth: seatRect.width,
       seatHeight: seatRect.height,
@@ -91,6 +113,7 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   if (!geometry) return;
 
   const violations = [];
+  const [firstCard, secondCard, thirdCard, fourthCard] = geometry.cardRects;
 
   if (geometry.rootScrollWidth > geometry.rootClientWidth + 1) {
     violations.push('document horizontal overflow');
@@ -109,6 +132,33 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   }
   if (geometry.contentBottom > geometry.innerHeight + 1) {
     violations.push('admin content exceeds viewport height');
+  }
+  if (!(geometry.summaryWidth < 260)) {
+    violations.push('global KPI rail is too wide');
+  }
+  if (!(geometry.summaryHeight > geometry.summaryWidth * 1.8)) {
+    violations.push('global KPI summary is not a vertical rail');
+  }
+  if (
+    !firstCard ||
+    !secondCard ||
+    !thirdCard ||
+    !fourthCard ||
+    !(secondCard.top > firstCard.bottom) ||
+    !(thirdCard.top > secondCard.bottom) ||
+    !(fourthCard.top > thirdCard.bottom)
+  ) {
+    violations.push('global KPI cards are not vertically stacked');
+  }
+  if (
+    firstCard &&
+    secondCard &&
+    Math.abs(firstCard.left - secondCard.left) > 1
+  ) {
+    violations.push('global KPI cards do not share one vertical rail');
+  }
+  if (!(geometry.layoutLeft > geometry.summaryRight)) {
+    violations.push('operational canvas does not sit beside KPI rail');
   }
   if (!(geometry.seatWidth > geometry.layoutWidth * 0.95)) {
     violations.push('seat selector is not full width');
