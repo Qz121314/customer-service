@@ -1,0 +1,345 @@
+/* Conversation-thread visual hierarchy shared by desktop and phone agent views.
+ * Keep routing, realtime, status and composer behavior in the existing components;
+ * this layer only refines the active conversation surface.
+ */
+
+.workspace-shell .thread-head .eyebrow,
+.workspace-shell .thread-head p,
+.workspace-shell .conversation-context-card > div > span {
+  display: none;
+}
+
+@media (min-width: 761px) {
+  .workspace-shell .thread-head {
+    min-height: 64px;
+    gap: 12px;
+    padding: 9px 14px 9px 16px;
+    background: #fff;
+  }
+
+  .workspace-shell .thread-head-copy {
+    padding-left: 44px;
+  }
+
+  .workspace-shell .thread-head-copy::before {
+    width: 36px;
+    height: 36px;
+  }
+
+  .workspace-shell .thread-head h2 {
+    font-size: 15px;
+    font-weight: 760;
+  }
+
+  .workspace-shell .conversation-expiry {
+    margin-top: 2px;
+    font-size: 9px;
+  }
+
+  .workspace-shell .thread-actions {
+    gap: 5px;
+  }
+
+  .workspace-shell .thread-status,
+  .workspace-shell .thread-status-action,
+  .workspace-shell .transfer-menu > summary {
+    min-height: 32px;
+    border-radius: 8px;
+    font-size: 10px;
+  }
+
+  .workspace-shell .thread-status {
+    min-width: 58px;
+    padding-inline: 9px;
+  }
+
+  .workspace-shell .thread-status-action {
+    min-width: 72px;
+    padding-inline: 10px;
+  }
+
+  .workspace-shell .transfer-menu > summary {
+    padding-inline: 10px;
+  }
+
+  .workspace-shell .conversation-context-card {
+    width: min(760px, calc(100% - 40px));
+    min-height: 46px;
+    margin: 8px auto 0;
+    padding: 5px 7px;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 8px;
+    border-color: #e2e6eb;
+    border-radius: 10px;
+    box-shadow: none;
+  }
+
+  .workspace-shell .conversation-context-card > img,
+  .workspace-shell .conversation-context-placeholder {
+    width: 34px;
+    height: 34px;
+    border-radius: 7px;
+  }
+
+  .workspace-shell .conversation-context-card > div {
+    gap: 1px;
+  }
+
+  .workspace-shell .conversation-context-card > div > strong {
+    font-size: 11px;
+    font-weight: 730;
+  }
+
+  .workspace-shell .conversation-context-card > div > small {
+    font-size: 9px;
+  }
+
+  .workspace-shell .conversation-context-card > a {
+    min-height: 28px;
+    padding-inline: 8px;
+    border-radius: 7px;
+    font-size: 9px;
+  }
+
+  .workspace-shell .messages {
+    gap: 6px;
+    padding: 14px 26px 18px;
+    background: #f6f7f9;
+  }
+
+  .workspace-shell .message {
+    width: min(100%, 860px);
+  }
+
+  .workspace-shell .message > div {
+    max-width: min(68%, 600px);
+    padding: 8px 11px 6px;
+    border-radius: 13px;
+    box-shadow: 0 1px 2px rgba(31, 41, 55, 0.04);
+  }
+
+  .workspace-shell .message.visitor > div {
+    border-color: #e1e5ea;
+    border-bottom-left-radius: 5px;
+  }
+
+  .workspace-shell .message.mine > div {
+    border-color: #dcd9ff;
+    border-bottom-right-radius: 5px;
+    background: #eeecff;
+  }
+
+  .workspace-shell .message p,
+  .workspace-shell .message.visitor p,
+  .workspace-shell .message.mine p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .workspace-shell .composer {
+    min-height: 76px;
+    grid-template-columns: 40px minmax(0, 1fr) 42px;
+    gap: 8px;
+    padding: 8px 14px 9px;
+    background: #f1f3f5;
+  }
+
+  .workspace-shell .composer > textarea {
+    height: auto;
+    min-height: 48px;
+    max-height: 128px;
+    padding: 10px 13px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .workspace-shell .composer-tools,
+  .workspace-shell .media-picker {
+    width: 40px;
+    min-width: 40px;
+  }
+
+  .workspace-shell .media-picker {
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .workspace-shell .composer-foot,
+  .workspace-shell .composer-foot .primary-button {
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    min-height: 42px;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-shell .thread-head {
+    height: 56px;
+    min-height: 56px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 5px;
+    padding: 6px 7px;
+  }
+
+  .workspace-shell .thread-back-button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+  }
+
+  .workspace-shell .thread-head-copy {
+    min-height: 38px;
+    gap: 1px;
+    padding-left: 35px;
+  }
+
+  .workspace-shell .thread-head-copy::before {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+
+  .workspace-shell .thread-head h2 {
+    font-size: 14px;
+  }
+
+  .workspace-shell .conversation-expiry {
+    font-size: 9px;
+  }
+
+  .workspace-shell .thread-actions {
+    min-height: 38px;
+    grid-template-columns: auto 38px;
+    gap: 4px;
+  }
+
+  .workspace-shell .thread-status {
+    display: none;
+  }
+
+  .workspace-shell .thread-status-action {
+    min-width: 54px;
+    height: 38px;
+    min-height: 38px;
+    padding-inline: 9px;
+  }
+
+  .workspace-shell .conversation-context-card {
+    min-height: 44px;
+    padding: 5px 8px;
+    grid-template-columns: 32px minmax(0, 1fr) 32px;
+    gap: 7px;
+  }
+
+  .workspace-shell .conversation-context-card > img,
+  .workspace-shell .conversation-context-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .workspace-shell .conversation-context-card > div {
+    gap: 1px;
+  }
+
+  .workspace-shell .conversation-context-card > div strong {
+    font-size: 11px;
+  }
+
+  .workspace-shell .conversation-context-card > div small {
+    font-size: 8px;
+  }
+
+  .workspace-shell .conversation-context-card > a {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 9px;
+  }
+
+  .workspace-shell .messages {
+    gap: 7px;
+    padding: 10px 9px 14px;
+  }
+
+  .workspace-shell .message > div {
+    max-width: 82%;
+    padding: 8px 10px 6px;
+    border: 1px solid #e6e9ee;
+    border-radius: 15px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+  }
+
+  .workspace-shell .message.visitor > div {
+    border-bottom-left-radius: 6px;
+  }
+
+  .workspace-shell .message.mine > div {
+    border-color: #dedcff;
+    border-bottom-right-radius: 6px;
+    background: #eeedff;
+  }
+
+  .workspace-shell .message p {
+    font-size: 14px;
+    line-height: 1.48;
+  }
+
+  .workspace-shell .composer {
+    grid-template-columns: 36px minmax(0, 1fr) 40px;
+    gap: 5px;
+    padding: 5px 7px max(6px, env(safe-area-inset-bottom));
+  }
+
+  .workspace-shell .composer-tools {
+    width: 36px;
+    min-width: 36px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .workspace-shell .media-picker {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+  }
+
+  .workspace-shell .composer > textarea {
+    min-height: 40px;
+    max-height: 104px;
+    padding: 8px 12px;
+    border-radius: 18px;
+  }
+
+  .workspace-shell .composer-foot,
+  .workspace-shell .composer-foot .primary-button {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 390px) {
+  .workspace-shell .thread-head {
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+  }
+
+  .workspace-shell .thread-actions {
+    grid-template-columns: auto 38px;
+  }
+
+  .workspace-shell .thread-status-action {
+    min-width: 50px;
+    padding-inline: 7px;
+  }
+
+  .workspace-shell .message > div {
+    max-width: 84%;
+  }
+}

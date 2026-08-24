@@ -20,6 +20,7 @@ async function loadAgentStyles() {
   await import('./agent-desktop-composer.css');
   await import('./agent-mobile.css');
   await import('./agent-unread.css');
+  await import('./agent-thread.css');
 }
 
 async function loadAdminStyles() {
