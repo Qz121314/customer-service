@@ -6,6 +6,7 @@ import {
 } from './api';
 import { isAgentNotificationOpenMessage } from './agent-push';
 import { calendarMonthPeriod } from '../shared/calendar-month';
+import { MonthPicker } from './MonthPicker';
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
 
@@ -87,14 +88,7 @@ export function AgentStatisticsModal({
             <p>访客首次进入坐席时计 1 次，转接和重新排队不重复计数。</p>
           </div>
           <div className="agent-statistics-head-actions">
-            <label>
-              <span>月份</span>
-              <input
-                type="month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-              />
-            </label>
+            <MonthPicker value={month} onChange={setMonth} label="月份" />
             <button
               type="button"
               className="modal-close"

@@ -109,33 +109,6 @@
   letter-spacing: -0.02em;
 }
 
-.product-hero-head label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 4px 8px;
-  border: 1px solid rgb(255 255 255 / 13%);
-  border-radius: 9px;
-  background: rgb(255 255 255 / 8%);
-  color: rgb(255 255 255 / 62%);
-  font-size: 8px;
-  font-weight: 700;
-  backdrop-filter: blur(10px);
-}
-
-.product-hero-head input {
-  width: 103px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #fff;
-  font: inherit;
-  font-size: 10px;
-  font-weight: 760;
-  color-scheme: dark;
-}
-
 .product-hero-metric {
   position: absolute;
   bottom: 13px;
@@ -899,7 +872,7 @@
     flex-direction: column;
   }
 
-  .product-hero-head label {
+  .product-hero-head .month-picker {
     align-self: flex-start;
   }
 

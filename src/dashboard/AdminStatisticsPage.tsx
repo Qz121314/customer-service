@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ProductCatalogItem, ProductTrafficMonthlyStats } from './api';
 import { calendarMonthPeriod } from '../shared/calendar-month';
+import { MonthPicker } from './MonthPicker';
 
 const CHART_WIDTH = 760;
 const CHART_HEIGHT = 180;
@@ -202,14 +203,7 @@ export function AdminStatisticsPage({
                 <span>TRAFFIC INTELLIGENCE</span>
                 <strong>产品流量分布</strong>
               </div>
-              <label>
-                <span>统计月份</span>
-                <input
-                  type="month"
-                  value={month}
-                  onChange={(event) => onMonthChange(event.target.value)}
-                />
-              </label>
+              <MonthPicker value={month} onChange={onMonthChange} tone="dark" />
             </div>
             <div className="product-hero-metric">
               <strong>{busy ? '—' : total}</strong>

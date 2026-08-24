@@ -36,3 +36,26 @@ test('admin and agent statistics query the complete calendar month', () => {
     assert.ok(!source.includes('Array.from({ length: 30 }'));
   }
 });
+
+test('statistics surfaces use the shared controlled month picker', () => {
+  const picker = readFileSync(
+    new URL('../src/dashboard/MonthPicker.tsx', import.meta.url),
+    'utf8',
+  );
+  const surfaces = [
+    '../src/dashboard/AdminStatisticsPage.tsx',
+    '../src/dashboard/AdminAgentStatisticsModal.tsx',
+    '../src/dashboard/AgentStatisticsWorkspace.tsx',
+  ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'));
+
+  for (const source of surfaces) {
+    assert.ok(source.includes('<MonthPicker'));
+    assert.ok(!source.includes('type="month"'));
+  }
+
+  assert.ok(picker.includes('createPortal'));
+  assert.ok(picker.includes('aria-haspopup="dialog"'));
+  assert.ok(picker.includes('aria-expanded={open}'));
+  assert.ok(picker.includes("event.key === 'Escape'"));
+  assert.ok(picker.includes('MONTH_LABELS.map'));
+});
