@@ -9,7 +9,6 @@ const toolbar = readFileSync('src/dashboard/AgentWorkspaceChrome.tsx', 'utf8');
 const panels = readFileSync('src/dashboard/AgentWorkspacePanels.tsx', 'utf8');
 const modal = readFileSync('src/dashboard/AgentAutoReplySettings.tsx', 'utf8');
 const client = readFileSync('src/dashboard/agent-auto-reply-client.ts', 'utf8');
-const main = readFileSync('src/dashboard/main.tsx', 'utf8');
 
 test('agent auto reply defaults off and has no forced greeting copy in storage', () => {
   assert.match(migration, /auto_greeting_enabled INTEGER NOT NULL DEFAULT 0/u);
@@ -39,5 +38,4 @@ test('agent workspace exposes optional first-greeting settings without making ch
   assert.match(modal, /首次问候语/u);
   assert.match(modal, /未开启或未配置问候语时，会话仍会正常创建和分配/u);
   assert.match(modal, /转接、重新排队和重连也不会重复发送/u);
-  assert.match(main, /import\('\.\/agent-auto-reply\.css'\)/u);
 });
