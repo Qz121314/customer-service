@@ -1,0 +1,602 @@
+/* Desktop admin viewport ownership.
+ * Keep the browser viewport fixed, let genuine data surfaces own scrolling, and
+ * keep the traffic statistics workspace fully visible without page scrollbars.
+ * This follows the same shell policy used by the site admin workbench.
+ */
+
+@media (min-width: 1024px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .admin-console {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-columns: 208px minmax(0, 1fr);
+  }
+
+  .admin-sidebar {
+    position: relative;
+    top: auto;
+    height: 100dvh;
+    min-height: 0;
+    padding: 12px 10px 14px;
+    overflow: hidden;
+  }
+
+  .admin-brand {
+    min-height: 52px;
+    margin-bottom: 10px;
+    padding: 4px 6px 12px;
+  }
+
+  .admin-nav {
+    min-height: 0;
+    padding: 8px 0;
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .admin-nav button {
+    min-height: 40px;
+    padding-inline: 10px;
+    border-radius: 7px;
+  }
+
+  .admin-sidebar-foot {
+    gap: 5px;
+    padding-top: 10px;
+  }
+
+  .admin-content {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    min-height: 0;
+    padding: 18px 22px 20px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-content-head {
+    min-height: 48px;
+    margin-bottom: 10px;
+    flex: 0 0 auto;
+  }
+
+  .admin-content-head h1 {
+    font-size: 23px;
+  }
+
+  .admin-content-head p {
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .admin-content > .notice {
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+  }
+
+  /* Account management follows the same workbench policy as site: the shell
+   * never scrolls; only a long data table receives overflow ownership. */
+  .admin-agent-layout {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .admin-overview-strip {
+    flex: 0 0 auto;
+  }
+
+  .admin-agent-layout .admin-table-card {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-agent-layout .admin-table-title,
+  .admin-agent-layout .admin-list-toolbar {
+    flex: 0 0 auto;
+  }
+
+  .admin-agent-layout .admin-table-wrap {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  /* Statistics is intentionally different: every region is reconciled into
+   * the available viewport. No page, panel, seat-list or chart scrollbar is
+   * allowed in the desktop workbench. */
+  .admin-content:has(.admin-statistics-page) {
+    padding: 12px 18px;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head {
+    min-height: 40px;
+    margin-bottom: 6px;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head h1 {
+    font-size: 21px;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head p {
+    margin-top: 2px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .admin-content:has(.admin-statistics-page) > .notice,
+  .admin-statistics-page > .notice {
+    min-height: 28px;
+    margin-bottom: 5px;
+    flex: 0 0 auto;
+  }
+
+  .admin-statistics-page {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-statistics-workspace {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 46px 72px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .admin-statistics-page .statistics-hero {
+    width: 100%;
+    height: 46px;
+    min-width: 0;
+    min-height: 0;
+    padding: 5px 8px 5px 12px;
+    border-radius: 10px;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-statistics-page .statistics-hero-copy {
+    gap: 1px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy > strong {
+    font-size: 15px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy > span:last-child {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .admin-statistics-page .statistics-period-control {
+    min-width: 156px;
+    padding: 3px 5px 3px 8px;
+    border-radius: 8px;
+    gap: 6px !important;
+  }
+
+  .admin-statistics-page .statistics-period-control > span {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page .statistics-period-control input {
+    min-height: 27px;
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-global-summary {
+    width: 100%;
+    height: 72px;
+    min-width: 0;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card {
+    height: 72px;
+    min-height: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card::after {
+    width: 38px;
+    height: 38px;
+    border-radius: 0 0 0 38px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card .statistics-kpi-label {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > strong {
+    font-size: 23px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > small {
+    font-size: 8.5px;
+  }
+
+  .admin-statistics-page .statistics-kpi-progress {
+    right: 10px;
+    bottom: 6px;
+    left: 10px;
+    height: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-layout {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 66px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 0;
+    border-bottom: 1px solid #e3e5ea;
+    background: #f8f8fa;
+    display: grid;
+    grid-template-columns: 126px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header {
+    height: 66px;
+    min-height: 0;
+    padding: 7px 9px;
+    border-right: 1px solid #e4e6eb;
+    border-bottom: 0;
+    background: #fafafb;
+    align-items: center;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header > div:first-child {
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header strong {
+    font-size: 12px;
+  }
+
+  .admin-statistics-page
+    .statistics-seat-sidebar
+    > header
+    > div:first-child
+    > span:last-child {
+    display: none;
+  }
+
+  .admin-statistics-page .statistics-seat-tools {
+    align-self: end;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .admin-statistics-page .statistics-seat-tools > small {
+    padding: 3px 5px;
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-seat-pagination {
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-pagination > button {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    min-height: 20px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .admin-statistics-page .statistics-seat-pagination > span {
+    min-width: 26px;
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    min-width: 0;
+    min-height: 0;
+    max-height: none;
+    padding: 5px;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
+    gap: 5px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav > button {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    min-height: 54px;
+    height: 54px;
+    padding: 5px 7px;
+    border-radius: 8px;
+    flex: 1 1 0;
+    grid-template-columns: 17px 27px minmax(0, 1fr) auto;
+    gap: 5px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar .avatar.tiny {
+    width: 27px;
+    height: 27px;
+    border-radius: 7px;
+  }
+
+  .admin-statistics-page .statistics-seat-copy {
+    min-width: 0;
+    gap: 1px;
+  }
+
+  .admin-statistics-page .statistics-seat-copy strong {
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-seat-copy small {
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav > button > b {
+    min-width: 28px;
+    padding: 3px 5px;
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-seat-detail {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 46px 68px minmax(0, 1fr) 40px;
+  }
+
+  .admin-statistics-page .statistics-seat-head {
+    height: 46px;
+    min-height: 0;
+    padding: 5px 10px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity {
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity .avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity strong {
+    font-size: 12px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics {
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+    margin: 5px 7px;
+    width: calc(100% - 14px);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics > article {
+    min-width: 0;
+    min-height: 0;
+    padding: 6px 9px;
+    border-radius: 8px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics > article > span {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics strong {
+    font-size: 18px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics small {
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-trend-card {
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 7px 5px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 38px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-trend-card > header {
+    height: 38px;
+    min-height: 0;
+    padding: 4px 9px;
+  }
+
+  .admin-statistics-page .statistics-trend-card > header strong {
+    font-size: 11px;
+  }
+
+  .admin-statistics-page
+    .statistics-trend-card
+    > header
+    span:not(.statistics-panel-kicker) {
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-chart-wrap,
+  .admin-statistics-page .statistics-chart {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .admin-statistics-page .statistics-chart-wrap {
+    height: auto;
+    padding: 3px 7px 1px;
+  }
+
+  .admin-statistics-page .statistics-day-section {
+    width: auto;
+    max-width: none;
+    height: 36px;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 7px 7px;
+    overflow: hidden;
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: 102px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-day-section > header {
+    height: 100%;
+    min-height: 0;
+    padding: 3px 7px;
+    border-right: 1px solid #e8e9ed;
+    border-bottom: 0;
+    align-items: center;
+  }
+
+  .admin-statistics-page .statistics-day-section > header strong {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page
+    .statistics-day-section
+    > header
+    > div
+    > span:last-child,
+  .admin-statistics-page .statistics-day-section > header > small {
+    display: none;
+  }
+
+  .admin-statistics-page .statistics-day-grid {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-columns: repeat(31, minmax(0, 1fr));
+  }
+
+  .admin-statistics-page .statistics-day-grid > div {
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 1px;
+    border: 0;
+    border-right: 1px solid #eef0f3;
+    background: #fff;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div:nth-child(7n) {
+    border-right: 1px solid #eef0f3;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div:last-child {
+    border-right: 0;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div.has-value {
+    background: #f8f7ff;
+  }
+
+  .admin-statistics-page .statistics-day-grid span {
+    font-size: 7px;
+    line-height: 1;
+  }
+
+  .admin-statistics-page .statistics-day-grid strong {
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .admin-statistics-page .statistics-footnote {
+    position: absolute;
+    top: 6px;
+    right: 170px;
+    z-index: 20;
+    width: auto;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .admin-statistics-page .statistics-footnote summary {
+    min-height: 27px;
+    padding: 0 8px;
+    border: 1px solid #e1e4e9;
+    border-radius: 7px;
+    background: rgb(255 255 255 / 92%);
+    color: #747b86;
+    font-size: 8px;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 2%);
+  }
+
+  .admin-statistics-page .statistics-footnote p {
+    position: absolute;
+    top: 32px;
+    right: 0;
+    width: 330px;
+    max-width: min(330px, calc(100vw - 40px));
+    padding: 9px 10px;
+    border: 1px solid #e1e4e9;
+    border-radius: 8px;
+    background: #fff;
+    color: #727985;
+    font-size: 9px;
+    line-height: 1.5;
+    box-shadow: 0 12px 32px rgb(16 24 40 / 10%);
+  }
+}

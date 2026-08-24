@@ -37,6 +37,8 @@ async function loadAdminStyles() {
   await import('./admin-agent-editor.css');
   await import('./admin-statistics.css');
   await import('./admin-statistics-layout.css');
+  await import('./admin-scroll-ownership.css');
+  await import('./admin-viewport-geometry.css');
 }
 
 async function loadRouteStyles() {

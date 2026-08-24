@@ -89,7 +89,7 @@ jobs:
             --var ADMIN_PASSWORD:ui-smoke-admin-password \
             --var ENVIRONMENT:ui-smoke \
             --var APP_VERSION:ui-smoke \
-            > /tmp/ui-smoke-worker.log 2>&1 &
+            > /tmp/ui-smoke-agent-worker.log 2>&1 &
           worker_pid=$!
           trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
 
@@ -102,11 +102,56 @@ jobs:
             sleep 1
           done
           if [ "$ready" -ne 1 ]; then
-            cat /tmp/ui-smoke-worker.log
+            cat /tmp/ui-smoke-agent-worker.log
             exit 1
           fi
 
-          pnpm exec playwright test test/agent-browser-smoke.spec.mjs --workers=1 --reporter=github
+          pnpm exec playwright test \
+            test/agent-browser-smoke.spec.mjs \
+            --workers=1 \
+            --reporter=github
+
+      - name: Smoke test admin UI in Chromium
+        env:
+          UI_SMOKE_BASE_URL: http://127.0.0.1:8787
+          UI_SMOKE_ADMIN_PASSWORD: ui-smoke-admin-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler dev --local --port 8787 \
+            --var ADMIN_PASSWORD:ui-smoke-admin-password \
+            --var ENVIRONMENT:ui-smoke \
+            --var APP_VERSION:ui-smoke \
+            > /tmp/ui-smoke-admin-worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-admin-worker.log
+            exit 1
+          fi
+
+          pnpm exec playwright test \
+            test/admin-browser-smoke.spec.mjs \
+            --workers=1 \
+            --reporter=github
+
+      - name: Upload admin viewport diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-viewport-geometry
+          path: /tmp/admin-viewport-geometry.json
+          if-no-files-found: ignore
+          retention-days: 1
 
       - name: Deploy production to Cloudflare
         id: deploy
