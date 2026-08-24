@@ -6,36 +6,12 @@ const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 const agentUsername = 'ui-admin-smoke-agent';
 const agentPassword = 'ui-admin-smoke-pass';
-const productId = 'ui-admin-smoke-product';
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
 async function seedAdminStatistics(page) {
-  const conversation = await page.request.post(
-    url('/client/v1/conversations'),
-    {
-      data: {
-        visitorId: 'UIADMIN001',
-        sourceHandoffId: '22222222-2222-4222-8222-222222222222',
-        clientMessageId: 'ui-admin-smoke-message-1',
-        message: '管理员统计页布局 smoke 数据',
-        product: {
-          id: productId,
-          sectionId: 'ui-admin-smoke-section',
-          sectionName: 'Admin Smoke Section',
-          categoryId: 'ui-admin-smoke-category',
-          categoryName: 'Admin Smoke Category',
-          title: 'Admin Smoke Product',
-          href: 'https://example.com/ui-admin-smoke-product',
-          coverUrl: null,
-        },
-      },
-    },
-  );
-  expect(conversation.ok()).toBeTruthy();
-
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -46,7 +22,7 @@ async function seedAdminStatistics(page) {
       name: 'UI Admin Smoke Agent',
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'product', productIds: [productId] },
+      routingScope: { type: 'none' },
       maxActiveConversations: 5,
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
