@@ -1,0 +1,339 @@
+/* Shared interaction-state layer for the agent workspace.
+ * Own selected/unread conversation priority, connectivity feedback,
+ * empty states and floating errors without changing workspace geometry.
+ */
+
+.workspace-shell {
+  --agent-unread: #d92d20;
+  --agent-unread-strong: #b42318;
+  --agent-unread-soft: #fff4f2;
+  --agent-unread-ring: rgba(217, 45, 32, 0.16);
+  --agent-selected: #5755d9;
+  --agent-selected-soft: #f1f0ff;
+  --agent-selected-line: #d8d6ff;
+  --agent-success: #2f9d70;
+  --agent-warning: #b7791f;
+  --agent-danger: #c64f4f;
+}
+
+/* Conversation priority */
+.workspace-shell .unread-total,
+.workspace-shell .unread-badge {
+  color: #fff;
+  background: var(--agent-unread);
+  box-shadow:
+    0 0 0 2px #fff,
+    0 1px 5px var(--agent-unread-ring);
+}
+
+.workspace-shell .conversation-row {
+  position: relative;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.workspace-shell .conversation-row.unread {
+  background: var(--agent-unread-soft);
+  box-shadow: inset 3px 0 0 var(--agent-unread);
+}
+
+.workspace-shell .conversation-row.unread:hover {
+  background: #ffefed;
+}
+
+.workspace-shell .conversation-row.unread .conversation-copy > span > strong {
+  color: #241817;
+  font-weight: 760;
+}
+
+.workspace-shell .conversation-row.selected,
+.workspace-shell .conversation-row.selected:hover,
+.workspace-shell .conversation-row.selected.unread,
+.workspace-shell .conversation-row.selected.unread:hover {
+  background: var(--agent-selected-soft);
+  box-shadow: inset 3px 0 0 var(--agent-selected);
+}
+
+.workspace-shell .conversation-row.selected::after {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--agent-selected);
+  content: '';
+  transform: translateY(-50%);
+}
+
+.workspace-shell .conversation-row.selected .avatar.small {
+  color: #4542b8;
+  background: #e5e3ff;
+}
+
+.workspace-shell .conversation-row.selected .conversation-copy strong {
+  color: #25233e;
+}
+
+.workspace-shell .conversation-row.selected .conversation-copy time,
+.workspace-shell .conversation-row.selected .conversation-copy small,
+.workspace-shell .conversation-row.selected .conversation-copy p {
+  color: #676584;
+}
+
+/* Connectivity and availability */
+.workspace-shell .availability-pill,
+.workspace-shell .connection-status {
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.workspace-shell .availability-pill {
+  border-color: #d9ebe3;
+  color: #277b5b;
+  background: #f1f9f5;
+}
+
+.workspace-shell .availability-pill:hover:not(:disabled) {
+  border-color: #bfe0d1;
+  background: #eaf7f1;
+}
+
+.workspace-shell .availability-pill.is-busy {
+  border-color: #eadfc9;
+  color: #8f651d;
+  background: #fff8eb;
+}
+
+.workspace-shell .availability-pill:disabled {
+  opacity: 0.62;
+}
+
+.workspace-shell .connection-status {
+  min-height: 24px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace-shell .connection-status i {
+  box-shadow: 0 0 0 3px rgba(47, 157, 112, 0.08);
+}
+
+.workspace-shell .connection-status.is-connected {
+  color: #6e7885;
+  background: transparent;
+}
+
+.workspace-shell .connection-status.is-connecting,
+.workspace-shell .connection-status.is-reconnecting {
+  border-color: #eee0c6;
+  color: #96691b;
+  background: #fff9ee;
+}
+
+.workspace-shell .connection-status.is-connecting i,
+.workspace-shell .connection-status.is-reconnecting i {
+  background: #c58a2d;
+  box-shadow: 0 0 0 3px rgba(197, 138, 45, 0.1);
+}
+
+.workspace-shell .connection-status.is-offline {
+  border-color: #efd3d3;
+  color: #aa4444;
+  background: #fff3f3;
+}
+
+.workspace-shell .connection-status.is-offline i {
+  background: var(--agent-danger);
+  box-shadow: 0 0 0 3px rgba(198, 79, 79, 0.1);
+}
+
+/* Empty/loading states */
+.workspace-shell .empty-state,
+.workspace-shell .thread-empty {
+  color: #78818d;
+}
+
+.workspace-shell .conversation-list > .empty-state {
+  width: calc(100% - 28px);
+  max-width: 300px;
+  min-height: 170px;
+  align-self: center;
+  justify-self: center;
+  margin: 30px auto;
+  padding: 24px 20px;
+  border: 1px dashed #dce1e7;
+  border-radius: 14px;
+  background: #fafbfc;
+}
+
+.workspace-shell .conversation-list > .empty-state::before {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  margin: 0 auto 4px;
+  border: 1px solid #e0e4ea;
+  border-radius: 12px;
+  color: #7d8794;
+  background: #f1f3f6;
+  content: '···';
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.workspace-shell .conversation-list > .empty-state strong {
+  color: #3b4350;
+  font-size: 13px;
+  font-weight: 740;
+}
+
+.workspace-shell .conversation-list > .empty-state span {
+  max-width: 240px;
+  margin: 2px auto 0;
+  color: #858e9a;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.workspace-shell .thread-empty {
+  padding: 28px;
+}
+
+.workspace-shell .thread-empty strong {
+  color: #3e4652;
+  font-size: 14px;
+  font-weight: 730;
+}
+
+.workspace-shell .thread-empty span {
+  max-width: 320px;
+  color: #858e9a;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+/* Floating error feedback */
+.workspace-shell .notice.error.floating {
+  top: 14px;
+  max-width: min(460px, calc(100% - 28px));
+  padding: 9px 12px;
+  border: 1px solid #efcece;
+  border-radius: 10px;
+  color: #a64040;
+  background: rgba(255, 247, 247, 0.98);
+  box-shadow: 0 10px 28px rgba(76, 32, 32, 0.12);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.4;
+  backdrop-filter: blur(10px);
+}
+
+.workspace-shell .notice.error.floating:hover {
+  border-color: #e9bebe;
+  background: #fff3f3;
+}
+
+@media (min-width: 761px) {
+  .workspace-shell .conversation-row.selected {
+    padding-right: 22px;
+  }
+
+  .workspace-shell .connection-status {
+    font-size: 9px;
+    font-weight: 650;
+  }
+
+  .workspace-shell .connection-status.is-connected {
+    padding-inline: 4px;
+  }
+
+  .workspace-shell .conversation-list > .empty-state {
+    margin-top: 42px;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1100px) {
+  .workspace-shell .conversation-head {
+    padding-inline: 11px;
+  }
+
+  .workspace-shell .conversation-head-status {
+    gap: 4px;
+  }
+
+  .workspace-shell .availability-pill {
+    padding-inline: 7px;
+  }
+
+  .workspace-shell .connection-status.is-connected {
+    width: 8px;
+    min-width: 8px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    font-size: 0;
+  }
+
+  .workspace-shell .connection-status.is-connected i {
+    width: 7px;
+    height: 7px;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-shell .conversation-row.selected,
+  .workspace-shell .conversation-row.selected:hover,
+  .workspace-shell .conversation-row.selected.unread,
+  .workspace-shell .conversation-row.selected.unread:hover {
+    background: #f2f1ff;
+  }
+
+  .workspace-shell .conversation-row.selected::after {
+    right: 7px;
+  }
+
+  .workspace-shell .connection-status {
+    min-height: 24px;
+    padding-inline: 6px;
+  }
+
+  .workspace-shell .connection-status.is-connected {
+    border-color: #e2e6eb;
+    background: rgba(255, 255, 255, 0.74);
+  }
+
+  .workspace-shell .conversation-list > .empty-state {
+    min-height: 150px;
+    margin: 24px auto;
+    padding: 20px 16px;
+    border-radius: 13px;
+  }
+
+  .workspace-shell .conversation-list > .empty-state::before {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+
+  .workspace-shell .thread-empty {
+    padding: 24px 20px;
+  }
+
+  .workspace-shell .notice.error.floating {
+    top: calc(env(safe-area-inset-top) + 62px);
+    right: 8px;
+    left: 8px;
+    max-width: none;
+    padding: 8px 10px;
+    border-radius: 11px;
+    font-size: 10px;
+    transform: none;
+  }
+}
