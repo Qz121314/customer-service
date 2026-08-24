@@ -112,6 +112,15 @@ jobs:
             --workers=1 \
             --reporter=github
 
+      - name: Upload admin viewport diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-viewport-geometry
+          path: /tmp/admin-viewport-geometry.json
+          if-no-files-found: ignore
+          retention-days: 1
+
       - name: Deploy production to Cloudflare
         id: deploy
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
