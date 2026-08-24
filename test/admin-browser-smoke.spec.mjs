@@ -41,30 +41,25 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: /流量统计/u })).toBeVisible();
   await page.getByRole('button', { name: /流量统计/u }).click();
-  await expect(page.getByText('月度流量对账', { exact: true })).toBeVisible();
-  await expect(page.locator('.statistics-seat-layout')).toBeVisible();
+  await expect(page.getByText('产品流量分布', { exact: true })).toBeVisible();
+  await expect(page.locator('.product-traffic-analysis')).toBeVisible();
 
   const geometry = await page.evaluate(() => {
     const browser = globalThis;
     const root = browser.document.scrollingElement;
     const content = browser.document.querySelector('.admin-content');
-    const layout = browser.document.querySelector('.statistics-seat-layout');
-    const seatSelector = browser.document.querySelector(
-      '.statistics-seat-sidebar',
-    );
+    const layout = browser.document.querySelector('.product-traffic-analysis');
 
     if (
       !root ||
       !(content instanceof browser.HTMLElement) ||
-      !(layout instanceof browser.HTMLElement) ||
-      !(seatSelector instanceof browser.HTMLElement)
+      !(layout instanceof browser.HTMLElement)
     ) {
       return null;
     }
 
     const contentRect = content.getBoundingClientRect();
     const layoutRect = layout.getBoundingClientRect();
-    const seatRect = seatSelector.getBoundingClientRect();
 
     return {
       innerWidth: browser.innerWidth,
@@ -80,10 +75,8 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
       contentRight: contentRect.right,
       contentBottom: contentRect.bottom,
       layoutWidth: layoutRect.width,
-      seatWidth: seatRect.width,
-      seatHeight: seatRect.height,
-      seatOverflowX: browser.getComputedStyle(seatSelector).overflowX,
-      seatOverflowY: browser.getComputedStyle(seatSelector).overflowY,
+      layoutHeight: layoutRect.height,
+      layoutOverflowX: browser.getComputedStyle(layout).overflowX,
     };
   });
 
@@ -110,17 +103,11 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   if (geometry.contentBottom > geometry.innerHeight + 1) {
     violations.push('admin content exceeds viewport height');
   }
-  if (!(geometry.seatWidth > geometry.layoutWidth * 0.95)) {
-    violations.push('seat selector is not full width');
+  if (!(geometry.layoutWidth > 900 && geometry.layoutHeight > 250)) {
+    violations.push('product traffic analysis is not the primary workspace');
   }
-  if (!(geometry.seatHeight < 100)) {
-    violations.push('seat selector is not horizontal/compact');
-  }
-  if (geometry.seatOverflowX !== 'hidden') {
-    violations.push(`seat overflow-x=${geometry.seatOverflowX}`);
-  }
-  if (geometry.seatOverflowY !== 'hidden') {
-    violations.push(`seat overflow-y=${geometry.seatOverflowY}`);
+  if (geometry.layoutOverflowX !== 'hidden') {
+    violations.push(`analysis overflow-x=${geometry.layoutOverflowX}`);
   }
 
   writeFileSync(
@@ -132,4 +119,11 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     violations,
     `ADMIN_VIEWPORT_GEOMETRY ${JSON.stringify(geometry)}`,
   ).toEqual([]);
+
+  await page.getByRole('button', { name: /客服账号/u }).click();
+  await page.getByRole('button', { name: '统计' }).click();
+  await expect(
+    page.getByRole('dialog', { name: /UI Admin Smoke Agent · 接待统计/u }),
+  ).toBeVisible();
+  await expect(page.getByText('每日接待', { exact: true })).toBeVisible();
 });

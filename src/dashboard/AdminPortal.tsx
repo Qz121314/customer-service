@@ -3,13 +3,13 @@ import {
   AgentAccount,
   AgentQuotaAdjustment,
   AgentQuotaLedger,
-  AgentMonthlyStats,
+  ProductTrafficMonthlyStats,
   ProductCatalogItem,
   adminLogin,
   adminLogout,
   createAgent,
   getAdminSession,
-  getAgentMonthlyStats,
+  getProductTrafficStats,
   getAgentQuotaLedger,
   getAgents,
   getProductCatalog,
@@ -31,6 +31,7 @@ import {
 import { UiIcon, AdminLogin, AdminSetup, Startup } from './dashboard-ui';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
+import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
 
 type AdminView = 'agents' | 'statistics';
 type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
@@ -94,7 +95,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [statsMonth, setStatsMonth] = useState(() => currentBusinessMonth());
-  const [monthlyStats, setMonthlyStats] = useState<AgentMonthlyStats | null>(
+  const [monthlyStats, setMonthlyStats] =
+    useState<ProductTrafficMonthlyStats | null>(null);
+  const [statisticsAgent, setStatisticsAgent] = useState<AgentAccount | null>(
     null,
   );
   const [statsBusy, setStatsBusy] = useState(false);
@@ -126,12 +129,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     let active = true;
     setStatsError('');
     setStatsBusy(true);
-    getAgentMonthlyStats(statsMonth)
+    getProductTrafficStats(statsMonth)
       .then((result) => {
         if (active) setMonthlyStats(result);
       })
       .catch((reason) => {
-        if (active) setStatsError(message(reason, '无法加载坐席流量'));
+        if (active) setStatsError(message(reason, '无法加载产品流量'));
       })
       .finally(() => {
         if (active) setStatsBusy(false);
@@ -288,7 +291,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const sectionHint =
     section === 'agents'
       ? '管理登录身份、接待能力、咨询额度和产品负责范围。搜索与筛选均在本地完成。'
-      : '按自然月核对客服首次实际接收的有效咨询流量。';
+      : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
 
   return (
     <div className="admin-console">
@@ -578,13 +581,22 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                               </div>
                             </td>
                             <td>
-                              <button
-                                type="button"
-                                className="table-action"
-                                onClick={() => editAgent(agent)}
-                              >
-                                编辑
-                              </button>
+                              <div className="admin-agent-actions">
+                                <button
+                                  type="button"
+                                  className="table-action statistics-action"
+                                  onClick={() => setStatisticsAgent(agent)}
+                                >
+                                  统计
+                                </button>
+                                <button
+                                  type="button"
+                                  className="table-action"
+                                  onClick={() => editAgent(agent)}
+                                >
+                                  编辑
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -599,7 +611,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
         {section === 'statistics' && (
           <AdminStatisticsPage
-            agents={agents}
+            products={products}
             month={statsMonth}
             stats={monthlyStats}
             busy={statsBusy}
@@ -628,6 +640,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             if (!saving) setEditorOpen(false);
           }}
           onSubmit={(event) => void saveAgent(event)}
+        />
+      )}
+      {statisticsAgent && (
+        <AdminAgentStatisticsModal
+          agent={statisticsAgent}
+          onClose={() => setStatisticsAgent(null)}
         />
       )}
     </div>

@@ -374,3 +374,19 @@
     max-width: min(62vw, 300px);
   }
 }
+
+.admin-agent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.admin-agent-actions .statistics-action {
+  border-color: #d9d7f5;
+  background: #f7f6ff;
+  color: #5555c8;
+}
+
+.admin-agent-actions .statistics-action::after {
+  display: none;
+}

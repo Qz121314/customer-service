@@ -89,50 +89,74 @@ adminConfigApi.get('/api/admin/agents', async (c) => {
   return c.json({ agents: await loadAgents(c.env.DB) });
 });
 
-adminConfigApi.get('/api/admin/agent-stats', async (c) => {
+adminConfigApi.get('/api/admin/product-stats', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const month = normalizeMonth(c.req.query('month'));
   if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
   const period = calendarMonthPeriod(month);
   const retainedFrom = reportingRetentionCutoff();
-  const [result, handoffResult] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT agent_id,
-         CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
-         conversation_count AS count
-       FROM agent_daily_stats
-       WHERE site_id = 'default'
-         AND business_date >= ?1
-         AND business_date <= ?2
-         AND business_date >= ?3
-       ORDER BY agent_id ASC, business_date ASC`,
-    )
-      .bind(period.start, period.end, retainedFrom)
-      .all<{ agent_id: string; day: number; count: number }>(),
-    c.env.DB.prepare(
-      `SELECT agent_id, COUNT(*) AS count
-       FROM agent_traffic_receipts
-       WHERE site_id = 'default'
-         AND business_date >= ?1
-         AND business_date <= ?2
-         AND business_date >= ?3
-         AND source_handoff_id IS NOT NULL
-       GROUP BY agent_id
-       ORDER BY agent_id ASC`,
-    )
-      .bind(period.start, period.end, retainedFrom)
-      .all<{ agent_id: string; count: number }>(),
-  ]);
+  const result = await c.env.DB.prepare(
+    `SELECT product_id,
+       MAX(NULLIF(TRIM(product_title), '')) AS product_title,
+       CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
+       COUNT(*) AS count
+     FROM agent_traffic_receipts
+     WHERE site_id = 'default'
+       AND business_date >= ?1
+       AND business_date <= ?2
+       AND business_date >= ?3
+     GROUP BY product_id, business_date
+     ORDER BY product_id ASC, business_date ASC`,
+  )
+    .bind(period.start, period.end, retainedFrom)
+    .all<{
+      product_id: string | null;
+      product_title: string | null;
+      day: number;
+      count: number;
+    }>();
+
   return c.json({
     month,
     days: period.days,
-    counts: (result.results ?? []).map((row) => ({
-      agentId: row.agent_id,
+    rows: (result.results ?? []).map((row) => ({
+      productId: row.product_id,
+      productTitle: row.product_title,
       day: Number(row.day),
       count: Number(row.count),
     })),
-    handoffCounts: (handoffResult.results ?? []).map((row) => ({
-      agentId: row.agent_id,
+    retainedFrom,
+  });
+});
+
+adminConfigApi.get('/api/admin/agent-stats', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const month = normalizeMonth(c.req.query('month'));
+  const agentId = normalizeIdentifier(c.req.query('agentId'));
+  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  if (!agentId) return c.json({ error: 'INVALID_AGENT' }, 400);
+  const period = calendarMonthPeriod(month);
+  const retainedFrom = reportingRetentionCutoff();
+  const result = await c.env.DB.prepare(
+    `SELECT CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
+       conversation_count AS count
+     FROM agent_daily_stats
+     WHERE site_id = 'default'
+       AND business_date >= ?1
+       AND business_date <= ?2
+       AND business_date >= ?3
+       AND agent_id = ?4
+     ORDER BY business_date ASC`,
+  )
+    .bind(period.start, period.end, retainedFrom, agentId)
+    .all<{ day: number; count: number }>();
+
+  return c.json({
+    month,
+    agentId,
+    days: period.days,
+    counts: (result.results ?? []).map((row) => ({
+      day: Number(row.day),
       count: Number(row.count),
     })),
     retainedFrom,

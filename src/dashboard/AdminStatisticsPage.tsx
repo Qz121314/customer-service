@@ -1,21 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AgentAccount, AgentMonthlyStats } from './api';
-import { initials, presenceClass, statusLabel } from './dashboard-runtime';
+import type { ProductCatalogItem, ProductTrafficMonthlyStats } from './api';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 
 const CHART_WIDTH = 760;
-const CHART_HEIGHT = 220;
+const CHART_HEIGHT = 180;
 const CHART_LEFT = 42;
 const CHART_RIGHT = 18;
 const CHART_TOP = 18;
-const CHART_BOTTOM = 34;
-const SEATS_PER_PAGE = 5;
+const CHART_BOTTOM = 32;
+const PRODUCTS_PER_PAGE = 6;
+const DISTRIBUTION_COLORS = [
+  '#5b5ce2',
+  '#7c6cf2',
+  '#2f9e8f',
+  '#ef9b41',
+  '#ec6e8b',
+  '#a0a6b5',
+];
 
 type TrendPoint = {
   x: number;
   y: number;
   value: number;
-  day: string;
+  day: number;
+};
+
+type ProductTrafficItem = {
+  key: string;
+  productId: string | null;
+  title: string;
+  coverUrl: string | null;
+  category: string;
+  count: number;
 };
 
 function formatDecimal(value: number) {
@@ -25,23 +41,16 @@ function formatDecimal(value: number) {
   });
 }
 
-function trafficIntensity(value: number, peak: number): number {
-  if (value <= 0 || peak <= 0) return 0;
-  return Math.min(4, Math.max(1, Math.ceil((value / peak) * 4)));
+function formatShare(value: number, total: number) {
+  return total ? `${formatDecimal((value / total) * 100)}%` : '0.0%';
 }
 
-function buildTrendPoints(dailyValues: Array<{ day: string; value: number }>): {
-  points: TrendPoint[];
-  line: string;
-  area: string;
-  maxValue: number;
-} {
+function buildTrendPoints(dailyValues: Array<{ day: number; value: number }>) {
   const maxValue = Math.max(1, ...dailyValues.map((item) => item.value));
   const plotWidth = CHART_WIDTH - CHART_LEFT - CHART_RIGHT;
   const plotHeight = CHART_HEIGHT - CHART_TOP - CHART_BOTTOM;
   const denominator = Math.max(1, dailyValues.length - 1);
-
-  const points = dailyValues.map((item, index) => ({
+  const points: TrendPoint[] = dailyValues.map((item, index) => ({
     x: CHART_LEFT + (index / denominator) * plotWidth,
     y: CHART_TOP + (1 - item.value / maxValue) * plotHeight,
     value: item.value,
@@ -49,16 +58,14 @@ function buildTrendPoints(dailyValues: Array<{ day: string; value: number }>): {
   }));
   const line = points.map((point) => `${point.x},${point.y}`).join(' ');
   const baseline = CHART_HEIGHT - CHART_BOTTOM;
-  const area =
-    points.length > 0
-      ? `${CHART_LEFT},${baseline} ${line} ${points[points.length - 1]?.x ?? CHART_LEFT},${baseline}`
-      : '';
-
+  const area = points.length
+    ? `${CHART_LEFT},${baseline} ${line} ${points.at(-1)?.x ?? CHART_LEFT},${baseline}`
+    : '';
   return { points, line, area, maxValue };
 }
 
 export function AdminStatisticsPage({
-  agents,
+  products,
   month,
   stats,
   busy,
@@ -66,14 +73,112 @@ export function AdminStatisticsPage({
   onClearError,
   onMonthChange,
 }: {
-  agents: AgentAccount[];
+  products: ProductCatalogItem[];
   month: string;
-  stats: AgentMonthlyStats | null;
+  stats: ProductTrafficMonthlyStats | null;
   busy: boolean;
   error: string;
   onClearError: () => void;
   onMonthChange: (month: string) => void;
 }) {
+  const [productPage, setProductPage] = useState(0);
+  const days = useMemo(
+    () =>
+      stats?.month === month ? stats.days : calendarMonthPeriod(month).days,
+    [month, stats],
+  );
+  const productMap = useMemo(
+    () => new Map(products.map((product) => [product.id, product])),
+    [products],
+  );
+  const productTraffic = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { productId: string | null; productTitle: string | null; count: number }
+    >();
+    for (const row of stats?.rows ?? []) {
+      const key = row.productId || '__unknown__';
+      const current = grouped.get(key);
+      grouped.set(key, {
+        productId: row.productId,
+        productTitle: row.productTitle || current?.productTitle || null,
+        count: (current?.count ?? 0) + row.count,
+      });
+    }
+    return [...grouped.entries()]
+      .map(([key, item]): ProductTrafficItem => {
+        const catalog = item.productId ? productMap.get(item.productId) : null;
+        return {
+          key,
+          productId: item.productId,
+          title:
+            catalog?.title ||
+            item.productTitle ||
+            (item.productId ? `产品 ${item.productId}` : '未知产品'),
+          coverUrl: catalog?.coverUrl ?? null,
+          category:
+            catalog?.categoryName || catalog?.sectionName || '历史或未归因流量',
+          count: item.count,
+        };
+      })
+      .sort(
+        (left, right) =>
+          right.count - left.count ||
+          left.title.localeCompare(right.title, 'zh-CN'),
+      );
+  }, [productMap, stats]);
+  const dailyTraffic = useMemo(() => {
+    const totals = new Map<number, number>();
+    for (const row of stats?.rows ?? []) {
+      totals.set(row.day, (totals.get(row.day) ?? 0) + row.count);
+    }
+    return days.map((day) => ({ day, value: totals.get(day) ?? 0 }));
+  }, [days, stats]);
+  const total = productTraffic.reduce((sum, product) => sum + product.count, 0);
+  const activeProducts = productTraffic.filter(
+    (product) => product.productId,
+  ).length;
+  const unknownTraffic =
+    productTraffic.find((product) => !product.productId)?.count ?? 0;
+  const leader = productTraffic[0] ?? null;
+  const peak = dailyTraffic.reduce(
+    (current, item) => (item.value > current.value ? item : current),
+    { day: 0, value: 0 },
+  );
+  const chart = useMemo(() => buildTrendPoints(dailyTraffic), [dailyTraffic]);
+  const pageCount = Math.max(
+    1,
+    Math.ceil(productTraffic.length / PRODUCTS_PER_PAGE),
+  );
+  const visibleProducts = productTraffic.slice(
+    productPage * PRODUCTS_PER_PAGE,
+    (productPage + 1) * PRODUCTS_PER_PAGE,
+  );
+  const distribution = useMemo(() => {
+    const leading = productTraffic.slice(0, 5);
+    const other = productTraffic
+      .slice(5)
+      .reduce((sum, item) => sum + item.count, 0);
+    return other
+      ? [
+          ...leading,
+          { ...leading[0], key: '__other__', title: '其他产品', count: other },
+        ]
+      : leading;
+  }, [productTraffic]);
+  const donutBackground = useMemo(() => {
+    if (!total) return '#ececf2';
+    let offset = 0;
+    const stops = distribution.map((item, index) => {
+      const start = offset;
+      offset += (item.count / total) * 100;
+      return `${DISTRIBUTION_COLORS[index]} ${start}% ${offset}%`;
+    });
+    return `conic-gradient(${stops.join(', ')})`;
+  }, [distribution, total]);
+
+  useEffect(() => setProductPage(0), [month, stats]);
+
   return (
     <section className="admin-statistics-page">
       {error && (
@@ -81,488 +186,241 @@ export function AdminStatisticsPage({
           {error}
         </button>
       )}
-      <MonthlyAgentStatistics
-        agents={agents}
-        month={month}
-        stats={stats}
-        busy={busy}
-        onMonthChange={onMonthChange}
-      />
-    </section>
-  );
-}
-
-function MonthlyAgentStatistics({
-  agents,
-  month,
-  stats,
-  busy,
-  onMonthChange,
-}: {
-  agents: AgentAccount[];
-  month: string;
-  stats: AgentMonthlyStats | null;
-  busy: boolean;
-  onMonthChange: (month: string) => void;
-}) {
-  const [selectedAgentId, setSelectedAgentId] = useState('');
-  const [seatPage, setSeatPage] = useState(0);
-  const countMap = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const item of stats?.counts ?? []) {
-      map.set(`${item.agentId}:${item.day}`, item.count);
-    }
-    return map;
-  }, [stats]);
-  const handoffMap = useMemo(
-    () =>
-      new Map(
-        (stats?.handoffCounts ?? []).map((item) => [item.agentId, item.count]),
-      ),
-    [stats],
-  );
-  const days = useMemo(
-    () =>
-      stats?.month === month ? stats.days : calendarMonthPeriod(month).days,
-    [month, stats],
-  );
-  const agentTotals = useMemo(
-    () =>
-      new Map(
-        agents.map((agent) => [
-          agent.id,
-          days.reduce(
-            (sum, day) => sum + (countMap.get(`${agent.id}:${day}`) ?? 0),
-            0,
-          ),
-        ]),
-      ),
-    [agents, countMap, days],
-  );
-  const orderedAgents = useMemo(
-    () =>
-      [...agents].sort((left, right) => {
-        const difference =
-          (agentTotals.get(right.id) ?? 0) - (agentTotals.get(left.id) ?? 0);
-        return difference || left.name.localeCompare(right.name, 'zh-CN');
-      }),
-    [agentTotals, agents],
-  );
-  const selectedAgent =
-    orderedAgents.find((agent) => agent.id === selectedAgentId) ??
-    orderedAgents[0] ??
-    null;
-  const selectedTotal = selectedAgent
-    ? (agentTotals.get(selectedAgent.id) ?? 0)
-    : 0;
-  const selectedHandoffCount = selectedAgent
-    ? (handoffMap.get(selectedAgent.id) ?? 0)
-    : 0;
-  const selectedCoverageValue = selectedTotal
-    ? Math.min(100, (selectedHandoffCount / selectedTotal) * 100)
-    : 0;
-  const selectedCoverage = `${selectedCoverageValue.toFixed(1)}%`;
-  const monthlyTotal = [...agentTotals.values()].reduce(
-    (sum, count) => sum + count,
-    0,
-  );
-  const monthlyHandoffTotal = [...handoffMap.values()].reduce(
-    (sum, count) => sum + count,
-    0,
-  );
-  const activeAgentCount = [...agentTotals.values()].filter(
-    (count) => count > 0,
-  ).length;
-  const overallCoverageValue = monthlyTotal
-    ? Math.min(100, (monthlyHandoffTotal / monthlyTotal) * 100)
-    : 0;
-  const overallCoverage = `${overallCoverageValue.toFixed(1)}%`;
-  const monthlyAverage = days.length ? monthlyTotal / days.length : 0;
-  const unreconciledTotal = Math.max(0, monthlyTotal - monthlyHandoffTotal);
-  const maxAgentTotal = Math.max(1, ...agentTotals.values());
-  const selectedDaily = useMemo(
-    () =>
-      selectedAgent
-        ? days.map((day) => ({
-            day: String(day),
-            value: countMap.get(`${selectedAgent.id}:${day}`) ?? 0,
-          }))
-        : [],
-    [countMap, days, selectedAgent],
-  );
-  const selectedActiveDays = selectedDaily.filter(
-    (item) => item.value > 0,
-  ).length;
-  const selectedAverage = selectedActiveDays
-    ? selectedTotal / selectedActiveDays
-    : 0;
-  const selectedPeak = selectedDaily.reduce(
-    (peak, item) => (item.value > peak.value ? item : peak),
-    { day: '—', value: 0 },
-  );
-  const chart = useMemo(() => buildTrendPoints(selectedDaily), [selectedDaily]);
-  const monthLabel = month
-    ? `${month.slice(0, 4)} 年 ${Number(month.slice(5, 7))} 月`
-    : '当前月份';
-  const seatPageCount = Math.max(
-    1,
-    Math.ceil(orderedAgents.length / SEATS_PER_PAGE),
-  );
-  const seatPageStart = seatPage * SEATS_PER_PAGE;
-  const visibleSeatAgents = orderedAgents.slice(
-    seatPageStart,
-    seatPageStart + SEATS_PER_PAGE,
-  );
-
-  useEffect(() => {
-    if (orderedAgents.length === 0) {
-      if (selectedAgentId) setSelectedAgentId('');
-      setSeatPage(0);
-      return;
-    }
-    const selectedIndex = orderedAgents.findIndex(
-      (agent) => agent.id === selectedAgentId,
-    );
-    if (selectedIndex >= 0) {
-      setSeatPage(Math.floor(selectedIndex / SEATS_PER_PAGE));
-      return;
-    }
-    setSelectedAgentId(orderedAgents[0].id);
-    setSeatPage(0);
-  }, [orderedAgents, selectedAgentId]);
-
-  function changeSeatPage(nextPage: number) {
-    const page = Math.min(Math.max(nextPage, 0), seatPageCount - 1);
-    const firstAgent = orderedAgents[page * SEATS_PER_PAGE];
-    setSeatPage(page);
-    if (firstAgent) setSelectedAgentId(firstAgent.id);
-  }
-
-  return (
-    <section
-      className={`statistics-panel admin-statistics-workspace${busy ? ' is-loading' : ''}`}
-      aria-busy={busy}
-    >
-      <div className="statistics-toolbar statistics-hero">
-        <div className="statistics-hero-copy">
-          <span className="statistics-kicker">运营概览</span>
-          <strong>月度流量对账</strong>
-          <span>首次有效接待计数，集中查看总量、坐席贡献和每日趋势。</span>
+      <section
+        className={`product-traffic-workspace${busy ? ' is-loading' : ''}`}
+        aria-busy={busy}
+      >
+        <div className="product-traffic-hero">
+          <div>
+            <span>流量转化概览</span>
+            <strong>产品流量分布</strong>
+            <small>按访客首次有效接待归因，查看哪些产品真正带来咨询。</small>
+          </div>
+          <label>
+            <span>统计月份</span>
+            <input
+              type="month"
+              value={month}
+              onChange={(event) => onMonthChange(event.target.value)}
+            />
+          </label>
         </div>
-        <label className="statistics-period-control">
-          <span>统计月份</span>
-          <input
-            type="month"
-            value={month}
-            onChange={(event) => onMonthChange(event.target.value)}
-          />
-        </label>
-      </div>
 
-      <section className="statistics-global-summary" aria-label="月度流量概览">
-        <article className="statistics-kpi-card is-primary">
-          <span className="statistics-kpi-label">本月总接待</span>
-          <strong>{busy ? '—' : monthlyTotal}</strong>
-          <small>
-            {busy ? '数据加载中' : `日均 ${formatDecimal(monthlyAverage)} 次`}
-          </small>
-        </article>
-        <article className="statistics-kpi-card is-agents">
-          <span className="statistics-kpi-label">有流量坐席</span>
-          <strong>{busy ? '—' : activeAgentCount}</strong>
-          <small>{busy ? '数据加载中' : `${agents.length} 个客服账号`}</small>
-        </article>
-        <article className="statistics-kpi-card is-reconciled">
-          <span className="statistics-kpi-label">可逐笔对账</span>
-          <strong>{busy ? '—' : monthlyHandoffTotal}</strong>
-          <small>
-            {busy ? '数据加载中' : `${unreconciledTotal} 笔无 Site 分发号`}
-          </small>
-        </article>
-        <article className="statistics-kpi-card is-coverage">
-          <span className="statistics-kpi-label">总体覆盖率</span>
-          <strong>{busy ? '—' : overallCoverage}</strong>
-          <small>Site 分发编号覆盖</small>
-          <span className="statistics-kpi-progress" aria-hidden="true">
-            <i style={{ width: `${overallCoverageValue}%` }} />
-          </span>
-        </article>
-      </section>
+        <section className="product-traffic-summary" aria-label="产品流量摘要">
+          <div className="is-primary">
+            <span>本月有效会话</span>
+            <strong>{busy ? '—' : total}</strong>
+            <small>
+              日均 {formatDecimal(days.length ? total / days.length : 0)} 次
+            </small>
+          </div>
+          <div>
+            <span>有流量产品</span>
+            <strong>{busy ? '—' : activeProducts}</strong>
+            <small>共 {products.length} 个在册产品</small>
+          </div>
+          <div>
+            <span>流量最高产品</span>
+            <strong className="is-text">
+              {busy ? '—' : (leader?.title ?? '暂无')}
+            </strong>
+            <small>
+              {leader
+                ? `${leader.count} 次 · ${formatShare(leader.count, total)}`
+                : '本月暂无咨询'}
+            </small>
+          </div>
+          <div>
+            <span>未归因流量</span>
+            <strong>{busy ? '—' : unknownTraffic}</strong>
+            <small>历史数据或缺少产品信息</small>
+          </div>
+        </section>
 
-      {selectedAgent ? (
-        <div className="statistics-seat-layout">
-          <aside className="statistics-seat-sidebar">
-            <header>
-              <div>
-                <span className="statistics-panel-kicker">坐席贡献</span>
-                <strong>客服排名</strong>
-                <span>{monthLabel}</span>
-              </div>
-              <div className="statistics-seat-tools">
-                <small>{agents.length} 人</small>
-                {seatPageCount > 1 && (
-                  <div
-                    className="statistics-seat-pagination"
-                    aria-label="客服排行分页"
-                  >
-                    <button
-                      type="button"
-                      aria-label="上一组客服"
-                      disabled={seatPage === 0}
-                      onClick={() => changeSeatPage(seatPage - 1)}
-                    >
-                      ‹
-                    </button>
-                    <span>
-                      {seatPage + 1}/{seatPageCount}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="下一组客服"
-                      disabled={seatPage >= seatPageCount - 1}
-                      onClick={() => changeSeatPage(seatPage + 1)}
-                    >
-                      ›
-                    </button>
-                  </div>
-                )}
-              </div>
-            </header>
-            <nav aria-label="选择客服坐席">
-              {visibleSeatAgents.map((agent, index) => {
-                const total = agentTotals.get(agent.id) ?? 0;
-                const progress = Math.min(100, (total / maxAgentTotal) * 100);
-                const isSelected = agent.id === selectedAgent.id;
-                return (
-                  <button
-                    type="button"
-                    key={agent.id}
-                    className={isSelected ? 'active' : ''}
-                    aria-pressed={isSelected}
-                    onClick={() => setSelectedAgentId(agent.id)}
-                  >
-                    <span className="statistics-seat-rank">
-                      {String(seatPageStart + index + 1).padStart(2, '0')}
-                    </span>
-                    <span className="avatar tiny">{initials(agent.name)}</span>
-                    <span className="statistics-seat-copy">
-                      <strong>{agent.name}</strong>
-                      <small>@{agent.username || '未设置账号'}</small>
-                      <span
-                        className="statistics-seat-progress"
-                        aria-hidden="true"
-                      >
-                        <i style={{ width: `${progress}%` }} />
-                      </span>
-                    </span>
-                    <b>{busy ? '—' : total}</b>
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
-
-          <section className="statistics-seat-detail" aria-live="polite">
-            <header className="statistics-seat-head">
-              <div className="statistics-agent-identity">
-                <span className="avatar small">
-                  {initials(selectedAgent.name)}
-                </span>
-                <div>
-                  <span>当前坐席</span>
-                  <strong>{selectedAgent.name}</strong>
-                  <small>@{selectedAgent.username || '未设置账号'}</small>
-                </div>
-              </div>
-              <span
-                className={`account-status ${presenceClass(selectedAgent)}`}
-              >
-                {selectedAgent.isEnabled
-                  ? statusLabel(selectedAgent.status)
-                  : '已停用'}
-              </span>
-            </header>
-
-            <div className="statistics-seat-metrics">
-              <article>
-                <span>本月接待</span>
-                <strong>{busy ? '—' : selectedTotal}</strong>
-                <small>
-                  {busy
-                    ? '—'
-                    : `${selectedActiveDays} 个活跃日 · 活跃日均 ${formatDecimal(selectedAverage)}`}
-                </small>
-              </article>
-              <article>
-                <span>峰值日</span>
-                <strong>{busy ? '—' : selectedPeak.value}</strong>
-                <small>
-                  {busy || selectedPeak.value === 0
-                    ? '暂无峰值'
-                    : `${selectedPeak.day} 日最高`}
-                </small>
-              </article>
-              <article>
-                <span>可逐笔对账</span>
-                <strong>{busy ? '—' : selectedHandoffCount}</strong>
-                <small>带 Site 分发编号</small>
-              </article>
-              <article>
-                <span>对账覆盖率</span>
-                <strong>{busy ? '—' : selectedCoverage}</strong>
-                <small>当前坐席覆盖情况</small>
-              </article>
-            </div>
-
-            <section className="statistics-trend-card">
+        {productTraffic.length === 0 && !busy ? (
+          <div className="product-traffic-empty">
+            <strong>本月还没有产品咨询流量</strong>
+            <span>产生首次有效接待后，产品分布与趋势会自动更新。</span>
+          </div>
+        ) : (
+          <div className="product-traffic-analysis">
+            <section className="product-distribution-card">
               <header>
                 <div>
-                  <span className="statistics-panel-kicker">接待趋势</span>
-                  <strong>每日接待趋势</strong>
-                  <span>自然日维度 · 首次有效接待</span>
+                  <span>转化分布</span>
+                  <strong>产品贡献占比</strong>
                 </div>
-                <div className="statistics-trend-legend">
-                  <span>
-                    <i />
-                    接待量
-                  </span>
-                  <strong>{days.length} 天</strong>
-                </div>
+                <small>首次有效接待</small>
               </header>
-
-              <div className="statistics-chart-wrap">
-                <svg
-                  className="statistics-chart"
-                  viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-                  role="img"
-                  aria-label={`${selectedAgent.name} ${monthLabel}每日接待趋势`}
-                  preserveAspectRatio="none"
+              <div className="product-distribution-body">
+                <div
+                  className="product-distribution-donut"
+                  style={{ background: donutBackground }}
                 >
-                  <defs>
-                    <linearGradient
-                      id="adminTrafficTrendFill"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="0%" stopColor="#5b5bd6" stopOpacity="0.2" />
-                      <stop offset="100%" stopColor="#5b5bd6" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  {[1, 0.5, 0].map((ratio) => {
-                    const y =
-                      CHART_TOP +
-                      (1 - ratio) * (CHART_HEIGHT - CHART_TOP - CHART_BOTTOM);
-                    return (
-                      <g key={ratio}>
-                        <line
-                          className="statistics-chart-grid"
-                          x1={CHART_LEFT}
-                          x2={CHART_WIDTH - CHART_RIGHT}
-                          y1={y}
-                          y2={y}
-                        />
-                        <text
-                          className="statistics-chart-y-label"
-                          x={CHART_LEFT - 10}
-                          y={y + 3}
-                          textAnchor="end"
-                        >
-                          {Math.round(chart.maxValue * ratio)}
-                        </text>
-                      </g>
-                    );
-                  })}
-                  {chart.area && (
-                    <polygon
-                      className="statistics-chart-area"
-                      points={chart.area}
-                    />
-                  )}
-                  {chart.line && (
-                    <polyline
-                      className="statistics-chart-line"
-                      points={chart.line}
-                    />
-                  )}
-                  {chart.points.map((point, index) => (
-                    <g key={point.day}>
-                      {(index % 5 === 0 ||
-                        index === chart.points.length - 1) && (
-                        <text
-                          className="statistics-chart-x-label"
-                          x={point.x}
-                          y={CHART_HEIGHT - 9}
-                          textAnchor={
-                            index === 0
-                              ? 'start'
-                              : index === chart.points.length - 1
-                                ? 'end'
-                                : 'middle'
-                          }
-                        >
-                          {point.day}日
-                        </text>
-                      )}
-                      {point.value > 0 && (
-                        <circle
-                          className="statistics-chart-point"
-                          cx={point.x}
-                          cy={point.y}
-                          r="3.5"
-                        >
-                          <title>
-                            {point.day} 日 · {point.value} 次接待
-                          </title>
-                        </circle>
-                      )}
-                    </g>
+                  <div>
+                    <strong>{busy ? '—' : total}</strong>
+                    <span>有效会话</span>
+                  </div>
+                </div>
+                <div className="product-distribution-legend">
+                  {distribution.map((item, index) => (
+                    <div key={item.key}>
+                      <i style={{ background: DISTRIBUTION_COLORS[index] }} />
+                      <span title={item.title}>{item.title}</span>
+                      <strong>{formatShare(item.count, total)}</strong>
+                    </div>
                   ))}
-                </svg>
+                </div>
               </div>
             </section>
 
-            <section className="statistics-day-section">
+            <section className="product-ranking-card">
               <header>
                 <div>
-                  <span className="statistics-panel-kicker">每日账本</span>
-                  <strong>每日明细</strong>
-                  <span>保留精确日数据，便于快速核对异常日期。</span>
+                  <span>产品排行</span>
+                  <strong>有效咨询贡献</strong>
                 </div>
-                <small>完整月份 · {days.length} 天</small>
-              </header>
-              <div className="statistics-day-grid">
-                {selectedDaily.map(({ day, value }) => (
-                  <div
-                    key={day}
-                    className={value ? 'has-value' : ''}
-                    data-intensity={trafficIntensity(value, selectedPeak.value)}
-                    title={`${month}-${day.padStart(2, '0')} · ${value} 次接待`}
+                <div className="product-ranking-pagination">
+                  <button
+                    type="button"
+                    disabled={productPage === 0}
+                    onClick={() => setProductPage((value) => value - 1)}
                   >
-                    <span>{day} 日</span>
-                    <strong>{busy ? '·' : value || '—'}</strong>
+                    ‹
+                  </button>
+                  <span>
+                    {Math.min(productPage + 1, pageCount)} / {pageCount}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={productPage >= pageCount - 1}
+                    onClick={() => setProductPage((value) => value + 1)}
+                  >
+                    ›
+                  </button>
+                </div>
+              </header>
+              <div className="product-ranking-list">
+                {visibleProducts.map((product, index) => (
+                  <div className="product-ranking-row" key={product.key}>
+                    <span className="product-rank-number">
+                      {productPage * PRODUCTS_PER_PAGE + index + 1}
+                    </span>
+                    {product.coverUrl ? (
+                      <img src={product.coverUrl} alt="" />
+                    ) : (
+                      <span className="product-cover-fallback">
+                        {product.title.slice(0, 1)}
+                      </span>
+                    )}
+                    <div className="product-rank-copy">
+                      <strong title={product.title}>{product.title}</strong>
+                      <small>{product.category}</small>
+                    </div>
+                    <div className="product-rank-meter">
+                      <i
+                        style={{
+                          width: `${leader ? (product.count / leader.count) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="product-rank-value">
+                      <strong>{product.count}</strong>
+                      <small>{formatShare(product.count, total)}</small>
+                    </div>
                   </div>
                 ))}
               </div>
             </section>
-          </section>
-        </div>
-      ) : (
-        <div className="statistics-empty">
-          <strong>暂无客服坐席</strong>
-          <span>创建客服账号后，这里会按坐席显示每日接待数量。</span>
-        </div>
-      )}
 
-      <details className="statistics-footnote">
-        <summary>统计口径说明</summary>
-        <p>
-          每日上限按 America/Los_Angeles 自然日计算；流量账本独立于 24
-          小时聊天记录保存并保留 400 天。可逐笔对账表示该流量带有 Site
-          分发编号；旧数据和直接调用客服 API 的会话仍计入接待总数。
-        </p>
-      </details>
+            <section className="product-trend-card">
+              <header>
+                <div>
+                  <span>整体趋势</span>
+                  <strong>每日有效会话</strong>
+                </div>
+                <small>
+                  {peak.value
+                    ? `${peak.day} 日最高 · ${peak.value} 次`
+                    : '本月暂无峰值'}
+                </small>
+              </header>
+              <div className="product-trend-chart">
+                <svg
+                  viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                  role="img"
+                  aria-label={`${month} 每日产品有效会话趋势`}
+                >
+                  {[0, 0.5, 1].map((ratio) => {
+                    const y =
+                      CHART_TOP +
+                      ratio * (CHART_HEIGHT - CHART_TOP - CHART_BOTTOM);
+                    return (
+                      <line
+                        key={ratio}
+                        x1={CHART_LEFT}
+                        x2={CHART_WIDTH - CHART_RIGHT}
+                        y1={y}
+                        y2={y}
+                        className="product-chart-grid"
+                      />
+                    );
+                  })}
+                  {chart.area && (
+                    <polygon
+                      points={chart.area}
+                      className="product-chart-area"
+                    />
+                  )}
+                  {chart.line && (
+                    <polyline
+                      points={chart.line}
+                      className="product-chart-line"
+                    />
+                  )}
+                  {chart.points
+                    .filter((point) => point.value > 0)
+                    .map((point) => (
+                      <circle
+                        key={point.day}
+                        cx={point.x}
+                        cy={point.y}
+                        r="3.5"
+                        className="product-chart-point"
+                      >
+                        <title>
+                          {point.day} 日：{point.value} 次
+                        </title>
+                      </circle>
+                    ))}
+                  {[1, 6, 11, 16, 21, 26, days.length]
+                    .filter(
+                      (day, index, values) =>
+                        days.includes(day) && values.indexOf(day) === index,
+                    )
+                    .map((day) => {
+                      const point = chart.points[day - 1];
+                      return point ? (
+                        <text
+                          key={day}
+                          x={point.x}
+                          y={CHART_HEIGHT - 8}
+                          textAnchor="middle"
+                        >
+                          {day}日
+                        </text>
+                      ) : null;
+                    })}
+                </svg>
+              </div>
+            </section>
+          </div>
+        )}
+        <footer className="product-traffic-foot">
+          统计保留范围从 {stats?.retainedFrom ?? '—'} 起 ·
+          产品名称按首次接待时快照归档
+        </footer>
+      </section>
     </section>
   );
 }
