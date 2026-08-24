@@ -37,9 +37,9 @@ test('quota reconciliation is one explicit D1 read and stays off admin bootstrap
 });
 
 test('admin copy separates daily reception limits from cumulative consultation quota', () => {
-  assert.match(editor, />每日接待</u);
+  assert.match(editor, />每日接待上限</u);
   assert.match(editor, />咨询额度</u);
-  assert.match(editor, /每个会话首次有效接待只扣 1 次/u);
+  assert.match(editor, /每个会话首次有效接待只扣 1\s*次/u);
   assert.match(editor, />保存后累计额度</u);
   assert.match(editor, />已使用额度</u);
   assert.match(editor, />保存后剩余</u);
