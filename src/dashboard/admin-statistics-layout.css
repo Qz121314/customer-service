@@ -1,6 +1,6 @@
-/* Fluid geometry for the admin traffic statistics page.
- * Desktop statistics is a true single-screen operations workspace: no page,
- * horizontal or internal ranking scrollbars. Large agent sets use pagination.
+/* Final geometry for the admin traffic statistics page.
+ * The desktop workspace uses one viewport without page or panel scrollbars.
+ * Large agent sets are paged in React, so the selector can stay fully visible.
  */
 
 .admin-statistics-page,
@@ -57,9 +57,12 @@
 .admin-statistics-page .statistics-seat-copy,
 .admin-statistics-page .statistics-agent-identity,
 .admin-statistics-page .statistics-agent-identity > div,
-.admin-statistics-page .statistics-trend-card > header > div:first-child,
-.admin-statistics-page .statistics-day-section > header > div,
 .admin-statistics-page .statistics-trend-legend {
+  min-width: 0;
+}
+
+.admin-statistics-page .statistics-trend-card > header > div:first-child,
+.admin-statistics-page .statistics-day-section > header > div {
   min-width: 0;
 }
 
@@ -103,10 +106,10 @@
 }
 
 .statistics-seat-pagination > span {
-  min-width: 28px;
-  color: #8b9099;
-  font-size: 8px;
-  font-weight: 700;
+  min-width: 30px;
+  color: #858b95;
+  font-size: 9px;
+  font-weight: 720;
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
@@ -167,11 +170,6 @@
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 6px;
   }
-
-  .admin-statistics-page .statistics-seat-sidebar nav > button {
-    width: 100%;
-    min-width: 0;
-  }
 }
 
 @container (max-width: 680px) {
@@ -189,11 +187,6 @@
 
   .admin-statistics-page .statistics-seat-sidebar nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-statistics-page .statistics-trend-card > header,
-  .admin-statistics-page .statistics-day-section > header {
-    align-items: flex-start;
   }
 }
 
@@ -218,58 +211,30 @@
   }
 }
 
-@media (max-width: 1050px) {
-  .admin-statistics-page .statistics-seat-sidebar nav {
-    max-height: none;
-    overflow-x: hidden;
-    overflow-y: visible;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 6px;
-  }
-
-  .admin-statistics-page .statistics-seat-sidebar nav > button {
-    width: 100%;
-    min-width: 0;
-  }
-}
-
-@media (max-width: 620px) {
-  .admin-statistics-page .statistics-seat-sidebar nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 430px) {
-  .admin-statistics-page .statistics-seat-sidebar nav {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Desktop single-screen workspace. The ranking becomes a horizontal selector
- * instead of consuming a mostly empty vertical rail. Five seats are shown per
- * page, so additional agents remain accessible without any scroll container.
+/* Desktop operations workspace.
+ * Fixed rows reserve predictable space for the chart while keeping every
+ * control, KPI, seat and day visible in the same viewport.
  */
-@media (min-width: 1280px) and (min-height: 720px) {
+@media (min-width: 1180px) and (min-height: 700px) {
   .admin-content:has(.admin-statistics-page) {
     box-sizing: border-box;
     height: 100dvh;
     min-height: 0;
-    padding-top: 16px;
-    padding-bottom: 16px;
+    padding-top: 14px;
+    padding-bottom: 14px;
     overflow: hidden;
     display: flex;
     flex-direction: column;
   }
 
   .admin-content:has(.admin-statistics-page) .admin-content-head {
-    min-height: 44px;
-    margin-bottom: 7px;
+    min-height: 43px;
+    margin-bottom: 6px;
     flex: 0 0 auto;
   }
 
   .admin-content:has(.admin-statistics-page) .admin-content-head h1 {
-    font-size: 22px;
+    font-size: 21px;
   }
 
   .admin-content:has(.admin-statistics-page) .admin-content-head p {
@@ -300,14 +265,14 @@
     flex: 1 1 auto;
     overflow: hidden;
     display: grid;
-    grid-template-rows: 52px 72px minmax(0, 1fr);
-    gap: 7px;
+    grid-template-rows: 48px 76px minmax(0, 1fr);
+    gap: 8px;
   }
 
   .admin-statistics-page .statistics-hero {
-    height: 52px;
+    height: 48px;
     min-height: 0;
-    padding: 7px 10px 7px 14px;
+    padding: 6px 9px 6px 13px;
     border-radius: 11px;
   }
 
@@ -316,56 +281,65 @@
   }
 
   .admin-statistics-page .statistics-hero-copy > strong {
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .admin-statistics-page .statistics-hero-copy > span:last-child {
-    font-size: 8px;
+    font-size: 9px;
     line-height: 1.25;
   }
 
   .admin-statistics-page .statistics-period-control {
-    min-width: 152px;
+    min-width: 158px;
     padding: 4px 6px 4px 8px;
     border-radius: 8px;
-    gap: 5px !important;
+    gap: 6px !important;
+  }
+
+  .admin-statistics-page .statistics-period-control > span {
+    font-size: 9px;
   }
 
   .admin-statistics-page .statistics-period-control input {
-    min-height: 26px;
+    min-height: 27px;
+    font-size: 10px;
   }
 
   .admin-statistics-page .statistics-global-summary {
-    height: 72px;
+    height: 76px;
     min-height: 0;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 7px;
+    gap: 8px;
   }
 
   .admin-statistics-page .statistics-kpi-card {
-    height: 72px;
+    height: 76px;
     min-height: 0;
-    padding: 8px 11px 7px;
+    padding: 8px 11px 8px;
     border-radius: 10px;
-    gap: 1px;
+    gap: 2px;
   }
 
   .admin-statistics-page .statistics-kpi-card::after {
-    width: 38px;
-    height: 38px;
-    border-radius: 0 0 0 38px;
+    width: 40px;
+    height: 40px;
+    border-radius: 0 0 0 40px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card .statistics-kpi-label {
+    font-size: 9px;
   }
 
   .admin-statistics-page .statistics-kpi-card > strong {
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .admin-statistics-page .statistics-kpi-card > small {
-    font-size: 7px;
+    font-size: 8.5px;
   }
 
   .admin-statistics-page .statistics-kpi-card.is-coverage {
-    padding-bottom: 7px;
+    padding-bottom: 8px;
   }
 
   .admin-statistics-page .statistics-kpi-card.is-coverage > small {
@@ -385,7 +359,7 @@
     overflow: hidden;
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 66px minmax(0, 1fr);
+    grid-template-rows: 72px minmax(0, 1fr);
   }
 
   .admin-statistics-page .statistics-seat-sidebar {
@@ -393,14 +367,14 @@
     border-right: 0;
     border-bottom: 1px solid #e3e5ea;
     display: grid;
-    grid-template-columns: 124px minmax(0, 1fr);
+    grid-template-columns: 132px minmax(0, 1fr);
     background: #f8f8fa;
   }
 
   .admin-statistics-page .statistics-seat-sidebar > header {
-    height: 66px;
+    height: 72px;
     min-height: 0;
-    padding: 7px 9px;
+    padding: 8px 10px;
     border-right: 1px solid #e4e6eb;
     border-bottom: 0;
     background: #fafafb;
@@ -408,11 +382,11 @@
   }
 
   .admin-statistics-page .statistics-seat-sidebar > header > div:first-child {
-    gap: 1px;
+    gap: 2px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar > header strong {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar > header > div:first-child > span:last-child {
@@ -427,6 +401,7 @@
 
   .admin-statistics-page .statistics-seat-tools > small {
     padding: 3px 5px;
+    font-size: 8px;
   }
 
   .admin-statistics-page .statistics-seat-pagination {
@@ -443,33 +418,35 @@
   }
 
   .admin-statistics-page .statistics-seat-pagination > span {
-    min-width: 24px;
-    font-size: 7px;
+    min-width: 26px;
+    font-size: 8px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar nav {
     min-height: 0;
     max-height: none;
-    padding: 5px 6px;
+    padding: 6px;
     overflow: hidden;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 5px;
+    display: flex;
+    align-items: stretch;
+    gap: 6px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar nav > button {
+    width: auto;
     min-width: 0;
-    min-height: 54px;
-    height: 54px;
-    padding: 5px 7px;
-    border-radius: 8px;
-    grid-template-columns: 18px 26px minmax(0, 1fr) auto;
-    gap: 5px;
+    min-height: 58px;
+    height: 58px;
+    padding: 6px 8px;
+    border-radius: 9px;
+    flex: 1 1 0;
+    grid-template-columns: 18px 28px minmax(0, 1fr) auto;
+    gap: 6px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar .avatar.tiny {
-    width: 26px;
-    height: 26px;
+    width: 28px;
+    height: 28px;
     border-radius: 7px;
   }
 
@@ -478,103 +455,107 @@
   }
 
   .admin-statistics-page .statistics-seat-copy strong {
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .admin-statistics-page .statistics-seat-copy small {
-    font-size: 7px;
+    font-size: 8px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar nav > button > b {
-    min-width: 27px;
+    min-width: 30px;
     padding: 3px 5px;
-    font-size: 9px;
+    font-size: 10px;
   }
 
   .admin-statistics-page .statistics-seat-detail {
     min-height: 0;
     overflow: hidden;
     display: grid;
-    grid-template-rows: 48px 68px minmax(0, 1fr) 40px;
+    grid-template-rows: 50px 74px minmax(0, 1fr) 44px;
   }
 
   .admin-statistics-page .statistics-seat-head {
-    height: 48px;
+    height: 50px;
     min-height: 0;
-    padding: 6px 10px;
+    padding: 6px 11px;
   }
 
   .admin-statistics-page .statistics-agent-identity {
-    gap: 7px;
+    gap: 8px;
   }
 
   .admin-statistics-page .statistics-agent-identity .avatar {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
   }
 
   .admin-statistics-page .statistics-agent-identity strong {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .admin-statistics-page .statistics-seat-metrics {
     height: auto;
-    margin: 6px 7px 5px;
-    width: calc(100% - 14px);
+    margin: 6px 8px;
+    width: calc(100% - 16px);
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 5px;
+    gap: 6px;
   }
 
   .admin-statistics-page .statistics-seat-metrics > article {
     min-height: 0;
-    padding: 7px 9px;
+    padding: 7px 10px;
     border-radius: 8px;
-    gap: 1px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics > article > span {
+    font-size: 9px;
   }
 
   .admin-statistics-page .statistics-seat-metrics strong {
-    font-size: 17px;
+    font-size: 18px;
   }
 
   .admin-statistics-page .statistics-seat-metrics small {
-    font-size: 7px;
+    font-size: 8px;
   }
 
   .admin-statistics-page .statistics-trend-card {
     min-height: 0;
-    margin: 0 7px 5px;
+    margin: 0 8px 6px;
     overflow: hidden;
     display: grid;
-    grid-template-rows: 40px minmax(0, 1fr);
+    grid-template-rows: 42px minmax(0, 1fr);
   }
 
   .admin-statistics-page .statistics-trend-card > header {
-    height: 40px;
+    height: 42px;
     min-height: 0;
-    padding: 5px 9px;
+    padding: 5px 10px;
   }
 
   .admin-statistics-page .statistics-trend-card > header strong {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .admin-statistics-page .statistics-trend-card > header span:not(.statistics-panel-kicker) {
-    font-size: 7px;
+    font-size: 8px;
   }
 
   .admin-statistics-page .statistics-chart-wrap {
     height: auto;
     min-height: 0;
-    padding: 3px 7px 1px;
+    padding: 4px 8px 2px;
   }
 
   .admin-statistics-page .statistics-day-section {
-    height: 36px;
+    height: 40px;
     min-height: 0;
-    margin: 0 7px 7px;
+    margin: 0 8px 8px;
     display: grid;
-    grid-template-columns: 104px minmax(0, 1fr);
+    grid-template-columns: 106px minmax(0, 1fr);
     overflow: hidden;
     border-radius: 8px;
   }
@@ -582,21 +563,17 @@
   .admin-statistics-page .statistics-day-section > header {
     height: 100%;
     min-height: 0;
-    padding: 4px 7px;
+    padding: 4px 8px;
     border-right: 1px solid #e8e9ed;
     border-bottom: 0;
     align-items: center;
   }
 
   .admin-statistics-page .statistics-day-section > header strong {
-    font-size: 8px;
+    font-size: 9px;
   }
 
-  .admin-statistics-page
-    .statistics-day-section
-    > header
-    > div
-    > span:last-child,
+  .admin-statistics-page .statistics-day-section > header > div > span:last-child,
   .admin-statistics-page .statistics-day-section > header > small {
     display: none;
   }
@@ -618,7 +595,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 1px;
+    gap: 2px;
     text-align: center;
   }
 
@@ -635,19 +612,19 @@
   }
 
   .admin-statistics-page .statistics-day-grid span {
-    font-size: 6px;
+    font-size: 7px;
     line-height: 1;
   }
 
   .admin-statistics-page .statistics-day-grid strong {
-    font-size: 7px;
+    font-size: 9px;
     line-height: 1;
   }
 
   .admin-statistics-page .statistics-footnote {
     position: absolute;
-    top: 8px;
-    right: 166px;
+    top: 7px;
+    right: 172px;
     z-index: 20;
     width: auto;
     margin: 0;
@@ -661,8 +638,8 @@
     padding: 0 8px;
     border: 1px solid #e1e4e9;
     border-radius: 7px;
-    background: rgb(255 255 255 / 90%);
-    color: #777e89;
+    background: rgb(255 255 255 / 92%);
+    color: #747b86;
     font-size: 8px;
     box-shadow: 0 1px 2px rgb(16 24 40 / 2%);
   }
@@ -678,7 +655,7 @@
     border-radius: 8px;
     background: #fff;
     color: #727985;
-    font-size: 8px;
+    font-size: 9px;
     line-height: 1.5;
     box-shadow: 0 12px 32px rgb(16 24 40 / 10%);
   }
