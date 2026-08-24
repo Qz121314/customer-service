@@ -130,7 +130,9 @@
   line-height: 1;
 }
 
-.admin-statistics-page .statistics-seat-pagination > button:hover:not(:disabled) {
+.admin-statistics-page
+  .statistics-seat-pagination
+  > button:hover:not(:disabled) {
   border-color: #c9c8f2;
   background: #f7f6ff;
   color: var(--cs-accent-strong, #4747c4);
@@ -389,7 +391,11 @@
     font-size: 12px;
   }
 
-  .admin-statistics-page .statistics-seat-sidebar > header > div:first-child > span:last-child {
+  .admin-statistics-page
+    .statistics-seat-sidebar
+    > header
+    > div:first-child
+    > span:last-child {
     display: none;
   }
 
@@ -540,7 +546,10 @@
     font-size: 11px;
   }
 
-  .admin-statistics-page .statistics-trend-card > header span:not(.statistics-panel-kicker) {
+  .admin-statistics-page
+    .statistics-trend-card
+    > header
+    span:not(.statistics-panel-kicker) {
     font-size: 8px;
   }
 
@@ -573,7 +582,11 @@
     font-size: 9px;
   }
 
-  .admin-statistics-page .statistics-day-section > header > div > span:last-child,
+  .admin-statistics-page
+    .statistics-day-section
+    > header
+    > div
+    > span:last-child,
   .admin-statistics-page .statistics-day-section > header > small {
     display: none;
   }

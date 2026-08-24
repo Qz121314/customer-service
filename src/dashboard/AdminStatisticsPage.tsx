@@ -293,7 +293,10 @@ function MonthlyAgentStatistics({
               <div className="statistics-seat-tools">
                 <small>{agents.length} 人</small>
                 {seatPageCount > 1 && (
-                  <div className="statistics-seat-pagination" aria-label="客服排行分页">
+                  <div
+                    className="statistics-seat-pagination"
+                    aria-label="客服排行分页"
+                  >
                     <button
                       type="button"
                       aria-label="上一组客服"
