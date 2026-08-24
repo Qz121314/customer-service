@@ -363,7 +363,9 @@
   color: #737b88;
 }
 
-.agent-modal .product-assignment-modes > button:hover:not(:disabled):not(.is-active) {
+.agent-modal
+  .product-assignment-modes
+  > button:hover:not(:disabled):not(.is-active) {
   background: rgb(255 255 255 / 72%);
   color: #343a45;
 }
