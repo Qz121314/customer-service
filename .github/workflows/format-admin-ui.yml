@@ -5,7 +5,7 @@ on:
     branches: [agent/admin-form-polish]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   format:
@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: agent/admin-form-polish
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -28,15 +30,16 @@ jobs:
       - name: Format admin UI files
         run: pnpm exec prettier --write src/dashboard/AgentEditorModal.tsx src/dashboard/product-assignment.css
 
-      - name: Collect formatted files
+      - name: Commit formatted admin UI
+        shell: bash
         run: |
-          mkdir -p formatted/src/dashboard
-          cp src/dashboard/AgentEditorModal.tsx formatted/src/dashboard/
-          cp src/dashboard/product-assignment.css formatted/src/dashboard/
-
-      - name: Upload formatted files
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-admin-ui
-          path: formatted
-          if-no-files-found: error
+          set -euo pipefail
+          git add src/dashboard/AgentEditorModal.tsx src/dashboard/product-assignment.css
+          if git diff --cached --quiet; then
+            echo "Admin UI files already match Prettier."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Format admin UI with locked Prettier"
+          git push origin HEAD:agent/admin-form-polish
