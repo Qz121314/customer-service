@@ -121,7 +121,12 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   ).toEqual([]);
 
   await page.getByRole('button', { name: /客服账号/u }).click();
-  await page.getByRole('button', { name: '统计' }).click();
+  await page
+    .getByRole('row')
+    .filter({ hasText: 'UI Admin Smoke Agent' })
+    .getByRole('button', { name: '统计', exact: true })
+    .first()
+    .click();
   await expect(
     page.getByRole('dialog', { name: /UI Admin Smoke Agent · 接待统计/u }),
   ).toBeVisible();
