@@ -6,7 +6,10 @@ import { URL } from 'node:url';
 test('agent workspace state layer preserves unread alerts and selected priority', async () => {
   const [main, css] = await Promise.all([
     readFile(new URL('../src/dashboard/main.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../src/dashboard/agent-state.css', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/dashboard/agent-state.css', import.meta.url),
+      'utf8',
+    ),
   ]);
 
   assert.match(
