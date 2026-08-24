@@ -417,7 +417,10 @@ body:has(.admin-statistics-page),
   gap: 6px;
 }
 
-.admin-statistics-page .statistics-day-section > header .statistics-panel-kicker,
+.admin-statistics-page
+  .statistics-day-section
+  > header
+  .statistics-panel-kicker,
 .admin-statistics-page .statistics-day-section > header div > span:last-child {
   display: none;
 }
