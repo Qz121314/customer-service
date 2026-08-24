@@ -1,0 +1,42 @@
+name: Format admin UI artifact
+
+on:
+  push:
+    branches: [agent/admin-form-polish]
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format admin UI files
+        run: pnpm exec prettier --write src/dashboard/AgentEditorModal.tsx src/dashboard/product-assignment.css
+
+      - name: Collect formatted files
+        run: |
+          mkdir -p formatted/src/dashboard
+          cp src/dashboard/AgentEditorModal.tsx formatted/src/dashboard/
+          cp src/dashboard/product-assignment.css formatted/src/dashboard/
+
+      - name: Upload formatted files
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-admin-ui
+          path: formatted
+          if-no-files-found: error
