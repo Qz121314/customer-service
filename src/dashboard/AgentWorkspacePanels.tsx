@@ -204,12 +204,14 @@ export function AgentInboxPane({
   return (
     <section className="conversation-pane">
       <header className="conversation-head">
-        <h1>
-          我的会话
-          {totalUnread > 0 && (
-            <span className="unread-total">{totalUnread}</span>
-          )}
-        </h1>
+        <div>
+          <h1>
+            我的会话
+            {totalUnread > 0 && (
+              <span className="unread-total">{totalUnread}</span>
+            )}
+          </h1>
+        </div>
         <div className="conversation-head-status">
           <button
             type="button"
@@ -245,15 +247,17 @@ export function AgentInboxPane({
           </span>
         </div>
       </header>
-      <div className="filters" aria-label="会话状态筛选">
+      <div className="filters">
         {(Object.keys(filterLabels) as Filter[]).map((item) => (
           <button
             type="button"
             key={item}
             className={filter === item ? 'filter active' : 'filter'}
+            aria-label={filterLabels[item]}
             onClick={() => onFilterChange(item)}
           >
-            {filterLabels[item]} {filterCounts[item]}
+            {filterLabels[item]}{' '}
+            <span aria-hidden="true">{filterCounts[item]}</span>
           </button>
         ))}
       </div>
