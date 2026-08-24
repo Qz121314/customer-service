@@ -67,11 +67,23 @@ export type Overview = {
   trafficQuotaRemaining: number;
 };
 
-export type AgentMonthlyStats = {
+export type ProductTrafficMonthlyStats = {
   month: string;
   days: number[];
-  counts: Array<{ agentId: string; day: number; count: number }>;
-  handoffCounts: Array<{ agentId: string; count: number }>;
+  rows: Array<{
+    productId: string | null;
+    productTitle: string | null;
+    day: number;
+    count: number;
+  }>;
+  retainedFrom: string;
+};
+
+export type AdminAgentMonthlyStats = {
+  month: string;
+  agentId: string;
+  days: number[];
+  counts: Array<{ day: number; count: number }>;
   retainedFrom: string;
 };
 
@@ -295,10 +307,19 @@ export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
   return response.products;
 }
 
-export async function getAgentMonthlyStats(
+export async function getProductTrafficStats(
   month: string,
-): Promise<AgentMonthlyStats> {
-  return request(`/api/admin/agent-stats?month=${encodeURIComponent(month)}`);
+): Promise<ProductTrafficMonthlyStats> {
+  return request(`/api/admin/product-stats?month=${encodeURIComponent(month)}`);
+}
+
+export async function getAdminAgentMonthlyStats(
+  month: string,
+  agentId: string,
+): Promise<AdminAgentMonthlyStats> {
+  return request(
+    `/api/admin/agent-stats?month=${encodeURIComponent(month)}&agentId=${encodeURIComponent(agentId)}`,
+  );
 }
 
 export async function getAgentSelfMonthlyStats(

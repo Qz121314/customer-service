@@ -402,6 +402,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     DB: db,
     MEDIA: media.bucket,
     CONVERSATION_ROOMS: rooms.namespace,
+    ADMIN_PASSWORD: 'admin-password',
   };
 
   const token = 'agent-session-e2e';
@@ -510,16 +511,44 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(assigned.section_id, 'west');
   assert.equal(assigned.category_id, 'massage');
   assert.equal(assigned.source_handoff_id, sourceHandoffId);
-  assert.equal(
-    database
-      .prepare(
-        `SELECT source_handoff_id
-         FROM agent_traffic_receipts
-         WHERE conversation_id = ?`,
-      )
-      .get(conversationId).source_handoff_id,
-    sourceHandoffId,
+  const trafficReceipt = database
+    .prepare(
+      `SELECT source_handoff_id, product_id, product_title, business_date
+       FROM agent_traffic_receipts
+       WHERE conversation_id = ?`,
+    )
+    .get(conversationId);
+  assert.equal(trafficReceipt.source_handoff_id, sourceHandoffId);
+  assert.equal(trafficReceipt.product_id, 'product-e2e');
+  assert.equal(trafficReceipt.product_title, 'Product E2E');
+
+  const statisticsMonth = trafficReceipt.business_date.slice(0, 7);
+  const productStatsResponse = await adminConfigApi.request(
+    `/api/admin/product-stats?month=${statisticsMonth}`,
+    { headers: { cookie: adminCookie('admin-password') } },
+    env,
   );
+  assert.equal(productStatsResponse.status, 200);
+  const productStats = await json(productStatsResponse);
+  assert.deepEqual(productStats.rows, [
+    {
+      productId: 'product-e2e',
+      productTitle: 'Product E2E',
+      day: Number(trafficReceipt.business_date.slice(-2)),
+      count: 1,
+    },
+  ]);
+
+  const agentStatsResponse = await adminConfigApi.request(
+    `/api/admin/agent-stats?month=${statisticsMonth}&agentId=agent-e2e`,
+    { headers: { cookie: adminCookie('admin-password') } },
+    env,
+  );
+  assert.equal(agentStatsResponse.status, 200);
+  const agentStats = await json(agentStatsResponse);
+  assert.deepEqual(agentStats.counts, [
+    { day: Number(trafficReceipt.business_date.slice(-2)), count: 1 },
+  ]);
 
   const cookie = `cs_agent_session=${token}`;
   const inboxResponse = await agentApi.request(

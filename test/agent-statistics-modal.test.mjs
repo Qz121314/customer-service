@@ -21,15 +21,23 @@ test('agent statistics opens inside the workspace instead of navigating away', (
   assert.ok(statistics.includes("event.key === 'Escape'"));
 });
 
-test('admin statistics remains a first-class page rather than a modal', () => {
+test('admin product traffic remains a page and seat traffic opens from the account list', () => {
   const portal = source('../src/dashboard/AdminPortal.tsx');
   const statistics = source('../src/dashboard/AdminStatisticsPage.tsx');
-  const app = `${portal}\n${statistics}`;
+  const agentStatistics = source(
+    '../src/dashboard/AdminAgentStatisticsModal.tsx',
+  );
+  const app = `${portal}\n${statistics}\n${agentStatistics}`;
 
   assert.ok(portal.includes("setSection('statistics')"));
   assert.ok(portal.includes("section === 'statistics'"));
   assert.ok(portal.includes('<AdminStatisticsPage'));
-  assert.ok(statistics.includes('aria-label="选择客服坐席"'));
+  assert.ok(statistics.includes('产品流量分布'));
+  assert.ok(!statistics.includes('选择客服坐席'));
+  assert.ok(portal.includes('setStatisticsAgent(agent)'));
+  assert.ok(portal.includes('<AdminAgentStatisticsModal'));
+  assert.ok(agentStatistics.includes('aria-modal="true"'));
+  assert.ok(agentStatistics.includes('每日接待'));
   assert.ok(!app.includes('className="admin-statistics-modal"'));
   assert.ok(!statistics.includes('aria-modal="true"'));
 });

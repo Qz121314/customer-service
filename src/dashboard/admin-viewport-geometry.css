@@ -11,10 +11,8 @@
   .admin-sidebar,
   .admin-content,
   .admin-statistics-page,
-  .admin-statistics-workspace,
-  .admin-statistics-page .statistics-seat-layout,
-  .admin-statistics-page .statistics-seat-sidebar,
-  .admin-statistics-page .statistics-seat-detail {
+  .product-traffic-workspace,
+  .product-traffic-analysis {
     box-sizing: border-box;
     min-width: 0;
   }
@@ -44,17 +42,10 @@
   }
 
   .admin-statistics-page,
-  .admin-statistics-workspace,
-  .admin-statistics-page .statistics-seat-layout,
-  .admin-statistics-page .statistics-seat-sidebar,
-  .admin-statistics-page .statistics-seat-detail {
+  .product-traffic-workspace,
+  .product-traffic-analysis {
     width: 100%;
     max-width: none;
     overflow: hidden;
-  }
-
-  .admin-statistics-page .statistics-seat-sidebar {
-    height: 66px;
-    max-height: 66px;
   }
 }
