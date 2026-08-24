@@ -5,7 +5,7 @@ import type {
   ProductCatalogItem,
 } from './api';
 import type { AgentDraft } from './dashboard-runtime';
-import { initials, relativeTime } from './dashboard-runtime';
+import { relativeTime } from './dashboard-runtime';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
 
 export function AgentEditorModal({
@@ -33,8 +33,14 @@ export function AgentEditorModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const identityName = draft.name.trim() || '新客服';
-  const identityUsername = draft.username.trim() || '登录账号';
+  const username = draft.username.trim();
+  const canSave =
+    Boolean(username) && Boolean(draft.id || draft.password.length >= 4);
+  const quotaTotalAfterSave = draft.trafficQuotaTotal + draft.trafficQuotaTopUp;
+  const quotaRemainingAfterSave = Math.max(
+    0,
+    quotaTotalAfterSave - draft.trafficQuotaUsed,
+  );
 
   return (
     <div className="modal-backdrop" onMouseDown={() => !saving && onClose()}>
@@ -47,22 +53,19 @@ export function AgentEditorModal({
       >
         <header className="agent-editor-header">
           <div className="agent-editor-title-block">
-            <span className="agent-editor-kicker">客服配置</span>
+            <span className="agent-editor-kicker">客服账号</span>
             <div>
               <h2 id="agent-editor-title">
-                {draft.id ? '编辑客服账号' : '新增客服账号'}
+                {draft.id ? '编辑客服' : '新增客服'}
               </h2>
-              <p>
-                {draft.id
-                  ? `${identityName} · @${identityUsername}`
-                  : '建立登录身份，并配置接待规则与分流范围'}
-              </p>
+              <p>先维护登录、接待能力与咨询额度，再配置它的分流负责范围。</p>
             </div>
           </div>
           <button
             type="button"
             className="modal-close"
             aria-label="关闭"
+            disabled={saving}
             onClick={() => !saving && onClose()}
           >
             ×
@@ -71,121 +74,60 @@ export function AgentEditorModal({
 
         <form className="agent-editor-form" onSubmit={onSubmit}>
           <div className="agent-editor-layout">
-            <section className="agent-editor-account-pane agent-editor-workspace-card">
-              <div className="agent-editor-pane-heading">
-                <div>
-                  <strong>账号与接待</strong>
-                  <small>登录身份、接待上限、账号状态与额度控制</small>
-                </div>
-              </div>
-
-              <div className="agent-editor-account-grid">
-                <div className="agent-editor-identity-preview">
-                  <span>{initials(draft.name || '客服')}</span>
+            <section className="agent-editor-settings-pane agent-editor-workspace-card">
+              <div className="agent-editor-section agent-editor-account-section">
+                <div className="agent-editor-section-head">
                   <div>
-                    <strong>{identityName}</strong>
-                    <small>@{identityUsername}</small>
-                  </div>
-                  <em
-                    className={draft.isEnabled ? 'is-enabled' : 'is-disabled'}
-                  >
-                    {draft.isEnabled ? '启用' : '停用'}
-                  </em>
-                </div>
-
-                <label className="agent-editor-field">
-                  <span>显示名称</span>
-                  <input
-                    value={draft.name}
-                    onChange={(event) =>
-                      onDraftChange({ ...draft, name: event.target.value })
-                    }
-                    placeholder="例如 Amy"
-                    autoFocus
-                  />
-                </label>
-
-                <label className="agent-editor-field">
-                  <span>登录账号</span>
-                  <input
-                    value={draft.username}
-                    onChange={(event) =>
-                      onDraftChange({ ...draft, username: event.target.value })
-                    }
-                    placeholder="例如 amy01"
-                    autoComplete="off"
-                  />
-                </label>
-
-                <label className="agent-editor-field">
-                  <span>{draft.id ? '重置登录密码' : '登录密码'}</span>
-                  <input
-                    type="password"
-                    value={draft.password}
-                    onChange={(event) =>
-                      onDraftChange({ ...draft, password: event.target.value })
-                    }
-                    placeholder={
-                      draft.id ? '留空表示不修改密码' : '至少 4 个字符'
-                    }
-                    autoComplete="new-password"
-                  />
-                </label>
-              </div>
-
-              <section className="agent-editor-subsection agent-editor-policy-section">
-                <div className="agent-editor-subsection-head">
-                  <div>
-                    <strong>接待规则</strong>
-                    <small>限制坐席负载，0 表示不限制</small>
+                    <strong>登录账号</strong>
+                    <small>只维护客服登录凭据和账号可用状态</small>
                   </div>
                 </div>
 
-                <div className="agent-editor-policy-grid">
-                  <label className="agent-editor-limit-card">
-                    <span>同时会话</span>
-                    <div>
-                      <input
-                        type="number"
-                        min="0"
-                        max="999"
-                        value={draft.maxActiveConversations}
-                        onChange={(event) =>
-                          onDraftChange({
-                            ...draft,
-                            maxActiveConversations:
-                              Number(event.target.value) || 0,
-                          })
-                        }
-                      />
-                      <small>0 = 不限</small>
-                    </div>
+                <div className="agent-editor-account-grid">
+                  <label className="agent-editor-field">
+                    <span>账号</span>
+                    <input
+                      value={draft.username}
+                      required
+                      autoFocus
+                      autoComplete="off"
+                      placeholder="例如 amy01"
+                      onChange={(event) => {
+                        const nextUsername = event.target.value;
+                        onDraftChange({
+                          ...draft,
+                          username: nextUsername,
+                          name: draft.id ? draft.name : nextUsername,
+                        });
+                      }}
+                    />
                   </label>
 
-                  <label className="agent-editor-limit-card">
-                    <span>每日接待</span>
-                    <div>
-                      <input
-                        type="number"
-                        min="0"
-                        max="9999"
-                        value={draft.dailyConversationLimit}
-                        onChange={(event) =>
-                          onDraftChange({
-                            ...draft,
-                            dailyConversationLimit:
-                              Number(event.target.value) || 0,
-                          })
-                        }
-                      />
-                      <small>次日恢复</small>
-                    </div>
+                  <label className="agent-editor-field">
+                    <span>{draft.id ? '重置密码' : '登录密码'}</span>
+                    <input
+                      type="password"
+                      value={draft.password}
+                      required={!draft.id}
+                      minLength={4}
+                      autoComplete="new-password"
+                      placeholder={
+                        draft.id ? '留空表示不修改' : '至少 4 个字符'
+                      }
+                      onChange={(event) =>
+                        onDraftChange({ ...draft, password: event.target.value })
+                      }
+                    />
                   </label>
 
-                  <div className="agent-editor-status-card">
+                  <div className="agent-editor-status-row">
                     <span>
-                      <strong>启用客服账号</strong>
-                      <small>允许登录并参与新会话分流</small>
+                      <strong>启用账号</strong>
+                      <small>
+                        {draft.isEnabled
+                          ? '允许登录，并参与后续新咨询分流'
+                          : '停用后不能登录，也不会接收新咨询'}
+                      </small>
                     </span>
                     <label className="switch-control" aria-label="启用客服账号">
                       <input
@@ -202,13 +144,71 @@ export function AgentEditorModal({
                     </label>
                   </div>
                 </div>
-              </section>
+              </div>
 
-              <section className="traffic-quota-editor agent-editor-quota-workspace">
-                <div className="traffic-quota-editor-head">
+              <div className="agent-editor-section agent-editor-capacity-section">
+                <div className="agent-editor-section-head">
+                  <div>
+                    <strong>接待能力</strong>
+                    <small>限制实时负载和每天可接收的新咨询</small>
+                  </div>
+                  <span className="agent-editor-section-hint">0 = 不限制</span>
+                </div>
+
+                <div className="agent-editor-capacity-grid">
+                  <label className="agent-editor-number-field">
+                    <span>
+                      <strong>并发上限</strong>
+                      <small>达到后新咨询分给其他可用客服</small>
+                    </span>
+                    <div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="999"
+                        value={draft.maxActiveConversations}
+                        onChange={(event) =>
+                          onDraftChange({
+                            ...draft,
+                            maxActiveConversations:
+                              Number(event.target.value) || 0,
+                          })
+                        }
+                      />
+                      <em>个</em>
+                    </div>
+                  </label>
+
+                  <label className="agent-editor-number-field">
+                    <span>
+                      <strong>每日接待上限</strong>
+                      <small>按业务日统计，次日自动恢复</small>
+                    </span>
+                    <div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="9999"
+                        value={draft.dailyConversationLimit}
+                        onChange={(event) =>
+                          onDraftChange({
+                            ...draft,
+                            dailyConversationLimit:
+                              Number(event.target.value) || 0,
+                          })
+                        }
+                      />
+                      <em>次</em>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="agent-editor-section agent-editor-quota-section">
+                <div className="agent-editor-section-head">
                   <div>
                     <strong>咨询额度</strong>
-                    <small>累计购买额度；每个会话首次有效接待只扣 1 次</small>
+                    <small>累计购买额度，用完后停止接收新的付费咨询</small>
                   </div>
                   <label className="switch-control" aria-label="启用咨询额度">
                     <input
@@ -228,9 +228,7 @@ export function AgentEditorModal({
                 <div className="traffic-quota-summary">
                   <div>
                     <span>保存后累计额度</span>
-                    <strong>
-                      {draft.trafficQuotaTotal + draft.trafficQuotaTopUp}
-                    </strong>
+                    <strong>{quotaTotalAfterSave}</strong>
                   </div>
                   <div>
                     <span>已使用额度</span>
@@ -238,19 +236,15 @@ export function AgentEditorModal({
                   </div>
                   <div>
                     <span>保存后剩余</span>
-                    <strong>
-                      {Math.max(
-                        0,
-                        draft.trafficQuotaTotal +
-                          draft.trafficQuotaTopUp -
-                          draft.trafficQuotaUsed,
-                      )}
-                    </strong>
+                    <strong>{quotaRemainingAfterSave}</strong>
                   </div>
                 </div>
 
                 <div className="traffic-quota-topup">
-                  <span>{draft.id ? '本次追加' : '初始额度'}</span>
+                  <div className="traffic-quota-topup-label">
+                    <span>{draft.id ? '本次追加额度' : '初始额度'}</span>
+                    <small>保存后立即生效</small>
+                  </div>
                   <div className="traffic-quota-presets">
                     {[100, 500, 1000].map((amount) => (
                       <button
@@ -292,7 +286,7 @@ export function AgentEditorModal({
                 </div>
 
                 <p className="agent-editor-quota-note">
-                  每日接待上限按天重置；咨询额度是累计总量。转接、重新排队和恢复同一会话不会重复扣减。
+                  每个会话首次有效接待只扣 1 次。每日接待上限按天重置；咨询额度按累计总量计算。转接、重新排队和恢复同一会话不会重复扣减。
                 </p>
 
                 {draft.id ? (
@@ -300,7 +294,7 @@ export function AgentEditorModal({
                     <div className="traffic-quota-history-head">
                       <div>
                         <strong>额度账本</strong>
-                        <small>仅在需要核对时读取</small>
+                        <small>仅在需要核对时读取，不增加日常请求</small>
                       </div>
                       {quotaLedger ? (
                         <span
@@ -308,7 +302,9 @@ export function AgentEditorModal({
                             quotaLedger.consistent ? 'is-ok' : 'is-warning'
                           }
                         >
-                          {quotaLedger.consistent ? '账本已核对' : '账本需检查'}
+                          {quotaLedger.consistent
+                            ? '账本已核对'
+                            : '账本需检查'}
                         </span>
                       ) : (
                         <button
@@ -321,6 +317,7 @@ export function AgentEditorModal({
                         </button>
                       )}
                     </div>
+
                     {quotaHistoryBusy ? (
                       <p>正在读取…</p>
                     ) : quotaHistoryError ? (
@@ -332,8 +329,9 @@ export function AgentEditorModal({
                         <div className="traffic-quota-history-row quota-ledger-warning">
                           <strong>核对异常</strong>
                           <span>
-                            总额 {quotaLedger.total}/{quotaLedger.expectedTotal}{' '}
-                            · 已用 {quotaLedger.used}/{quotaLedger.expectedUsed}
+                            总额度 {quotaLedger.total}/{quotaLedger.expectedTotal}{' '}
+                            · 已使用额度 {quotaLedger.used}/
+                            {quotaLedger.expectedUsed}
                           </span>
                           <time>请检查</time>
                         </div>
@@ -359,7 +357,7 @@ export function AgentEditorModal({
                         ))}
                       </div>
                     ) : quotaLedger ? (
-                      <p>账本正常，暂无追加记录</p>
+                      <p>账本已核对，暂无追加记录</p>
                     ) : (
                       <p className="traffic-quota-history-hint">
                         不查看时不会额外读取账本数据
@@ -367,15 +365,16 @@ export function AgentEditorModal({
                     )}
                   </div>
                 ) : null}
-              </section>
+              </div>
             </section>
 
             <section className="agent-editor-routing-pane agent-editor-workspace-card">
-              <div className="agent-editor-pane-heading">
+              <div className="agent-editor-routing-head">
                 <div>
                   <strong>分流负责范围</strong>
-                  <small>按分区、分类或指定产品建立负责规则</small>
+                  <small>按分区、分类或指定产品建立动态负责规则</small>
                 </div>
+                <span>新产品会按规则自动纳入</span>
               </div>
               <ProductAssignmentPicker
                 products={products}
@@ -388,9 +387,9 @@ export function AgentEditorModal({
             </section>
           </div>
 
-          <footer>
+          <footer className="agent-editor-footer">
             <span className="agent-editor-save-note">
-              保存后，新规则会立即用于后续会话分流
+              客服头像由客服本人在工作台设置
             </span>
             <div className="agent-editor-footer-actions">
               <button
@@ -402,10 +401,9 @@ export function AgentEditorModal({
                 取消
               </button>
               <button
+                type="submit"
                 className="primary-button"
-                disabled={
-                  saving || !draft.name.trim() || !draft.username.trim()
-                }
+                disabled={saving || !canSave}
               >
                 {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
               </button>
