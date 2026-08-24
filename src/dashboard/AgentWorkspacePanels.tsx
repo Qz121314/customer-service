@@ -205,20 +205,12 @@ export function AgentInboxPane({
     <section className="conversation-pane">
       <header className="conversation-head">
         <h1>
-          会话
+          我的会话
           {totalUnread > 0 && (
             <span className="unread-total">{totalUnread}</span>
           )}
         </h1>
         <div className="conversation-head-status">
-          {overview.trafficQuotaEnabled && (
-            <span
-              className="availability-pill inbox-quota-pill"
-              title="当前客服剩余接待额度"
-            >
-              额度 {overview.trafficQuotaRemaining}
-            </span>
-          )}
           <button
             type="button"
             className={`availability-pill is-${availability}`}
@@ -235,8 +227,8 @@ export function AgentInboxPane({
             {availabilitySaving
               ? '切换中…'
               : availability === 'online'
-                ? '在线'
-                : '暂停'}
+                ? '在线接待'
+                : '暂停接待'}
           </button>
           <span
             className={`connection-status is-${connectionState}`}
@@ -244,12 +236,12 @@ export function AgentInboxPane({
           >
             <i aria-hidden="true" />
             {connectionState === 'connected'
-              ? '实时'
+              ? '连接正常'
               : connectionState === 'offline'
-                ? '离线 · 草稿已保存'
+                ? '网络已断开 · 草稿已保存'
                 : connectionState === 'connecting'
-                  ? '连接中'
-                  : '恢复中'}
+                  ? '正在连接'
+                  : '正在恢复连接'}
           </span>
         </div>
       </header>
@@ -285,7 +277,7 @@ export function AgentInboxPane({
           aria-pressed={unreadFirst}
           onClick={onToggleUnreadFirst}
         >
-          未读置顶
+          未读优先
         </button>
       </div>
       <div className="conversation-list">
@@ -294,9 +286,13 @@ export function AgentInboxPane({
         ) : visibleConversations.length === 0 ? (
           <div className="empty-state">
             <strong>
-              {conversationCount === 0 ? '暂无会话' : '没有匹配的会话'}
+              {conversationCount === 0
+                ? '当前没有分配给你的会话'
+                : '没有找到匹配的会话'}
             </strong>
-            {conversationCount === 0 && <span>保持在线，新会话会自动出现。</span>}
+            {conversationCount === 0 && (
+              <span>保持在线，新咨询分配给你后会自动出现在这里。</span>
+            )}
           </div>
         ) : (
           visibleConversations.map((conversation) => (
@@ -338,7 +334,7 @@ export function AgentInboxPane({
                     className={`conversation-status is-${conversation.status}`}
                   >
                     {conversation.status === 'open'
-                      ? '新'
+                      ? '新会话'
                       : conversation.status === 'pending'
                         ? '处理中'
                         : '已关闭'}
