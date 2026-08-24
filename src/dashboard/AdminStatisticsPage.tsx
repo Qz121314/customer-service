@@ -9,6 +9,7 @@ const CHART_LEFT = 42;
 const CHART_RIGHT = 18;
 const CHART_TOP = 18;
 const CHART_BOTTOM = 34;
+const SEATS_PER_PAGE = 5;
 
 type TrendPoint = {
   x: number;
@@ -100,6 +101,7 @@ function MonthlyAgentStatistics({
   onMonthChange: (month: string) => void;
 }) {
   const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [seatPage, setSeatPage] = useState(0);
   const countMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of stats?.counts ?? []) {
@@ -197,15 +199,39 @@ function MonthlyAgentStatistics({
   const monthLabel = month
     ? `${month.slice(0, 4)} 年 ${Number(month.slice(5, 7))} 月`
     : '当前月份';
+  const seatPageCount = Math.max(
+    1,
+    Math.ceil(orderedAgents.length / SEATS_PER_PAGE),
+  );
+  const seatPageStart = seatPage * SEATS_PER_PAGE;
+  const visibleSeatAgents = orderedAgents.slice(
+    seatPageStart,
+    seatPageStart + SEATS_PER_PAGE,
+  );
 
   useEffect(() => {
     if (orderedAgents.length === 0) {
       if (selectedAgentId) setSelectedAgentId('');
+      setSeatPage(0);
       return;
     }
-    if (orderedAgents.some((agent) => agent.id === selectedAgentId)) return;
+    const selectedIndex = orderedAgents.findIndex(
+      (agent) => agent.id === selectedAgentId,
+    );
+    if (selectedIndex >= 0) {
+      setSeatPage(Math.floor(selectedIndex / SEATS_PER_PAGE));
+      return;
+    }
     setSelectedAgentId(orderedAgents[0].id);
+    setSeatPage(0);
   }, [orderedAgents, selectedAgentId]);
+
+  function changeSeatPage(nextPage: number) {
+    const page = Math.min(Math.max(nextPage, 0), seatPageCount - 1);
+    const firstAgent = orderedAgents[page * SEATS_PER_PAGE];
+    setSeatPage(page);
+    if (firstAgent) setSelectedAgentId(firstAgent.id);
+  }
 
   return (
     <section className="statistics-panel admin-statistics-workspace">
@@ -264,10 +290,38 @@ function MonthlyAgentStatistics({
                 <strong>客服排名</strong>
                 <span>{monthLabel}</span>
               </div>
-              <small>{agents.length} 人</small>
+              <div className="statistics-seat-tools">
+                <small>{agents.length} 人</small>
+                {seatPageCount > 1 && (
+                  <div
+                    className="statistics-seat-pagination"
+                    aria-label="客服排行分页"
+                  >
+                    <button
+                      type="button"
+                      aria-label="上一组客服"
+                      disabled={seatPage === 0}
+                      onClick={() => changeSeatPage(seatPage - 1)}
+                    >
+                      ‹
+                    </button>
+                    <span>
+                      {seatPage + 1}/{seatPageCount}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label="下一组客服"
+                      disabled={seatPage >= seatPageCount - 1}
+                      onClick={() => changeSeatPage(seatPage + 1)}
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </div>
             </header>
             <nav aria-label="选择客服坐席">
-              {orderedAgents.map((agent, index) => {
+              {visibleSeatAgents.map((agent, index) => {
                 const total = agentTotals.get(agent.id) ?? 0;
                 const progress = Math.min(100, (total / maxAgentTotal) * 100);
                 const isSelected = agent.id === selectedAgent.id;
@@ -280,7 +334,7 @@ function MonthlyAgentStatistics({
                     onClick={() => setSelectedAgentId(agent.id)}
                   >
                     <span className="statistics-seat-rank">
-                      {String(index + 1).padStart(2, '0')}
+                      {String(seatPageStart + index + 1).padStart(2, '0')}
                     </span>
                     <span className="avatar tiny">{initials(agent.name)}</span>
                     <span className="statistics-seat-copy">

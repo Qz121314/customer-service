@@ -1,6 +1,6 @@
-/* Fluid layout guardrails for the admin traffic statistics page.
- * This layer owns geometry only: every statistics region must fit the available
- * admin content width without requiring horizontal scrolling.
+/* Final geometry for the admin traffic statistics page.
+ * The desktop workspace uses one viewport without page or panel scrollbars.
+ * Large agent sets are paged in React, so the selector can stay fully visible.
  */
 
 .admin-statistics-page,
@@ -48,7 +48,7 @@
   overflow-x: hidden;
 }
 
-.admin-statistics-page .statistics-seat-sidebar button {
+.admin-statistics-page .statistics-seat-sidebar nav > button {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -57,9 +57,12 @@
 .admin-statistics-page .statistics-seat-copy,
 .admin-statistics-page .statistics-agent-identity,
 .admin-statistics-page .statistics-agent-identity > div,
-.admin-statistics-page .statistics-trend-card > header > div:first-child,
-.admin-statistics-page .statistics-day-section > header > div,
 .admin-statistics-page .statistics-trend-legend {
+  min-width: 0;
+}
+
+.admin-statistics-page .statistics-trend-card > header > div:first-child,
+.admin-statistics-page .statistics-day-section > header > div {
   min-width: 0;
 }
 
@@ -74,18 +77,70 @@
   max-width: none;
 }
 
-.admin-statistics-page .statistics-chart-wrap {
+.admin-statistics-page .statistics-chart-wrap,
+.admin-statistics-page .statistics-chart {
   overflow: hidden;
 }
 
 .admin-statistics-page .statistics-chart {
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
 }
 
 .admin-statistics-page .statistics-day-grid > div {
   min-width: 0;
+}
+
+.statistics-seat-tools {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.statistics-seat-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.statistics-seat-pagination > span {
+  min-width: 30px;
+  color: #858b95;
+  font-size: 9px;
+  font-weight: 720;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-statistics-page .statistics-seat-pagination > button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 1px solid #dfe2e7;
+  border-radius: 7px;
+  background: #fff;
+  color: #646b76;
+  display: inline-grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.admin-statistics-page
+  .statistics-seat-pagination
+  > button:hover:not(:disabled) {
+  border-color: #c9c8f2;
+  background: #f7f6ff;
+  color: var(--cs-accent-strong, #4747c4);
+}
+
+.admin-statistics-page .statistics-seat-pagination > button:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 @container (max-width: 1120px) {
@@ -117,11 +172,6 @@
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 6px;
   }
-
-  .admin-statistics-page .statistics-seat-sidebar button {
-    width: 100%;
-    min-width: 0;
-  }
 }
 
 @container (max-width: 680px) {
@@ -139,11 +189,6 @@
 
   .admin-statistics-page .statistics-seat-sidebar nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-statistics-page .statistics-trend-card > header,
-  .admin-statistics-page .statistics-day-section > header {
-    align-items: flex-start;
   }
 }
 
@@ -168,32 +213,463 @@
   }
 }
 
-/* Existing viewport breakpoints used horizontal seat navigation. Override them
- * explicitly so narrow layouts always reflow instead of becoming swipe rows. */
-@media (max-width: 1050px) {
-  .admin-statistics-page .statistics-seat-sidebar nav {
-    max-height: none;
-    overflow-x: hidden;
-    overflow-y: visible;
+/* Desktop operations workspace.
+ * Fixed rows reserve predictable space for the chart while keeping every
+ * control, KPI, seat and day visible in the same viewport.
+ */
+@media (min-width: 1180px) and (min-height: 700px) {
+  .admin-content:has(.admin-statistics-page) {
+    box-sizing: border-box;
+    height: 100dvh;
+    min-height: 0;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head {
+    min-height: 43px;
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head h1 {
+    font-size: 21px;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head p {
+    margin-top: 2px;
+    font-size: 10px;
+    line-height: 1.3;
+  }
+
+  .admin-content:has(.admin-statistics-page) > .notice,
+  .admin-statistics-page > .notice {
+    min-height: 28px;
+    margin-bottom: 5px;
+    flex: 0 0 auto;
+  }
+
+  .admin-statistics-page {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-statistics-workspace {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-rows: 48px 76px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .admin-statistics-page .statistics-hero {
+    height: 48px;
+    min-height: 0;
+    padding: 6px 9px 6px 13px;
+    border-radius: 11px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy {
+    gap: 1px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy > strong {
+    font-size: 15px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy > span:last-child {
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .admin-statistics-page .statistics-period-control {
+    min-width: 158px;
+    padding: 4px 6px 4px 8px;
+    border-radius: 8px;
+    gap: 6px !important;
+  }
+
+  .admin-statistics-page .statistics-period-control > span {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page .statistics-period-control input {
+    min-height: 27px;
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-global-summary {
+    height: 76px;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card {
+    height: 76px;
+    min-height: 0;
+    padding: 8px 11px 8px;
+    border-radius: 10px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card::after {
+    width: 40px;
+    height: 40px;
+    border-radius: 0 0 0 40px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card .statistics-kpi-label {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > strong {
+    font-size: 24px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > small {
+    font-size: 8.5px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-coverage {
+    padding-bottom: 8px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-coverage > small {
+    padding-bottom: 4px;
+  }
+
+  .admin-statistics-page .statistics-kpi-progress {
+    right: 11px;
+    bottom: 6px;
+    left: 11px;
+    height: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-layout {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 72px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar {
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid #e3e5ea;
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    background: #f8f8fa;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header {
+    height: 72px;
+    min-height: 0;
+    padding: 8px 10px;
+    border-right: 1px solid #e4e6eb;
+    border-bottom: 0;
+    background: #fafafb;
+    align-items: center;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header > div:first-child {
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header strong {
+    font-size: 12px;
+  }
+
+  .admin-statistics-page
+    .statistics-seat-sidebar
+    > header
+    > div:first-child
+    > span:last-child {
+    display: none;
+  }
+
+  .admin-statistics-page .statistics-seat-tools {
+    align-self: end;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+
+  .admin-statistics-page .statistics-seat-tools > small {
+    padding: 3px 5px;
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-seat-pagination {
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-pagination > button {
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    min-height: 20px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .admin-statistics-page .statistics-seat-pagination > span {
+    min-width: 26px;
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    min-height: 0;
+    max-height: none;
+    padding: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: stretch;
     gap: 6px;
   }
 
-  .admin-statistics-page .statistics-seat-sidebar button {
-    width: 100%;
+  .admin-statistics-page .statistics-seat-sidebar nav > button {
+    width: auto;
     min-width: 0;
+    min-height: 58px;
+    height: 58px;
+    padding: 6px 8px;
+    border-radius: 9px;
+    flex: 1 1 0;
+    grid-template-columns: 18px 28px minmax(0, 1fr) auto;
+    gap: 6px;
   }
-}
 
-@media (max-width: 620px) {
-  .admin-statistics-page .statistics-seat-sidebar nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .admin-statistics-page .statistics-seat-sidebar .avatar.tiny {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
   }
-}
 
-@media (max-width: 430px) {
-  .admin-statistics-page .statistics-seat-sidebar nav {
-    grid-template-columns: 1fr;
+  .admin-statistics-page .statistics-seat-copy {
+    gap: 1px;
+  }
+
+  .admin-statistics-page .statistics-seat-copy strong {
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-seat-copy small {
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav > button > b {
+    min-width: 30px;
+    padding: 3px 5px;
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-seat-detail {
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 50px 74px minmax(0, 1fr) 44px;
+  }
+
+  .admin-statistics-page .statistics-seat-head {
+    height: 50px;
+    min-height: 0;
+    padding: 6px 11px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity {
+    gap: 8px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity strong {
+    font-size: 12px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics {
+    height: auto;
+    margin: 6px 8px;
+    width: calc(100% - 16px);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics > article {
+    min-height: 0;
+    padding: 7px 10px;
+    border-radius: 8px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics > article > span {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics strong {
+    font-size: 18px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics small {
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-trend-card {
+    min-height: 0;
+    margin: 0 8px 6px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 42px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-trend-card > header {
+    height: 42px;
+    min-height: 0;
+    padding: 5px 10px;
+  }
+
+  .admin-statistics-page .statistics-trend-card > header strong {
+    font-size: 11px;
+  }
+
+  .admin-statistics-page
+    .statistics-trend-card
+    > header
+    span:not(.statistics-panel-kicker) {
+    font-size: 8px;
+  }
+
+  .admin-statistics-page .statistics-chart-wrap {
+    height: auto;
+    min-height: 0;
+    padding: 4px 8px 2px;
+  }
+
+  .admin-statistics-page .statistics-day-section {
+    height: 40px;
+    min-height: 0;
+    margin: 0 8px 8px;
+    display: grid;
+    grid-template-columns: 106px minmax(0, 1fr);
+    overflow: hidden;
+    border-radius: 8px;
+  }
+
+  .admin-statistics-page .statistics-day-section > header {
+    height: 100%;
+    min-height: 0;
+    padding: 4px 8px;
+    border-right: 1px solid #e8e9ed;
+    border-bottom: 0;
+    align-items: center;
+  }
+
+  .admin-statistics-page .statistics-day-section > header strong {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page
+    .statistics-day-section
+    > header
+    > div
+    > span:last-child,
+  .admin-statistics-page .statistics-day-section > header > small {
+    display: none;
+  }
+
+  .admin-statistics-page .statistics-day-grid {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: repeat(31, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div {
+    height: 100%;
+    min-height: 0;
+    padding: 1px;
+    border: 0;
+    border-right: 1px solid #eef0f3;
+    background: #fff;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    text-align: center;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div:nth-child(7n) {
+    border-right: 1px solid #eef0f3;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div:last-child {
+    border-right: 0;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div.has-value {
+    background: #f8f7ff;
+  }
+
+  .admin-statistics-page .statistics-day-grid span {
+    font-size: 7px;
+    line-height: 1;
+  }
+
+  .admin-statistics-page .statistics-day-grid strong {
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .admin-statistics-page .statistics-footnote {
+    position: absolute;
+    top: 7px;
+    right: 172px;
+    z-index: 20;
+    width: auto;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .admin-statistics-page .statistics-footnote summary {
+    min-height: 27px;
+    padding: 0 8px;
+    border: 1px solid #e1e4e9;
+    border-radius: 7px;
+    background: rgb(255 255 255 / 92%);
+    color: #747b86;
+    font-size: 8px;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 2%);
+  }
+
+  .admin-statistics-page .statistics-footnote p {
+    position: absolute;
+    top: 32px;
+    right: 0;
+    width: 330px;
+    max-width: min(330px, calc(100vw - 40px));
+    padding: 9px 10px;
+    border: 1px solid #e1e4e9;
+    border-radius: 8px;
+    background: #fff;
+    color: #727985;
+    font-size: 9px;
+    line-height: 1.5;
+    box-shadow: 0 12px 32px rgb(16 24 40 / 10%);
   }
 }
