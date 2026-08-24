@@ -14,7 +14,7 @@ async function loginAndSeedAgents(page) {
   });
   expect(login.ok()).toBeTruthy();
 
-  for (let index = 1; index <= 5; index += 1) {
+  for (let index = 1; index <= 6; index += 1) {
     const response = await page.request.post(url('/api/admin/agents'), {
       data: {
         name: `Statistics Smoke ${index}`,
