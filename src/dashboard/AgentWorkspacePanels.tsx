@@ -14,7 +14,6 @@ import {
 } from './agent-push';
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
-import { Metric } from './dashboard-ui';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
 import { AgentActionToolbar } from './AgentWorkspaceChrome';
@@ -123,6 +122,12 @@ export function AgentInboxPane({
   const overviewRef = useRef(overview);
   const notificationOverviewBaselineRef = useRef(overview);
   const lastOverviewChangeAtRef = useRef(Date.now());
+  const filterCounts: Record<Filter, number> = {
+    all: conversationCount,
+    open: overview.open,
+    pending: overview.pending,
+    closed: overview.closed,
+  };
 
   useEffect(() => {
     overviewRef.current = overview;
@@ -200,7 +205,6 @@ export function AgentInboxPane({
     <section className="conversation-pane">
       <header className="conversation-head">
         <div>
-          <span className="eyebrow">坐席收件箱</span>
           <h1>
             我的会话
             {totalUnread > 0 && (
@@ -243,28 +247,17 @@ export function AgentInboxPane({
           </span>
         </div>
       </header>
-      <div className="inbox-overview" aria-label="会话概览">
-        <Metric label="新会话" value={overview.open} />
-        <Metric label="处理中" value={overview.pending} />
-        <Metric label="已关闭" value={overview.closed} />
-        <Metric
-          label="剩余额度"
-          value={
-            overview.trafficQuotaEnabled
-              ? overview.trafficQuotaRemaining
-              : '不限'
-          }
-        />
-      </div>
       <div className="filters">
         {(Object.keys(filterLabels) as Filter[]).map((item) => (
           <button
             type="button"
             key={item}
             className={filter === item ? 'filter active' : 'filter'}
+            aria-label={filterLabels[item]}
             onClick={() => onFilterChange(item)}
           >
-            {filterLabels[item]}
+            {filterLabels[item]}{' '}
+            <span aria-hidden="true">{filterCounts[item]}</span>
           </button>
         ))}
       </div>
@@ -329,9 +322,7 @@ export function AgentInboxPane({
                     {conversation.visitor_name || '访客'}
                     {conversation.agent_unread_count > 0 && (
                       <span className="unread-badge">
-                        {conversation.status === 'open'
-                          ? `新 · ${Math.min(conversation.agent_unread_count, 99)}`
-                          : Math.min(conversation.agent_unread_count, 99)}
+                        {Math.min(conversation.agent_unread_count, 99)}
                       </span>
                     )}
                   </strong>
