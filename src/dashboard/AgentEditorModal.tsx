@@ -58,7 +58,6 @@ export function AgentEditorModal({
               <h2 id="agent-editor-title">
                 {draft.id ? '编辑客服' : '新增客服'}
               </h2>
-              <p>先维护登录、接待能力与咨询额度，再配置它的分流负责范围。</p>
             </div>
           </div>
           <button
@@ -77,10 +76,7 @@ export function AgentEditorModal({
             <section className="agent-editor-settings-pane agent-editor-workspace-card">
               <div className="agent-editor-section agent-editor-account-section">
                 <div className="agent-editor-section-head">
-                  <div>
-                    <strong>登录账号</strong>
-                    <small>只维护客服登录凭据和账号可用状态</small>
-                  </div>
+                  <strong>登录账号</strong>
                 </div>
 
                 <div className="agent-editor-account-grid">
@@ -124,14 +120,7 @@ export function AgentEditorModal({
                   </label>
 
                   <div className="agent-editor-status-row">
-                    <span>
-                      <strong>启用账号</strong>
-                      <small>
-                        {draft.isEnabled
-                          ? '允许登录，并参与后续新咨询分流'
-                          : '停用后不能登录，也不会接收新咨询'}
-                      </small>
-                    </span>
+                    <strong>启用账号</strong>
                     <label className="switch-control" aria-label="启用客服账号">
                       <input
                         type="checkbox"
@@ -151,19 +140,13 @@ export function AgentEditorModal({
 
               <div className="agent-editor-section agent-editor-capacity-section">
                 <div className="agent-editor-section-head">
-                  <div>
-                    <strong>接待能力</strong>
-                    <small>限制实时负载和每天可接收的新咨询</small>
-                  </div>
+                  <strong>接待能力</strong>
                   <span className="agent-editor-section-hint">0 = 不限制</span>
                 </div>
 
                 <div className="agent-editor-capacity-grid">
                   <label className="agent-editor-number-field">
-                    <span>
-                      <strong>并发上限</strong>
-                      <small>达到后新咨询分给其他可用客服</small>
-                    </span>
+                    <strong>并发上限</strong>
                     <div>
                       <input
                         type="number"
@@ -183,10 +166,7 @@ export function AgentEditorModal({
                   </label>
 
                   <label className="agent-editor-number-field">
-                    <span>
-                      <strong>每日接待上限</strong>
-                      <small>按业务日统计，次日自动恢复</small>
-                    </span>
+                    <strong>每日接待上限</strong>
                     <div>
                       <input
                         type="number"
@@ -209,10 +189,7 @@ export function AgentEditorModal({
 
               <div className="agent-editor-section agent-editor-quota-section">
                 <div className="agent-editor-section-head">
-                  <div>
-                    <strong>咨询额度</strong>
-                    <small>累计购买额度，用完后停止接收新的付费咨询</small>
-                  </div>
+                  <strong>咨询额度</strong>
                   <label className="switch-control" aria-label="启用咨询额度">
                     <input
                       type="checkbox"
@@ -246,7 +223,6 @@ export function AgentEditorModal({
                 <div className="traffic-quota-topup">
                   <div className="traffic-quota-topup-label">
                     <span>{draft.id ? '本次追加额度' : '初始额度'}</span>
-                    <small>保存后立即生效</small>
                   </div>
                   <div className="traffic-quota-presets">
                     {[100, 500, 1000].map((amount) => (
@@ -296,10 +272,7 @@ export function AgentEditorModal({
                 {draft.id ? (
                   <div className="traffic-quota-history">
                     <div className="traffic-quota-history-head">
-                      <div>
-                        <strong>额度账本</strong>
-                        <small>仅在需要核对时读取，不增加日常请求</small>
-                      </div>
+                      <strong>额度账本</strong>
                       {quotaLedger ? (
                         <span
                           className={
@@ -372,11 +345,7 @@ export function AgentEditorModal({
 
             <section className="agent-editor-routing-pane agent-editor-workspace-card">
               <div className="agent-editor-routing-head">
-                <div>
-                  <strong>分流负责范围</strong>
-                  <small>按分区、分类或指定产品建立动态负责规则</small>
-                </div>
-                <span>新产品会按规则自动纳入</span>
+                <strong>分流负责范围</strong>
               </div>
               <ProductAssignmentPicker
                 products={products}
@@ -390,9 +359,6 @@ export function AgentEditorModal({
           </div>
 
           <footer className="agent-editor-footer">
-            <span className="agent-editor-save-note">
-              客服头像由客服本人在工作台设置
-            </span>
             <div className="agent-editor-footer-actions">
               <button
                 type="button"

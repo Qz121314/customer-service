@@ -253,9 +253,7 @@ export function ProductAssignmentPicker({
         <legend>负责范围</legend>
         <div className="product-assignment-empty">
           <strong>还没有同步产品目录</strong>
-          <span>
-            回到 Site 后台重新验证客服系统，产品目录会自动同步到这里。
-          </span>
+          <span>回到 Site 后台重新验证客服系统后会自动同步。</span>
         </div>
       </fieldset>
     );
@@ -273,7 +271,6 @@ export function ProductAssignmentPicker({
           onClick={() => selectMode('section')}
         >
           <strong>整个分区</strong>
-          <span>该分区全部产品</span>
         </button>
         <button
           type="button"
@@ -282,7 +279,6 @@ export function ProductAssignmentPicker({
           onClick={() => selectMode('category')}
         >
           <strong>指定分类</strong>
-          <span>按分类批量负责</span>
         </button>
         <button
           type="button"
@@ -291,17 +287,13 @@ export function ProductAssignmentPicker({
           onClick={() => selectMode('product')}
         >
           <strong>指定产品</strong>
-          <span>只负责单独产品</span>
         </button>
       </div>
 
       {mode === 'section' ? (
         <div className="product-assignment-panel">
           <div className="product-assignment-panel-head">
-            <div>
-              <strong>选择负责分区</strong>
-              <span>可同时选择多个分区</span>
-            </div>
+            <strong>选择负责分区</strong>
             <span className="selection-count">
               已选 {selectedSectionIds.size} 个
             </span>
@@ -328,10 +320,9 @@ export function ProductAssignmentPicker({
           <div className="product-assignment-note">
             <strong>
               {selectedSectionIds.size
-                ? `已选 ${selectedSectionIds.size} 个分区，当前覆盖 ${sectionProductCount} 个产品`
+                ? `覆盖 ${sectionProductCount} 个产品 · 后续新增自动纳入`
                 : '请选择至少一个负责分区'}
             </strong>
-            <span>保存的是分区规则，之后新增到这些分区的产品会自动纳入。</span>
           </div>
         </div>
       ) : null}
@@ -390,10 +381,9 @@ export function ProductAssignmentPicker({
           <div className="product-assignment-note">
             <strong>
               {scope.type === 'category'
-                ? `已选 ${scope.categoryIds.length} 个分类，当前覆盖 ${categoryProductCount} 个产品`
+                ? `已选 ${scope.categoryIds.length} 个分类 · 覆盖 ${categoryProductCount} 个产品`
                 : '选择需要负责的分类'}
             </strong>
-            <span>保存的是分类规则，分类中后续新增的产品会自动纳入。</span>
           </div>
         </div>
       ) : null}
@@ -439,7 +429,6 @@ export function ProductAssignmentPicker({
 
           <div className="product-assignment-summary">
             <span>已选择 {selectedProductIds.size} 个产品</span>
-            <span>可按分区和分类缩小查找范围</span>
           </div>
 
           {selectedProducts.length ? (
@@ -473,7 +462,7 @@ export function ProductAssignmentPicker({
           <div className="product-assignment-list">
             {!hasProductSearch ? (
               <div className="product-assignment-empty compact">
-                输入名称或选择分区 / 分类后再查找产品
+                输入名称或选择筛选条件
               </div>
             ) : searchResults.length === 0 ? (
               <div className="product-assignment-empty compact">
@@ -512,7 +501,7 @@ export function ProductAssignmentPicker({
           </div>
           {searchResults.length === searchResultLimit ? (
             <small className="product-assignment-limit-hint">
-              当前只显示前 {searchResultLimit} 个结果，可继续输入名称缩小范围。
+              仅显示前 {searchResultLimit} 个结果，请继续缩小范围。
             </small>
           ) : null}
         </div>
