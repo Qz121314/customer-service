@@ -274,8 +274,8 @@ async function purgeReportingHistory(
   nowIso: string,
 ): Promise<void> {
   // 12:00 UTC is 04:00/05:00 in Los Angeles, so UTC and reporting-local dates
-  // are already aligned. Keep the current reporting day plus the prior 399.
-  // Archive only receipts that actually consumed paid quota. The three
+  // are already aligned. Keep the current reporting day plus the prior 89.
+  // Archive only receipts that actually consumed paid quota. The four
   // statements run in one D1 batch so a failed cleanup can never count an old
   // receipt in the archive while also leaving that same receipt to be counted
   // again on the next daily pass.
@@ -289,7 +289,7 @@ async function purgeReportingHistory(
            WHERE receipt.site_id = agents.site_id
              AND receipt.agent_id = agents.id
              AND receipt.quota_consumed = 1
-             AND receipt.business_date < date(?1, '-399 days')
+             AND receipt.business_date < date(?1, '-89 days')
          ),
              updated_at = CURRENT_TIMESTAMP
          WHERE site_id = 'default'
@@ -299,7 +299,7 @@ async function purgeReportingHistory(
              WHERE receipt.site_id = agents.site_id
                AND receipt.agent_id = agents.id
                AND receipt.quota_consumed = 1
-               AND receipt.business_date < date(?1, '-399 days')
+               AND receipt.business_date < date(?1, '-89 days')
            )`,
       )
       .bind(nowIso),
@@ -307,14 +307,21 @@ async function purgeReportingHistory(
       .prepare(
         `DELETE FROM agent_daily_stats
          WHERE site_id = 'default'
-           AND business_date < date(?1, '-399 days')`,
+           AND business_date < date(?1, '-89 days')`,
       )
       .bind(nowIso),
     db
       .prepare(
         `DELETE FROM agent_traffic_receipts
          WHERE site_id = 'default'
-           AND business_date < date(?1, '-399 days')`,
+           AND business_date < date(?1, '-89 days')`,
+      )
+      .bind(nowIso),
+    db
+      .prepare(
+        `DELETE FROM conversation_traffic_receipts
+         WHERE site_id = 'default'
+           AND business_date < date(?1, '-89 days')`,
       )
       .bind(nowIso),
   ]);

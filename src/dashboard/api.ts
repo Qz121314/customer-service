@@ -67,13 +67,18 @@ export type Overview = {
   trafficQuotaRemaining: number;
 };
 
-export type ProductTrafficMonthlyStats = {
-  month: string;
-  days: number[];
-  rows: Array<{
+export type TrafficOverviewStats = {
+  from: string;
+  to: string;
+  total: number;
+  agents: Array<{
+    agentId: string | null;
+    agentName: string;
+    count: number;
+  }>;
+  products: Array<{
     productId: string | null;
-    productTitle: string | null;
-    day: number;
+    productTitle: string;
     count: number;
   }>;
   retainedFrom: string;
@@ -307,10 +312,13 @@ export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
   return response.products;
 }
 
-export async function getProductTrafficStats(
-  month: string,
-): Promise<ProductTrafficMonthlyStats> {
-  return request(`/api/admin/product-stats?month=${encodeURIComponent(month)}`);
+export async function getTrafficOverviewStats(
+  from: string,
+  to: string,
+): Promise<TrafficOverviewStats> {
+  return request(
+    `/api/admin/traffic-stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
 }
 
 export async function getAdminAgentMonthlyStats(

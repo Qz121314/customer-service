@@ -43,7 +43,6 @@ test('statistics surfaces use the shared controlled month picker', () => {
     'utf8',
   );
   const surfaces = [
-    '../src/dashboard/AdminStatisticsPage.tsx',
     '../src/dashboard/AdminAgentStatisticsModal.tsx',
     '../src/dashboard/AgentStatisticsWorkspace.tsx',
   ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'));

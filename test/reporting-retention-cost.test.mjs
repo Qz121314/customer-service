@@ -14,6 +14,10 @@ const retentionSource = readFileSync(
   new URL('../src/worker/conversation-retention.ts', import.meta.url),
   'utf8',
 );
+const agentApiSource = readFileSync(
+  new URL('../src/worker/agent-api.ts', import.meta.url),
+  'utf8',
+);
 
 // Keep historical pruning out of the first-reception transaction as the
 // reporting tables grow; cron owns that low-frequency maintenance cost.
@@ -32,10 +36,18 @@ test('scheduled reporting retention uses indexed site and business date predicat
   assert.match(retentionSource, /REPORTING_HISTORY_CLEANUP_UTC_HOUR = 12/u);
   assert.match(
     retentionSource,
-    /DELETE FROM agent_daily_stats\s+WHERE site_id = 'default'\s+AND business_date < date\(\?1, '-399 days'\)/u,
+    /DELETE FROM agent_daily_stats\s+WHERE site_id = 'default'\s+AND business_date < date\(\?1, '-89 days'\)/u,
   );
   assert.match(
     retentionSource,
-    /DELETE FROM agent_traffic_receipts\s+WHERE site_id = 'default'\s+AND business_date < date\(\?1, '-399 days'\)/u,
+    /DELETE FROM agent_traffic_receipts\s+WHERE site_id = 'default'\s+AND business_date < date\(\?1, '-89 days'\)/u,
+  );
+  assert.match(
+    retentionSource,
+    /DELETE FROM conversation_traffic_receipts\s+WHERE site_id = 'default'\s+AND business_date < date\(\?1, '-89 days'\)/u,
+  );
+  assert.match(
+    agentApiSource,
+    /date\.setUTCDate\(date\.getUTCDate\(\) - 89\)/u,
   );
 });

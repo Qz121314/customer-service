@@ -21,7 +21,7 @@ test('agent statistics opens inside the workspace instead of navigating away', (
   assert.ok(statistics.includes("event.key === 'Escape'"));
 });
 
-test('admin product traffic remains a page and seat traffic opens from the account list', () => {
+test('admin traffic overview stays focused while seat history opens from the account list', () => {
   const portal = source('../src/dashboard/AdminPortal.tsx');
   const statistics = source('../src/dashboard/AdminStatisticsPage.tsx');
   const agentStatistics = source(
@@ -32,9 +32,12 @@ test('admin product traffic remains a page and seat traffic opens from the accou
   assert.ok(portal.includes("setSection('statistics')"));
   assert.ok(portal.includes("section === 'statistics'"));
   assert.ok(portal.includes('<AdminStatisticsPage'));
-  assert.ok(statistics.includes('产品流量分布'));
-  assert.ok(statistics.includes('product-traffic-bento'));
-  assert.ok(statistics.includes('product-quality-card'));
+  assert.ok(statistics.includes('会话总数'));
+  assert.ok(statistics.includes('客服接待分布'));
+  assert.ok(statistics.includes('产品会话分布'));
+  assert.ok(statistics.includes('待接待'));
+  assert.ok(!statistics.includes('产品质量'));
+  assert.ok(!statistics.includes('转化率'));
   assert.ok(!statistics.includes('选择客服坐席'));
   assert.ok(portal.includes('setStatisticsAgent(agent)'));
   assert.ok(portal.includes('<AdminAgentStatisticsModal'));

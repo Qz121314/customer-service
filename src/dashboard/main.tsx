@@ -22,6 +22,7 @@ async function loadAgentStyles() {
   await import('./agent-mobile.css');
   await import('./agent-thread.css');
   await import('./agent-state.css');
+  await import('./commercial-polish.css');
 }
 
 async function loadAdminStyles() {
@@ -40,6 +41,7 @@ async function loadAdminStyles() {
   await import('./admin-statistics.css');
   await import('./admin-scroll-ownership.css');
   await import('./admin-viewport-geometry.css');
+  await import('./commercial-polish.css');
 }
 
 async function loadRouteStyles() {

@@ -41,68 +41,35 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
 
   await expect(page.getByRole('button', { name: /流量统计/u })).toBeVisible();
   await page.getByRole('button', { name: /流量统计/u }).click();
-  await expect(page.getByText('产品流量分布', { exact: true })).toBeVisible();
-  await expect(page.locator('.product-traffic-analysis')).toBeVisible();
-
-  const monthPicker = page.getByRole('button', {
-    name: /选择统计月份/u,
-  });
-  await monthPicker.click();
-  const monthDialog = page.getByRole('dialog', { name: '选择统计月份' });
-  await expect(monthDialog).toBeVisible();
-  const monthPickerGeometry = await monthDialog.evaluate((element) => {
-    const browser = globalThis;
-    const style = browser.getComputedStyle(element);
-    const rect = element.getBoundingClientRect();
-    return {
-      background: style.backgroundColor,
-      borderRadius: Number.parseFloat(style.borderRadius),
-      width: rect.width,
-      withinViewport:
-        rect.left >= 0 &&
-        rect.top >= 0 &&
-        rect.right <= browser.innerWidth &&
-        rect.bottom <= browser.innerHeight,
-    };
-  });
-  expect(monthPickerGeometry.background).toBe('rgb(255, 255, 255)');
-  expect(monthPickerGeometry.borderRadius).toBeGreaterThanOrEqual(18);
-  expect(monthPickerGeometry.width).toBeGreaterThanOrEqual(280);
-  expect(monthPickerGeometry.withinViewport).toBeTruthy();
-  await expect(monthDialog.getByRole('button', { name: '8月' })).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(monthDialog).toBeHidden();
+  await expect(page.getByText('会话流量分布', { exact: true })).toBeVisible();
+  await expect(page.getByText('会话总数', { exact: true })).toBeVisible();
+  await expect(page.getByText('客服接待分布', { exact: true })).toBeVisible();
+  await expect(page.getByText('产品会话分布', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '近 7 天', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: '近 7 天', exact: true }),
+  ).toHaveAttribute('aria-pressed', 'true');
 
   const geometry = await page.evaluate(() => {
     const browser = globalThis;
     const root = browser.document.scrollingElement;
     const content = browser.document.querySelector('.admin-content');
-    const workspace = browser.document.querySelector(
-      '.product-traffic-workspace',
+    const workspace = browser.document.querySelector('.traffic-overview');
+    const layout = browser.document.querySelector('.traffic-overview-grid');
+    const total = browser.document.querySelector('.traffic-total-card');
+    const distributions = browser.document.querySelectorAll(
+      '.traffic-distribution-card',
     );
-    const layout = browser.document.querySelector('.product-traffic-analysis');
-    const hero = browser.document.querySelector('.product-traffic-hero');
-    const productKpi = browser.document.querySelector(
-      '.product-kpi-card.is-products',
-    );
-    const distribution = browser.document.querySelector(
-      '.product-distribution-card',
-    );
-    const ranking = browser.document.querySelector('.product-ranking-card');
-    const trend = browser.document.querySelector('.product-trend-card');
-    const quality = browser.document.querySelector('.product-quality-card');
 
     if (
       !root ||
       !(content instanceof browser.HTMLElement) ||
       !(workspace instanceof browser.HTMLElement) ||
       !(layout instanceof browser.HTMLElement) ||
-      !(hero instanceof browser.HTMLElement) ||
-      !(productKpi instanceof browser.HTMLElement) ||
-      !(distribution instanceof browser.HTMLElement) ||
-      !(ranking instanceof browser.HTMLElement) ||
-      !(trend instanceof browser.HTMLElement) ||
-      !(quality instanceof browser.HTMLElement)
+      !(total instanceof browser.HTMLElement) ||
+      distributions.length !== 2 ||
+      !(distributions[0] instanceof browser.HTMLElement) ||
+      !(distributions[1] instanceof browser.HTMLElement)
     ) {
       return null;
     }
@@ -110,12 +77,9 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     const contentRect = content.getBoundingClientRect();
     const workspaceRect = workspace.getBoundingClientRect();
     const layoutRect = layout.getBoundingClientRect();
-    const heroRect = hero.getBoundingClientRect();
-    const productKpiRect = productKpi.getBoundingClientRect();
-    const distributionRect = distribution.getBoundingClientRect();
-    const rankingRect = ranking.getBoundingClientRect();
-    const trendRect = trend.getBoundingClientRect();
-    const qualityRect = quality.getBoundingClientRect();
+    const totalRect = total.getBoundingClientRect();
+    const agentRect = distributions[0].getBoundingClientRect();
+    const productRect = distributions[1].getBoundingClientRect();
 
     return {
       innerWidth: browser.innerWidth,
@@ -134,18 +98,19 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
       layoutWidth: layoutRect.width,
       layoutHeight: layoutRect.height,
       layoutOverflowX: browser.getComputedStyle(layout).overflowX,
-      heroWidth: heroRect.width,
-      productKpiWidth: productKpiRect.width,
-      distributionHeight: distributionRect.height,
-      distributionWidth: distributionRect.width,
-      rankingHeight: rankingRect.height,
-      rankingWidth: rankingRect.width,
-      trendHeight: trendRect.height,
-      trendWidth: trendRect.width,
-      trendBottom: trendRect.bottom,
-      qualityWidth: qualityRect.width,
+      totalWidth: totalRect.width,
+      totalHeight: totalRect.height,
+      agentWidth: agentRect.width,
+      agentHeight: agentRect.height,
+      productWidth: productRect.width,
+      productHeight: productRect.height,
+      cardsBottom: Math.max(
+        totalRect.bottom,
+        agentRect.bottom,
+        productRect.bottom,
+      ),
       cardRadius: Number.parseFloat(
-        browser.getComputedStyle(hero).borderRadius,
+        browser.getComputedStyle(total).borderRadius,
       ),
     };
   });
@@ -174,10 +139,10 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     violations.push('admin content exceeds viewport height');
   }
   if (geometry.workspaceBottom > geometry.contentBottom + 1) {
-    violations.push('product traffic workspace is clipped below content');
+    violations.push('traffic workspace is clipped below content');
   }
   if (!(geometry.layoutWidth > 900 && geometry.layoutHeight > 250)) {
-    violations.push('product traffic analysis is not the primary workspace');
+    violations.push('traffic overview is not the primary workspace');
   }
   if (geometry.layoutOverflowX !== 'hidden') {
     violations.push(`analysis overflow-x=${geometry.layoutOverflowX}`);
@@ -185,26 +150,17 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   if (geometry.cardRadius < 18) {
     violations.push('bento cards lack high-fidelity rounded geometry');
   }
-  if (geometry.heroWidth <= geometry.productKpiWidth * 1.8) {
-    violations.push('hero and KPI cards lack bento size contrast');
+  if (geometry.totalWidth >= geometry.agentWidth) {
+    violations.push('total card should stay narrower than a distribution card');
   }
-  if (Math.abs(geometry.distributionHeight - geometry.rankingHeight) > 1) {
-    violations.push('product distribution and ranking heights diverge');
+  if (Math.abs(geometry.agentHeight - geometry.productHeight) > 1) {
+    violations.push('agent and product distribution heights diverge');
   }
-  if (geometry.distributionHeight > 220) {
-    violations.push('product summary cards waste vertical space');
+  if (geometry.totalHeight < 300 || geometry.agentHeight < 300) {
+    violations.push('traffic distribution cards are not readable');
   }
-  if (geometry.rankingWidth <= geometry.distributionWidth * 1.5) {
-    violations.push('distribution and ranking lack bento width contrast');
-  }
-  if (geometry.trendHeight < 150) {
-    violations.push('daily trend is not readable');
-  }
-  if (geometry.trendBottom > geometry.contentBottom + 1) {
-    violations.push('daily trend is clipped below content');
-  }
-  if (geometry.trendWidth <= geometry.qualityWidth * 2.4) {
-    violations.push('trend and quality cards lack bento width contrast');
+  if (geometry.cardsBottom > geometry.contentBottom + 1) {
+    violations.push('traffic cards are clipped below content');
   }
 
   writeFileSync(
@@ -261,4 +217,48 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   await expect(
     page.getByRole('dialog', { name: '选择统计月份' }),
   ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: '选择统计月份' })).toBeHidden();
+  await page.getByRole('button', { name: '关闭客服统计' }).click();
+
+  await agentRow.getByRole('button', { name: '编辑', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '编辑客服' });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('button', { name: '保存修改' })).toBeVisible();
+  const editorGeometry = await editor.evaluate((element) => {
+    const browser = globalThis;
+    const layout = element.querySelector('.agent-editor-layout');
+    const footer = element.querySelector('.agent-editor-footer');
+    if (
+      !(layout instanceof browser.HTMLElement) ||
+      !(footer instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    const dialogRect = element.getBoundingClientRect();
+    const footerRect = footer.getBoundingClientRect();
+    return {
+      dialogTop: dialogRect.top,
+      dialogBottom: dialogRect.bottom,
+      footerBottom: footerRect.bottom,
+      innerHeight: browser.innerHeight,
+      scrollbarWidth: browser.getComputedStyle(layout, '::-webkit-scrollbar')
+        .width,
+      layoutOverflowY: browser.getComputedStyle(layout).overflowY,
+      radius: Number.parseFloat(browser.getComputedStyle(element).borderRadius),
+    };
+  });
+  expect(editorGeometry).not.toBeNull();
+  if (editorGeometry) {
+    expect(editorGeometry.dialogTop).toBeGreaterThanOrEqual(0);
+    expect(editorGeometry.dialogBottom).toBeLessThanOrEqual(
+      editorGeometry.innerHeight + 1,
+    );
+    expect(editorGeometry.footerBottom).toBeLessThanOrEqual(
+      editorGeometry.innerHeight + 1,
+    );
+    expect(editorGeometry.scrollbarWidth).toBe('8px');
+    expect(editorGeometry.layoutOverflowY).toBe('auto');
+    expect(editorGeometry.radius).toBeGreaterThanOrEqual(20);
+  }
 });
