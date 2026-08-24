@@ -119,6 +119,30 @@
   font-weight: 760;
 }
 
+.admin-agent-layout .admin-agent-table th:nth-child(1) {
+  width: 19%;
+}
+
+.admin-agent-layout .admin-agent-table th:nth-child(2) {
+  width: 26%;
+}
+
+.admin-agent-layout .admin-agent-table th:nth-child(3) {
+  width: 10%;
+}
+
+.admin-agent-layout .admin-agent-table th:nth-child(4) {
+  width: 15%;
+}
+
+.admin-agent-layout .admin-agent-table th:nth-child(5) {
+  width: 18%;
+}
+
+.admin-agent-layout .admin-agent-table th:nth-child(6) {
+  width: 12%;
+}
+
 .admin-agent-layout .admin-agent-table td {
   border-bottom-color: #eceff3;
 }
@@ -284,7 +308,7 @@
 
   .admin-agent-layout .admin-agent-table td:nth-child(1) {
     grid-column: 1 / -1;
-    padding: 0 72px 12px 0;
+    padding: 0 120px 12px 0;
     border-bottom: 1px solid #edf0f3;
   }
 
@@ -377,16 +401,32 @@
 
 .admin-agent-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 6px;
+  min-width: 102px;
+}
+
+.admin-agent-actions .table-action {
+  min-width: 48px;
+  min-height: 32px;
+  padding-inline: 10px;
+  flex: 0 0 auto;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .admin-agent-actions .statistics-action {
   border-color: #d9d7f5;
-  background: #f7f6ff;
-  color: #5555c8;
+  background: #f4f3ff;
+  color: #514fc5;
 }
 
 .admin-agent-actions .statistics-action::after {
   display: none;
+}
+
+.admin-agent-actions .statistics-action:hover {
+  border-color: #bbb7ee;
+  background: #eceaff;
 }
