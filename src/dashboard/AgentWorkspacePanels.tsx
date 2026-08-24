@@ -212,7 +212,10 @@ export function AgentInboxPane({
         </h1>
         <div className="conversation-head-status">
           {overview.trafficQuotaEnabled && (
-            <span className="inbox-quota-pill" title="当前客服剩余接待额度">
+            <span
+              className="availability-pill inbox-quota-pill"
+              title="当前客服剩余接待额度"
+            >
               额度 {overview.trafficQuotaRemaining}
             </span>
           )}
@@ -258,8 +261,7 @@ export function AgentInboxPane({
             className={filter === item ? 'filter active' : 'filter'}
             onClick={() => onFilterChange(item)}
           >
-            <span>{filterLabels[item]}</span>
-            <strong className="filter-count">{filterCounts[item]}</strong>
+            {filterLabels[item]} {filterCounts[item]}
           </button>
         ))}
       </div>
