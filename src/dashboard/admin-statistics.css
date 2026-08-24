@@ -252,7 +252,10 @@
   letter-spacing: -0.015em;
 }
 
-.admin-statistics-page .statistics-seat-sidebar > header span:not(.statistics-panel-kicker),
+.admin-statistics-page
+  .statistics-seat-sidebar
+  > header
+  span:not(.statistics-panel-kicker),
 .admin-statistics-page .statistics-seat-sidebar > header small {
   color: #9398a1;
   font-size: 8px;
@@ -305,7 +308,10 @@
   text-align: center;
 }
 
-.admin-statistics-page .statistics-seat-sidebar button.active .statistics-seat-rank {
+.admin-statistics-page
+  .statistics-seat-sidebar
+  button.active
+  .statistics-seat-rank {
   color: var(--cs-accent-strong, #4747c4);
 }
 
@@ -563,8 +569,7 @@
   padding: 8px 10px 4px;
   overflow: hidden;
   background:
-    linear-gradient(to bottom, rgb(249 249 251 / 55%), transparent 46%),
-    #fff;
+    linear-gradient(to bottom, rgb(249 249 251 / 55%), transparent 46%), #fff;
 }
 
 .statistics-chart {

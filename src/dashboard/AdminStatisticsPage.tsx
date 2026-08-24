@@ -24,9 +24,7 @@ function formatDecimal(value: number) {
   });
 }
 
-function buildTrendPoints(
-  dailyValues: Array<{ day: string; value: number }>,
-): {
+function buildTrendPoints(dailyValues: Array<{ day: string; value: number }>): {
   points: TrendPoint[];
   line: string;
   area: string;
@@ -393,8 +391,7 @@ function MonthlyAgentStatistics({
                   {[1, 0.5, 0].map((ratio) => {
                     const y =
                       CHART_TOP +
-                      (1 - ratio) *
-                        (CHART_HEIGHT - CHART_TOP - CHART_BOTTOM);
+                      (1 - ratio) * (CHART_HEIGHT - CHART_TOP - CHART_BOTTOM);
                     return (
                       <g key={ratio}>
                         <line
