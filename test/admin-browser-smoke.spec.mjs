@@ -113,6 +113,8 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   expect(geometry).not.toBeNull();
   if (!geometry) return;
 
+  console.log('ADMIN_VIEWPORT_GEOMETRY', JSON.stringify(geometry));
+
   expect(geometry.rootScrollWidth).toBeLessThanOrEqual(
     geometry.rootClientWidth + 1,
   );
