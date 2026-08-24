@@ -34,6 +34,7 @@ async function loadAdminStyles() {
   await import('./agent-avatar.css');
   await import('./admin-commercial.css');
   await import('./admin-statistics.css');
+  await import('./admin-statistics-layout.css');
 }
 
 async function loadRouteStyles() {
