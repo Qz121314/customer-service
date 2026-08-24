@@ -1,0 +1,199 @@
+/* Fluid layout guardrails for the admin traffic statistics page.
+ * This layer owns geometry only: every statistics region must fit the available
+ * admin content width without requiring horizontal scrolling.
+ */
+
+.admin-statistics-page,
+.admin-statistics-workspace,
+.admin-statistics-page .statistics-hero,
+.admin-statistics-page .statistics-global-summary,
+.admin-statistics-page .statistics-seat-layout,
+.admin-statistics-page .statistics-seat-sidebar,
+.admin-statistics-page .statistics-seat-detail,
+.admin-statistics-page .statistics-seat-head,
+.admin-statistics-page .statistics-seat-metrics,
+.admin-statistics-page .statistics-trend-card,
+.admin-statistics-page .statistics-day-section,
+.admin-statistics-page .statistics-chart-wrap,
+.admin-statistics-page .statistics-day-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.admin-statistics-page {
+  container-type: inline-size;
+  overflow-x: clip;
+}
+
+.admin-statistics-workspace {
+  overflow-x: clip;
+}
+
+.admin-statistics-page .statistics-hero {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.admin-statistics-page .statistics-global-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-statistics-page .statistics-seat-layout {
+  grid-template-columns: minmax(210px, 232px) minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.admin-statistics-page .statistics-seat-sidebar nav {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.admin-statistics-page .statistics-seat-sidebar button {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.admin-statistics-page .statistics-seat-copy,
+.admin-statistics-page .statistics-agent-identity,
+.admin-statistics-page .statistics-agent-identity > div,
+.admin-statistics-page .statistics-trend-card > header > div:first-child,
+.admin-statistics-page .statistics-day-section > header > div,
+.admin-statistics-page .statistics-trend-legend {
+  min-width: 0;
+}
+
+.admin-statistics-page .statistics-seat-metrics {
+  margin-inline: 12px;
+  width: calc(100% - 24px);
+}
+
+.admin-statistics-page .statistics-trend-card,
+.admin-statistics-page .statistics-day-section {
+  width: auto;
+  max-width: none;
+}
+
+.admin-statistics-page .statistics-chart-wrap {
+  overflow: hidden;
+}
+
+.admin-statistics-page .statistics-chart {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.admin-statistics-page .statistics-day-grid > div {
+  min-width: 0;
+}
+
+@container (max-width: 1120px) {
+  .admin-statistics-page .statistics-global-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-statistics-page .statistics-seat-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 900px) {
+  .admin-statistics-page .statistics-seat-layout {
+    display: block;
+    min-height: 0;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #e3e5ea;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    max-height: none;
+    padding: 8px;
+    overflow: visible;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 6px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@container (max-width: 680px) {
+  .admin-statistics-page .statistics-hero {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .admin-statistics-page .statistics-period-control {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-statistics-page .statistics-trend-card > header,
+  .admin-statistics-page .statistics-day-section > header {
+    align-items: flex-start;
+  }
+}
+
+@container (max-width: 480px) {
+  .admin-statistics-page .statistics-global-summary,
+  .admin-statistics-page .statistics-seat-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics {
+    margin-inline: 10px;
+    width: calc(100% - 20px);
+  }
+
+  .admin-statistics-page .statistics-trend-card,
+  .admin-statistics-page .statistics-day-section {
+    margin-inline: 10px;
+  }
+}
+
+/* Existing viewport breakpoints used horizontal seat navigation. Override them
+ * explicitly so narrow layouts always reflow instead of becoming swipe rows. */
+@media (max-width: 1050px) {
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: visible;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 6px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar button {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 430px) {
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    grid-template-columns: 1fr;
+  }
+}
