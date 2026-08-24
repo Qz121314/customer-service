@@ -25,6 +25,11 @@ function formatDecimal(value: number) {
   });
 }
 
+function trafficIntensity(value: number, peak: number): number {
+  if (value <= 0 || peak <= 0) return 0;
+  return Math.min(4, Math.max(1, Math.ceil((value / peak) * 4)));
+}
+
 function buildTrendPoints(dailyValues: Array<{ day: string; value: number }>): {
   points: TrendPoint[];
   line: string;
@@ -234,10 +239,13 @@ function MonthlyAgentStatistics({
   }
 
   return (
-    <section className="statistics-panel admin-statistics-workspace">
+    <section
+      className={`statistics-panel admin-statistics-workspace${busy ? ' is-loading' : ''}`}
+      aria-busy={busy}
+    >
       <div className="statistics-toolbar statistics-hero">
         <div className="statistics-hero-copy">
-          <span className="statistics-kicker">TRAFFIC RECONCILIATION</span>
+          <span className="statistics-kicker">运营概览</span>
           <strong>月度流量对账</strong>
           <span>首次有效接待计数，集中查看总量、坐席贡献和每日趋势。</span>
         </div>
@@ -259,12 +267,12 @@ function MonthlyAgentStatistics({
             {busy ? '数据加载中' : `日均 ${formatDecimal(monthlyAverage)} 次`}
           </small>
         </article>
-        <article className="statistics-kpi-card">
+        <article className="statistics-kpi-card is-agents">
           <span className="statistics-kpi-label">有流量坐席</span>
           <strong>{busy ? '—' : activeAgentCount}</strong>
           <small>{busy ? '数据加载中' : `${agents.length} 个客服账号`}</small>
         </article>
-        <article className="statistics-kpi-card">
+        <article className="statistics-kpi-card is-reconciled">
           <span className="statistics-kpi-label">可逐笔对账</span>
           <strong>{busy ? '—' : monthlyHandoffTotal}</strong>
           <small>
@@ -409,7 +417,7 @@ function MonthlyAgentStatistics({
             <section className="statistics-trend-card">
               <header>
                 <div>
-                  <span className="statistics-panel-kicker">DAILY TREND</span>
+                  <span className="statistics-panel-kicker">接待趋势</span>
                   <strong>每日接待趋势</strong>
                   <span>自然日维度 · 首次有效接待</span>
                 </div>
@@ -518,7 +526,7 @@ function MonthlyAgentStatistics({
             <section className="statistics-day-section">
               <header>
                 <div>
-                  <span className="statistics-panel-kicker">DAILY LEDGER</span>
+                  <span className="statistics-panel-kicker">每日账本</span>
                   <strong>每日明细</strong>
                   <span>保留精确日数据，便于快速核对异常日期。</span>
                 </div>
@@ -526,7 +534,12 @@ function MonthlyAgentStatistics({
               </header>
               <div className="statistics-day-grid">
                 {selectedDaily.map(({ day, value }) => (
-                  <div key={day} className={value ? 'has-value' : ''}>
+                  <div
+                    key={day}
+                    className={value ? 'has-value' : ''}
+                    data-intensity={trafficIntensity(value, selectedPeak.value)}
+                    title={`${month}-${day.padStart(2, '0')} · ${value} 次接待`}
+                  >
                     <span>{day} 日</span>
                     <strong>{busy ? '·' : value || '—'}</strong>
                   </div>

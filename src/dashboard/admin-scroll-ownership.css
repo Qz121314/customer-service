@@ -228,9 +228,9 @@
   }
 
   .admin-statistics-page .statistics-kpi-card::after {
-    width: 38px;
-    height: 38px;
-    border-radius: 0 0 0 38px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
   }
 
   .admin-statistics-page .statistics-kpi-card .statistics-kpi-label {
@@ -238,11 +238,11 @@
   }
 
   .admin-statistics-page .statistics-kpi-card > strong {
-    font-size: 23px;
+    font-size: 24px;
   }
 
   .admin-statistics-page .statistics-kpi-card > small {
-    font-size: 8.5px;
+    font-size: 9px;
   }
 
   .admin-statistics-page .statistics-kpi-progress {
@@ -366,11 +366,11 @@
   }
 
   .admin-statistics-page .statistics-seat-copy strong {
-    font-size: 10px;
+    font-size: 10.5px;
   }
 
   .admin-statistics-page .statistics-seat-copy small {
-    font-size: 8px;
+    font-size: 8.5px;
   }
 
   .admin-statistics-page .statistics-seat-sidebar nav > button > b {
@@ -428,7 +428,7 @@
   }
 
   .admin-statistics-page .statistics-seat-metrics > article > span {
-    font-size: 9px;
+    font-size: 9.5px;
   }
 
   .admin-statistics-page .statistics-seat-metrics strong {
@@ -436,7 +436,7 @@
   }
 
   .admin-statistics-page .statistics-seat-metrics small {
-    font-size: 8px;
+    font-size: 8.5px;
   }
 
   .admin-statistics-page .statistics-trend-card {
@@ -464,7 +464,7 @@
     .statistics-trend-card
     > header
     span:not(.statistics-panel-kicker) {
-    font-size: 8px;
+    font-size: 8.5px;
   }
 
   .admin-statistics-page .statistics-chart-wrap,
@@ -549,6 +549,18 @@
 
   .admin-statistics-page .statistics-day-grid > div.has-value {
     background: #f8f7ff;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div[data-intensity='2'] {
+    background: #f2f0ff;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div[data-intensity='3'] {
+    background: #e9e6ff;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div[data-intensity='4'] {
+    background: #ddd9ff;
   }
 
   .admin-statistics-page .statistics-day-grid span {
