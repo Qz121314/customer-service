@@ -1,6 +1,6 @@
-/* Fluid layout guardrails for the admin traffic statistics page.
- * This layer owns geometry only: every statistics region must fit the available
- * admin content width without requiring horizontal scrolling.
+/* Fluid geometry for the admin traffic statistics page.
+ * The desktop regime behaves like a single-screen operations workspace while
+ * narrower layouts keep the existing natural document flow for usability.
  */
 
 .admin-statistics-page,
@@ -168,8 +168,8 @@
   }
 }
 
-/* Existing viewport breakpoints used horizontal seat navigation. Override them
- * explicitly so narrow layouts always reflow instead of becoming swipe rows. */
+/* Existing viewport breakpoints used horizontal seat navigation. Keep narrow
+ * layouts reflowed instead of turning the ranking into a swipe row. */
 @media (max-width: 1050px) {
   .admin-statistics-page .statistics-seat-sidebar nav {
     max-height: none;
@@ -195,5 +195,378 @@
 @media (max-width: 430px) {
   .admin-statistics-page .statistics-seat-sidebar nav {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Desktop single-screen workspace.
+ * At normal desktop sizes the page itself never needs vertical scrolling: the
+ * title, month control, four KPIs, seat ranking, trend and exact daily ledger
+ * all share the available viewport height. Large agent lists may scroll only
+ * inside the ranking rail, without moving the page shell.
+ */
+@media (min-width: 1280px) and (min-height: 720px) {
+  .admin-content:has(.admin-statistics-page) {
+    box-sizing: border-box;
+    height: 100dvh;
+    min-height: 0;
+    padding-top: 18px;
+    padding-bottom: 18px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head {
+    min-height: 46px;
+    margin-bottom: 8px;
+    flex: 0 0 auto;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head h1 {
+    font-size: 22px;
+  }
+
+  .admin-content:has(.admin-statistics-page) .admin-content-head p {
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .admin-content:has(.admin-statistics-page) > .notice {
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+  }
+
+  .admin-statistics-page {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .admin-statistics-page > .notice {
+    margin-bottom: 6px;
+    flex: 0 0 auto;
+  }
+
+  .admin-statistics-workspace {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 58px 78px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .admin-statistics-page .statistics-hero {
+    height: 58px;
+    min-height: 0;
+    padding: 9px 12px 9px 15px;
+    border-radius: 12px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy {
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy > strong {
+    font-size: 15px;
+  }
+
+  .admin-statistics-page .statistics-hero-copy > span:last-child {
+    font-size: 9px;
+    line-height: 1.35;
+  }
+
+  .admin-statistics-page .statistics-period-control {
+    min-width: 156px;
+    padding: 5px 7px 5px 9px;
+    border-radius: 9px;
+    gap: 6px !important;
+  }
+
+  .admin-statistics-page .statistics-period-control input {
+    min-height: 27px;
+  }
+
+  .admin-statistics-page .statistics-global-summary {
+    height: 78px;
+    min-height: 0;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card {
+    height: 78px;
+    min-height: 0;
+    padding: 9px 12px 8px;
+    border-radius: 11px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card::after {
+    width: 42px;
+    height: 42px;
+    border-radius: 0 0 0 42px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > strong {
+    font-size: 23px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card > small {
+    font-size: 7px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-coverage {
+    padding-bottom: 8px;
+  }
+
+  .admin-statistics-page .statistics-kpi-card.is-coverage > small {
+    padding-bottom: 5px;
+  }
+
+  .admin-statistics-page .statistics-kpi-progress {
+    right: 12px;
+    bottom: 7px;
+    left: 12px;
+    height: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-layout {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar {
+    min-height: 0;
+    display: grid;
+    grid-template-rows: 54px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header {
+    height: 54px;
+    min-height: 0;
+    padding: 8px 10px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar > header strong {
+    font-size: 12px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar nav {
+    min-height: 0;
+    max-height: none;
+    padding: 6px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    gap: 3px;
+    scrollbar-width: thin;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar button {
+    min-height: 54px;
+    padding: 6px 7px 6px 6px;
+    border-radius: 8px;
+    grid-template-columns: 18px auto minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .admin-statistics-page .statistics-seat-sidebar .avatar.tiny {
+    width: 27px;
+    height: 27px;
+    border-radius: 7px;
+  }
+
+  .admin-statistics-page .statistics-seat-detail {
+    min-height: 0;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 54px 76px minmax(0, 1fr) 50px;
+  }
+
+  .admin-statistics-page .statistics-seat-head {
+    height: 54px;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity {
+    gap: 8px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+  }
+
+  .admin-statistics-page .statistics-agent-identity strong {
+    font-size: 12px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics {
+    height: auto;
+    margin: 7px 8px 6px;
+    width: calc(100% - 16px);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics > article {
+    min-height: 0;
+    padding: 8px 10px;
+    border-radius: 9px;
+    gap: 2px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics strong {
+    font-size: 18px;
+  }
+
+  .admin-statistics-page .statistics-seat-metrics small {
+    font-size: 7px;
+  }
+
+  .admin-statistics-page .statistics-trend-card {
+    min-height: 0;
+    margin: 0 8px 6px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 44px minmax(0, 1fr);
+  }
+
+  .admin-statistics-page .statistics-trend-card > header {
+    height: 44px;
+    min-height: 0;
+    padding: 7px 10px;
+  }
+
+  .admin-statistics-page .statistics-trend-card > header strong {
+    font-size: 10px;
+  }
+
+  .admin-statistics-page .statistics-chart-wrap {
+    height: auto;
+    min-height: 0;
+    padding: 4px 8px 2px;
+  }
+
+  .admin-statistics-page .statistics-day-section {
+    height: 42px;
+    min-height: 0;
+    margin: 0 8px 8px;
+    display: grid;
+    grid-template-columns: 118px minmax(0, 1fr);
+    overflow: hidden;
+    border-radius: 9px;
+  }
+
+  .admin-statistics-page .statistics-day-section > header {
+    height: 100%;
+    min-height: 0;
+    padding: 5px 8px;
+    border-right: 1px solid #e8e9ed;
+    border-bottom: 0;
+    align-items: center;
+  }
+
+  .admin-statistics-page .statistics-day-section > header strong {
+    font-size: 9px;
+  }
+
+  .admin-statistics-page
+    .statistics-day-section
+    > header
+    > div
+    > span:last-child,
+  .admin-statistics-page .statistics-day-section > header > small {
+    display: none;
+  }
+
+  .admin-statistics-page .statistics-day-grid {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: repeat(31, minmax(0, 1fr));
+    overflow: hidden;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div {
+    height: 100%;
+    min-height: 0;
+    padding: 2px 1px;
+    border: 0;
+    border-right: 1px solid #eef0f3;
+    background: #fff;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    text-align: center;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div:nth-child(7n) {
+    border-right: 1px solid #eef0f3;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div:last-child {
+    border-right: 0;
+  }
+
+  .admin-statistics-page .statistics-day-grid > div.has-value {
+    background: #f8f7ff;
+  }
+
+  .admin-statistics-page .statistics-day-grid span {
+    font-size: 6px;
+    line-height: 1;
+  }
+
+  .admin-statistics-page .statistics-day-grid strong {
+    font-size: 8px;
+    line-height: 1;
+  }
+
+  .admin-statistics-page .statistics-footnote {
+    position: absolute;
+    top: 11px;
+    right: 173px;
+    z-index: 20;
+    width: auto;
+    margin: 0;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+  }
+
+  .admin-statistics-page .statistics-footnote summary {
+    min-height: 30px;
+    padding: 0 9px;
+    border: 1px solid #e1e4e9;
+    border-radius: 8px;
+    background: rgb(255 255 255 / 88%);
+    color: #777e89;
+    font-size: 8px;
+    box-shadow: 0 1px 2px rgb(16 24 40 / 2%);
+  }
+
+  .admin-statistics-page .statistics-footnote p {
+    position: absolute;
+    top: 35px;
+    right: 0;
+    width: 340px;
+    max-width: min(340px, calc(100vw - 40px));
+    padding: 10px 11px;
+    border: 1px solid #e1e4e9;
+    border-radius: 9px;
+    background: #fff;
+    color: #727985;
+    font-size: 8px;
+    line-height: 1.55;
+    box-shadow: 0 12px 32px rgb(16 24 40 / 10%);
   }
 }
