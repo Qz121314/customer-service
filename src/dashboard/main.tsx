@@ -42,6 +42,7 @@ async function loadAdminStyles() {
   await import('./admin-scroll-ownership.css');
   await import('./admin-viewport-geometry.css');
   await import('./commercial-polish.css');
+  await import('./admin-design-system.css');
 }
 
 async function loadRouteStyles() {
