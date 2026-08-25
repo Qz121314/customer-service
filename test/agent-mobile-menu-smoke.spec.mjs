@@ -82,12 +82,13 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   const settingsGeometry = await settingsPage.evaluate((element) => {
     const cards = [...element.querySelectorAll('.mobile-agent-settings-card')];
     const rect = element.getBoundingClientRect();
+    const view = element.ownerDocument.defaultView;
     return {
       width: rect.width,
       height: rect.height,
       cardCount: cards.length,
       cardRadii: cards.map((card) =>
-        Number.parseFloat(getComputedStyle(card).borderRadius),
+        Number.parseFloat(view?.getComputedStyle(card).borderRadius ?? '0'),
       ),
     };
   });
