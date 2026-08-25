@@ -1,35 +1,20 @@
 /* Final visual owner for the agent workspace.
- * Layout geometry remains in agent-desktop.css / agent-mobile.css and feature
- * files. Keep this layer scoped to .workspace-shell and focused on finish,
- * hierarchy, states, motion and surface quality.
+ * Geometry stays in agent-desktop.css / agent-mobile.css and feature CSS.
+ * This layer owns only tokens, surfaces, borders, shadows, states and motion.
  */
 
 .workspace-shell {
   --cs-accent: #625bdd;
   --cs-accent-strong: #514ac8;
-  --cs-accent-deep: #4540b7;
   --cs-accent-soft: #f1f0ff;
-  --cs-accent-softer: #f7f6ff;
   --cs-ink: #1a1f28;
-  --cs-ink-soft: #353c48;
   --cs-muted: #747d8b;
-  --cs-muted-soft: #9299a4;
   --cs-line: #e1e5eb;
   --cs-line-strong: #d4dae3;
-  --cs-canvas: #f2f4f7;
-  --cs-panel: #fff;
   --cs-panel-soft: #f8f9fb;
-  --cs-success: #2e9a6a;
-  --cs-warning: #a96d20;
-  --cs-danger: #b34c4c;
-  --cs-radius-control: 10px;
-  --cs-radius-card: 16px;
-  --cs-radius-shell: 24px;
   --cs-shadow-xs: 0 1px 2px rgb(15 23 42 / 4%);
   --cs-shadow-sm:
     0 1px 2px rgb(15 23 42 / 4%), 0 8px 24px rgb(15 23 42 / 4%);
-  --cs-shadow-card:
-    0 1px 2px rgb(15 23 42 / 4%), 0 16px 38px rgb(15 23 42 / 5%);
   --cs-shadow-focus: 0 0 0 3px rgb(98 91 221 / 11%);
   --agent-accent: var(--cs-accent);
   --agent-accent-strong: var(--cs-accent-strong);
@@ -72,18 +57,6 @@
   background-color: var(--cs-accent);
 }
 
-.workspace-shell .empty-state,
-.workspace-shell .thread-empty {
-  color: var(--cs-muted);
-}
-
-.workspace-shell .empty-state strong,
-.workspace-shell .thread-empty strong {
-  color: var(--cs-ink-soft);
-  font-weight: 760;
-  letter-spacing: -0.01em;
-}
-
 .workspace-shell .conversation-list,
 .workspace-shell .messages,
 .workspace-shell .transfer-menu-panel {
@@ -96,12 +69,6 @@
 .workspace-shell .transfer-menu-panel::-webkit-scrollbar {
   width: 8px;
   height: 8px;
-}
-
-.workspace-shell .conversation-list::-webkit-scrollbar-track,
-.workspace-shell .messages::-webkit-scrollbar-track,
-.workspace-shell .transfer-menu-panel::-webkit-scrollbar-track {
-  background: transparent;
 }
 
 .workspace-shell .conversation-list::-webkit-scrollbar-thumb,
@@ -129,57 +96,36 @@
   }
 
   .workspace-shell {
-    position: relative;
     border-color: #d5dae3;
-    border-radius: var(--cs-radius-shell);
-    background: #fff;
+    border-radius: 24px;
     box-shadow:
       0 34px 90px rgb(26 34 51 / 16%),
       0 8px 28px rgb(26 34 51 / 7%),
       0 1px 2px rgb(26 34 51 / 8%);
   }
 
-  .workspace-shell::after {
-    position: absolute;
-    inset: 0;
-    z-index: 100;
-    border: 1px solid rgb(255 255 255 / 56%);
-    border-radius: inherit;
-    pointer-events: none;
-    content: '';
-  }
-
   .workspace-shell .workspace-sidebar {
     border-right-color: rgb(255 255 255 / 6%);
     background:
       radial-gradient(circle at 50% 0%, rgb(101 93 224 / 18%), transparent 27%),
-      linear-gradient(180deg, rgb(255 255 255 / 1.5%), transparent 26%),
       #17191f;
-  }
-
-  .workspace-shell .workspace-brand-lockup,
-  .workspace-shell .agent-profile {
-    border-color: rgb(255 255 255 / 7%);
   }
 
   .workspace-shell .workspace-brand {
     border: 1px solid rgb(164 157 255 / 34%);
-    background: linear-gradient(145deg, #756ee9 0%, #5d56d5 55%, #4f49c1 100%);
+    background: linear-gradient(145deg, #756ee9 0%, #5d56d5 58%, #4f49c1 100%);
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 24%),
+      inset 0 1px 0 rgb(255 255 255 / 22%),
       0 9px 24px rgb(72 64 190 / 26%);
   }
 
   .workspace-shell .agent-profile .avatar {
     border: 1px solid rgb(255 255 255 / 8%);
     background: linear-gradient(145deg, #363b45, #282c34);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 6%),
-      0 7px 16px rgb(0 0 0 / 16%);
+    box-shadow: 0 7px 16px rgb(0 0 0 / 16%);
   }
 
-  .workspace-shell .workspace-sidebar .ghost-button,
-  .workspace-shell .workspace-sidebar .ghost-button.full {
+  .workspace-shell .workspace-sidebar .ghost-button {
     transition:
       border-color 140ms ease,
       background-color 140ms ease,
@@ -203,64 +149,77 @@
     border-color: rgb(88 211 154 / 10%);
     background: rgb(68 201 142 / 13%);
     color: #7be0b2;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
-  }
-
-  .workspace-shell .conversation-pane {
-    border-right-color: #dfe3e9;
-    background: #fff;
   }
 
   .workspace-shell .conversation-head,
   .workspace-shell .thread-head {
     border-bottom-color: #e3e6eb;
     background: rgb(255 255 255 / 95%);
+    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
     backdrop-filter: blur(16px) saturate(1.04);
   }
 
-  .workspace-shell .conversation-head h1 {
-    color: #171b22;
+  .workspace-shell .conversation-head h1,
+  .workspace-shell .thread-head h2 {
+    color: #191d25;
     font-weight: 790;
-    letter-spacing: -0.035em;
+    letter-spacing: -0.025em;
   }
 
-  .workspace-shell .unread-total {
+  .workspace-shell .unread-total,
+  .workspace-shell .unread-badge {
     box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 18%),
-      0 3px 8px rgb(82 75 196 / 17%);
+      inset 0 1px 0 rgb(255 255 255 / 16%),
+      0 3px 8px rgb(82 75 196 / 16%);
   }
 
-  .workspace-shell .availability-pill {
-    border-color: #dfe4e9;
-    background: #f9fafb;
-    box-shadow: inset 0 1px 0 #fff;
-    transition:
-      border-color 140ms ease,
-      background-color 140ms ease,
-      box-shadow 140ms ease,
-      transform 140ms ease;
-  }
-
-  .workspace-shell .availability-pill:hover:not(:disabled) {
-    border-color: #cfd5de;
+  .workspace-shell .availability-pill,
+  .workspace-shell .unread-first-toggle,
+  .workspace-shell .thread-status-action,
+  .workspace-shell .transfer-menu > summary {
+    border-color: #dce1e7;
     background: #fff;
     box-shadow: var(--cs-shadow-xs);
+  }
+
+  .workspace-shell .availability-pill,
+  .workspace-shell .unread-first-toggle,
+  .workspace-shell .thread-status-action,
+  .workspace-shell .transfer-menu > summary,
+  .workspace-shell .conversation-context-card > a {
+    transition:
+      border-color 130ms ease,
+      background-color 130ms ease,
+      color 130ms ease,
+      box-shadow 130ms ease,
+      transform 130ms ease;
+  }
+
+  .workspace-shell .availability-pill:hover:not(:disabled),
+  .workspace-shell .unread-first-toggle:hover,
+  .workspace-shell .thread-status-action:hover:not(:disabled),
+  .workspace-shell .transfer-menu > summary:hover,
+  .workspace-shell .transfer-menu[open] > summary {
+    border-color: #d5d1ff;
+    background: #f5f3ff;
+    color: #4741bd;
+    box-shadow: 0 2px 7px rgb(72 64 190 / 8%);
     transform: translateY(-1px);
   }
 
-  .workspace-shell .connection-status {
-    color: #747d8a;
+  .workspace-shell .availability-pill:active:not(:disabled),
+  .workspace-shell .unread-first-toggle:active,
+  .workspace-shell .thread-status-action:active:not(:disabled),
+  .workspace-shell .transfer-menu > summary:active {
+    transform: translateY(0);
   }
 
   .workspace-shell .filters {
-    gap: 3px;
     border-bottom-color: #e9ecf0;
     background: #fafbfc;
   }
 
   .workspace-shell .filter {
-    border-radius: 9px;
-    color: #68717e;
     transition:
       color 130ms ease,
       background-color 130ms ease,
@@ -274,18 +233,15 @@
     box-shadow: var(--cs-shadow-xs);
   }
 
-  .workspace-shell .filter.active {
+  .workspace-shell .filter.active,
+  .workspace-shell .unread-first-toggle.is-active {
     border-color: #dddafe;
-    background: #f0efff;
+    background: #f1efff;
     color: #4741bd;
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 70%),
-      0 1px 2px rgb(65 58 177 / 6%);
   }
 
   .workspace-shell .inbox-tools {
     border-bottom-color: #e7eaee;
-    background: #fff;
   }
 
   .workspace-shell .inbox-search {
@@ -309,41 +265,13 @@
     box-shadow: var(--cs-shadow-focus);
   }
 
-  .workspace-shell .unread-first-toggle {
-    border-color: #e0e4e9;
-    background: #fff;
-    color: #59626f;
-    box-shadow: var(--cs-shadow-xs);
-    transition:
-      border-color 140ms ease,
-      background-color 140ms ease,
-      color 140ms ease,
-      box-shadow 140ms ease,
-      transform 140ms ease;
-  }
-
-  .workspace-shell .unread-first-toggle:hover {
-    border-color: #d3d7df;
-    background: #fafbfc;
-    transform: translateY(-1px);
-  }
-
-  .workspace-shell .unread-first-toggle.is-active {
-    border-color: #dddafe;
-    background: #f2f0ff;
-    color: #4741bd;
-    box-shadow: 0 1px 3px rgb(72 64 190 / 8%);
-  }
-
   .workspace-shell .conversation-list {
     padding-block: 4px 8px;
-    background: #fff;
   }
 
   .workspace-shell .conversation-row {
     width: calc(100% - 12px);
     margin: 2px 6px;
-    padding-inline: 10px;
     border: 1px solid transparent;
     border-radius: 13px;
     background: transparent;
@@ -351,8 +279,7 @@
     transition:
       border-color 130ms ease,
       background-color 130ms ease,
-      box-shadow 130ms ease,
-      transform 130ms ease;
+      box-shadow 130ms ease;
   }
 
   .workspace-shell .conversation-row:hover {
@@ -375,102 +302,24 @@
     box-shadow: inset 2px 0 0 rgb(98 91 221 / 68%);
   }
 
-  .workspace-shell .conversation-row .avatar.small {
-    border: 1px solid #e1e5ea;
-    background: linear-gradient(145deg, #f4f3ff 0%, #eae9fa 100%);
-    color: #5751ba;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 80%);
+  .workspace-shell .conversation-row .avatar.small,
+  .workspace-shell .thread-head-avatar {
+    border: 1px solid #e0e3eb;
+    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
+    color: #5953b8;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 86%);
   }
 
-  .workspace-shell .conversation-copy strong {
-    color: #232832;
-    font-weight: 750;
-  }
-
-  .workspace-shell .conversation-copy time {
-    color: #8b929d;
-  }
-
-  .workspace-shell .conversation-copy small {
-    color: #747d89;
-  }
-
-  .workspace-shell .conversation-copy p {
-    color: #5d6673;
-  }
-
-  .workspace-shell .conversation-status {
-    border-width: 1px;
-    font-weight: 760;
-  }
-
-  .workspace-shell .unread-badge {
-    box-shadow: 0 2px 6px rgb(79 72 191 / 16%);
+  .workspace-shell .conversation-copy time,
+  .workspace-shell .conversation-expiry,
+  .workspace-shell .message-meta {
+    color: #858e9a;
   }
 
   .workspace-shell .thread-pane {
     background:
       radial-gradient(circle at 86% 0%, rgb(100 92 219 / 3.5%), transparent 31%),
       #f5f6f8;
-  }
-
-  .workspace-shell .thread-head {
-    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
-  }
-
-  .workspace-shell .thread-head-avatar {
-    border-color: #dddfea;
-    border-radius: 12px;
-    color: #5e59b9;
-    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 90%),
-      0 2px 6px rgb(31 41 55 / 5%);
-  }
-
-  .workspace-shell .thread-head h2 {
-    color: #191d25;
-    font-weight: 790;
-    letter-spacing: -0.025em;
-  }
-
-  .workspace-shell .conversation-expiry {
-    color: #838b96;
-  }
-
-  .workspace-shell .thread-status-action,
-  .workspace-shell .transfer-menu > summary {
-    border-color: #d8dde5;
-    background: #fff;
-    color: #3a424e;
-    box-shadow: var(--cs-shadow-xs);
-    transition:
-      border-color 130ms ease,
-      background-color 130ms ease,
-      color 130ms ease,
-      box-shadow 130ms ease,
-      transform 130ms ease;
-  }
-
-  .workspace-shell .thread-status-action:hover:not(:disabled),
-  .workspace-shell .transfer-menu > summary:hover,
-  .workspace-shell .transfer-menu[open] > summary {
-    border-color: #d5d1ff;
-    background: #f3f1ff;
-    color: #4741bd;
-    box-shadow: 0 2px 7px rgb(72 64 190 / 8%);
-    transform: translateY(-1px);
-  }
-
-  .workspace-shell .thread-status-action:active:not(:disabled),
-  .workspace-shell .transfer-menu > summary:active {
-    transform: translateY(0);
-  }
-
-  .workspace-shell .thread-status-action.is-pending {
-    border-color: #eadada;
-    background: #fffafa;
-    color: #a34e4e;
   }
 
   .workspace-shell .transfer-menu-panel {
@@ -483,16 +332,6 @@
       0 22px 54px rgb(15 23 42 / 16%),
       0 3px 10px rgb(15 23 42 / 7%);
     backdrop-filter: blur(18px);
-  }
-
-  .workspace-shell .transfer-menu-panel header {
-    background: #fafbfc;
-  }
-
-  .workspace-shell .transfer-menu-panel button {
-    transition:
-      color 120ms ease,
-      background-color 120ms ease;
   }
 
   .workspace-shell .transfer-menu-panel button:hover:not(:disabled) {
@@ -510,30 +349,10 @@
     backdrop-filter: blur(12px);
   }
 
-  .workspace-shell .conversation-context-card > img,
-  .workspace-shell .conversation-context-placeholder {
-    border: 1px solid #e2e5ea;
-    background: #f0f2f5;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 74%);
-  }
-
-  .workspace-shell .conversation-context-card > div > strong {
-    color: #282e38;
-    font-weight: 760;
-  }
-
-  .workspace-shell .conversation-context-card > div > small {
-    color: #7a838f;
-  }
-
   .workspace-shell .conversation-context-card > a {
     border: 1px solid #e1defd;
     background: #f7f6ff;
     color: #514ac8;
-    transition:
-      border-color 130ms ease,
-      background-color 130ms ease,
-      transform 130ms ease;
   }
 
   .workspace-shell .conversation-context-card > a:hover {
@@ -549,7 +368,7 @@
   }
 
   .workspace-shell .message > div {
-    border: 1px solid #e2e5ea;
+    border-color: #e1e5ea;
     border-radius: 15px;
     background: #fff;
     box-shadow:
@@ -558,9 +377,7 @@
   }
 
   .workspace-shell .message.visitor > div {
-    border-color: #e0e4e9;
     border-bottom-left-radius: 6px;
-    background: #fff;
   }
 
   .workspace-shell .message.mine > div {
@@ -570,14 +387,6 @@
     box-shadow:
       0 1px 2px rgb(73 66 184 / 4%),
       0 5px 14px rgb(73 66 184 / 4%);
-  }
-
-  .workspace-shell .message.mine p {
-    color: #27263c;
-  }
-
-  .workspace-shell .message-meta {
-    color: #8b929d;
   }
 
   .workspace-shell .visitor-typing {
@@ -598,14 +407,9 @@
 
   .workspace-shell .composer > textarea {
     border-color: #d5dae2;
-    background: #fff;
     box-shadow:
       inset 0 1px 2px rgb(15 23 42 / 2%),
       0 1px 2px rgb(15 23 42 / 2%);
-  }
-
-  .workspace-shell .composer > textarea:hover:not(:disabled) {
-    border-color: #c7cdd6;
   }
 
   .workspace-shell .composer > textarea:focus {
@@ -638,50 +442,16 @@
 
   .workspace-shell .composer-foot .primary-button:hover:not(:disabled) {
     background: linear-gradient(180deg, #625bdc 0%, #5049c2 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 18%),
-      0 9px 22px rgb(76 69 188 / 26%);
-  }
-
-  .workspace-shell .composer-foot .primary-button:disabled {
-    border-color: #cfd4dc;
-    background: #cfd4dc;
-    box-shadow: none;
-  }
-
-  .workspace-shell .notice.error.floating {
-    border: 1px solid #efcaca;
-    border-radius: 12px;
-    background: rgb(255 248 248 / 97%);
-    color: #a94444;
-    box-shadow: 0 10px 30px rgb(106 52 52 / 11%);
-    backdrop-filter: blur(10px);
   }
 }
 
 @media (max-width: 760px) {
-  .workspace-shell {
-    background: #fff;
-  }
-
-  .workspace-shell .conversation-pane,
-  .workspace-shell .thread-pane {
-    background: #fff;
-  }
-
   .workspace-shell .conversation-head,
   .workspace-shell .thread-head {
     border-bottom-color: #e8ebef;
     background: rgb(255 255 255 / 96%);
     box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
-    backdrop-filter: blur(14px) saturate(1.04);
-  }
-
-  .workspace-shell .conversation-row {
-    border-color: transparent;
-    transition:
-      background-color 120ms ease,
-      box-shadow 120ms ease;
+    backdrop-filter: blur(14px);
   }
 
   .workspace-shell .conversation-row.selected {
@@ -694,71 +464,20 @@
     box-shadow: inset 2px 0 0 rgb(98 91 221 / 58%);
   }
 
-  .workspace-shell .conversation-row .avatar.small {
-    border: 1px solid #e5e7ee;
-    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
-    color: #5751ba;
-  }
-
-  .workspace-shell .inbox-search {
-    border-color: #e2e5ea;
-    background: #f7f8fa;
-  }
-
-  .workspace-shell .inbox-search:focus-within {
-    border-color: rgb(98 91 221 / 44%);
-    background: #fff;
-    box-shadow: var(--cs-shadow-focus);
-  }
-
-  .workspace-shell .unread-first-toggle.is-active,
-  .workspace-shell .filter.active {
-    border-color: #dddafe;
-    background: #f1efff;
-    color: #4943bc;
-  }
-
+  .workspace-shell .conversation-row .avatar.small,
   .workspace-shell .thread-head-avatar {
-    border: 1px solid #e0e2ec;
-    background: linear-gradient(145deg, #f4f3ff, #ebeafa);
-    color: #5b55b8;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 82%);
-  }
-
-  .workspace-shell .thread-status-action,
-  .workspace-shell .transfer-menu > summary {
-    border-color: #dce0e6;
-    background: #fff;
-    box-shadow: var(--cs-shadow-xs);
-  }
-
-  .workspace-shell .conversation-context-card {
-    border-color: #e1e5ea;
-    background: #fff;
-    box-shadow: 0 4px 14px rgb(15 23 42 / 4%);
+    border: 1px solid #e2e4ec;
+    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
+    color: #5953b8;
   }
 
   .workspace-shell .messages {
     background: linear-gradient(180deg, #f8f9fb 0%, #f5f6f8 100%);
   }
 
-  .workspace-shell .message > div {
-    border-color: #e4e7ec;
-    background: #fff;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 3.5%);
-  }
-
   .workspace-shell .message.mine > div {
     border-color: #dddafe;
     background: linear-gradient(145deg, #f1f0ff 0%, #eceaff 100%);
-  }
-
-  .workspace-shell .visitor-typing {
-    border: 1px solid #e3e6eb;
-    border-radius: 999px;
-    background: rgb(255 255 255 / 90%);
-    color: #747d89;
-    box-shadow: var(--cs-shadow-xs);
   }
 
   .workspace-shell .composer {
@@ -768,24 +487,20 @@
     backdrop-filter: blur(12px);
   }
 
-  .workspace-shell .composer > textarea {
-    border-color: #dce0e6;
-    background: #fff;
-    box-shadow: inset 0 1px 2px rgb(15 23 42 / 2%);
-  }
-
-  .workspace-shell .composer > textarea:focus {
+  .workspace-shell .composer > textarea:focus,
+  .workspace-shell .inbox-search:focus-within {
     border-color: rgb(98 91 221 / 44%);
     box-shadow: var(--cs-shadow-focus);
   }
 
-  .workspace-shell .media-picker {
-    color: #5f6875;
-    background: #fff;
+  .workspace-shell .filter.active,
+  .workspace-shell .unread-first-toggle.is-active {
+    border-color: #dddafe;
+    background: #f1efff;
+    color: #4943bc;
   }
 
   .workspace-shell .composer-foot .primary-button {
-    border-color: rgb(73 67 184 / 22%);
     background: linear-gradient(180deg, #6962e1 0%, #5851ce 100%);
     box-shadow:
       inset 0 1px 0 rgb(255 255 255 / 16%),
