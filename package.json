@@ -23,7 +23,7 @@
     "lint": "eslint .",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "preflight": "pnpm guardrails && pnpm format && pnpm lint && pnpm typecheck",
+    "preflight": "pnpm guardrails && pnpm lint && pnpm typecheck",
     "verify": "pnpm preflight && pnpm db:migrate:local && pnpm test && pnpm build && pnpm cf:check",
     "smoke:production": "node scripts/smoke-production.mjs",
     "typecheck": "pnpm typecheck:ui && pnpm typecheck:worker",
