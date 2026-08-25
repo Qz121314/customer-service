@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { AgentRoutingScope, ProductCatalogItem } from './api';
+import { UiIcon } from './icons';
 
 type Props = {
   products: ProductCatalogItem[];
@@ -313,7 +314,9 @@ export function ProductAssignmentPicker({
                   <strong>{section.name}</strong>
                   <small>{section.count} 个产品</small>
                 </span>
-                <i aria-hidden="true">✓</i>
+                <i aria-hidden="true">
+                  <UiIcon name="check" />
+                </i>
               </label>
             ))}
           </div>

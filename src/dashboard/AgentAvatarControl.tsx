@@ -9,6 +9,7 @@ import {
   prepareAgentAvatar,
   type PreparedAgentAvatar,
 } from './agent-avatar-image';
+import { UiIcon } from './icons';
 
 export function AgentAvatarControl({
   agentId,
@@ -146,7 +147,7 @@ export function AgentAvatarControl({
             disabled={saving || processing}
             onClick={closeDialog}
           >
-            ×
+            <UiIcon name="close" />
           </button>
         </header>
 
@@ -180,6 +181,7 @@ export function AgentAvatarControl({
             disabled={saving || processing}
             onClick={() => inputRef.current?.click()}
           >
+            <UiIcon name="image-plus" />
             {prepared || avatarUrl ? '更换照片' : '选择照片'}
           </button>
           <input
@@ -238,7 +240,9 @@ export function AgentAvatarControl({
         onClick={() => setOpen(true)}
       >
         {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{initials}</span>}
-        <i aria-hidden="true" />
+        <i aria-hidden="true">
+          <UiIcon name="plus" />
+        </i>
       </button>
       {dialog ? createPortal(dialog, document.body) : null}
     </>

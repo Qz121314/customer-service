@@ -7,6 +7,7 @@ import type {
 import type { AgentDraft } from './dashboard-runtime';
 import { relativeTime } from './dashboard-runtime';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
+import { UiIcon } from './icons';
 
 export function AgentEditorModal({
   draft,
@@ -67,7 +68,7 @@ export function AgentEditorModal({
             disabled={saving}
             onClick={() => !saving && onClose()}
           >
-            ×
+            <UiIcon name="close" />
           </button>
         </header>
 

@@ -49,9 +49,12 @@
   background: rgb(15 23 42 / 6%);
   color: #475569;
   font: inherit;
-  font-size: 24px;
-  line-height: 1;
   cursor: pointer;
+}
+
+.agent-auto-reply-close .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .agent-auto-reply-close:hover:not(:disabled) {

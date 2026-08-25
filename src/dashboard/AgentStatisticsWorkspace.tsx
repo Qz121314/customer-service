@@ -7,6 +7,7 @@ import {
 import { isAgentNotificationOpenMessage } from './agent-push';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { MonthPicker } from './MonthPicker';
+import { UiIcon } from './icons';
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
 
@@ -95,7 +96,7 @@ export function AgentStatisticsModal({
               aria-label="关闭接待流量"
               onClick={onClose}
             >
-              ×
+              <UiIcon name="close" />
             </button>
           </div>
         </header>

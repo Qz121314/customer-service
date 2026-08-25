@@ -50,6 +50,7 @@ body {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
+  overflow: visible;
 }
 
 button:focus-visible,
@@ -265,9 +266,17 @@ select:focus-visible {
 }
 
 .admin-content-head .primary-button {
+  display: inline-flex;
   min-height: 40px;
+  align-items: center;
+  gap: 7px;
   padding-inline: 18px;
   border-radius: 8px;
+}
+
+.admin-content-head .primary-button .ui-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .admin-stats {

@@ -373,9 +373,17 @@
   }
 
   .workspace-shell .transfer-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     border-color: #cfd5de;
     background: #fff;
     color: #28313e;
+  }
+
+  .workspace-shell .transfer-menu > summary .ui-icon {
+    width: 15px;
+    height: 15px;
   }
 
   .workspace-shell .transfer-menu > summary:hover,
@@ -420,12 +428,18 @@
     padding-left: 46px;
   }
 
-  .workspace-shell .thread-head-copy::before {
+  .workspace-shell .thread-head-avatar {
     width: 38px;
     height: 38px;
     border: 1px solid #d9dfe7;
+    color: #687384;
     background-color: #eef1f5;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  }
+
+  .workspace-shell .thread-head-avatar .ui-icon {
+    width: 18px;
+    height: 18px;
   }
 
   .workspace-shell .thread-head h2 {
@@ -595,9 +609,6 @@
 
   .workspace-shell .delivery-mark {
     color: #747d8a;
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: -0.12em;
   }
 
   .workspace-shell .delivery-mark.is-read {

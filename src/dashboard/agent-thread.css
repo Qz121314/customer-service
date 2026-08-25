@@ -21,7 +21,7 @@
     padding-left: 44px;
   }
 
-  .workspace-shell .thread-head-copy::before {
+  .workspace-shell .thread-head-avatar {
     width: 36px;
     height: 36px;
   }
@@ -196,7 +196,7 @@
     padding-left: 35px;
   }
 
-  .workspace-shell .thread-head-copy::before {
+  .workspace-shell .thread-head-avatar {
     width: 30px;
     height: 30px;
     border-radius: 9px;

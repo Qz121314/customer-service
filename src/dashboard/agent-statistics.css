@@ -228,6 +228,11 @@
     border-radius: 10px;
   }
 
+  .agent-statistics-head-actions .modal-close .ui-icon {
+    width: 17px;
+    height: 17px;
+  }
+
   .agent-statistics-dialog-body {
     display: grid;
     min-height: 0;
