@@ -65,6 +65,7 @@ import {
   prepareAgentNotifications,
   type AgentNotificationState,
 } from './agent-push';
+import { UiIcon } from './icons';
 
 export function AgentPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -1293,9 +1294,12 @@ function AgentWorkspace({
                 aria-label="返回会话列表"
                 onClick={() => setSelectedId(null)}
               >
-                ‹
+                <UiIcon name="back" />
               </button>
               <div className="thread-head-copy">
+                <span className="thread-head-avatar" aria-hidden="true">
+                  <UiIcon name="user" />
+                </span>
                 <span className="eyebrow">当前访客</span>
                 <h2>{String(detail.conversation.visitor_name || '访客')}</h2>
                 <p>
@@ -1341,7 +1345,10 @@ function AgentWorkspace({
                 </button>
                 {detail.conversation.status !== 'closed' && (
                   <details className="transfer-menu">
-                    <summary>转接</summary>
+                    <summary>
+                      <UiIcon name="transfer" />
+                      <span>转接</span>
+                    </summary>
                     <div className="transfer-menu-panel">
                       <header>
                         <strong>转接会话</strong>
@@ -1408,7 +1415,8 @@ function AgentWorkspace({
                     target="_blank"
                     rel="noreferrer"
                   >
-                    查看商品 ↗
+                    查看商品
+                    <UiIcon name="external" />
                   </a>
                 )}
               </div>
@@ -1517,7 +1525,7 @@ function AgentWorkspace({
             <form className="composer" onSubmit={(event) => void submit(event)}>
               <div className="composer-tools">
                 <label className="media-picker" aria-label="发送图片">
-                  ＋
+                  <UiIcon name="image-plus" />
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
@@ -1580,7 +1588,8 @@ function AgentWorkspace({
                     !threadConnected
                   }
                 >
-                  发送
+                  <UiIcon name="send" />
+                  <span>发送</span>
                 </button>
               </div>
             </form>

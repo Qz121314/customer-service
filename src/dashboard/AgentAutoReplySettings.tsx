@@ -4,6 +4,7 @@ import {
   updateAgentAutoReplySettings,
   type AgentAutoReplySettings,
 } from './agent-auto-reply-client';
+import { UiIcon } from './icons';
 
 const EMPTY_SETTINGS: AgentAutoReplySettings = {
   enabled: false,
@@ -117,7 +118,7 @@ export function AgentAutoReplySettingsModal({
             disabled={saving}
             onClick={onClose}
           >
-            ×
+            <UiIcon name="close" />
           </button>
         </header>
 

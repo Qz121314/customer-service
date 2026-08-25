@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
-import { UiIcon } from './dashboard-ui';
+import { UiIcon } from './icons';
 
 export function AgentActionToolbar({
   notificationState,
@@ -78,7 +78,7 @@ export function AgentActionToolbar({
           title="自动回复"
           onClick={onOpenAutoReply}
         >
-          <AutoReplyIcon />
+          <UiIcon name="auto-reply" />
           <span>自动回复</span>
         </button>
         <button
@@ -273,7 +273,7 @@ export function AgentMobileSettingsPage({
             onClick={() => openAndClose(onOpenAutoReply)}
           >
             <i aria-hidden="true">
-              <AutoReplyIcon />
+              <UiIcon name="auto-reply" />
             </i>
             <span>
               <strong>首次问候语</strong>
@@ -311,24 +311,5 @@ export function AgentMobileSettingsPage({
         </button>
       </div>
     </section>
-  );
-}
-
-function AutoReplyIcon() {
-  return (
-    <svg
-      className="ui-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M7 8h10a4 4 0 0 1 4 4v5" />
-      <path d="m7 4-4 4 4 4" />
-      <path d="M17 16h4v4" />
-    </svg>
   );
 }

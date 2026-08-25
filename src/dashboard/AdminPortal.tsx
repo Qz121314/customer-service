@@ -28,7 +28,8 @@ import {
   initials,
   message,
 } from './dashboard-runtime';
-import { UiIcon, AdminLogin, AdminSetup, Startup } from './dashboard-ui';
+import { AdminLogin, AdminSetup, Startup } from './dashboard-ui';
+import { UiIcon } from './icons';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
@@ -361,6 +362,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               className="primary-button"
               onClick={createNewAgent}
             >
+              <UiIcon name="plus" />
               新增客服
             </button>
           )}

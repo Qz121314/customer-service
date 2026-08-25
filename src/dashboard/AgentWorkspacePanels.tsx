@@ -16,6 +16,7 @@ import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
+import { UiIcon } from './icons';
 import {
   AgentActionToolbar,
   AgentMobileSettingsPage,
@@ -280,10 +281,7 @@ export function AgentInboxPane({
       </div>
       <div className="inbox-tools">
         <label className="inbox-search">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-4-4" />
-          </svg>
+          <UiIcon name="search" />
           <input
             type="search"
             value={searchQuery}

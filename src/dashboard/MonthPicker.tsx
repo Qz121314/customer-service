@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { UiIcon } from './icons';
 
 const MONTH_LABELS = Array.from({ length: 12 }, (_, index) => `${index + 1}月`);
 const PANEL_WIDTH = 296;
@@ -137,7 +138,7 @@ export function MonthPicker({
           aria-label="上一年"
           onClick={() => setViewYear((year) => year - 1)}
         >
-          <Chevron direction="left" />
+          <UiIcon name="chevron-left" />
         </button>
         <div>
           <span>选择年份</span>
@@ -148,7 +149,7 @@ export function MonthPicker({
           aria-label="下一年"
           onClick={() => setViewYear((year) => year + 1)}
         >
-          <Chevron direction="right" />
+          <UiIcon name="chevron" />
         </button>
       </div>
       <div className="month-picker-grid" role="grid">
@@ -199,7 +200,7 @@ export function MonthPicker({
       >
         <span>{label}</span>
         <strong>{formatMonth(value)}</strong>
-        <CalendarIcon />
+        <UiIcon name="calendar" />
       </button>
       {picker && createPortal(picker, document.body)}
     </div>
@@ -229,33 +230,4 @@ function currentBusinessMonth(): string {
     parts.map((part) => [part.type, part.value]),
   );
   return `${values.year}-${values.month}`;
-}
-
-function Chevron({ direction }: { direction: 'left' | 'right' }) {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d={direction === 'left' ? 'm9.5 4-4 4 4 4' : 'm6.5 4 4 4-4 4'}
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.6"
-      />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 18 18" aria-hidden="true">
-      <path
-        d="M5.25 2.75v2M12.75 2.75v2M3.25 7h11.5M4.5 4h9A1.5 1.5 0 0 1 15 5.5v8A1.5 1.5 0 0 1 13.5 15h-9A1.5 1.5 0 0 1 3 13.5v-8A1.5 1.5 0 0 1 4.5 4Z"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="1.4"
-      />
-    </svg>
-  );
 }

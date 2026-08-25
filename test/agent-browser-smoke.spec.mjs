@@ -292,6 +292,15 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
 
   const settingsButton = page.getByRole('button', { name: '打开功能菜单' });
   await expect(settingsButton).toBeVisible();
+  const settingsIcon = settingsButton.locator('svg.ui-icon');
+  await expect(settingsIcon).toBeVisible();
+  await expect(settingsIcon).toHaveAttribute('viewBox', '0 0 24 24');
+  const settingsButtonBox = await settingsButton.boundingBox();
+  const settingsIconBox = await settingsIcon.boundingBox();
+  expect(settingsButtonBox?.width ?? 0).toBeGreaterThanOrEqual(40);
+  expect(settingsButtonBox?.height ?? 0).toBeGreaterThanOrEqual(40);
+  expect(settingsIconBox?.width ?? 0).toBeGreaterThanOrEqual(19);
+  expect(settingsIconBox?.height ?? 0).toBeGreaterThanOrEqual(19);
   await settingsButton.click();
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
   await expect(settingsPage).toBeVisible();

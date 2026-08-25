@@ -224,9 +224,13 @@
   border-radius: 50%;
   color: transparent;
   background: transparent;
-  font-size: 0.64rem;
   font-style: normal;
-  font-weight: 800;
+}
+
+.product-assignment-section > i .ui-icon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.5;
 }
 
 .product-assignment-section:has(input:checked) > i {

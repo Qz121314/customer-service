@@ -7,6 +7,7 @@ import {
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { CHAT_TIME_ZONE, message } from './dashboard-runtime';
 import { MonthPicker } from './MonthPicker';
+import { UiIcon } from './icons';
 
 export function AdminAgentStatisticsModal({
   agent,
@@ -86,7 +87,7 @@ export function AdminAgentStatisticsModal({
               aria-label="关闭客服统计"
               onClick={onClose}
             >
-              ×
+              <UiIcon name="close" />
             </button>
           </div>
         </header>

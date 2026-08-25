@@ -50,9 +50,17 @@
   height: 15px;
   border: 2px solid #fff;
   border-radius: 50%;
-  background: #5b5ce2 center / 9px 9px no-repeat
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='white' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M10 4v12M4 10h12'/%3E%3C/svg%3E");
+  display: grid;
+  place-items: center;
+  background: #5b5ce2;
+  color: #fff;
   pointer-events: none;
+}
+
+.agent-avatar-button > i .ui-icon {
+  width: 9px;
+  height: 9px;
+  stroke-width: 2.4;
 }
 
 .agent-avatar-button:hover {
@@ -132,11 +140,13 @@
   border-radius: 50%;
   background: transparent;
   color: #5e6570;
-  font-size: 25px;
-  font-weight: 350;
-  line-height: 1;
   cursor: pointer;
   touch-action: manipulation;
+}
+
+.agent-avatar-close .ui-icon {
+  width: 19px;
+  height: 19px;
 }
 
 .agent-avatar-close:active {
@@ -209,11 +219,20 @@
 }
 
 .agent-avatar-select {
+  display: inline-flex;
   min-width: 132px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   padding: 0 18px;
   border: 1px solid #dfe2e7;
   background: #f8f9fa;
   color: #303641;
+}
+
+.agent-avatar-select .ui-icon {
+  width: 17px;
+  height: 17px;
 }
 
 .agent-avatar-select:active:not(:disabled) {

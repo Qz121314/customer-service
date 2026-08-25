@@ -3,113 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import type { Message } from './api';
 import type { AgentMediaItem } from './agent-media';
 import { formatTime } from './dashboard-runtime';
-
-type UiIconName =
-  | 'agents'
-  | 'statistics'
-  | 'workspace'
-  | 'external'
-  | 'logout'
-  | 'notification'
-  | 'sound'
-  | 'settings'
-  | 'install'
-  | 'back'
-  | 'chevron';
-
-function UiIcon({ name }: { name: UiIconName }) {
-  const paths: Record<UiIconName, ReactNode> = {
-    agents: (
-      <>
-        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-      </>
-    ),
-    statistics: (
-      <>
-        <path d="M4 19V9" />
-        <path d="M10 19V5" />
-        <path d="M16 19v-7" />
-        <path d="M22 19V3" />
-      </>
-    ),
-    workspace: (
-      <>
-        <path d="M4 13a8 8 0 0 1 16 0" />
-        <path d="M18 19c0 1.1-.9 2-2 2h-3" />
-        <path d="M4 13v3a2 2 0 0 0 2 2h1v-7H6a2 2 0 0 0-2 2Z" />
-        <path d="M20 13v3a2 2 0 0 1-2 2h-1v-7h1a2 2 0 0 1 2 2Z" />
-      </>
-    ),
-    external: (
-      <>
-        <path d="M15 3h6v6" />
-        <path d="m10 14 11-11" />
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      </>
-    ),
-    logout: (
-      <>
-        <path d="M10 17l5-5-5-5" />
-        <path d="M15 12H3" />
-        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
-      </>
-    ),
-    notification: (
-      <>
-        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-        <path d="M10 21h4" />
-      </>
-    ),
-    sound: (
-      <>
-        <path d="M11 5 6 9H3v6h3l5 4Z" />
-        <path d="M15.5 8.5a5 5 0 0 1 0 7" />
-        <path d="M18.5 5.5a9 9 0 0 1 0 13" />
-      </>
-    ),
-    settings: (
-      <>
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.04 1.56V20.3h-3v-.08a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.56-1.04H5.3v-3h.14A1.7 1.7 0 0 0 7 9.92a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.7 4.7v-.08h3v.08a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.04h.14v3h-.14A1.7 1.7 0 0 0 19.4 15Z" />
-      </>
-    ),
-    install: (
-      <>
-        <path d="M12 3v12" />
-        <path d="m7 10 5 5 5-5" />
-        <path d="M5 21h14" />
-      </>
-    ),
-    back: (
-      <>
-        <path d="m15 18-6-6 6-6" />
-      </>
-    ),
-    chevron: (
-      <>
-        <path d="m9 18 6-6-6-6" />
-      </>
-    ),
-  };
-
-  return (
-    <svg
-      className="ui-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {paths[name]}
-    </svg>
-  );
-}
+import { UiIcon } from './icons';
 
 function AdminLogin({
   password,
@@ -304,7 +198,7 @@ function ConversationExpiryCountdown({
 
   return (
     <span className={`conversation-expiry${urgency}`} aria-live="off">
-      <span aria-hidden="true">◷</span>
+      <UiIcon name="clock" />
       {remaining > 0 ? `会话将在 ${clock} 后自动删除` : '会话已到期，正在删除'}
     </span>
   );
@@ -344,7 +238,7 @@ function Bubble({
               aria-label={isRead ? '已读' : '已发送'}
               title={isRead ? '已读' : '已发送'}
             >
-              {isRead ? '✓✓' : '✓'}
+              <UiIcon name={isRead ? 'check-double' : 'check'} />
             </span>
           ) : null}
         </span>

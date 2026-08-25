@@ -80,8 +80,11 @@
   color: #667085;
   background: transparent;
   cursor: pointer;
-  font-size: 1.35rem;
-  line-height: 1;
+}
+
+.agent-modal .modal-close .ui-icon {
+  width: 18px;
+  height: 18px;
 }
 
 .agent-modal .modal-close:not(:disabled):hover {

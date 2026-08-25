@@ -174,11 +174,6 @@
   font-size: 0;
 }
 
-.composer-foot .primary-button::before {
-  content: '➤';
-  font-size: 17px;
-}
-
 .conversation-row.selected {
   background: #f2f6fb;
   box-shadow: inset 3px 0 0 #526f92;

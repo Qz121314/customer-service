@@ -446,6 +446,19 @@
   color: var(--agent-muted);
 }
 
+.thread-head-copy {
+  position: relative;
+}
+
+.thread-head-avatar {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+}
+
 .thread-back-button {
   border: 0;
   color: var(--agent-text);
@@ -513,6 +526,10 @@
   place-items: center;
   list-style: none;
   cursor: pointer;
+}
+
+.transfer-menu > summary > span {
+  display: inline;
 }
 
 .transfer-menu > summary::-webkit-details-marker {
@@ -600,8 +617,15 @@
 }
 
 .conversation-context-card > a {
-  display: inline-grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.conversation-context-card > a .ui-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .messages {
@@ -645,6 +669,11 @@
 
 .delivery-mark {
   line-height: 1;
+}
+
+.delivery-mark .ui-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .message-image {
@@ -716,26 +745,9 @@
   white-space: nowrap;
 }
 
-.media-picker::before,
-.media-picker::after {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: block;
-  border-radius: 999px;
-  background: currentColor;
-  content: '';
-  transform: translate(-50%, -50%);
-}
-
-.media-picker::before {
-  width: 18px;
-  height: 1.8px;
-}
-
-.media-picker::after {
-  width: 1.8px;
-  height: 18px;
+.media-picker .ui-icon {
+  width: 19px;
+  height: 19px;
 }
 
 .composer > textarea {
@@ -772,12 +784,18 @@
   grid-column: 1;
   grid-row: 1;
   overflow: hidden;
-  color: transparent;
+  color: #fff;
   background-color: var(--agent-accent);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 4 17 8-17 8 3.7-8L4 4Z'/%3E%3Cpath d='M8 12h13'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: center;
   font-size: 0;
+}
+
+.composer-foot .primary-button .ui-icon {
+  width: 19px;
+  height: 19px;
+}
+
+.composer-foot .primary-button > span {
+  display: none;
 }
 
 .composer-foot .media-upload-progress.is-connection-warning {
