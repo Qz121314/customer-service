@@ -33,6 +33,7 @@ import { UiIcon } from './icons';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
+import { Button } from './ui';
 
 type AdminView = 'agents' | 'statistics';
 type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
@@ -357,14 +358,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <p>{sectionHint}</p>
           </div>
           {section === 'agents' && (
-            <button
-              type="button"
-              className="primary-button"
-              onClick={createNewAgent}
-            >
+            <Button type="button" onClick={createNewAgent}>
               <UiIcon name="plus" />
               新增客服
-            </button>
+            </Button>
           )}
         </header>
 
@@ -452,28 +449,24 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 <div className="empty-state admin-empty">
                   <strong>还没有客服账号</strong>
                   <span>创建第一个客服账号后，再配置它的分流负责范围。</span>
-                  <button
-                    type="button"
-                    className="primary-button"
-                    onClick={createNewAgent}
-                  >
+                  <Button type="button" onClick={createNewAgent}>
                     新增客服
-                  </button>
+                  </Button>
                 </div>
               ) : visibleAgents.length === 0 ? (
                 <div className="empty-state admin-empty admin-filter-empty">
                   <strong>没有匹配的客服</strong>
                   <span>调整搜索内容或状态筛选即可恢复列表。</span>
-                  <button
+                  <Button
                     type="button"
-                    className="secondary-button"
+                    variant="secondary"
                     onClick={() => {
                       setAgentSearch('');
                       setAgentFilter('all');
                     }}
                   >
                     清除筛选
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="admin-table-wrap">

@@ -9,6 +9,10 @@ const [
   ciWorkflow,
   workflowFiles,
   testFiles,
+  componentConfigText,
+  viteConfig,
+  dashboardMain,
+  dashboardFiles,
 ] = await Promise.all([
   readFile('package.json', 'utf8'),
   readFile('AGENTS.md', 'utf8'),
@@ -17,10 +21,15 @@ const [
   readFile('.github/workflows/ci.yml', 'utf8'),
   readdir('.github/workflows'),
   readdir('test'),
+  readFile('components.json', 'utf8'),
+  readFile('vite.config.ts', 'utf8'),
+  readFile('src/dashboard/main.tsx', 'utf8'),
+  readdir('src/dashboard'),
 ]);
 
 const packageJson = JSON.parse(packageText);
 const scripts = packageJson.scripts ?? {};
+const componentConfig = JSON.parse(componentConfigText);
 
 for (const scriptName of [
   'guardrails',
@@ -41,11 +50,7 @@ for (const scriptName of [
   );
 }
 
-for (const requiredStep of [
-  'pnpm guardrails',
-  'pnpm lint',
-  'pnpm typecheck',
-]) {
+for (const requiredStep of ['pnpm guardrails', 'pnpm lint', 'pnpm typecheck']) {
   assert.match(
     scripts.preflight,
     new RegExp(requiredStep.replaceAll(' ', '\\s+'), 'u'),
@@ -119,6 +124,42 @@ assert.match(
   engineeringContract,
   /Keep exactly one GitHub Actions workflow/u,
   'engineering contract must prohibit temporary and one-shot workflows',
+);
+
+for (const dependency of [
+  '@radix-ui/react-slot',
+  'class-variance-authority',
+  'clsx',
+  'lucide-react',
+  'tailwind-merge',
+]) {
+  assert.equal(
+    typeof packageJson.dependencies?.[dependency],
+    'string',
+    `UI design-system dependency is missing: ${dependency}`,
+  );
+}
+
+for (const dependency of ['@tailwindcss/vite', 'tailwindcss']) {
+  assert.equal(
+    typeof packageJson.devDependencies?.[dependency],
+    'string',
+    `UI build dependency is missing: ${dependency}`,
+  );
+}
+
+assert.equal(componentConfig.style, 'new-york');
+assert.equal(componentConfig.iconLibrary, 'lucide');
+assert.equal(componentConfig.tailwind?.cssVariables, true);
+assert.match(viteConfig, /tailwindcss from '@tailwindcss\/vite'/u);
+assert.match(dashboardMain, /import '\.\/ui-system\.css'/u);
+
+const dashboardCssFiles = dashboardFiles.filter((name) =>
+  name.endsWith('.css'),
+);
+assert.ok(
+  dashboardCssFiles.length <= 22,
+  `Dashboard CSS ownership regressed to ${dashboardCssFiles.length} files`,
 );
 
 const executableContracts = testFiles.filter((name) =>

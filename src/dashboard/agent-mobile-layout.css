@@ -1,3 +1,5 @@
+/* --- agent-mobile.css --- */
+
 /* Single owner for the complete phone/PWA agent experience. */
 
 @media (max-width: 760px) {
@@ -1470,5 +1472,251 @@
   .thread-head,
   .composer {
     background: rgba(255, 255, 255, 0.99);
+  }
+}
+
+/* --- agent-mobile-settings.css --- */
+
+/* Mobile agent settings is a dedicated app-level surface.
+ * Keep conversation/thread geometry in agent-mobile.css; this file owns only
+ * the settings navigation surface and its child-dialog layering.
+ */
+
+@media (max-width: 760px) {
+  .workspace-shell .mobile-agent-settings-page {
+    z-index: 80;
+    background: #f5f6f8;
+  }
+
+  .workspace-shell .mobile-agent-settings-head {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    display: grid;
+    min-height: 58px;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #e7e9ee;
+    background: rgb(255 255 255 / 96%);
+    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
+    backdrop-filter: blur(18px) saturate(1.05);
+  }
+
+  .workspace-shell .mobile-agent-settings-head > button {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    border: 1px solid #e0e4ea;
+    border-radius: 12px;
+    color: #4f5968;
+    background: #fff;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 4%);
+  }
+
+  .workspace-shell .mobile-agent-settings-head > button:active {
+    background: #f0f2f5;
+    transform: scale(0.96);
+  }
+
+  .workspace-shell .mobile-agent-settings-head h1 {
+    grid-column: 2;
+    margin: 0;
+    color: #171b22;
+    font-size: 17px;
+    font-weight: 790;
+    letter-spacing: -0.025em;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .workspace-shell .mobile-agent-settings-content {
+    gap: 20px;
+    padding: 16px 14px calc(22px + env(safe-area-inset-bottom));
+    background: #f5f6f8;
+  }
+
+  .workspace-shell .mobile-agent-settings-group {
+    display: grid;
+    gap: 7px;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .workspace-shell .mobile-agent-settings-label {
+    margin: 0;
+    padding: 0 4px;
+    color: #8a929e;
+    font-size: 10px;
+    font-weight: 760;
+    letter-spacing: 0.06em;
+    line-height: 1.4;
+  }
+
+  .workspace-shell .mobile-agent-settings-card {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid #e4e7ec;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 2%),
+      0 10px 28px rgb(15 23 42 / 3.5%);
+  }
+
+  .workspace-shell .mobile-agent-settings-item {
+    min-height: 64px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 11px;
+    padding: 10px 13px;
+    background: #fff;
+  }
+
+  .workspace-shell
+    .mobile-agent-settings-item
+    + .mobile-agent-settings-item::before {
+    right: 13px;
+    left: 62px;
+    background: #eceef2;
+  }
+
+  .workspace-shell .mobile-agent-settings-item:active:not(:disabled) {
+    background: #f7f8fa;
+  }
+
+  .workspace-shell .mobile-agent-settings-item > i {
+    width: 38px;
+    height: 38px;
+    border-radius: 12px;
+    color: #5d6877;
+    background: #f0f2f5;
+  }
+
+  .workspace-shell .mobile-agent-settings-item > i.is-accent {
+    color: #514bc7;
+    background: #efefff;
+  }
+
+  .workspace-shell .mobile-agent-settings-item strong {
+    color: #1b2028;
+    font-size: 13px;
+    font-weight: 740;
+    letter-spacing: -0.012em;
+  }
+
+  .workspace-shell .mobile-agent-settings-item small {
+    color: #7e8794;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .workspace-shell .mobile-agent-settings-item > .ui-icon {
+    width: 16px;
+    height: 16px;
+    color: #a5acb6;
+  }
+
+  .workspace-shell .mobile-agent-settings-item > b {
+    width: 40px;
+    height: 24px;
+    background: #dfe3e8;
+    box-shadow: inset 0 0 0 1px rgb(15 23 42 / 2%);
+  }
+
+  .workspace-shell .mobile-agent-settings-item > b::after {
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    box-shadow: 0 1px 4px rgb(15 23 42 / 18%);
+  }
+
+  .workspace-shell .mobile-agent-settings-item.is-enabled > b {
+    background: #5b5bd6;
+  }
+
+  .workspace-shell .mobile-agent-settings-item.is-enabled > b::after {
+    transform: translateX(16px);
+  }
+
+  .workspace-shell .mobile-agent-install-help {
+    margin: 1px 2px 0;
+    padding: 9px 11px;
+    border: 1px solid #e2e0ff;
+    border-radius: 12px;
+    color: #625e98;
+    background: #f2f1ff;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .workspace-shell .mobile-agent-settings-group.is-account {
+    margin-top: auto;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout {
+    display: grid;
+    width: 100%;
+    min-height: 62px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 11px;
+    margin: 0;
+    padding: 10px 13px;
+    border: 1px solid #efdede;
+    border-radius: 18px;
+    color: #b44949;
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 2%),
+      0 8px 24px rgb(15 23 42 / 3%);
+    text-align: left;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout > .ui-icon:first-child {
+    width: 38px;
+    height: 38px;
+    padding: 10px;
+    border-radius: 12px;
+    color: #bf4e4e;
+    background: #fff1f1;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout > span {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout strong {
+    color: #b44949;
+    font-size: 13px;
+    font-weight: 740;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout small {
+    color: #a17c7c;
+    font-size: 10px;
+    font-weight: 520;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout > .ui-icon:last-child {
+    width: 16px;
+    height: 16px;
+    color: #cbaaaa;
+  }
+
+  .workspace-shell .mobile-agent-settings-logout:active {
+    background: #fff8f8;
+  }
+
+  .workspace-shell .agent-statistics-backdrop,
+  .workspace-shell .agent-auto-reply-backdrop {
+    z-index: 120;
   }
 }

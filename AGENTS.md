@@ -116,6 +116,10 @@ These principles apply unless the user explicitly changes the product rule:
 - Routing correctness and conversion availability are higher priority than cosmetic continuity; routing changes must be validated against assignment, waiting, quota, and lifecycle contracts together.
 - Administrator responsibilities are operational: account/password, enable state, quota/capacity, and routing scope. Agent personal presentation such as avatar/profile belongs to the agent-side profile flow unless the product rule is explicitly changed.
 - Keep UI forms compact and commercially usable. Field width and grouping should reflect data semantics instead of making every control full-width by default.
+- Keep shared UI primitives source-owned in `src/dashboard/ui/` using the repository shadcn/Tailwind/Radix baseline. New pages must reuse or extend those primitives instead of recreating button, input, textarea, icon, or overlay foundations.
+- Keep visual tokens in `src/dashboard/ui-system.css`; feature CSS owns only page geometry or genuinely feature-specific presentation. Do not add a new late-loading polish/override file to win the cascade.
+- Use `lucide-react` only through the semantic `UiIcon` boundary for functional dashboard icons. Do not add local SVG markup, character action icons, CSS data URIs, or a second icon package.
+- Preserve agent desktop/mobile geometry, Visual Viewport keyboard handling, overlay stability, safe areas, and PWA behavior when migrating components. A component-library migration must not add Worker or D1 requests.
 - Avoid duplicated state ownership. One rule should have one owning layer; do not patch the same behavior independently in UI, API, SQL, and CSS when a single source of truth can own it.
 - Remove superseded code when a structural replacement is complete. Do not leave old and new implementations side by side without a migration reason.
 - Do not hard-code mutable configuration that already belongs to admin/runtime data.

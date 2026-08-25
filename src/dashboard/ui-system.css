@@ -1,0 +1,138 @@
+@import 'tailwindcss';
+
+@source './**/*.{ts,tsx}';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+}
+
+:root {
+  --background: #f5f6f8;
+  --foreground: #191d26;
+  --card: #ffffff;
+  --card-foreground: #191d26;
+  --primary: #5b5bd6;
+  --primary-foreground: #ffffff;
+  --muted: #f3f4f7;
+  --muted-foreground: #737b88;
+  --border: #e2e5ea;
+  --border-strong: #d4dae3;
+  --input: #dce1e7;
+  --ring: #625bdd;
+  --destructive: #b42318;
+  --radius-sm: 8px;
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-overlay: 18px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 0;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-width: 320px;
+  color: var(--foreground);
+  background: var(--background);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.ui-icon {
+  display: block;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+@media (max-width: 760px) {
+  [data-ui='button'],
+  [data-ui='input'] {
+    min-height: 44px;
+  }
+}
+
+.message-image {
+  display: block;
+  width: min(100%, 360px);
+  max-height: 420px;
+  border-radius: 12px;
+  object-fit: contain;
+  background: #eef1f5;
+}
+
+.media-picker {
+  display: inline-flex;
+  min-width: 36px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.media-picker input {
+  display: none;
+}
+
+.media-upload-progress {
+  color: #667180;
+  font-size: 11px;
+}

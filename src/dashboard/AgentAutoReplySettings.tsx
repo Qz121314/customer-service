@@ -5,6 +5,7 @@ import {
   type AgentAutoReplySettings,
 } from './agent-auto-reply-client';
 import { UiIcon } from './icons';
+import { Button, Textarea } from './ui';
 
 const EMPTY_SETTINGS: AgentAutoReplySettings = {
   enabled: false,
@@ -111,15 +112,17 @@ export function AgentAutoReplySettingsModal({
             <span className="eyebrow">自动回复</span>
             <h2 id="agent-auto-reply-title">首次问候语</h2>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             className="agent-auto-reply-close"
             aria-label="关闭自动回复设置"
             disabled={saving}
             onClick={onClose}
           >
             <UiIcon name="close" />
-          </button>
+          </Button>
         </header>
 
         {loading ? (
@@ -146,7 +149,7 @@ export function AgentAutoReplySettingsModal({
 
             <label className="agent-auto-reply-field">
               <span>问候内容</span>
-              <textarea
+              <Textarea
                 value={settings.text}
                 maxLength={AUTO_GREETING_LIMIT}
                 rows={6}
@@ -171,22 +174,17 @@ export function AgentAutoReplySettingsModal({
         )}
 
         <footer className="agent-auto-reply-actions">
-          <button
+          <Button
             type="button"
-            className="ghost-button"
+            variant="ghost"
             disabled={saving}
             onClick={onClose}
           >
             关闭
-          </button>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={!canSave}
-            onClick={() => void save()}
-          >
+          </Button>
+          <Button type="button" disabled={!canSave} onClick={() => void save()}>
             {saving ? '保存中…' : changed ? '保存设置' : '已保存'}
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

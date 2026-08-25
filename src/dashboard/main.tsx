@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import './ui-system.css';
 import {
   clearAgentThreadHistoryMarker,
   readAgentThreadHistoryMarker,
@@ -11,17 +12,13 @@ const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
 
 async function loadAgentStyles() {
   await import('./agent-foundation.css');
-  await import('./media-view.css');
   await import('./agent-statistics.css');
   await import('./month-picker.css');
-  await import('./agent-auto-reply.css');
+  await import('./agent-overlays.css');
   await import('./agent-avatar.css');
-  await import('./agent-overlay-motion.css');
   await import('./agent-workspace.css');
-  await import('./agent-desktop.css');
-  await import('./agent-desktop-composer.css');
-  await import('./agent-mobile.css');
-  await import('./agent-mobile-settings.css');
+  await import('./agent-desktop-layout.css');
+  await import('./agent-mobile-layout.css');
   await import('./agent-thread.css');
   await import('./agent-state.css');
   await import('./commercial-polish.css');
@@ -31,18 +28,15 @@ async function loadAdminStyles() {
   await import('./styles.css');
   await import('./product-assignment.css');
   await import('./chat-dialogue.css');
-  await import('./media-view.css');
   await import('./agent-statistics.css');
   await import('./month-picker.css');
   await import('./cloud-service-ui.css');
   await import('./agent-editor.css');
   await import('./agent-avatar.css');
   await import('./admin-commercial.css');
-  await import('./admin-agent-directory.css');
-  await import('./admin-agent-editor.css');
+  await import('./admin-agents.css');
   await import('./admin-statistics.css');
-  await import('./admin-scroll-ownership.css');
-  await import('./admin-viewport-geometry.css');
+  await import('./admin-layout.css');
   await import('./commercial-polish.css');
   await import('./admin-design-system.css');
 }

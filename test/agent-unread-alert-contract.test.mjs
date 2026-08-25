@@ -14,7 +14,7 @@ test('agent workspace state layer preserves unread alerts and selected priority'
 
   assert.match(
     main,
-    /import\('\.\/agent-mobile\.css'\);[\s\S]*?import\('\.\/agent-state\.css'\);/u,
+    /import\('\.\/agent-mobile-layout\.css'\);[\s\S]*?import\('\.\/agent-state\.css'\);/u,
   );
   assert.match(css, /--agent-unread: #d92d20;/u);
   assert.match(

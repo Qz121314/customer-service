@@ -1,3 +1,5 @@
+/* --- admin-scroll-ownership.css --- */
+
 /* Desktop admin viewport ownership. The browser stays fixed; only the
  * current data surface owns vertical overflow. */
 @media (min-width: 1024px) {
@@ -137,5 +139,67 @@
     overflow: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
+  }
+}
+
+/* --- admin-viewport-geometry.css --- */
+
+/* Final desktop geometry guard.
+ * Keep viewport-sized admin regions inside their border box and neutralize
+ * inherited width constraints that can reintroduce document overflow.
+ */
+
+@media (min-width: 1024px) {
+  html,
+  body,
+  #root,
+  .admin-console,
+  .admin-sidebar,
+  .admin-content,
+  .admin-statistics-page,
+  .traffic-overview,
+  .traffic-overview-grid {
+    box-sizing: border-box;
+    min-width: 0;
+  }
+
+  html,
+  body,
+  #root {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  .admin-console,
+  .admin-sidebar,
+  .admin-content {
+    max-width: none;
+    max-height: 100dvh;
+  }
+
+  .admin-console,
+  .admin-content {
+    width: 100%;
+  }
+
+  .admin-statistics-page,
+  .traffic-overview,
+  .traffic-overview-grid {
+    width: 100%;
+    max-width: none;
+    overflow-x: hidden;
+  }
+}
+
+@media (min-width: 1101px) {
+  .admin-statistics-page,
+  .traffic-overview,
+  .traffic-overview-grid {
+    overflow-y: hidden;
   }
 }

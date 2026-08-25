@@ -93,7 +93,11 @@
 
 .admin-nav button.active {
   border-color: var(--admin-accent-border);
-  background: linear-gradient(180deg, #f5f4ff 0%, var(--admin-accent-soft) 100%);
+  background: linear-gradient(
+    180deg,
+    #f5f4ff 0%,
+    var(--admin-accent-soft) 100%
+  );
   color: var(--admin-accent-strong);
   box-shadow:
     inset 3px 0 0 var(--admin-accent),

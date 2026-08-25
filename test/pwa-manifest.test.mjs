@@ -39,7 +39,7 @@ test('agent shell exposes mobile standalone metadata and registers an agent-only
       'utf8',
     ),
     readFile(
-      new URL('../src/dashboard/agent-mobile.css', import.meta.url),
+      new URL('../src/dashboard/agent-mobile-layout.css', import.meta.url),
       'utf8',
     ),
   ]);

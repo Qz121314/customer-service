@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
 import { UiIcon } from './icons';
+import { Button } from './ui';
 
 export function AgentActionToolbar({
   notificationState,
@@ -27,9 +28,10 @@ export function AgentActionToolbar({
   return (
     <>
       <div className="workspace-sidebar-actions" aria-label="客服工具">
-        <button
+        <Button
           type="button"
-          className={`ghost-button full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
+          variant="ghost"
+          className={`full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
           aria-label={
             notificationState === 'enabled'
               ? '关闭新消息通知'
@@ -57,10 +59,11 @@ export function AgentActionToolbar({
                   ? '通知已被阻止'
                   : '开启新消息通知'}
           </span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className={`ghost-button full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
+          variant="ghost"
+          className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
           aria-pressed={soundEnabled}
           aria-label={
             soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
@@ -70,47 +73,52 @@ export function AgentActionToolbar({
         >
           <UiIcon name="sound" />
           <span>{soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}</span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="ghost-button full workspace-auto-reply-button"
+          variant="ghost"
+          className="full workspace-auto-reply-button"
           aria-label="打开自动回复设置"
           title="自动回复"
           onClick={onOpenAutoReply}
         >
           <UiIcon name="auto-reply" />
           <span>自动回复</span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="ghost-button full workspace-statistics-button"
+          variant="ghost"
+          className="full workspace-statistics-button"
           aria-label="打开接待流量"
           title="接待流量"
           onClick={onOpenStatistics}
         >
           <UiIcon name="statistics" />
           <span>接待流量</span>
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="ghost-button full workspace-logout-button"
+          variant="ghost"
+          className="full workspace-logout-button"
           aria-label="退出客服账号"
           title="退出客服账号"
           onClick={onLogout}
         >
           <UiIcon name="logout" />
           <span>退出客服账号</span>
-        </button>
+        </Button>
       </div>
-      <button
+      <Button
         type="button"
-        className="ghost-button mobile-settings-trigger"
+        variant="ghost"
+        size="icon"
+        className="mobile-settings-trigger"
         aria-label="打开功能菜单"
         title="功能菜单"
         onClick={onOpenMobileSettings}
       >
         <UiIcon name="settings" />
-      </button>
+      </Button>
     </>
   );
 }

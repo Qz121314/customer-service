@@ -8,6 +8,7 @@ import type { AgentDraft } from './dashboard-runtime';
 import { relativeTime } from './dashboard-runtime';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
 import { UiIcon } from './icons';
+import { Button } from './ui';
 
 export function AgentEditorModal({
   draft,
@@ -361,21 +362,17 @@ export function AgentEditorModal({
 
           <footer className="agent-editor-footer">
             <div className="agent-editor-footer-actions">
-              <button
+              <Button
                 type="button"
-                className="secondary-button"
+                variant="secondary"
                 disabled={saving}
                 onClick={onClose}
               >
                 取消
-              </button>
-              <button
-                type="submit"
-                className="primary-button"
-                disabled={saving || !canSave}
-              >
+              </Button>
+              <Button type="submit" disabled={saving || !canSave}>
                 {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
-              </button>
+              </Button>
             </div>
           </footer>
         </form>

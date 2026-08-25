@@ -4,6 +4,7 @@ import type { Message } from './api';
 import type { AgentMediaItem } from './agent-media';
 import { formatTime } from './dashboard-runtime';
 import { UiIcon } from './icons';
+import { Button, Input } from './ui';
 
 function AdminLogin({
   password,
@@ -25,7 +26,7 @@ function AdminLogin({
       <form className="auth-form" onSubmit={onSubmit}>
         <label>
           管理员密码
-          <input
+          <Input
             type="password"
             autoComplete="current-password"
             value={password}
@@ -34,9 +35,7 @@ function AdminLogin({
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
-        <button className="primary-button" disabled={!password}>
-          登录管理中心
-        </button>
+        <Button disabled={!password}>登录管理中心</Button>
         <a className="auth-link" href="/agent">
           我是客服，进入客服登录
         </a>
@@ -70,7 +69,7 @@ function AgentLogin({
       >
         <label>
           客服账号
-          <input
+          <Input
             name="agent-account"
             value={username}
             onChange={(event) => onUsername(event.target.value)}
@@ -84,7 +83,7 @@ function AgentLogin({
         </label>
         <label>
           登录密码
-          <input
+          <Input
             type="password"
             name="agent-access-key"
             value={password}
@@ -95,12 +94,12 @@ function AgentLogin({
           />
         </label>
         {error && <div className="auth-error">{error}</div>}
-        <button
-          className="primary-button agent-login-button"
+        <Button
+          className="agent-login-button"
           disabled={!username.trim() || !password}
         >
           进入工作台
-        </button>
+        </Button>
       </form>
     </AuthPage>
   );

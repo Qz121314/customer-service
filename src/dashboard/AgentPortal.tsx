@@ -31,6 +31,7 @@ import {
   setConversationStatus,
   transferConversation,
 } from './api';
+import { Button } from './ui';
 import {
   LoadState,
   Filter,
@@ -1578,8 +1579,7 @@ function AgentWorkspace({
                       ? '实时连接恢复后即可发送'
                       : 'Enter 发送 · Shift + Enter 换行'}
                 </span>
-                <button
-                  className="primary-button"
+                <Button
                   aria-label="发送"
                   disabled={
                     Boolean(currentPendingText) ||
@@ -1591,7 +1591,7 @@ function AgentWorkspace({
                 >
                   <UiIcon name="send" />
                   <span>发送</span>
-                </button>
+                </Button>
               </div>
             </form>
           </>

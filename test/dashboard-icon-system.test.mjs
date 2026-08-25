@@ -21,12 +21,15 @@ const dashboardStyles = readdirSync(dashboardDirectory)
     source: readFileSync(`${dashboardDirectory}/${file}`, 'utf8'),
   }));
 
-test('dashboard functional icons share one accessible SVG component', () => {
+test('dashboard functional icons share the Lucide component boundary', () => {
   assert.match(iconSource, /export type UiIconName/u);
-  assert.match(iconSource, /viewBox="0 0 24 24"/u);
-  assert.match(iconSource, /stroke="currentColor"/u);
+  assert.match(iconSource, /from 'lucide-react'/u);
+  assert.match(iconSource, /Record<UiIconName, LucideIcon>/u);
+  assert.match(iconSource, /settings: Settings/u);
+  assert.match(iconSource, /strokeWidth=\{1\.9\}/u);
   assert.match(iconSource, /aria-hidden="true"/u);
   assert.match(iconSource, /focusable="false"/u);
+  assert.doesNotMatch(iconSource, /<svg\b|<path\b|<circle\b/u);
 
   for (const { file, source } of dashboardSources) {
     if (file === 'icons.tsx') continue;
@@ -36,13 +39,10 @@ test('dashboard functional icons share one accessible SVG component', () => {
 
 test('mobile settings uses a recognizable gear in a dedicated touch target', () => {
   assert.match(toolbarSource, /<UiIcon name="settings" \/>/u);
-  assert.match(
-    iconSource,
-    /settings:[\s\S]*<circle cx="12" cy="12" r="3" \/>/u,
-  );
+  assert.match(iconSource, /settings: Settings/u);
 
   const mobileStyles = readFileSync(
-    `${dashboardDirectory}/agent-mobile.css`,
+    `${dashboardDirectory}/agent-mobile-layout.css`,
     'utf8',
   );
   assert.match(
