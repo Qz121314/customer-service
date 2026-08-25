@@ -5,7 +5,6 @@ const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 const agentUsername = 'ui-mobile-menu-agent';
 const agentPassword = 'ui-mobile-menu-pass';
-const productId = 'ui-mobile-menu-product';
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
@@ -22,7 +21,7 @@ async function seedAgent(page) {
       name: 'Mobile Menu Agent',
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'product', productIds: [productId] },
+      routingScope: { type: 'none' },
       maxActiveConversations: 5,
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
