@@ -39,7 +39,26 @@ jobs:
         run: pnpm db:migrate:local
 
       - name: Lint
-        run: pnpm lint
+        id: lint
+        shell: bash
+        run: |
+          set +e
+          pnpm lint 2>&1 | tee /tmp/eslint.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload ESLint diagnostics
+        if: steps.lint.outputs.status != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-diagnostics
+          path: /tmp/eslint.log
+          retention-days: 1
+
+      - name: Enforce lint
+        if: steps.lint.outputs.status != '0'
+        run: exit 1
 
       - name: Typecheck
         run: pnpm typecheck
