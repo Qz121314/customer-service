@@ -1,7 +1,7 @@
 /* Shared visual baseline for the management console.
- * This file is intentionally loaded last on the admin route. It only owns
- * cross-page visual tokens and component finish; page geometry and business
- * behavior remain in their existing modules.
+ * This file is intentionally loaded last on the admin route. It owns shared
+ * component finish and visual tokens; page geometry and business behavior stay
+ * in their feature modules.
  */
 
 .admin-console {
@@ -20,9 +20,14 @@
   --admin-accent-soft: #f1f0ff;
   --admin-accent-border: #d9d7f5;
   --admin-danger: #b42318;
+  --admin-success: #2e805c;
+  --admin-warning: #9c651b;
   --admin-radius-sm: 8px;
   --admin-radius-md: 10px;
   --admin-radius-lg: 13px;
+  --admin-radius-pill: 999px;
+  --admin-control-height: 38px;
+  --admin-control-height-sm: 32px;
   --admin-shadow-xs: 0 1px 2px rgb(16 24 40 / 3%);
   --admin-shadow-sm:
     0 1px 2px rgb(16 24 40 / 4%), 0 8px 24px rgb(16 24 40 / 2.5%);
@@ -31,6 +36,13 @@
   background:
     radial-gradient(circle at 96% 0%, rgb(91 91 214 / 4.5%), transparent 27%),
     var(--admin-bg);
+}
+
+.admin-console button,
+.admin-console input,
+.admin-console select,
+.admin-console textarea {
+  accent-color: var(--admin-accent);
 }
 
 .admin-sidebar {
@@ -252,7 +264,10 @@
 .admin-statistics-page input,
 .agent-modal input,
 .agent-modal select,
-.agent-modal textarea {
+.agent-modal textarea,
+.agent-modal .product-assignment-panel select,
+.agent-modal .product-assignment-toolbar input,
+.agent-modal .product-assignment-toolbar select {
   border-color: var(--admin-border-strong);
   outline: 0;
   transition:
@@ -265,7 +280,10 @@
 .admin-statistics-page input:hover,
 .agent-modal input:hover,
 .agent-modal select:hover,
-.agent-modal textarea:hover {
+.agent-modal textarea:hover,
+.agent-modal .product-assignment-panel select:hover,
+.agent-modal .product-assignment-toolbar input:hover,
+.agent-modal .product-assignment-toolbar select:hover {
   border-color: #c7cdd6;
 }
 
@@ -273,7 +291,10 @@
 .admin-statistics-page input:focus,
 .agent-modal input:focus,
 .agent-modal select:focus,
-.agent-modal textarea:focus {
+.agent-modal textarea:focus,
+.agent-modal .product-assignment-panel select:focus,
+.agent-modal .product-assignment-toolbar input:focus,
+.agent-modal .product-assignment-toolbar select:focus {
   border-color: rgb(91 91 214 / 58%);
   box-shadow: var(--admin-shadow-focus);
 }
@@ -298,36 +319,87 @@
   color: #5252b8;
 }
 
+.admin-agent-actions {
+  min-width: 116px;
+  padding: 3px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-md);
+  background: var(--admin-surface-soft);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
 .admin-agent-layout .table-action,
 .admin-agent-actions .table-action {
-  border-color: #dce1e8;
-  background: #fff;
+  min-width: 50px;
+  min-height: var(--admin-control-height-sm);
+  border-color: transparent;
+  border-radius: var(--admin-radius-sm);
+  background: transparent;
   color: #505864;
-  box-shadow: var(--admin-shadow-xs);
+  box-shadow: none;
   transition:
     border-color 130ms ease,
     background-color 130ms ease,
     color 130ms ease,
-    transform 130ms ease;
+    transform 130ms ease,
+    box-shadow 130ms ease;
+}
+
+.admin-agent-actions .table-action::after {
+  display: none;
 }
 
 .admin-agent-layout .table-action:hover,
 .admin-agent-actions .table-action:hover {
-  border-color: #cdd3dc;
-  background: #f8f9fb;
+  border-color: transparent;
+  background: #fff;
   color: #292f39;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 7%);
 }
 
 .admin-agent-actions .statistics-action {
-  border-color: var(--admin-accent-border);
-  background: var(--admin-accent-soft);
-  color: var(--admin-accent-strong);
+  border-color: transparent;
+  background: linear-gradient(180deg, #6565df 0%, var(--admin-accent) 100%);
+  color: #fff;
+  box-shadow: 0 2px 7px rgb(60 60 150 / 15%);
 }
 
 .admin-agent-actions .statistics-action:hover {
-  border-color: #c7c4ef;
-  background: #eae9ff;
-  color: #4444aa;
+  border-color: transparent;
+  background: linear-gradient(180deg, #5d5dd5 0%, #5151c7 100%);
+  color: #fff;
+}
+
+.admin-console .modal-backdrop:has(.agent-modal) {
+  background: rgb(15 18 28 / 54%);
+  backdrop-filter: blur(10px) saturate(0.95);
+}
+
+.admin-console .agent-modal {
+  border-color: var(--admin-border-strong);
+  border-radius: 16px;
+  box-shadow:
+    0 30px 90px rgb(8 12 24 / 28%),
+    0 2px 10px rgb(8 12 24 / 8%);
+}
+
+.admin-console .agent-editor-header,
+.admin-console .agent-editor-footer {
+  background: rgb(255 255 255 / 97%);
+  backdrop-filter: blur(14px);
+}
+
+.admin-console .agent-editor-workspace-card {
+  background: var(--admin-surface);
+}
+
+.admin-console .agent-editor-layout {
+  scrollbar-color: #c9ced7 transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
 }
 
 .admin-console button:focus-visible,
@@ -335,10 +407,10 @@
 .admin-console input:focus-visible,
 .admin-console select:focus-visible,
 .admin-console textarea:focus-visible,
-.agent-modal button:focus-visible,
-.agent-modal input:focus-visible,
-.agent-modal select:focus-visible,
-.agent-modal textarea:focus-visible {
+.admin-console .agent-modal button:focus-visible,
+.admin-console .agent-modal input:focus-visible,
+.admin-console .agent-modal select:focus-visible,
+.admin-console .agent-modal textarea:focus-visible {
   outline: none;
   box-shadow: var(--admin-shadow-focus);
 }
@@ -351,27 +423,31 @@
 }
 
 .admin-table-wrap,
-.admin-statistics-page {
+.admin-statistics-page,
+.admin-console .agent-editor-layout {
   scrollbar-color: #c9ced7 transparent;
   scrollbar-width: thin;
 }
 
 .admin-table-wrap::-webkit-scrollbar,
-.admin-statistics-page::-webkit-scrollbar {
+.admin-statistics-page::-webkit-scrollbar,
+.admin-console .agent-editor-layout::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 .admin-table-wrap::-webkit-scrollbar-thumb,
-.admin-statistics-page::-webkit-scrollbar-thumb {
+.admin-statistics-page::-webkit-scrollbar-thumb,
+.admin-console .agent-editor-layout::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--admin-radius-pill);
   background: #c9ced7;
   background-clip: padding-box;
 }
 
 .admin-table-wrap::-webkit-scrollbar-thumb:hover,
-.admin-statistics-page::-webkit-scrollbar-thumb:hover {
+.admin-statistics-page::-webkit-scrollbar-thumb:hover,
+.admin-console .agent-editor-layout::-webkit-scrollbar-thumb:hover {
   background: #adb4bf;
   background-clip: padding-box;
 }
@@ -386,15 +462,16 @@
       inset 0 -2px 0 var(--admin-accent),
       var(--admin-shadow-xs);
   }
+
+  .admin-agent-actions {
+    min-width: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .admin-console *,
   .admin-console *::before,
-  .admin-console *::after,
-  .agent-modal *,
-  .agent-modal *::before,
-  .agent-modal *::after {
+  .admin-console *::after {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
