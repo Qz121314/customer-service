@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   deleteAgentAvatar,
@@ -27,6 +27,19 @@ export function AgentAvatarControl({
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  const clearPrepared = useCallback(() => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setPrepared(null);
+    setError('');
+  }, [previewUrl]);
+
+  const closeDialog = useCallback(() => {
+    if (saving || processing) return;
+    clearPrepared();
+    setOpen(false);
+  }, [clearPrepared, processing, saving]);
+
   useEffect(() => {
     let active = true;
     void getAgentAvatarProfile()
@@ -42,11 +55,11 @@ export function AgentAvatarControl({
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !saving && !processing) closeDialog();
+      if (event.key === 'Escape') closeDialog();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, saving, processing]);
+  }, [closeDialog, open]);
 
   useEffect(
     () => () => {
@@ -57,19 +70,6 @@ export function AgentAvatarControl({
 
   const initials = agentName.trim().slice(0, 1).toUpperCase() || 'CS';
   const displayUrl = previewUrl ?? avatarUrl;
-
-  function clearPrepared() {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setPrepared(null);
-    setError('');
-  }
-
-  function closeDialog() {
-    if (saving || processing) return;
-    clearPrepared();
-    setOpen(false);
-  }
 
   async function selectFile(file: File) {
     setError('');
