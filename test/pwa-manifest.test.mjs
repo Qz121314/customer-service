@@ -27,15 +27,36 @@ test('agent PWA opens directly into the standalone workspace', () => {
 });
 
 test('agent shell exposes mobile standalone metadata and registers an agent-only service worker', async () => {
-  const [index, main] = await Promise.all([
+  const [index, main, install, chrome, mobileCss] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/dashboard/main.tsx', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/dashboard/agent-install.ts', import.meta.url),
+      'utf8',
+    ),
+    readFile(
+      new URL('../src/dashboard/AgentWorkspaceChrome.tsx', import.meta.url),
+      'utf8',
+    ),
+    readFile(
+      new URL('../src/dashboard/agent-mobile.css', import.meta.url),
+      'utf8',
+    ),
   ]);
 
   assert.match(index, /apple-mobile-web-app-capable/u);
   assert.match(index, /apple-mobile-web-app-title/u);
   assert.match(index, /viewport-fit=cover/u);
   assert.ok(main.includes(".register('/agent-sw.js', { scope: '/agent' })"));
+  assert.match(install, /addEventListener\('beforeinstallprompt'/u);
+  assert.match(install, /deferredInstallPrompt/u);
+  assert.match(install, /await prompt\.prompt\(\)/u);
+  assert.match(install, /addEventListener\('appinstalled'/u);
+  assert.match(chrome, /aria-label="打开功能菜单"/u);
+  assert.match(chrome, /aria-label="安装到手机"/u);
+  assert.match(chrome, />首次问候语</u);
+  assert.match(mobileCss, /\.workspace-sidebar-actions \{\s*display: none;/u);
+  assert.match(mobileCss, /\.mobile-agent-settings-page/u);
 });
 
 test('agent service worker stays inside agent navigation and handles background messages', async () => {

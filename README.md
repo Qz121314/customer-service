@@ -347,6 +347,7 @@ R2_SECRET_ACCESS_KEY
 - Service Worker 只控制 `/agent` 导航，不接管管理后台 `/`；
 - 支持 standalone / minimal-ui；
 - 使用 `viewport-fit=cover` 和安全区布局；
+- 移动端顶部只保留齿轮入口，通知、提示音、首次问候语、接待流量、PWA 安装和退出统一进入功能菜单；
 - 手机聊天头部、输入区、头像弹窗和主要操作都有独立的触控/安全区规则。
 
 ## 12. 数据清理

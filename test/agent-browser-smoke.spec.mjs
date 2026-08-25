@@ -290,6 +290,22 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(backButton).toBeHidden();
   await expect(mobileComposer).toBeHidden();
 
+  const settingsButton = page.getByRole('button', { name: '打开功能菜单' });
+  await expect(settingsButton).toBeVisible();
+  await settingsButton.click();
+  const settingsPage = page.getByRole('region', { name: '功能菜单' });
+  await expect(settingsPage).toBeVisible();
+  await expect(
+    settingsPage.getByRole('button', { name: '安装到手机' }),
+  ).toBeVisible();
+  await expect(settingsPage.getByText('首次问候语')).toBeVisible();
+  await expect(settingsPage.getByText('接待流量')).toBeVisible();
+  await expect(
+    settingsPage.getByRole('button', { name: '退出客服账号' }),
+  ).toBeVisible();
+  await settingsPage.getByRole('button', { name: '返回工作台' }).click();
+  await expect(settingsPage).toBeHidden();
+
   const inboxGeometry = await page.evaluate(() => {
     const browser = globalThis;
     const sidebar = browser.document.querySelector('.workspace-sidebar');
