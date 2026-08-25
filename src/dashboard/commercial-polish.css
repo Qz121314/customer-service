@@ -1,26 +1,26 @@
-/* Agent-workspace-only visual polish.
- * The admin route has its own final visual owner in admin-design-system.css.
- * Keep this file scoped to .workspace-shell so admin styling cannot be
- * accidentally overridden by shared commercial selectors.
+/* Final visual owner for the agent workspace.
+ * Geometry stays in agent-desktop.css / agent-mobile.css and feature CSS.
+ * This layer owns only tokens, surfaces, borders, shadows, states and motion.
  */
 
 .workspace-shell {
   --cs-accent: #625bdd;
   --cs-accent-strong: #514ac8;
   --cs-accent-soft: #f1f0ff;
-  --cs-ink: #1d222c;
-  --cs-muted: #767e8b;
-  --cs-line: #e0e4ea;
-  --cs-canvas: #f2f3f6;
-  --cs-panel: #fff;
-  --cs-radius-card: 16px;
-  --cs-shadow-card:
-    0 1px 2px rgb(15 23 42 / 3%), 0 14px 36px rgb(15 23 42 / 4%);
+  --cs-ink: #1a1f28;
+  --cs-muted: #747d8b;
+  --cs-line: #e1e5eb;
+  --cs-line-strong: #d4dae3;
+  --cs-panel-soft: #f8f9fb;
+  --cs-shadow-xs: 0 1px 2px rgb(15 23 42 / 4%);
+  --cs-shadow-sm:
+    0 1px 2px rgb(15 23 42 / 4%), 0 8px 24px rgb(15 23 42 / 4%);
+  --cs-shadow-focus: 0 0 0 3px rgb(98 91 221 / 11%);
   --agent-accent: var(--cs-accent);
   --agent-accent-strong: var(--cs-accent-strong);
-  --agent-line: #e1e5eb;
+  --agent-line: var(--cs-line);
   --agent-shell: #f4f5f8;
-  --agent-thread: #f1f3f6;
+  --agent-thread: #f4f5f7;
   color: var(--cs-ink);
 }
 
@@ -31,110 +31,481 @@
   accent-color: var(--cs-accent);
 }
 
+.workspace-shell button,
+.workspace-shell a,
+.workspace-shell input,
+.workspace-shell select,
+.workspace-shell textarea,
+.workspace-shell summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
 .workspace-shell button:focus-visible,
 .workspace-shell a:focus-visible,
 .workspace-shell input:focus-visible,
 .workspace-shell select:focus-visible,
 .workspace-shell textarea:focus-visible,
 .workspace-shell summary:focus-visible {
-  outline: 3px solid rgb(98 91 221 / 16%);
-  outline-offset: 2px;
+  outline: 0;
+  box-shadow: var(--cs-shadow-focus);
 }
 
-@media (min-width: 761px) {
-  body:has(.workspace-shell) {
-    background:
-      radial-gradient(circle at 82% 4%, rgb(111 102 229 / 9%), transparent 34%),
-      #e9ecf1;
-  }
-
-  .workspace-shell {
-    border-color: #d7dce4;
-    border-radius: 22px;
-    box-shadow:
-      0 28px 80px rgb(27 35 51 / 16%),
-      0 2px 8px rgb(27 35 51 / 6%);
-  }
-
-  .workspace-shell .workspace-sidebar {
-    border-right-color: rgb(255 255 255 / 6%);
-    background:
-      radial-gradient(circle at 50% 0%, rgb(101 93 224 / 18%), transparent 28%),
-      #17191f;
-  }
-
-  .workspace-shell .workspace-brand {
-    border: 1px solid rgb(151 143 255 / 30%);
-    background: linear-gradient(145deg, #6d66e5, #544dcc);
-    box-shadow: 0 8px 22px rgb(72 64 190 / 24%);
-  }
-
-  .workspace-shell .conversation-head,
-  .workspace-shell .thread-head {
-    background: rgb(255 255 255 / 96%);
-    backdrop-filter: blur(14px);
-  }
-
-  .workspace-shell .conversation-row {
-    width: calc(100% - 12px);
-    margin: 3px 6px;
-    border: 1px solid transparent;
-    border-radius: 12px;
-  }
-
-  .workspace-shell .conversation-row:hover {
-    border-color: #e8e9ef;
-    background: #f8f8fb;
-  }
-
-  .workspace-shell .conversation-row.selected,
-  .workspace-shell .conversation-row.selected:hover {
-    border-color: #dedbff;
-    background: #f1f0ff;
-    box-shadow: inset 3px 0 0 var(--agent-accent);
-  }
-
-  .workspace-shell .conversation-context-card {
-    border-radius: 14px;
-    box-shadow: 0 8px 22px rgb(15 23 42 / 5%);
-  }
-
-  .workspace-shell .composer {
-    border-top-color: #dde1e8;
-    background: rgb(247 248 250 / 97%);
-    backdrop-filter: blur(14px);
-  }
+.workspace-shell .primary-button,
+.workspace-shell .unread-total,
+.workspace-shell .unread-badge,
+.workspace-shell .composer-foot .primary-button {
+  background-color: var(--cs-accent);
 }
 
 .workspace-shell .conversation-list,
-.workspace-shell .messages {
-  scrollbar-color: rgb(91 96 110 / 24%) transparent;
+.workspace-shell .messages,
+.workspace-shell .transfer-menu-panel {
+  scrollbar-color: rgb(91 96 110 / 22%) transparent;
   scrollbar-width: thin;
 }
 
 .workspace-shell .conversation-list::-webkit-scrollbar,
-.workspace-shell .messages::-webkit-scrollbar {
+.workspace-shell .messages::-webkit-scrollbar,
+.workspace-shell .transfer-menu-panel::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.workspace-shell .conversation-list::-webkit-scrollbar-track,
-.workspace-shell .messages::-webkit-scrollbar-track {
-  background: transparent;
-}
-
 .workspace-shell .conversation-list::-webkit-scrollbar-thumb,
-.workspace-shell .messages::-webkit-scrollbar-thumb {
+.workspace-shell .messages::-webkit-scrollbar-thumb,
+.workspace-shell .transfer-menu-panel::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
   background: rgb(91 96 110 / 28%);
   background-clip: padding-box;
 }
 
-.workspace-shell .primary-button,
-.workspace-shell .unread-total,
-.workspace-shell .composer-foot .primary-button {
-  background-color: var(--cs-accent);
+.workspace-shell .conversation-list::-webkit-scrollbar-thumb:hover,
+.workspace-shell .messages::-webkit-scrollbar-thumb:hover,
+.workspace-shell .transfer-menu-panel::-webkit-scrollbar-thumb:hover {
+  background: rgb(91 96 110 / 40%);
+  background-clip: padding-box;
+}
+
+@media (min-width: 761px) {
+  body:has(.workspace-shell) {
+    background:
+      radial-gradient(circle at 82% 2%, rgb(105 96 225 / 10%), transparent 30%),
+      radial-gradient(circle at 12% 92%, rgb(90 105 135 / 7%), transparent 32%),
+      #e9ecf1;
+  }
+
+  .workspace-shell {
+    border-color: #d5dae3;
+    border-radius: 24px;
+    box-shadow:
+      0 34px 90px rgb(26 34 51 / 16%),
+      0 8px 28px rgb(26 34 51 / 7%),
+      0 1px 2px rgb(26 34 51 / 8%);
+  }
+
+  .workspace-shell .workspace-sidebar {
+    border-right-color: rgb(255 255 255 / 6%);
+    background:
+      radial-gradient(circle at 50% 0%, rgb(101 93 224 / 18%), transparent 27%),
+      #17191f;
+  }
+
+  .workspace-shell .workspace-brand {
+    border: 1px solid rgb(164 157 255 / 34%);
+    background: linear-gradient(145deg, #756ee9 0%, #5d56d5 58%, #4f49c1 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 22%),
+      0 9px 24px rgb(72 64 190 / 26%);
+  }
+
+  .workspace-shell .agent-profile .avatar {
+    border: 1px solid rgb(255 255 255 / 8%);
+    background: linear-gradient(145deg, #363b45, #282c34);
+    box-shadow: 0 7px 16px rgb(0 0 0 / 16%);
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button {
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease,
+      transform 140ms ease;
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button:hover:not(:disabled) {
+    border-color: rgb(255 255 255 / 10%);
+    background: rgb(255 255 255 / 9%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+    transform: translateY(-1px);
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .workspace-shell .workspace-sidebar .ghost-button.is-enabled {
+    border-color: rgb(88 211 154 / 10%);
+    background: rgb(68 201 142 / 13%);
+    color: #7be0b2;
+  }
+
+  .workspace-shell .conversation-head,
+  .workspace-shell .thread-head {
+    border-bottom-color: #e3e6eb;
+    background: rgb(255 255 255 / 95%);
+    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
+    backdrop-filter: blur(16px) saturate(1.04);
+  }
+
+  .workspace-shell .conversation-head h1,
+  .workspace-shell .thread-head h2 {
+    color: #191d25;
+    font-weight: 790;
+    letter-spacing: -0.025em;
+  }
+
+  .workspace-shell .unread-total,
+  .workspace-shell .unread-badge {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 16%),
+      0 3px 8px rgb(82 75 196 / 16%);
+  }
+
+  .workspace-shell .availability-pill,
+  .workspace-shell .unread-first-toggle,
+  .workspace-shell .thread-status-action,
+  .workspace-shell .transfer-menu > summary {
+    border-color: #dce1e7;
+    background: #fff;
+    box-shadow: var(--cs-shadow-xs);
+  }
+
+  .workspace-shell .availability-pill,
+  .workspace-shell .unread-first-toggle,
+  .workspace-shell .thread-status-action,
+  .workspace-shell .transfer-menu > summary,
+  .workspace-shell .conversation-context-card > a {
+    transition:
+      border-color 130ms ease,
+      background-color 130ms ease,
+      color 130ms ease,
+      box-shadow 130ms ease,
+      transform 130ms ease;
+  }
+
+  .workspace-shell .availability-pill:hover:not(:disabled),
+  .workspace-shell .unread-first-toggle:hover,
+  .workspace-shell .thread-status-action:hover:not(:disabled),
+  .workspace-shell .transfer-menu > summary:hover,
+  .workspace-shell .transfer-menu[open] > summary {
+    border-color: #d5d1ff;
+    background: #f5f3ff;
+    color: #4741bd;
+    box-shadow: 0 2px 7px rgb(72 64 190 / 8%);
+    transform: translateY(-1px);
+  }
+
+  .workspace-shell .availability-pill:active:not(:disabled),
+  .workspace-shell .unread-first-toggle:active,
+  .workspace-shell .thread-status-action:active:not(:disabled),
+  .workspace-shell .transfer-menu > summary:active {
+    transform: translateY(0);
+  }
+
+  .workspace-shell .filters {
+    border-bottom-color: #e9ecf0;
+    background: #fafbfc;
+  }
+
+  .workspace-shell .filter {
+    transition:
+      color 130ms ease,
+      background-color 130ms ease,
+      border-color 130ms ease,
+      box-shadow 130ms ease;
+  }
+
+  .workspace-shell .filter:hover {
+    background: #fff;
+    color: #303641;
+    box-shadow: var(--cs-shadow-xs);
+  }
+
+  .workspace-shell .filter.active,
+  .workspace-shell .unread-first-toggle.is-active {
+    border-color: #dddafe;
+    background: #f1efff;
+    color: #4741bd;
+  }
+
+  .workspace-shell .inbox-tools {
+    border-bottom-color: #e7eaee;
+  }
+
+  .workspace-shell .inbox-search {
+    border-color: #e0e4e9;
+    background: #f7f8fa;
+    box-shadow: inset 0 1px 2px rgb(15 23 42 / 2%);
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease,
+      box-shadow 140ms ease;
+  }
+
+  .workspace-shell .inbox-search:hover {
+    border-color: #d4d9e0;
+    background: #f9fafb;
+  }
+
+  .workspace-shell .inbox-search:focus-within {
+    border-color: rgb(98 91 221 / 46%);
+    background: #fff;
+    box-shadow: var(--cs-shadow-focus);
+  }
+
+  .workspace-shell .conversation-list {
+    padding-block: 4px 8px;
+  }
+
+  .workspace-shell .conversation-row {
+    width: calc(100% - 12px);
+    margin: 2px 6px;
+    border: 1px solid transparent;
+    border-radius: 13px;
+    background: transparent;
+    box-shadow: none;
+    transition:
+      border-color 130ms ease,
+      background-color 130ms ease,
+      box-shadow 130ms ease;
+  }
+
+  .workspace-shell .conversation-row:hover {
+    border-color: #e8ebef;
+    background: #f8f9fb;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 2.5%);
+  }
+
+  .workspace-shell .conversation-row.selected,
+  .workspace-shell .conversation-row.selected:hover {
+    border-color: #dedbff;
+    background: linear-gradient(90deg, #f0efff 0%, #f6f5ff 100%);
+    box-shadow:
+      inset 3px 0 0 var(--agent-accent),
+      0 2px 8px rgb(69 62 177 / 6%);
+  }
+
+  .workspace-shell .conversation-row.unread:not(.selected) {
+    background: #fcfcff;
+    box-shadow: inset 2px 0 0 rgb(98 91 221 / 68%);
+  }
+
+  .workspace-shell .conversation-row .avatar.small,
+  .workspace-shell .thread-head-avatar {
+    border: 1px solid #e0e3eb;
+    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
+    color: #5953b8;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 86%);
+  }
+
+  .workspace-shell .conversation-copy time,
+  .workspace-shell .conversation-expiry,
+  .workspace-shell .message-meta {
+    color: #858e9a;
+  }
+
+  .workspace-shell .thread-pane {
+    background:
+      radial-gradient(circle at 86% 0%, rgb(100 92 219 / 3.5%), transparent 31%),
+      #f5f6f8;
+  }
+
+  .workspace-shell .transfer-menu-panel {
+    overflow-y: auto;
+    max-height: min(440px, calc(100dvh - 150px));
+    border-color: #dce1e8;
+    border-radius: 14px;
+    background: rgb(255 255 255 / 98%);
+    box-shadow:
+      0 22px 54px rgb(15 23 42 / 16%),
+      0 3px 10px rgb(15 23 42 / 7%);
+    backdrop-filter: blur(18px);
+  }
+
+  .workspace-shell .transfer-menu-panel button:hover:not(:disabled) {
+    background: #f6f5ff;
+    color: #3833a8;
+  }
+
+  .workspace-shell .conversation-context-card {
+    border-color: #dfe3e9;
+    border-radius: 14px;
+    background: rgb(255 255 255 / 96%);
+    box-shadow:
+      0 8px 24px rgb(15 23 42 / 4.5%),
+      0 1px 2px rgb(15 23 42 / 3%);
+    backdrop-filter: blur(12px);
+  }
+
+  .workspace-shell .conversation-context-card > a {
+    border: 1px solid #e1defd;
+    background: #f7f6ff;
+    color: #514ac8;
+  }
+
+  .workspace-shell .conversation-context-card > a:hover {
+    border-color: #d5d1ff;
+    background: #f1efff;
+    transform: translateY(-1px);
+  }
+
+  .workspace-shell .messages {
+    background:
+      radial-gradient(circle at 72% 12%, rgb(97 89 215 / 3.5%), transparent 24%),
+      linear-gradient(180deg, #f7f8fa 0%, #f4f5f7 100%);
+  }
+
+  .workspace-shell .message > div {
+    border-color: #e1e5ea;
+    border-radius: 15px;
+    background: #fff;
+    box-shadow:
+      0 1px 2px rgb(15 23 42 / 3.5%),
+      0 5px 14px rgb(15 23 42 / 2.5%);
+  }
+
+  .workspace-shell .message.visitor > div {
+    border-bottom-left-radius: 6px;
+  }
+
+  .workspace-shell .message.mine > div {
+    border-color: #dbd8ff;
+    border-bottom-right-radius: 6px;
+    background: linear-gradient(145deg, #f0efff 0%, #ebe9ff 100%);
+    box-shadow:
+      0 1px 2px rgb(73 66 184 / 4%),
+      0 5px 14px rgb(73 66 184 / 4%);
+  }
+
+  .workspace-shell .visitor-typing {
+    border: 1px solid #e2e5ea;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 86%);
+    color: #747d89;
+    box-shadow: var(--cs-shadow-xs);
+    backdrop-filter: blur(8px);
+  }
+
+  .workspace-shell .composer {
+    border-top-color: #dde1e7;
+    background: rgb(245 246 248 / 96%);
+    box-shadow: 0 -8px 24px rgb(15 23 42 / 3%);
+    backdrop-filter: blur(16px) saturate(1.02);
+  }
+
+  .workspace-shell .composer > textarea {
+    border-color: #d5dae2;
+    box-shadow:
+      inset 0 1px 2px rgb(15 23 42 / 2%),
+      0 1px 2px rgb(15 23 42 / 2%);
+  }
+
+  .workspace-shell .composer > textarea:focus {
+    border-color: rgb(98 91 221 / 46%);
+    box-shadow:
+      var(--cs-shadow-focus),
+      0 2px 8px rgb(15 23 42 / 4%);
+  }
+
+  .workspace-shell .media-picker {
+    border-color: #d9dee5;
+    background: #fff;
+    color: #626c79;
+    box-shadow: var(--cs-shadow-xs);
+  }
+
+  .workspace-shell .media-picker:hover {
+    border-color: #d4d0ff;
+    background: #f5f3ff;
+    color: #514ac8;
+  }
+
+  .workspace-shell .composer-foot .primary-button {
+    border-color: rgb(73 67 184 / 24%);
+    background: linear-gradient(180deg, #6b64e4 0%, #5a53d1 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 18%),
+      0 7px 18px rgb(76 69 188 / 22%);
+  }
+
+  .workspace-shell .composer-foot .primary-button:hover:not(:disabled) {
+    background: linear-gradient(180deg, #625bdc 0%, #5049c2 100%);
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-shell .conversation-head,
+  .workspace-shell .thread-head {
+    border-bottom-color: #e8ebef;
+    background: rgb(255 255 255 / 96%);
+    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
+    backdrop-filter: blur(14px);
+  }
+
+  .workspace-shell .conversation-row.selected {
+    background: #f4f2ff;
+    box-shadow: inset 3px 0 0 var(--agent-accent);
+  }
+
+  .workspace-shell .conversation-row.unread:not(.selected) {
+    background: #fcfcff;
+    box-shadow: inset 2px 0 0 rgb(98 91 221 / 58%);
+  }
+
+  .workspace-shell .conversation-row .avatar.small,
+  .workspace-shell .thread-head-avatar {
+    border: 1px solid #e2e4ec;
+    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
+    color: #5953b8;
+  }
+
+  .workspace-shell .messages {
+    background: linear-gradient(180deg, #f8f9fb 0%, #f5f6f8 100%);
+  }
+
+  .workspace-shell .message.mine > div {
+    border-color: #dddafe;
+    background: linear-gradient(145deg, #f1f0ff 0%, #eceaff 100%);
+  }
+
+  .workspace-shell .composer {
+    border-top-color: #e1e4e9;
+    background: rgb(248 249 251 / 97%);
+    box-shadow: 0 -5px 18px rgb(15 23 42 / 3%);
+    backdrop-filter: blur(12px);
+  }
+
+  .workspace-shell .composer > textarea:focus,
+  .workspace-shell .inbox-search:focus-within {
+    border-color: rgb(98 91 221 / 44%);
+    box-shadow: var(--cs-shadow-focus);
+  }
+
+  .workspace-shell .filter.active,
+  .workspace-shell .unread-first-toggle.is-active {
+    border-color: #dddafe;
+    background: #f1efff;
+    color: #4943bc;
+  }
+
+  .workspace-shell .composer-foot .primary-button {
+    background: linear-gradient(180deg, #6962e1 0%, #5851ce 100%);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 16%),
+      0 5px 14px rgb(76 69 188 / 21%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
