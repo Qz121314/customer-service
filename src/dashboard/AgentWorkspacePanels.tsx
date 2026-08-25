@@ -16,7 +16,10 @@ import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
-import { AgentActionToolbar } from './AgentWorkspaceChrome';
+import {
+  AgentActionToolbar,
+  AgentMobileSettingsPage,
+} from './AgentWorkspaceChrome';
 
 export function AgentSidebar({
   identity,
@@ -40,6 +43,7 @@ export function AgentSidebar({
   onLogout: () => void;
 }) {
   const [autoReplyOpen, setAutoReplyOpen] = useState(false);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
 
   return (
     <>
@@ -65,8 +69,21 @@ export function AgentSidebar({
           onOpenAutoReply={() => setAutoReplyOpen(true)}
           onOpenStatistics={onOpenStatistics}
           onLogout={onLogout}
+          onOpenMobileSettings={() => setMobileSettingsOpen(true)}
         />
       </aside>
+      <AgentMobileSettingsPage
+        open={mobileSettingsOpen}
+        notificationState={notificationState}
+        notificationBusy={notificationBusy}
+        soundEnabled={soundEnabled}
+        onClose={() => setMobileSettingsOpen(false)}
+        onToggleNotifications={onToggleNotifications}
+        onToggleSound={onToggleSound}
+        onOpenAutoReply={() => setAutoReplyOpen(true)}
+        onOpenStatistics={onOpenStatistics}
+        onLogout={onLogout}
+      />
       <AgentAutoReplySettingsModal
         open={autoReplyOpen}
         onClose={() => setAutoReplyOpen(false)}

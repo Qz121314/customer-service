@@ -11,7 +11,11 @@ type UiIconName =
   | 'external'
   | 'logout'
   | 'notification'
-  | 'sound';
+  | 'sound'
+  | 'settings'
+  | 'install'
+  | 'back'
+  | 'chevron';
 
 function UiIcon({ name }: { name: UiIconName }) {
   const paths: Record<UiIconName, ReactNode> = {
@@ -64,6 +68,29 @@ function UiIcon({ name }: { name: UiIconName }) {
         <path d="M11 5 6 9H3v6h3l5 4Z" />
         <path d="M15.5 8.5a5 5 0 0 1 0 7" />
         <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+      </>
+    ),
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.04 1.56V20.3h-3v-.08a1.7 1.7 0 0 0-1.04-1.56 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7 15a1.7 1.7 0 0 0-1.56-1.04H5.3v-3h.14A1.7 1.7 0 0 0 7 9.92a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.12-2.12.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 11.7 4.7v-.08h3v.08a1.7 1.7 0 0 0 1.04 1.56 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.12 2.12-.06.06a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.04h.14v3h-.14A1.7 1.7 0 0 0 19.4 15Z" />
+      </>
+    ),
+    install: (
+      <>
+        <path d="M12 3v12" />
+        <path d="m7 10 5 5 5-5" />
+        <path d="M5 21h14" />
+      </>
+    ),
+    back: (
+      <>
+        <path d="m15 18-6-6 6-6" />
+      </>
+    ),
+    chevron: (
+      <>
+        <path d="m9 18 6-6-6-6" />
       </>
     ),
   };

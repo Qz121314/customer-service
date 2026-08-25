@@ -35,6 +35,8 @@ test('agent workspace exposes optional first-greeting settings without making ch
   assert.match(toolbar, />自动回复</u);
   assert.match(panels, /AgentAutoReplySettingsModal/u);
   assert.match(panels, /onOpenAutoReply=\{\(\) => setAutoReplyOpen\(true\)\}/u);
+  assert.match(toolbar, /mobile-agent-settings-item/u);
+  assert.match(toolbar, />首次问候语</u);
   assert.match(modal, /首次问候语/u);
   assert.match(modal, /未开启或未配置问候语时，会话仍会正常创建和分配/u);
   assert.match(modal, /转接、重新排队和重连也不会重复发送/u);
