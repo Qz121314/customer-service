@@ -1,0 +1,286 @@
+.agent-mobile-settings {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .workspace-sidebar-actions {
+    display: none;
+  }
+
+  .agent-mobile-settings {
+    display: block;
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .agent-mobile-settings-trigger {
+    display: grid;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 1px solid #e3e7ec;
+    border-radius: 11px;
+    color: #596473;
+    background: #f7f8fa;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+  }
+
+  .agent-mobile-settings-trigger .ui-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .agent-mobile-settings-trigger:active {
+    background: #eceff3;
+    transform: scale(0.95);
+  }
+
+  .agent-mobile-settings-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgb(15 23 42 / 36%);
+    backdrop-filter: blur(8px);
+  }
+
+  .agent-mobile-settings-sheet {
+    width: 100%;
+    max-height: min(82dvh, 680px);
+    overflow: auto;
+    border: 1px solid rgb(15 23 42 / 8%);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
+    background: #fff;
+    box-shadow: 0 -24px 64px rgb(15 23 42 / 18%);
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    animation: agent-mobile-settings-enter 180ms ease-out;
+  }
+
+  .agent-mobile-settings-handle {
+    width: 38px;
+    height: 4px;
+    margin: 9px auto 2px;
+    border-radius: 999px;
+    background: #d8dde5;
+  }
+
+  .agent-mobile-settings-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 13px 18px 12px;
+    border-bottom: 1px solid #eef0f3;
+  }
+
+  .agent-mobile-settings-head > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .agent-mobile-settings-head span {
+    color: #929aa5;
+    font-size: 10px;
+    font-weight: 680;
+    letter-spacing: 0.04em;
+  }
+
+  .agent-mobile-settings-head h2 {
+    margin: 0;
+    color: #1d222a;
+    font-size: 19px;
+    font-weight: 760;
+    letter-spacing: -0.03em;
+  }
+
+  .agent-mobile-settings-head button {
+    display: grid;
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    place-items: center;
+    margin: 0;
+    padding: 0 0 2px;
+    border: 0;
+    border-radius: 10px;
+    color: #697380;
+    background: #f2f4f6;
+    font: inherit;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .agent-mobile-settings-list {
+    display: grid;
+    padding: 6px 10px 0;
+  }
+
+  .agent-mobile-settings-row {
+    display: grid;
+    width: 100%;
+    min-height: 62px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    padding: 8px 8px;
+    border: 0;
+    border-bottom: 1px solid #f0f2f5;
+    border-radius: 0;
+    color: #29303a;
+    background: transparent;
+    text-align: left;
+    box-shadow: none;
+  }
+
+  .agent-mobile-settings-row:active:not(:disabled) {
+    border-radius: 12px;
+    background: #f6f7f9;
+  }
+
+  .agent-mobile-settings-row:disabled {
+    opacity: 0.55;
+  }
+
+  .agent-mobile-settings-icon {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    place-items: center;
+    border-radius: 11px;
+    color: #5d6673;
+    background: #f1f3f6;
+  }
+
+  .agent-mobile-settings-icon .ui-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .agent-mobile-settings-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .agent-mobile-settings-copy strong {
+    overflow: hidden;
+    color: #242a33;
+    font-size: 13px;
+    font-weight: 710;
+    letter-spacing: -0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agent-mobile-settings-copy small {
+    overflow: hidden;
+    color: #89929e;
+    font-size: 10px;
+    font-weight: 520;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .agent-mobile-settings-value {
+    min-width: 54px;
+    padding: 5px 8px;
+    border-radius: 999px;
+    color: #7b8490;
+    background: #f1f3f6;
+    font-size: 9px;
+    font-weight: 680;
+    text-align: center;
+  }
+
+  .agent-mobile-settings-value.is-enabled {
+    color: #287b5d;
+    background: #edf8f3;
+  }
+
+  .agent-mobile-settings-chevron {
+    width: 16px;
+    height: 16px;
+    color: #a0a8b2;
+  }
+
+  .agent-mobile-install-guide {
+    display: grid;
+    gap: 5px;
+    margin: 7px 5px 8px 48px;
+    padding: 10px 12px;
+    border: 1px solid #e3e3f5;
+    border-radius: 12px;
+    color: #696887;
+    background: #f7f7ff;
+  }
+
+  .agent-mobile-install-guide strong {
+    font-size: 10px;
+    font-weight: 720;
+  }
+
+  .agent-mobile-install-guide span {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .agent-mobile-settings-row.is-danger {
+    margin-top: 7px;
+    border-bottom: 0;
+    color: #af4d4d;
+  }
+
+  .agent-mobile-settings-row.is-danger .agent-mobile-settings-icon {
+    color: #b45454;
+    background: #fff0f0;
+  }
+
+  .agent-mobile-settings-row.is-danger .agent-mobile-settings-copy strong {
+    color: #a84b4b;
+  }
+
+  @keyframes agent-mobile-settings-enter {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+@media (max-width: 390px) {
+  .agent-mobile-settings-sheet {
+    max-height: 86dvh;
+  }
+
+  .agent-mobile-settings-head {
+    padding-inline: 16px;
+  }
+
+  .agent-mobile-settings-list {
+    padding-inline: 8px;
+  }
+
+  .agent-mobile-settings-copy small {
+    max-width: 210px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-mobile-settings-sheet {
+    animation: none;
+  }
+}
