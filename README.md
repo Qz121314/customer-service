@@ -443,6 +443,8 @@ R2_SECRET_ACCESS_KEY
 
 ## 14. CI 验收
 
+仓库只保留 `.github/workflows/ci.yml` 一个正式工作流，名称固定为 `CI and Deploy`。分支和 Pull Request 复用同一套验证步骤，合并到 `main` 后自动部署 Cloudflare 并执行生产协议 Smoke；不再创建一次性、诊断、格式化、补丁生成或分支专用 workflow。Actions 对仓库内容保持只读，不能在 Runner 内生成代码、提交或推送分支。
+
 CI 顺序：
 
 ```text
