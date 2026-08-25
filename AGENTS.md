@@ -120,6 +120,8 @@ These principles apply unless the user explicitly changes the product rule:
 - Remove superseded code when a structural replacement is complete. Do not leave old and new implementations side by side without a migration reason.
 - Do not hard-code mutable configuration that already belongs to admin/runtime data.
 - Manual operational overrides must remain explicit and auditable; do not hide them inside automatic routing side effects.
+- Keep exactly one GitHub Actions workflow: `.github/workflows/ci.yml`. Do not add one-shot, temporary, diagnostic, formatting, patching, or branch-specific workflows. Make changes on a branch, run the repository gates locally, and let the existing PR/main workflow validate and deploy them.
+- GitHub Actions must remain a read-only consumer of repository contents. It may validate and deploy the checked-out revision, but it must not generate patches, commit code, or push branches.
 
 ## Root-cause-first rule
 
