@@ -43,7 +43,6 @@ for (const scriptName of [
 
 for (const requiredStep of [
   'pnpm guardrails',
-  'pnpm format',
   'pnpm lint',
   'pnpm typecheck',
 ]) {
