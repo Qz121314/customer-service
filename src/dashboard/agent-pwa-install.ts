@@ -14,6 +14,7 @@ type BeforeInstallPromptEvent = Event & {
   }>;
 };
 
+const isAgentRoute = window.location.pathname.startsWith('/agent');
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let installed = false;
 const listeners = new Set<() => void>();
@@ -36,21 +37,24 @@ function emitCapabilityChange() {
   for (const listener of listeners) listener();
 }
 
-installed = isStandalone();
+if (isAgentRoute) {
+  installed = isStandalone();
 
-window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
-  deferredPrompt = event as BeforeInstallPromptEvent;
-  emitCapabilityChange();
-});
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    deferredPrompt = event as BeforeInstallPromptEvent;
+    emitCapabilityChange();
+  });
 
-window.addEventListener('appinstalled', () => {
-  deferredPrompt = null;
-  installed = true;
-  emitCapabilityChange();
-});
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    installed = true;
+    emitCapabilityChange();
+  });
+}
 
 export function getAgentInstallCapability(): AgentInstallCapability {
+  if (!isAgentRoute) return 'manual';
   if (installed || isStandalone()) return 'installed';
   if (deferredPrompt) return 'prompt';
   return isIos() ? 'ios' : 'manual';
@@ -64,7 +68,7 @@ export function subscribeAgentInstallCapability(listener: () => void) {
 }
 
 export async function promptAgentInstall(): Promise<AgentInstallOutcome> {
-  if (!deferredPrompt) return 'unavailable';
+  if (!isAgentRoute || !deferredPrompt) return 'unavailable';
 
   const prompt = deferredPrompt;
   deferredPrompt = null;
