@@ -16,6 +16,7 @@ import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
+import { AgentMobileSettings } from './AgentMobileSettings';
 import { AgentActionToolbar } from './AgentWorkspaceChrome';
 
 export function AgentSidebar({
@@ -57,6 +58,16 @@ export function AgentSidebar({
           <i className={`presence ${availability}`} />
         </div>
         <AgentActionToolbar
+          notificationState={notificationState}
+          notificationBusy={notificationBusy}
+          soundEnabled={soundEnabled}
+          onToggleNotifications={onToggleNotifications}
+          onToggleSound={onToggleSound}
+          onOpenAutoReply={() => setAutoReplyOpen(true)}
+          onOpenStatistics={onOpenStatistics}
+          onLogout={onLogout}
+        />
+        <AgentMobileSettings
           notificationState={notificationState}
           notificationBusy={notificationBusy}
           soundEnabled={soundEnabled}
