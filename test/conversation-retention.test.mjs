@@ -1,11 +1,18 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
+import { URL } from 'node:url';
 import {
   CONVERSATION_LIFETIME_HOURS,
   conversationExpiresAt,
   purgeExpiredConversations,
 } from '../src/worker/conversation-retention.ts';
+
+const wranglerConfig = readFileSync(
+  new URL('../wrangler.jsonc', import.meta.url),
+  'utf8',
+);
 
 function createRetentionDatabase() {
   const database = new DatabaseSync(':memory:');
@@ -145,6 +152,11 @@ test('conversation expiry is fixed at 24 hours after creation', () => {
     conversationExpiresAt('2026-08-14T10:00:00.000Z'),
     '2026-08-15T10:00:00.000Z',
   );
+});
+
+test('maintenance cron runs once per hour on the hour', () => {
+  assert.match(wranglerConfig, /"crons": \["0 \* \* \* \*"\]/u);
+  assert.doesNotMatch(wranglerConfig, /"crons": \["\*\/5 \* \* \* \*"\]/u);
 });
 
 test('cron cleanup removes conversation trees with bounded D1 work', async () => {

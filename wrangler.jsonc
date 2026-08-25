@@ -7,7 +7,7 @@
   "workers_dev": true,
   "keep_vars": true,
   "triggers": {
-    "crons": ["*/5 * * * *"],
+    "crons": ["0 * * * *"],
   },
   "assets": {
     "directory": "./dist",
