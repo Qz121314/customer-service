@@ -7,7 +7,6 @@ import {
   type AgentInstallCapability,
 } from './agent-pwa-install';
 import { UiIcon } from './dashboard-ui';
-import './agent-mobile-settings.css';
 
 export function AgentMobileSettings({
   notificationState,
