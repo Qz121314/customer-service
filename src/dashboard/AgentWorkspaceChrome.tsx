@@ -149,7 +149,9 @@ export function AgentMobileSettingsPage({
   useEffect(() => {
     if (!open) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
+      if (event.key !== 'Escape') return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      close();
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
@@ -180,8 +182,8 @@ export function AgentMobileSettingsPage({
     }
   };
 
-  const openAndClose = (action: () => void) => {
-    close();
+  const openChild = (action: () => void) => {
+    setShowManualInstall(false);
     action();
   };
 
@@ -194,121 +196,125 @@ export function AgentMobileSettingsPage({
         <button type="button" aria-label="返回工作台" onClick={close}>
           <UiIcon name="back" />
         </button>
-        <div>
-          <span>WORKSPACE</span>
-          <h1 id="mobile-agent-settings-title">功能菜单</h1>
-        </div>
+        <h1 id="mobile-agent-settings-title">功能菜单</h1>
       </header>
 
       <div className="mobile-agent-settings-content">
-        <div className="mobile-agent-settings-group">
-          <span className="mobile-agent-settings-label">应用</span>
-          <button
-            type="button"
-            className="mobile-agent-settings-item"
-            aria-label="安装到手机"
-            disabled={installState === 'installed'}
-            onClick={() => void openInstall()}
-          >
-            <i className="is-accent" aria-hidden="true">
-              <UiIcon name="install" />
-            </i>
-            <span>
-              <strong>{installLabel}</strong>
-              <small>{installDescription}</small>
-            </span>
-            {installState !== 'installed' && <UiIcon name="chevron" />}
-          </button>
+        <section className="mobile-agent-settings-group">
+          <h2 className="mobile-agent-settings-label">设备与提醒</h2>
+          <div className="mobile-agent-settings-card">
+            <button
+              type="button"
+              className="mobile-agent-settings-item"
+              aria-label="安装到手机"
+              disabled={installState === 'installed'}
+              onClick={() => void openInstall()}
+            >
+              <i className="is-accent" aria-hidden="true">
+                <UiIcon name="install" />
+              </i>
+              <span>
+                <strong>{installLabel}</strong>
+                <small>{installDescription}</small>
+              </span>
+              {installState !== 'installed' && <UiIcon name="chevron" />}
+            </button>
+            <button
+              type="button"
+              className={`mobile-agent-settings-item${notificationState === 'enabled' ? ' is-enabled' : ''}`}
+              disabled={notificationBusy || notificationState === 'unsupported'}
+              onClick={onToggleNotifications}
+            >
+              <i aria-hidden="true">
+                <UiIcon name="notification" />
+              </i>
+              <span>
+                <strong>新消息通知</strong>
+                <small>
+                  {notificationBusy
+                    ? '正在设置…'
+                    : notificationState === 'enabled'
+                      ? '已开启 · 后台可接收系统通知'
+                      : notificationState === 'blocked'
+                        ? '已被浏览器阻止'
+                        : notificationState === 'unsupported'
+                          ? '当前浏览器不支持'
+                          : '未开启'}
+                </small>
+              </span>
+              <b aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className={`mobile-agent-settings-item${soundEnabled ? ' is-enabled' : ''}`}
+              onClick={onToggleSound}
+            >
+              <i aria-hidden="true">
+                <UiIcon name="sound" />
+              </i>
+              <span>
+                <strong>前台提示音</strong>
+                <small>{soundEnabled ? '已开启' : '已静音'}</small>
+              </span>
+              <b aria-hidden="true" />
+            </button>
+          </div>
           {showManualInstall && (
             <p className="mobile-agent-install-help" role="status">
               打开浏览器菜单或分享菜单，选择“添加到主屏幕”。
             </p>
           )}
-        </div>
+        </section>
 
-        <div className="mobile-agent-settings-group">
-          <span className="mobile-agent-settings-label">接待设置</span>
+        <section className="mobile-agent-settings-group">
+          <h2 className="mobile-agent-settings-label">接待</h2>
+          <div className="mobile-agent-settings-card">
+            <button
+              type="button"
+              className="mobile-agent-settings-item"
+              onClick={() => openChild(onOpenAutoReply)}
+            >
+              <i aria-hidden="true">
+                <UiIcon name="auto-reply" />
+              </i>
+              <span>
+                <strong>首次问候语</strong>
+                <small>设置首次接待时自动发送的内容</small>
+              </span>
+              <UiIcon name="chevron" />
+            </button>
+            <button
+              type="button"
+              className="mobile-agent-settings-item"
+              onClick={() => openChild(onOpenStatistics)}
+            >
+              <i aria-hidden="true">
+                <UiIcon name="statistics" />
+              </i>
+              <span>
+                <strong>接待流量</strong>
+                <small>查看个人自然月接待数据</small>
+              </span>
+              <UiIcon name="chevron" />
+            </button>
+          </div>
+        </section>
+
+        <section className="mobile-agent-settings-group is-account">
+          <h2 className="mobile-agent-settings-label">账号</h2>
           <button
             type="button"
-            className={`mobile-agent-settings-item${notificationState === 'enabled' ? ' is-enabled' : ''}`}
-            disabled={notificationBusy || notificationState === 'unsupported'}
-            onClick={onToggleNotifications}
+            className="mobile-agent-settings-logout"
+            onClick={onLogout}
           >
-            <i aria-hidden="true">
-              <UiIcon name="notification" />
-            </i>
+            <UiIcon name="logout" />
             <span>
-              <strong>新消息通知</strong>
-              <small>
-                {notificationBusy
-                  ? '正在设置…'
-                  : notificationState === 'enabled'
-                    ? '已开启'
-                    : notificationState === 'blocked'
-                      ? '已被浏览器阻止'
-                      : notificationState === 'unsupported'
-                        ? '当前浏览器不支持'
-                        : '未开启'}
-              </small>
-            </span>
-            <b aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className={`mobile-agent-settings-item${soundEnabled ? ' is-enabled' : ''}`}
-            onClick={onToggleSound}
-          >
-            <i aria-hidden="true">
-              <UiIcon name="sound" />
-            </i>
-            <span>
-              <strong>前台提示音</strong>
-              <small>{soundEnabled ? '已开启' : '已静音'}</small>
-            </span>
-            <b aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="mobile-agent-settings-item"
-            onClick={() => openAndClose(onOpenAutoReply)}
-          >
-            <i aria-hidden="true">
-              <UiIcon name="auto-reply" />
-            </i>
-            <span>
-              <strong>首次问候语</strong>
-              <small>设置首次接待时自动发送的内容</small>
+              <strong>退出客服账号</strong>
+              <small>退出当前设备上的客服登录</small>
             </span>
             <UiIcon name="chevron" />
           </button>
-        </div>
-
-        <div className="mobile-agent-settings-group">
-          <span className="mobile-agent-settings-label">工作台</span>
-          <button
-            type="button"
-            className="mobile-agent-settings-item"
-            onClick={() => openAndClose(onOpenStatistics)}
-          >
-            <i aria-hidden="true">
-              <UiIcon name="statistics" />
-            </i>
-            <span>
-              <strong>接待流量</strong>
-              <small>查看个人自然月接待数据</small>
-            </span>
-            <UiIcon name="chevron" />
-          </button>
-        </div>
-
-        <button
-          type="button"
-          className="mobile-agent-settings-logout"
-          onClick={onLogout}
-        >
-          <UiIcon name="logout" />
-          退出客服账号
-        </button>
+        </section>
       </div>
     </section>
   );

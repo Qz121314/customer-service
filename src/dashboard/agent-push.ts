@@ -4,6 +4,7 @@ export type AgentNotificationState =
 const AGENT_NOTIFICATION_PARAM = 'notification';
 const AGENT_NOTIFICATION_TARGET = 'latest-unread';
 const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
+const AGENT_SERVICE_WORKER_SCOPE = '/agent';
 
 type PushConfig = {
   enabled: boolean;
@@ -45,7 +46,7 @@ export function isAgentNotificationOpenMessage(value: unknown): boolean {
 export async function prepareAgentNotifications(): Promise<AgentNotificationState> {
   if (!supported()) return 'unsupported';
   const registration = await navigator.serviceWorker.register('/agent-sw.js', {
-    scope: '/',
+    scope: AGENT_SERVICE_WORKER_SCOPE,
   });
   if (Notification.permission === 'denied') return 'blocked';
   const subscription = await registration.pushManager.getSubscription();
@@ -60,7 +61,7 @@ export async function enableAgentNotifications(): Promise<AgentNotificationState
   }
 
   const registration = await navigator.serviceWorker.register('/agent-sw.js', {
-    scope: '/',
+    scope: AGENT_SERVICE_WORKER_SCOPE,
   });
   const config = await request<PushConfig>('/api/agent/push/config');
   let subscription = await registration.pushManager.getSubscription();
@@ -77,7 +78,9 @@ export async function enableAgentNotifications(): Promise<AgentNotificationState
 
 export async function disableAgentNotifications(): Promise<AgentNotificationState> {
   if (!supported()) return 'unsupported';
-  const registration = await navigator.serviceWorker.getRegistration('/');
+  const registration = await navigator.serviceWorker.getRegistration(
+    AGENT_SERVICE_WORKER_SCOPE,
+  );
   const subscription = await registration?.pushManager.getSubscription();
   if (subscription) {
     let removalError: unknown = null;
