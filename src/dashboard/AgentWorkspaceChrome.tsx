@@ -172,14 +172,15 @@ export function AgentMobileSettingsPage({
         ? '获得更接近 App 的全屏体验'
         : '通过浏览器菜单完成安装';
 
-  const openInstall = async () => {
+  const openInstall = () => {
     if (installState === 'installed') return;
-    try {
-      const result = await install();
-      setShowManualInstall(result === 'manual' || result === 'dismissed');
-    } catch {
-      setShowManualInstall(true);
-    }
+    void Promise.resolve(install())
+      .then((result) => {
+        setShowManualInstall(result === 'manual' || result === 'dismissed');
+      })
+      .catch(() => {
+        setShowManualInstall(true);
+      });
   };
 
   const openChild = (action: () => void) => {
@@ -208,7 +209,7 @@ export function AgentMobileSettingsPage({
               className="mobile-agent-settings-item"
               aria-label="安装到手机"
               disabled={installState === 'installed'}
-              onClick={() => void openInstall()}
+              onClick={openInstall}
             >
               <i className="is-accent" aria-hidden="true">
                 <UiIcon name="install" />
