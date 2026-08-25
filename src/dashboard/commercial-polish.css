@@ -129,6 +129,7 @@
   }
 
   .workspace-shell {
+    position: relative;
     border-color: #d5dae3;
     border-radius: var(--cs-radius-shell);
     background: #fff;
