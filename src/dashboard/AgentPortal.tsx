@@ -1580,6 +1580,7 @@ function AgentWorkspace({
                 </span>
                 <button
                   className="primary-button"
+                  aria-label="发送"
                   disabled={
                     Boolean(currentPendingText) ||
                     !draft.trim() ||
