@@ -11,30 +11,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-async function seedWorkspace(page) {
-  const conversation = await page.request.post(
-    url('/client/v1/conversations'),
-    {
-      data: {
-        visitorId: 'MOBILEMENU001',
-        sourceHandoffId: '22222222-2222-4222-8222-222222222222',
-        clientMessageId: 'ui-mobile-menu-message-1',
-        message: '移动端功能菜单回归测试',
-        product: {
-          id: productId,
-          sectionId: 'mobile-menu-section',
-          sectionName: 'Mobile Menu Section',
-          categoryId: 'mobile-menu-category',
-          categoryName: 'Mobile Menu Category',
-          title: 'Mobile Menu Product',
-          href: 'https://example.com/mobile-menu-product',
-          coverUrl: null,
-        },
-      },
-    },
-  );
-  expect(conversation.ok()).toBeTruthy();
-
+async function seedAgent(page) {
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -69,7 +46,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await seedWorkspace(page);
+  await seedAgent(page);
   await loginAgent(page);
 
   await page.getByRole('button', { name: '打开功能菜单' }).click();
@@ -95,14 +72,14 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   expect(settingsGeometry.width).toBeLessThanOrEqual(390);
   expect(settingsGeometry.height).toBeLessThanOrEqual(844);
   expect(settingsGeometry.cardCount).toBe(2);
-  expect(settingsGeometry.cardRadii.every((radius) => radius >= 16)).toBeTruthy();
+  expect(
+    settingsGeometry.cardRadii.every((radius) => radius >= 16),
+  ).toBeTruthy();
 
   await settingsPage.getByRole('button', { name: /首次问候语/u }).click();
   const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
   await expect(autoReplyDialog).toBeVisible();
-  await page
-    .getByRole('button', { name: '关闭自动回复设置' })
-    .click();
+  await page.getByRole('button', { name: '关闭自动回复设置' }).click();
   await expect(autoReplyDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
