@@ -65,15 +65,11 @@ export function AgentActionToolbar({
           aria-label={
             soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
           }
-          title={
-            soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'
-          }
+          title={soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'}
           onClick={onToggleSound}
         >
           <UiIcon name="sound" />
-          <span>
-            {soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}
-          </span>
+          <span>{soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}</span>
         </button>
         <button
           type="button"
@@ -235,9 +231,7 @@ export function AgentMobileSettingsPage({
           <button
             type="button"
             className={`mobile-agent-settings-item${notificationState === 'enabled' ? ' is-enabled' : ''}`}
-            disabled={
-              notificationBusy || notificationState === 'unsupported'
-            }
+            disabled={notificationBusy || notificationState === 'unsupported'}
             onClick={onToggleNotifications}
           >
             <i aria-hidden="true">
