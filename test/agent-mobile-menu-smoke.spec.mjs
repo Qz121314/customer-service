@@ -51,6 +51,10 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await page.getByRole('button', { name: '打开功能菜单' }).click();
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
   await expect(settingsPage).toBeVisible();
+  await expect(settingsPage).toHaveCSS(
+    'animation-name',
+    'agent-overlay-page-in',
+  );
   await expect(settingsPage.getByText('设备与提醒')).toBeVisible();
   await expect(settingsPage.getByText('接待', { exact: true })).toBeVisible();
   await expect(settingsPage.getByText('账号', { exact: true })).toBeVisible();
@@ -75,9 +79,42 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     settingsGeometry.cardRadii.every((radius) => radius >= 16),
   ).toBeTruthy();
 
+  await page.route('**/api/agent/auto-reply', async (route) => {
+    if (route.request().method() === 'GET') {
+      await new Promise((resolve) => setTimeout(resolve, 650));
+    }
+    await route.continue();
+  });
   await settingsPage.getByRole('button', { name: /首次问候语/u }).click();
   const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
   await expect(autoReplyDialog).toBeVisible();
+  await expect(autoReplyDialog).toHaveCSS(
+    'animation-name',
+    'agent-overlay-sheet-in',
+  );
+  await page.waitForTimeout(220);
+  await expect(autoReplyDialog.getByText('正在读取设置…')).toBeVisible();
+  const autoReplyGeometryBeforeLoad = await autoReplyDialog.boundingBox();
+  await expect(
+    autoReplyDialog.getByRole('checkbox', { name: /自动发送首次问候/u }),
+  ).toBeVisible();
+  const autoReplyGeometryAfterLoad = await autoReplyDialog.boundingBox();
+  expect(autoReplyGeometryBeforeLoad).not.toBeNull();
+  expect(autoReplyGeometryAfterLoad).not.toBeNull();
+  if (autoReplyGeometryBeforeLoad && autoReplyGeometryAfterLoad) {
+    expect(
+      Math.abs(
+        autoReplyGeometryBeforeLoad.height - autoReplyGeometryAfterLoad.height,
+      ),
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(
+        autoReplyGeometryBeforeLoad.y +
+          autoReplyGeometryBeforeLoad.height -
+          (autoReplyGeometryAfterLoad.y + autoReplyGeometryAfterLoad.height),
+      ),
+    ).toBeLessThanOrEqual(1);
+  }
   await page.getByRole('button', { name: '关闭自动回复设置' }).click();
   await expect(autoReplyDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();

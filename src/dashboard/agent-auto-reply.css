@@ -215,7 +215,11 @@
 
   .agent-auto-reply-dialog {
     width: 100%;
+    height: min(660px, 82dvh);
     max-height: min(82dvh, 720px);
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
@@ -227,6 +231,18 @@
   .agent-auto-reply-actions {
     padding-right: 18px;
     padding-left: 18px;
+  }
+
+  .agent-auto-reply-body,
+  .agent-auto-reply-loading {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .agent-auto-reply-loading {
+    display: grid;
+    place-items: center;
   }
 
   .agent-auto-reply-actions {
