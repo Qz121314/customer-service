@@ -79,7 +79,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     settingsGeometry.cardRadii.every((radius) => radius >= 16),
   ).toBeTruthy();
 
-  await page.route('**/api/agent/auto-reply', async (route) => {
+  await page.route('**/api/agent/settings/auto-reply', async (route) => {
     if (route.request().method() === 'GET') {
       await new Promise((resolve) => setTimeout(resolve, 650));
     }
