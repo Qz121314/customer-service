@@ -380,7 +380,7 @@
 
 .admin-console .agent-modal {
   border-color: var(--admin-border-strong);
-  border-radius: 16px;
+  border-radius: 22px;
   box-shadow:
     0 30px 90px rgb(8 12 24 / 28%),
     0 2px 10px rgb(8 12 24 / 8%);
