@@ -7,6 +7,7 @@ const [
   preCommit,
   prePush,
   ciWorkflow,
+  workflowFiles,
   testFiles,
 ] = await Promise.all([
   readFile('package.json', 'utf8'),
@@ -14,6 +15,7 @@ const [
   readFile('.githooks/pre-commit', 'utf8'),
   readFile('.githooks/pre-push', 'utf8'),
   readFile('.github/workflows/ci.yml', 'utf8'),
+  readdir('.github/workflows'),
   readdir('test'),
 ]);
 
@@ -73,6 +75,27 @@ assert.match(
 );
 assert.match(prePush, /pnpm\s+verify/u, 'pre-push must run pnpm verify');
 
+assert.deepEqual(
+  workflowFiles.toSorted(),
+  ['ci.yml'],
+  'Repository must keep exactly one GitHub Actions workflow: .github/workflows/ci.yml',
+);
+assert.match(
+  ciWorkflow,
+  /^name:\s*CI and Deploy\s*$/mu,
+  'The single workflow must keep the stable CI and Deploy name',
+);
+assert.match(
+  ciWorkflow,
+  /permissions:\s*\n\s+contents:\s*read\s*$/mu,
+  'CI must keep repository contents read-only',
+);
+assert.doesNotMatch(
+  ciWorkflow,
+  /\b(?:git\s+push|gh\s+pr|contents:\s*write)\b/u,
+  'CI must validate and deploy only; it must never patch or push repository code',
+);
+
 assert.match(
   engineeringContract,
   /Read the existing tests that cover the same behavior \*\*before writing code\*\*/u,
@@ -92,6 +115,11 @@ assert.match(
   engineeringContract,
   /Minimize Cloudflare Workers and D1 requests/u,
   'engineering contract must preserve the Worker/D1 request-budget principle',
+);
+assert.match(
+  engineeringContract,
+  /Keep exactly one GitHub Actions workflow/u,
+  'engineering contract must prohibit temporary and one-shot workflows',
 );
 
 const executableContracts = testFiles.filter((name) =>
