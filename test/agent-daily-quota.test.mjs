@@ -1,10 +1,14 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { URL } from 'node:url';
 import {
   assignConversationAgent,
   routingBusinessDate,
 } from '../src/worker/routing.ts';
+
+const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 function d1(database) {
   return {
@@ -27,7 +31,7 @@ function d1(database) {
   };
 }
 
-function databaseWithQuota(limit) {
+async function databaseWithDailyLimit(limit) {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     CREATE TABLE agents (
@@ -64,25 +68,12 @@ function databaseWithQuota(limit) {
       is_enabled INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (site_id, id)
     );
-    CREATE TABLE support_groups (
-      site_id TEXT NOT NULL,
-      id TEXT NOT NULL,
-      is_enabled INTEGER NOT NULL,
-      PRIMARY KEY (site_id, id)
-    );
-    CREATE TABLE group_agents (
-      site_id TEXT NOT NULL,
-      group_id TEXT NOT NULL,
-      agent_id TEXT NOT NULL,
-      is_enabled INTEGER NOT NULL
-    );
     CREATE TABLE conversations (
       id TEXT PRIMARY KEY,
       site_id TEXT NOT NULL,
       product_id TEXT,
       section_id TEXT,
       category_id TEXT,
-      group_id TEXT,
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
@@ -120,19 +111,19 @@ function databaseWithQuota(limit) {
         conversation_count = conversation_count + 1;
     END;
 
-    INSERT INTO support_groups VALUES ('default', 'legacy', 1);
     INSERT INTO agents (
       id, site_id, name, username, password_hash, status, is_enabled,
       max_active_conversations, daily_conversation_limit,
       last_seen_at, last_assigned_at
     ) VALUES (
-      'agent-a', 'default', 'Agent A', 'agent-a', 'hash', 'online', 1,
-      0, ${Number(limit)}, CURRENT_TIMESTAMP, NULL
+      'agent-a', 'default', 'Agent A', 'agent-a', 'hash', 'offline', 1,
+      1, ${Number(limit)}, NULL, NULL
     );
     INSERT INTO agent_routing_scopes (
       site_id, agent_id, scope_type, section_id, category_id, product_id, is_enabled
     ) VALUES ('default', 'agent-a', 'section', 'west', '', '', 1);
   `);
+  database.exec(await read('../migrations/0042_simple_round_robin_routing.sql'));
   return database;
 }
 
@@ -140,15 +131,15 @@ function addConversation(database, id) {
   database
     .prepare(
       `INSERT INTO conversations (
-         id, site_id, product_id, section_id, category_id, group_id,
+         id, site_id, product_id, section_id, category_id,
          assigned_agent, status, expires_at, created_at
-       ) VALUES (?, 'default', ?, 'west', 'escorts', 'legacy', NULL, 'open',
+       ) VALUES (?, 'default', ?, 'west', 'escorts', NULL, 'open',
          '2099-01-01T00:00:00.000Z', CURRENT_TIMESTAMP)`,
     )
     .run(id, `product-${id}`);
 }
 
-test('daily quota uses Los Angeles natural-day boundaries', () => {
+test('daily reporting uses Los Angeles natural-day boundaries', () => {
   assert.equal(
     routingBusinessDate(new Date('2026-08-15T06:59:59.000Z')),
     '2026-08-14',
@@ -167,28 +158,27 @@ test('daily quota uses Los Angeles natural-day boundaries', () => {
   );
 });
 
-test('concurrent routing cannot exceed the daily conversation quota', async () => {
-  const database = databaseWithQuota(1);
+test('daily and active limits do not block automatic traffic delivery', async () => {
+  const database = await databaseWithDailyLimit(1);
   addConversation(database, 'conversation-1');
   addConversation(database, 'conversation-2');
 
   const db = d1(database);
-  const results = await Promise.all([
-    assignConversationAgent(db, 'conversation-1'),
-    assignConversationAgent(db, 'conversation-2'),
-  ]);
+  const first = await assignConversationAgent(db, 'conversation-1');
+  const second = await assignConversationAgent(db, 'conversation-2');
 
-  assert.equal(results.filter(Boolean).length, 1);
+  assert.equal(first?.id, 'agent-a');
+  assert.equal(second?.id, 'agent-a');
   assert.equal(
     database
       .prepare(
-        `SELECT COUNT(*) AS count
-         FROM conversations
-         WHERE assigned_agent = 'agent-a'
-           AND assigned_business_date IS NOT NULL`,
+        `SELECT conversation_count AS count
+         FROM agent_daily_stats
+         WHERE agent_id = 'agent-a'`,
       )
       .get().count,
-    1,
+    2,
+    'daily counts remain available for reporting even though they do not gate traffic',
   );
   database.close();
 });
