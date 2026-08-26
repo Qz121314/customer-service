@@ -5,7 +5,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('agent websocket presence avoids one D1 write per ping', async () => {
+test('presence stays realtime-only and does not gate automatic routing', async () => {
   const [core, routing, waiting, dashboardApi] = await Promise.all([
     read('../src/worker/core.ts'),
     read('../src/worker/routing.ts'),
@@ -17,13 +17,9 @@ test('agent websocket presence avoids one D1 write per ping', async () => {
     core,
     /datetime\(last_seen_at\) <= datetime\('now', '-90 seconds'\)/u,
   );
-  assert.match(
-    routing,
-    /datetime\(a\.last_seen_at\) >= datetime\('now', '-3 minutes'\)/u,
-  );
-  assert.match(
-    waiting,
-    /datetime\(a\.last_seen_at\) >= datetime\('now', '-3 minutes'\)/u,
-  );
+  assert.doesNotMatch(routing, /a\.status = 'online'/u);
+  assert.doesNotMatch(routing, /a\.last_seen_at/u);
+  assert.doesNotMatch(waiting, /last_seen_at/u);
+  assert.match(waiting, /assignConversationAgent/u);
   assert.match(dashboardApi, /window\.setInterval\(ping, 60_000\)/u);
 });
