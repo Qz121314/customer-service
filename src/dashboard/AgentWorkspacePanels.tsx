@@ -238,8 +238,8 @@ export function AgentInboxPane({
             disabled={availabilitySaving || !networkOnline || !inboxConnected}
             title={
               availability === 'online'
-                ? '点击暂停接收新会话'
-                : '点击恢复接收新会话'
+                ? '点击切换为忙碌状态'
+                : '点击切换为在线状态'
             }
             onClick={onToggleAvailability}
           >
@@ -247,8 +247,8 @@ export function AgentInboxPane({
             {availabilitySaving
               ? '切换中…'
               : availability === 'online'
-                ? '在线接待'
-                : '暂停接待'}
+                ? '在线'
+                : '忙碌'}
           </button>
           <span
             className={`connection-status is-${connectionState}`}
@@ -310,7 +310,7 @@ export function AgentInboxPane({
                 : '没有找到匹配的会话'}
             </strong>
             {conversationCount === 0 && (
-              <span>保持在线，新咨询分配给你后会自动出现在这里。</span>
+              <span>新咨询分配给你后会自动出现在这里。</span>
             )}
           </div>
         ) : (
