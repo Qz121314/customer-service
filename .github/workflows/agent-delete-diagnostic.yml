@@ -44,47 +44,21 @@ jobs:
           from pathlib import Path
           p = Path('src/dashboard/AdminPortal.tsx')
           s = p.read_text()
-          section_anchor = "  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';\n"
-          if section_anchor not in s:
+          section = "  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';\n"
+          if section not in s:
               raise SystemExit('missing sectionTitle anchor')
-          s = s.replace(
-              section_anchor,
-              "  const editingAgentId = draft.id;\n" + section_anchor,
-              1,
-          )
-          old = '''          onDelete={
-            draft.id
-              ? () =>
-                  void removeAgent({
-                    id: draft.id,
-                    name: draft.name,
-                  })
-              : undefined
-          }
-'''
-          new = '''          onDelete={
-            editingAgentId
-              ? () =>
-                  void removeAgent({
-                    id: editingAgentId,
-                    name: draft.name,
-                  })
-              : undefined
-          }
-'''
-          if old not in s:
-              raise SystemExit('missing onDelete anchor')
-          p.write_text(s.replace(old, new, 1))
+          s = s.replace(section, "  const editingAgentId = draft.id;\n" + section, 1)
+          ternary = "            draft.id\n              ? () =>\n"
+          if ternary not in s:
+              raise SystemExit('missing delete ternary anchor')
+          s = s.replace(ternary, "            editingAgentId\n              ? () =>\n", 1)
+          agent_id = "                    id: draft.id,\n"
+          if agent_id not in s:
+              raise SystemExit('missing delete id anchor')
+          s = s.replace(agent_id, "                    id: editingAgentId,\n", 1)
+          p.write_text(s)
           PY
-          pnpm exec prettier --write \
-            src/dashboard/api.ts \
-            src/dashboard/AdminPortal.tsx \
-            src/dashboard/AgentEditorModal.tsx \
-            src/dashboard/agent-editor.css \
-            src/worker/admin-config-api.ts \
-            test/customer-service-full-flow.test.mjs \
-            test/agent-delete-ui-contract.test.mjs \
-            test/admin-browser-smoke.spec.mjs
+          pnpm exec prettier --write src/dashboard/api.ts src/dashboard/AdminPortal.tsx src/dashboard/AgentEditorModal.tsx src/dashboard/agent-editor.css src/worker/admin-config-api.ts test/customer-service-full-flow.test.mjs test/agent-delete-ui-contract.test.mjs test/admin-browser-smoke.spec.mjs
 
       - name: Typecheck
         run: pnpm typecheck
