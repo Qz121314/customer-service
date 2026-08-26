@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import { URL } from 'node:url';
 import { assignConversationAgent } from '../src/worker/routing.ts';
+
+const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 function d1(database) {
   return {
@@ -24,7 +28,7 @@ function d1(database) {
   };
 }
 
-function createDatabase() {
+async function createDatabase() {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     CREATE TABLE agents (
@@ -89,21 +93,8 @@ function createDatabase() {
     CREATE TABLE agent_traffic_receipts (
       conversation_id TEXT PRIMARY KEY
     );
-    CREATE TRIGGER test_assignment_daily_stats
-    AFTER UPDATE OF assigned_agent ON conversations
-    WHEN OLD.assigned_agent IS NULL
-      AND NEW.assigned_agent IS NOT NULL
-      AND NEW.assigned_business_date IS NOT NULL
-    BEGIN
-      INSERT INTO agent_daily_stats (
-        site_id, agent_id, business_date, conversation_count
-      ) VALUES (
-        NEW.site_id, NEW.assigned_agent, NEW.assigned_business_date, 1
-      )
-      ON CONFLICT(site_id, agent_id, business_date) DO UPDATE SET
-        conversation_count = conversation_count + 1;
-    END;
   `);
+  database.exec(await read('../migrations/0042_simple_round_robin_routing.sql'));
   return database;
 }
 
@@ -112,9 +103,13 @@ function addAgent(
   {
     id,
     status = 'online',
-    lastAssignedAt = null,
+    enabled = true,
     maxActiveConversations = 0,
     dailyConversationLimit = 0,
+    quotaEnabled = false,
+    quotaTotal = 0,
+    quotaUsed = 0,
+    lastAssignedAt = null,
   },
 ) {
   database
@@ -122,8 +117,9 @@ function addAgent(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, status, is_enabled,
          max_active_conversations, daily_conversation_limit,
+         traffic_quota_enabled, traffic_quota_total, traffic_quota_used,
          last_seen_at, last_assigned_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 1, ?, ?, CURRENT_TIMESTAMP, ?)`,
+       ) VALUES (?, 'default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
     )
     .run(
       id,
@@ -131,8 +127,12 @@ function addAgent(
       id,
       `hash-${id}`,
       status,
+      enabled ? 1 : 0,
       maxActiveConversations,
       dailyConversationLimit,
+      quotaEnabled ? 1 : 0,
+      quotaTotal,
+      quotaUsed,
       lastAssignedAt,
     );
 }
@@ -168,148 +168,51 @@ function addConversation(
     .run(id, productId, sectionId, categoryId);
 }
 
-test('agents covering the same section receive conversations round-robin', async () => {
-  const database = createDatabase();
-  addAgent(database, {
-    id: 'agent-a',
-    lastAssignedAt: '2026-01-01T00:00:00.000Z',
-  });
-  addAgent(database, { id: 'agent-b' });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'conversation-1', 'product-a');
-  addConversation(database, 'conversation-2', 'product-b', {
-    categoryId: 'massage',
-  });
+test('matching seats receive fresh conversations in deterministic round robin', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+    addAgent(database, { id });
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+  for (let index = 1; index <= 4; index += 1) {
+    addConversation(database, `conversation-${index}`, `product-${index}`);
+  }
 
   const db = d1(database);
-  const first = await assignConversationAgent(db, 'conversation-1');
-  const second = await assignConversationAgent(db, 'conversation-2');
+  const assigned = [];
+  for (let index = 1; index <= 4; index += 1) {
+    assigned.push(
+      (await assignConversationAgent(db, `conversation-${index}`))?.id,
+    );
+  }
 
-  assert.equal(first?.id, 'agent-b');
-  assert.equal(second?.id, 'agent-a');
-  assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get('conversation-1').assigned_agent,
-    'agent-b',
-  );
-  assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get('conversation-2').assigned_agent,
-    'agent-a',
-  );
+  assert.deepEqual(assigned, ['agent-a', 'agent-b', 'agent-c', 'agent-a']);
   database.close();
 });
 
-test('one agent can cover multiple whole sections', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'multi-section-agent' });
-  addScope(database, 'multi-section-agent', {
-    type: 'section',
-    sectionId: 'west',
-  });
-  addScope(database, 'multi-section-agent', {
-    type: 'section',
-    sectionId: 'east',
-  });
-  addConversation(database, 'conversation-west', 'product-west');
-  addConversation(database, 'conversation-east', 'product-east', {
-    sectionId: 'east',
-  });
+test('offline and busy seats remain eligible for automatic traffic', async () => {
+  const database = await createDatabase();
+  addAgent(database, { id: 'agent-offline', status: 'offline' });
+  addAgent(database, { id: 'agent-busy', status: 'busy' });
+  addScope(database, 'agent-offline', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-busy', { type: 'section', sectionId: 'west' });
+  addConversation(database, 'conversation-1', 'product-a');
+  addConversation(database, 'conversation-2', 'product-b');
 
   const db = d1(database);
-  const west = await assignConversationAgent(db, 'conversation-west');
-  const east = await assignConversationAgent(db, 'conversation-east');
-
-  assert.equal(west?.id, 'multi-section-agent');
-  assert.equal(east?.id, 'multi-section-agent');
-  database.close();
-});
-
-test('configured category remains waiting when its scoped agent is unavailable', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'category-agent', status: 'offline' });
-  addScope(database, 'category-agent', {
-    type: 'category',
-    sectionId: 'west',
-    categoryId: 'escorts',
-  });
-  addConversation(database, 'conversation-1', 'product-a');
-
-  const assignment = await assignConversationAgent(
-    d1(database),
-    'conversation-1',
-  );
-
-  assert.equal(assignment, null);
   assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get('conversation-1').assigned_agent,
-    null,
+    (await assignConversationAgent(db, 'conversation-1'))?.id,
+    'agent-busy',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-2'))?.id,
+    'agent-offline',
   );
   database.close();
 });
 
-test('section scope automatically covers a newly introduced product', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'section-agent' });
-  addScope(database, 'section-agent', { type: 'section', sectionId: 'west' });
-
-  addConversation(database, 'conversation-1', 'future-product', {
-    sectionId: 'west',
-    categoryId: 'new-category',
-  });
-
-  const assignment = await assignConversationAgent(
-    d1(database),
-    'conversation-1',
-  );
-
-  assert.equal(assignment?.id, 'section-agent');
-  database.close();
-});
-
-test('explicit product scope matches only the selected product', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'product-agent' });
-  addScope(database, 'product-agent', {
-    type: 'product',
-    productId: 'product-a',
-  });
-  addConversation(database, 'conversation-1', 'product-b');
-
-  const assignment = await assignConversationAgent(
-    d1(database),
-    'conversation-1',
-  );
-
-  assert.equal(assignment, null);
-  database.close();
-});
-
-test('conversation without a routing scope remains waiting', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'unrelated-agent' });
-  addScope(database, 'unrelated-agent', {
-    type: 'section',
-    sectionId: 'east',
-  });
-  addConversation(database, 'conversation-1', 'product-without-scope');
-
-  const assignment = await assignConversationAgent(
-    d1(database),
-    'conversation-1',
-  );
-
-  assert.equal(assignment, null);
-  database.close();
-});
-
-test('active CTA affinity blocks fallback until its expiry', async () => {
-  const database = createDatabase();
+test('active two-hour affinity keeps traffic on its offline seat', async () => {
+  const database = await createDatabase();
   addAgent(database, { id: 'agent-a', status: 'offline' });
   addAgent(database, { id: 'agent-b' });
   addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
@@ -322,132 +225,148 @@ test('active CTA affinity blocks fallback until its expiry', async () => {
     WHERE id = 'protected-conversation';
   `);
 
-  assert.equal(
-    await assignConversationAgent(d1(database), 'protected-conversation'),
-    null,
-  );
-  assert.equal(
-    database
-      .prepare(
-        `SELECT assigned_agent FROM conversations
-         WHERE id = 'protected-conversation'`,
-      )
-      .get().assigned_agent,
-    null,
-  );
-
-  database.exec(`
-    UPDATE conversations
-    SET cta_affinity_expires_at = datetime('now', '-1 second')
-    WHERE id = 'protected-conversation';
-  `);
-  const released = await assignConversationAgent(
+  const assignment = await assignConversationAgent(
     d1(database),
     'protected-conversation',
   );
-  assert.equal(released?.id, 'agent-b');
-
+  assert.equal(assignment?.id, 'agent-a');
   database.close();
 });
 
-test('persistent requeue exclusion keeps the releasing seat out of later routing', async () => {
-  const database = createDatabase();
+test('disabled or quota-exhausted affinity falls back without waiting', async () => {
+  const database = await createDatabase();
+  addAgent(database, { id: 'disabled-agent', enabled: false });
+  addAgent(database, {
+    id: 'exhausted-agent',
+    quotaEnabled: true,
+    quotaTotal: 2,
+    quotaUsed: 2,
+  });
+  addAgent(database, { id: 'available-agent' });
+  for (const id of ['disabled-agent', 'exhausted-agent', 'available-agent']) {
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+  addConversation(database, 'disabled-affinity', 'product-a');
+  addConversation(database, 'exhausted-affinity', 'product-b');
+  database.exec(`
+    UPDATE conversations
+    SET cta_affinity_agent_id = 'disabled-agent',
+        cta_affinity_expires_at = datetime('now', '+2 hours')
+    WHERE id = 'disabled-affinity';
+    UPDATE conversations
+    SET cta_affinity_agent_id = 'exhausted-agent',
+        cta_affinity_expires_at = datetime('now', '+2 hours')
+    WHERE id = 'exhausted-affinity';
+  `);
+
+  const db = d1(database);
+  assert.equal(
+    (await assignConversationAgent(db, 'disabled-affinity'))?.id,
+    'available-agent',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'exhausted-affinity'))?.id,
+    'available-agent',
+  );
+  database.close();
+});
+
+test('active and daily limits do not block purchased traffic delivery', async () => {
+  const database = await createDatabase();
+  addAgent(database, {
+    id: 'agent-a',
+    maxActiveConversations: 1,
+    dailyConversationLimit: 1,
+  });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+  addConversation(database, 'conversation-1', 'product-a');
+  addConversation(database, 'conversation-2', 'product-b');
+
+  const db = d1(database);
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-1'))?.id,
+    'agent-a',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-2'))?.id,
+    'agent-a',
+  );
+  database.close();
+});
+
+test('section, category and product scopes remain authoritative', async () => {
+  const database = await createDatabase();
+  addAgent(database, { id: 'section-agent' });
+  addAgent(database, { id: 'category-agent' });
+  addAgent(database, { id: 'product-agent' });
+  addScope(database, 'section-agent', { type: 'section', sectionId: 'east' });
+  addScope(database, 'category-agent', {
+    type: 'category',
+    sectionId: 'west',
+    categoryId: 'massage',
+  });
+  addScope(database, 'product-agent', {
+    type: 'product',
+    productId: 'special-product',
+  });
+  addConversation(database, 'section-conversation', 'section-product', {
+    sectionId: 'east',
+  });
+  addConversation(database, 'category-conversation', 'category-product', {
+    categoryId: 'massage',
+  });
+  addConversation(database, 'product-conversation', 'special-product');
+
+  const db = d1(database);
+  assert.equal(
+    (await assignConversationAgent(db, 'section-conversation'))?.id,
+    'section-agent',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'category-conversation'))?.id,
+    'category-agent',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'product-conversation'))?.id,
+    'product-agent',
+  );
+  database.close();
+});
+
+test('manual requeue exclusion skips the releasing seat', async () => {
+  const database = await createDatabase();
   addAgent(database, { id: 'agent-a' });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'conversation-1', 'product-a');
-  database
-    .prepare(
-      `UPDATE conversations
-       SET requeue_excluded_agent_id = 'agent-a'
-       WHERE id = 'conversation-1'`,
-    )
-    .run();
-
-  const db = d1(database);
-  assert.equal(await assignConversationAgent(db, 'conversation-1'), null);
-
   addAgent(database, { id: 'agent-b' });
-  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
-  const reassigned = await assignConversationAgent(db, 'conversation-1');
-  assert.equal(reassigned?.id, 'agent-b');
-  database.close();
-});
-
-test('concurrent assignments respect capacity and spread work across eligible agents', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'agent-a', maxActiveConversations: 1 });
-  addAgent(database, { id: 'agent-b', maxActiveConversations: 1 });
   addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
   addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
   addConversation(database, 'conversation-1', 'product-a');
-  addConversation(database, 'conversation-2', 'product-b');
+  database.exec(`
+    UPDATE conversations
+    SET requeue_excluded_agent_id = 'agent-a'
+    WHERE id = 'conversation-1';
+  `);
 
-  const db = d1(database);
-  const [first, second] = await Promise.all([
-    assignConversationAgent(db, 'conversation-1'),
-    assignConversationAgent(db, 'conversation-2'),
-  ]);
-
-  assert.deepEqual(
-    new Set([first?.id, second?.id]),
-    new Set(['agent-a', 'agent-b']),
+  const assignment = await assignConversationAgent(
+    d1(database),
+    'conversation-1',
+    'agent-a',
   );
-  assert.equal(
-    database
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM conversations
-         WHERE assigned_agent = 'agent-a'`,
-      )
-      .get().count,
-    1,
-  );
-  assert.equal(
-    database
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM conversations
-         WHERE assigned_agent = 'agent-b'`,
-      )
-      .get().count,
-    1,
-  );
+  assert.equal(assignment?.id, 'agent-b');
   database.close();
 });
 
-test('daily conversation limit closes routing after quota and reopens next business day', async () => {
-  const database = createDatabase();
-  addAgent(database, { id: 'quota-agent', dailyConversationLimit: 2 });
-  addScope(database, 'quota-agent', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'conversation-1', 'product-a');
-  addConversation(database, 'conversation-2', 'product-b');
-  addConversation(database, 'conversation-3', 'product-c');
+test('conversation without a matching scope remains unassigned', async () => {
+  const database = await createDatabase();
+  addAgent(database, { id: 'unrelated-agent' });
+  addScope(database, 'unrelated-agent', {
+    type: 'section',
+    sectionId: 'east',
+  });
+  addConversation(database, 'conversation-1', 'product-without-scope');
 
-  const db = d1(database);
-  const first = await assignConversationAgent(db, 'conversation-1');
-  const second = await assignConversationAgent(db, 'conversation-2');
-  const third = await assignConversationAgent(db, 'conversation-3');
-
-  assert.equal(first?.id, 'quota-agent');
-  assert.equal(second?.id, 'quota-agent');
-  assert.equal(third, null);
-
-  const today = database
-    .prepare(
-      `SELECT assigned_business_date AS day
-       FROM conversations WHERE id = 'conversation-1'`,
-    )
-    .get().day;
-  database
-    .prepare(
-      `UPDATE agent_daily_stats
-       SET business_date = '2000-01-01'
-       WHERE agent_id = 'quota-agent'`,
-    )
-    .run();
-
-  const reopened = await assignConversationAgent(db, 'conversation-3');
-  assert.equal(reopened?.id, 'quota-agent');
-  assert.ok(today && today !== '2000-01-01');
+  assert.equal(
+    await assignConversationAgent(d1(database), 'conversation-1'),
+    null,
+  );
   database.close();
 });
