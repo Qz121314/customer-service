@@ -36,31 +36,14 @@ jobs:
           printf '%s' "$payload" | base64 -d | gzip -d > /tmp/restore-agent-delete.py
           python /tmp/restore-agent-delete.py
 
-      - name: Apply narrowing repair
+      - name: Show generated delete wiring
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('src/dashboard/AdminPortal.tsx')
-          s = p.read_text()
-          old = '''          onDeleteAgent={async () => {
-            if (!draft.id) return;
-            const ok = await onDeleteAgent(draft.id);
-          '''
-          new = '''          onDeleteAgent={async () => {
-            const id = draft.id;
-            if (!id) return;
-            const ok = await onDeleteAgent(id);
-          '''
-          if old not in s:
-              print('narrowing repair pattern not found; source excerpt follows')
-              marker = s.find('onDeleteAgent={async')
-              print(s[max(0, marker - 240):marker + 520])
-          else:
-              p.write_text(s.replace(old, new, 1))
-              print('narrowing repair applied')
-          PY
+          echo '--- AdminPortal lines 645-690 ---'
+          nl -ba src/dashboard/AdminPortal.tsx | sed -n '645,690p'
+          echo '--- delete-related matches ---'
+          grep -n -C 5 -E 'deleteAgent|deletingAgent|removeAgent|删除客服|删除中' src/dashboard/AdminPortal.tsx || true
 
       - name: Capture typecheck output
         shell: bash
