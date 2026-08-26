@@ -43,6 +43,13 @@ jobs:
           git diff -- pnpm-lock.yaml
           pnpm format
 
+      - name: Upload formatted lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-pnpm-lock
+          path: pnpm-lock.yaml
+          retention-days: 1
+
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
