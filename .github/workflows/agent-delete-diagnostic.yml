@@ -11,7 +11,7 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,31 +36,79 @@ jobs:
           printf '%s' "$payload" | base64 -d | gzip -d > /tmp/restore-agent-delete.py
           python /tmp/restore-agent-delete.py
 
-      - name: Show generated delete wiring
+      - name: Fix stable agent id capture
         shell: bash
         run: |
           set -euo pipefail
-          echo '--- AdminPortal lines 645-690 ---'
-          nl -ba src/dashboard/AdminPortal.tsx | sed -n '645,690p'
-          echo '--- delete-related matches ---'
-          grep -n -C 5 -E 'deleteAgent|deletingAgent|removeAgent|删除客服|删除中' src/dashboard/AdminPortal.tsx || true
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/dashboard/AdminPortal.tsx')
+          s = p.read_text()
+          section_anchor = "  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';\n"
+          if section_anchor not in s:
+              raise SystemExit('missing sectionTitle anchor')
+          s = s.replace(
+              section_anchor,
+              "  const editingAgentId = draft.id;\n" + section_anchor,
+              1,
+          )
+          old = '''          onDelete={
+            draft.id
+              ? () =>
+                  void removeAgent({
+                    id: draft.id,
+                    name: draft.name,
+                  })
+              : undefined
+          }
+'''
+          new = '''          onDelete={
+            editingAgentId
+              ? () =>
+                  void removeAgent({
+                    id: editingAgentId,
+                    name: draft.name,
+                  })
+              : undefined
+          }
+'''
+          if old not in s:
+              raise SystemExit('missing onDelete anchor')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          pnpm exec prettier --write \
+            src/dashboard/api.ts \
+            src/dashboard/AdminPortal.tsx \
+            src/dashboard/AgentEditorModal.tsx \
+            src/dashboard/agent-editor.css \
+            src/worker/admin-config-api.ts \
+            test/customer-service-full-flow.test.mjs \
+            test/agent-delete-ui-contract.test.mjs \
+            test/admin-browser-smoke.spec.mjs
 
-      - name: Capture typecheck output
-        shell: bash
-        run: |
-          set +e
-          pnpm typecheck > /tmp/typecheck.log 2>&1
-          status=$?
-          cat /tmp/typecheck.log
-          echo "$status" > /tmp/typecheck-status.txt
-          exit 0
+      - name: Typecheck
+        run: pnpm typecheck
 
-      - name: Upload typecheck diagnostics
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+
+      - name: Upload verified feature files
         uses: actions/upload-artifact@v4
         with:
-          name: agent-delete-typecheck
+          name: verified-agent-delete-files
           path: |
-            /tmp/typecheck.log
-            /tmp/typecheck-status.txt
+            src/dashboard/api.ts
             src/dashboard/AdminPortal.tsx
+            src/dashboard/AgentEditorModal.tsx
+            src/dashboard/agent-editor.css
+            src/worker/admin-config-api.ts
+            test/customer-service-full-flow.test.mjs
+            test/agent-delete-ui-contract.test.mjs
+            test/admin-browser-smoke.spec.mjs
           if-no-files-found: error
