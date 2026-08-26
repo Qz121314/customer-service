@@ -33,7 +33,7 @@ for (const directory of [workerDirectory, sharedDirectory]) {
 let adminAgentDeleteApi;
 try {
   ({ adminAgentDeleteApi } = await import(
-    '../src/worker/admin-agent-delete-api.ts'
+    '../src/worker/admin-agent-delete-api.ts',
   ));
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
@@ -239,8 +239,13 @@ test('admin deletes an agent without deleting historical traffic or chat data', 
   assert.equal(payload.releasedConversationCount, 1);
   assert.equal(payload.reassignedConversationCount, 1);
   assert.equal(
-    database.prepare("SELECT COUNT(*) AS count FROM agents WHERE id = 'agent-delete'").get()
-      .count,
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM agents
+         WHERE id = 'agent-delete'`,
+      )
+      .get().count,
     0,
   );
 
@@ -276,14 +281,20 @@ test('admin deletes an agent without deleting historical traffic or chat data', 
 
   assert.equal(
     database
-      .prepare("SELECT sender_id FROM messages WHERE id = 'message-delete'")
+      .prepare(
+        `SELECT sender_id
+         FROM messages
+         WHERE id = 'message-delete'`,
+      )
       .get().sender_id,
     'agent-delete',
   );
   assert.equal(
     database
       .prepare(
-        "SELECT conversation_count FROM agent_daily_stats WHERE agent_id = 'agent-delete'",
+        `SELECT conversation_count
+         FROM agent_daily_stats
+         WHERE agent_id = 'agent-delete'`,
       )
       .get().conversation_count,
     1,
@@ -291,7 +302,9 @@ test('admin deletes an agent without deleting historical traffic or chat data', 
   assert.equal(
     database
       .prepare(
-        "SELECT agent_name FROM conversation_traffic_receipts WHERE conversation_id = 'conversation-delete'",
+        `SELECT agent_name
+         FROM conversation_traffic_receipts
+         WHERE conversation_id = 'conversation-delete'`,
       )
       .get().agent_name,
     'Delete Me',
