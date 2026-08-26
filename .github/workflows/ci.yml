@@ -35,6 +35,9 @@ jobs:
       - name: Repository guardrails
         run: pnpm guardrails
 
+      - name: Format
+        run: pnpm format
+
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
