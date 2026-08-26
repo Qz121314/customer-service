@@ -15,6 +15,7 @@ import {
   getProductCatalog,
   updateAgent,
 } from './api';
+import { deleteAgentAccount } from './admin-agent-delete-client';
 import {
   LoadState,
   AgentDraft,
@@ -33,6 +34,7 @@ import { UiIcon } from './icons';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
+import { DeleteAgentDialog } from './DeleteAgentDialog';
 import { Button } from './ui';
 
 type AdminView = 'agents' | 'statistics';
@@ -104,6 +106,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [statisticsAgent, setStatisticsAgent] = useState<AgentAccount | null>(
     null,
   );
+  const [deleteAgentTarget, setDeleteAgentTarget] = useState<AgentAccount | null>(
+    null,
+  );
+  const [deletingAgent, setDeletingAgent] = useState(false);
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState('');
   const [quotaAdjustments, setQuotaAdjustments] = useState<
@@ -292,6 +298,21 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       setError(message(reason, '保存客服失败'));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function confirmDeleteAgent() {
+    if (!deleteAgentTarget || deletingAgent) return;
+    setDeletingAgent(true);
+    setError('');
+    try {
+      await deleteAgentAccount(deleteAgentTarget.id);
+      setDeleteAgentTarget(null);
+      await refresh();
+    } catch (reason) {
+      setError(message(reason, '删除客服失败'));
+    } finally {
+      setDeletingAgent(false);
     }
   }
 
@@ -597,6 +618,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                 >
                                   编辑
                                 </button>
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => setDeleteAgentTarget(agent)}
+                                >
+                                  删除
+                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -647,6 +676,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <AdminAgentStatisticsModal
           agent={statisticsAgent}
           onClose={() => setStatisticsAgent(null)}
+        />
+      )}
+      {deleteAgentTarget && (
+        <DeleteAgentDialog
+          agent={deleteAgentTarget}
+          deleting={deletingAgent}
+          onCancel={() => {
+            if (!deletingAgent) setDeleteAgentTarget(null);
+          }}
+          onConfirm={() => void confirmDeleteAgent()}
         />
       )}
     </div>

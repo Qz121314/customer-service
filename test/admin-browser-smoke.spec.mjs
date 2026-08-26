@@ -196,7 +196,7 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     };
   });
   expect(actionGeometry.direction).toBe('row');
-  expect(actionGeometry.buttons).toHaveLength(2);
+  expect(actionGeometry.buttons).toHaveLength(3);
   for (const button of actionGeometry.buttons) {
     expect(button.width).toBeGreaterThanOrEqual(44);
     expect(button.height).toBeGreaterThanOrEqual(30);
@@ -220,6 +220,17 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: '选择统计月份' })).toBeHidden();
   await page.getByRole('button', { name: '关闭客服统计' }).click();
+
+  await agentRow.getByRole('button', { name: '删除', exact: true }).click();
+  const deleteDialog = page.getByRole('alertdialog', {
+    name: /删除“UI Admin Smoke Agent”/u,
+  });
+  await expect(deleteDialog).toBeVisible();
+  await expect(
+    deleteDialog.getByText(/历史会话与流量统计继续保留/u),
+  ).toBeVisible();
+  await deleteDialog.getByRole('button', { name: '取消', exact: true }).click();
+  await expect(deleteDialog).toBeHidden();
 
   await agentRow.getByRole('button', { name: '编辑', exact: true }).click();
   const editor = page.getByRole('dialog', { name: '编辑客服' });
