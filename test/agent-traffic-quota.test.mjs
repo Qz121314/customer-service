@@ -112,6 +112,7 @@ async function createDatabase({ quotaEnabled = true, quotaTotal = 2 } = {}) {
   `);
   database.exec(await read('../migrations/0023_agent_traffic_quotas.sql'));
   database.exec(await read('../migrations/0033_new_traffic_limit_guard.sql'));
+  database.exec(await read('../migrations/0042_simple_round_robin_routing.sql'));
   database
     .prepare(
       `INSERT INTO agents (
@@ -263,7 +264,7 @@ test('already-counted traffic recovers after daily and paid quota are exhausted'
   assert.equal(
     await assignConversationAgent(d1(database), 'conversation-fresh'),
     null,
-    'fresh traffic must remain blocked after the limits are exhausted',
+    'fresh traffic must remain blocked after paid quota is exhausted',
   );
 });
 
