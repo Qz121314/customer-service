@@ -40,6 +40,21 @@ adminAgentDeleteApi.delete('/api/admin/agents/:id', async (c) => {
     .first<AgentDeleteRow>();
   if (!agent) return c.json({ error: 'NOT_FOUND' }, 404);
 
+  const revoked = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE agents
+       SET is_enabled = 0,
+           status = 'offline',
+           last_seen_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?1 AND site_id = 'default'`,
+    ).bind(id),
+    c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(id),
+  ]);
+  if (Number(revoked[0]?.meta?.changes ?? 0) !== 1) {
+    return c.json({ error: 'AGENT_DELETE_FAILED' }, 500);
+  }
+
   const activeConversationIds = await assignedActiveConversationIds(c.env.DB, id);
   const results = await c.env.DB.batch([
     c.env.DB.prepare(
@@ -63,17 +78,32 @@ adminAgentDeleteApi.delete('/api/admin/agents/:id', async (c) => {
     return c.json({ error: 'AGENT_DELETE_FAILED' }, 500);
   }
 
-  await disconnectAgentRealtime(c.env, id, activeConversationIds);
+  try {
+    await disconnectAgentRealtime(c.env, id, activeConversationIds);
+  } catch (error) {
+    console.warn('agent.delete.realtime_disconnect_failed', {
+      agentId: id,
+      error,
+    });
+  }
 
   let reassignedCount = 0;
   for (const conversationId of activeConversationIds) {
-    const assignment = await assignConversationAgent(c.env.DB, conversationId);
-    if (assignment) reassignedCount += 1;
-    await broadcastClientConversationEvent(
-      c.env,
-      conversationId,
-      'conversation.assigned',
-    );
+    try {
+      const assignment = await assignConversationAgent(c.env.DB, conversationId);
+      if (assignment) reassignedCount += 1;
+      await broadcastClientConversationEvent(
+        c.env,
+        conversationId,
+        'conversation.assigned',
+      );
+    } catch (error) {
+      console.warn('agent.delete.conversation_reassign_failed', {
+        agentId: id,
+        conversationId,
+        error,
+      });
+    }
   }
 
   try {
