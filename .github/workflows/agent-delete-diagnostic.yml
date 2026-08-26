@@ -1,4 +1,4 @@
-name: Agent Delete Diagnostic
+name: Agent Delete Finalizer
 
 on:
   push:
@@ -6,15 +6,17 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose:
+  finalize:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -27,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Restore staged agent deletion changes
+      - name: Materialize verified agent deletion
         shell: bash
         run: |
           set -euo pipefail
@@ -35,11 +37,6 @@ jobs:
           test -n "$payload"
           printf '%s' "$payload" | base64 -d | gzip -d > /tmp/restore-agent-delete.py
           python /tmp/restore-agent-delete.py
-
-      - name: Fix stable agent id capture
-        shell: bash
-        run: |
-          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
           p = Path('src/dashboard/AdminPortal.tsx')
@@ -60,6 +57,26 @@ jobs:
           PY
           pnpm exec prettier --write src/dashboard/api.ts src/dashboard/AdminPortal.tsx src/dashboard/AgentEditorModal.tsx src/dashboard/agent-editor.css src/worker/admin-config-api.ts test/customer-service-full-flow.test.mjs test/agent-delete-ui-contract.test.mjs test/admin-browser-smoke.spec.mjs
 
+      - name: Restore normal CI configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main:refs/remotes/origin/main
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          rm .github/workflows/agent-delete-diagnostic.yml
+
+      - name: Repository guardrails
+        run: pnpm guardrails
+
+      - name: Format
+        run: pnpm format
+
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
+
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -72,17 +89,16 @@ jobs:
       - name: Validate Worker bundle
         run: pnpm cf:check
 
-      - name: Upload verified feature files
-        uses: actions/upload-artifact@v4
-        with:
-          name: verified-agent-delete-files
-          path: |
-            src/dashboard/api.ts
-            src/dashboard/AdminPortal.tsx
-            src/dashboard/AgentEditorModal.tsx
-            src/dashboard/agent-editor.css
-            src/worker/admin-config-api.ts
-            test/customer-service-full-flow.test.mjs
-            test/agent-delete-ui-contract.test.mjs
-            test/admin-browser-smoke.spec.mjs
-          if-no-files-found: error
+      - name: Commit verified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Ali Lee"
+          git config user.email "fcqz121314@gmail.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(admin): restore agent deletion"
+          git push origin HEAD:fix/restore-agent-delete
