@@ -5,7 +5,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('busy seats stay connected without receiving new conversations', async () => {
+test('busy status stays connected without changing automatic traffic routing', async () => {
   const [agentApi, room, routing, dashboardApi, portal, panels] =
     await Promise.all([
       read('../src/worker/agent-api.ts'),
@@ -23,10 +23,11 @@ test('busy seats stay connected without receiving new conversations', async () =
     room,
     /status = CASE WHEN status = 'busy' THEN 'busy' ELSE 'online' END/u,
   );
-  assert.match(routing, /a\.status = 'online'/u);
+  assert.doesNotMatch(routing, /a\.status = 'online'/u);
+  assert.doesNotMatch(routing, /a\.last_seen_at/u);
   assert.match(dashboardApi, /setAgentAvailability/u);
-  assert.match(dashboard, /在线接待/u);
-  assert.match(dashboard, /暂停接待/u);
+  assert.match(dashboard, /点击切换为忙碌状态/u);
+  assert.match(dashboard, /点击切换为在线状态/u);
 });
 
 test('agent text replies keep short-lived local drafts and retry idempotently', async () => {
