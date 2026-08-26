@@ -326,7 +326,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';
   const sectionHint =
     section === 'agents'
-      ? '管理登录身份、接待能力、咨询额度和产品负责范围。搜索与筛选均在本地完成。'
+      ? '管理登录身份、人工转接限制、咨询额度和产品负责范围。自动分流采用严格轮询。'
       : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
 
   return (
@@ -453,7 +453,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                     [
                       ['all', '全部', agents.length],
                       ['online', '在线', onlineCount],
-                      ['limited', '受限', limitedCount],
+                      ['limited', '额度不足', limitedCount],
                       ['disabled', '停用', disabledCount],
                     ] as const
                   ).map(([value, label, count]) => (
@@ -504,7 +504,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                         <th>客服账号</th>
                         <th>负责范围</th>
                         <th>状态</th>
-                        <th>接待能力</th>
+                        <th>人工转接</th>
                         <th>咨询额度</th>
                         <th aria-label="操作" />
                       </tr>
@@ -567,8 +567,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                 </strong>
                                 <small className={dailyFull ? 'is-full' : ''}>
                                   {dailyFull
-                                    ? '今日已达上限'
-                                    : `同时 ${
+                                    ? '人工转接已达每日上限'
+                                    : `人工转接：同时 ${
                                         agent.maxActiveConversations || '不限'
                                       } · ${
                                         agent.dailyConversationLimit > 0
@@ -695,12 +695,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
 function agentIsLimited(agent: AgentAccount): boolean {
   if (!agent.isEnabled) return false;
-  const dailyFull =
-    agent.dailyConversationLimit > 0 &&
-    agent.todayConversationCount >= agent.dailyConversationLimit;
   const trafficExhausted =
     agent.trafficQuotaEnabled && agent.trafficQuotaRemaining <= 0;
-  return dailyFull || trafficExhausted;
+  return trafficExhausted;
 }
 
 function currentBusinessDate(): string {
