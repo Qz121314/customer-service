@@ -149,8 +149,10 @@ export function AgentEditorModal({
 
               <div className="agent-editor-section agent-editor-capacity-section">
                 <div className="agent-editor-section-head">
-                  <strong>接待能力</strong>
-                  <span className="agent-editor-section-hint">0 = 不限制</span>
+                  <strong>人工转接限制</strong>
+                  <span className="agent-editor-section-hint">
+                    0 = 不限制 · 不影响自动轮询
+                  </span>
                 </div>
 
                 <div className="agent-editor-capacity-grid">
@@ -275,7 +277,7 @@ export function AgentEditorModal({
 
                 <p className="agent-editor-quota-note">
                   每个会话首次有效接待只扣 1
-                  次。每日接待上限按天重置；咨询额度按累计总量计算。转接、重新排队和恢复同一会话不会重复扣减。
+                  次。并发和每日接待上限只限制人工指定转接，不参与自动轮询；每日接待上限按天重置，咨询额度按累计总量计算。转接、重新排队和恢复同一会话不会重复扣减。
                 </p>
 
                 {draft.id ? (

@@ -342,7 +342,7 @@ test('different products keep independent conversations', async () => {
   database.close();
 });
 
-test('a fresh closed conversation stays hard-bound to its agent', async () => {
+test('a fresh closed conversation prefers its original eligible agent', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -402,7 +402,7 @@ test('a fresh closed conversation stays hard-bound to its agent', async () => {
   database.close();
 });
 
-test('hard affinity waits for the bound agent instead of falling back', async () => {
+test('active affinity keeps the original offline agent eligible', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -436,25 +436,33 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
     ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
   `);
 
-  const waiting = await startConversation(
+  const second = await startConversation(
     database,
     rooms,
     'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
   );
-  const waitingValue = await waiting.json();
-  const waitingRow = database
+  const secondValue = await second.json();
+  const secondRow = database
     .prepare(
       `SELECT assigned_agent, cta_affinity_agent_id
        FROM conversations
        WHERE id = ?`,
     )
-    .get(waitingValue.conversation.id);
+    .get(secondValue.conversation.id);
 
-  assert.equal(waiting.status, 201);
-  assert.equal(waitingValue.conversation.status, 'waiting');
-  assert.equal(waitingValue.conversation.agentName, null);
-  assert.equal(waitingRow.assigned_agent, null);
-  assert.equal(waitingRow.cta_affinity_agent_id, 'cta-agent');
+  assert.equal(second.status, 201);
+  assert.equal(secondValue.conversation.status, 'active');
+  assert.equal(secondValue.conversation.agentName, 'CTA Agent');
+  assert.equal(secondRow.assigned_agent, 'cta-agent');
+  assert.equal(secondRow.cta_affinity_agent_id, 'cta-agent');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'`,
+      'traffic_quota_used',
+    ),
+    2,
+  );
   assert.equal(
     scalar(
       database,
@@ -463,22 +471,6 @@ test('hard affinity waits for the bound agent instead of falling back', async ()
     ),
     0,
   );
-
-  database.exec(`
-    UPDATE agents
-    SET status = 'online', last_seen_at = CURRENT_TIMESTAMP
-    WHERE id = 'cta-agent';
-  `);
-  const resumed = await startConversation(
-    database,
-    rooms,
-    'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-  );
-  const resumedValue = await resumed.json();
-
-  assert.equal(resumed.status, 200);
-  assert.equal(resumedValue.conversation.id, waitingValue.conversation.id);
-  assert.equal(resumedValue.conversation.agentName, 'CTA Agent');
 
   database.close();
 });

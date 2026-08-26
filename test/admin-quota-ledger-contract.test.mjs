@@ -36,13 +36,15 @@ test('quota reconciliation is one explicit D1 read and stays off admin bootstrap
   assert.match(editor, /不查看时不会额外读取账本数据/u);
 });
 
-test('admin copy separates daily reception limits from cumulative consultation quota', () => {
+test('admin copy separates manual transfer limits from automatic routing quota', () => {
+  assert.match(editor, />人工转接限制</u);
   assert.match(editor, />每日接待上限</u);
   assert.match(editor, />咨询额度</u);
   assert.match(editor, /每个会话首次有效接待只扣 1\s*次/u);
   assert.match(editor, />保存后累计额度</u);
   assert.match(editor, />已使用额度</u);
   assert.match(editor, />保存后剩余</u);
+  assert.match(editor, /只限制人工指定转接，不参与自动轮询/u);
   assert.match(editor, /每日接待上限按天重置/u);
   assert.match(editor, /转接、重新排队和恢复同一会话不会重复扣减/u);
   assert.match(editor, /账本已核对/u);
