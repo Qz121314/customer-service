@@ -263,3 +263,39 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     expect(editorGeometry.radius).toBeGreaterThanOrEqual(20);
   }
 });
+
+test('admin create modal remains usable when no deletion is active', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 760 });
+  const adminLogin = await page.request.post(url('/api/auth/login'), {
+    data: { password: adminPassword },
+  });
+  expect(adminLogin.ok()).toBeTruthy();
+
+  await page.goto(url('/'));
+  await page
+    .getByRole('button', { name: '新增客服', exact: true })
+    .first()
+    .click();
+
+  const editor = page.getByRole('dialog', { name: '新增客服' });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('button', { name: '关闭' })).toBeEnabled();
+
+  const createButton = editor.getByRole('button', { name: '创建客服' });
+  await expect(createButton).toBeDisabled();
+
+  const username = 'ui-create-smoke-agent';
+  await editor.getByLabel('账号', { exact: true }).fill(username);
+  await editor
+    .getByLabel('登录密码', { exact: true })
+    .fill('ui-create-smoke-pass');
+  await expect(createButton).toBeEnabled();
+
+  await createButton.click();
+  await expect(editor).toBeHidden();
+  await expect(
+    page.getByRole('row').filter({ hasText: username }).first(),
+  ).toBeVisible();
+});

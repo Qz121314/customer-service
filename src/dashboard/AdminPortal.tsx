@@ -659,7 +659,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           draft={draft}
           products={products}
           saving={saving}
-          deleting={deletingAgentId === draft.id}
+          deleting={
+            editingAgentId !== null && deletingAgentId === editingAgentId
+          }
           quotaAdjustments={quotaAdjustments}
           quotaLedger={quotaLedger}
           quotaHistoryBusy={quotaHistoryBusy}
