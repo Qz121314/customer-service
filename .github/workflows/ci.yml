@@ -2,19 +2,13 @@ name: CI and Deploy
 
 on:
   push:
-    branches: [main]
-  pull_request:
-  workflow_dispatch:
+    branches: [fix/restore-agent-delete]
 
 permissions:
   contents: write
 
-concurrency:
-  group: customer-service-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  validate-and-deploy:
+  validate-and-repair:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -22,7 +16,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.head_ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -39,379 +32,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python <<'PY'
-          from pathlib import Path
-
-          def replace_once(path: str, old: str, new: str) -> None:
-              target = Path(path)
-              text = target.read_text()
-              if old not in text:
-                  raise SystemExit(f'missing patch anchor in {path}: {old[:100]!r}')
-              target.write_text(text.replace(old, new, 1))
-
-          replace_once(
-              'src/dashboard/api.ts',
-              "  AGENT_CREATE_FAILED: '创建客服失败，请重新提交',\n",
-              "  AGENT_CREATE_FAILED: '创建客服失败，请重新提交',\n  AGENT_DELETE_FAILED: '删除客服失败，请稍后重试',\n",
-          )
-          replace_once(
-              'src/dashboard/api.ts',
-              "export async function getAgentQuotaLedger(\n  id: string,\n): Promise<AgentQuotaLedgerPayload> {\n",
-              "export async function deleteAgent(\n  id: string,\n): Promise<{ reassignedConversationCount: number }> {\n  return request(`/api/admin/agents/${encodeURIComponent(id)}`, {\n    method: 'DELETE',\n  });\n}\n\nexport async function getAgentQuotaLedger(\n  id: string,\n): Promise<AgentQuotaLedgerPayload> {\n",
-          )
-
-          replace_once(
-              'src/dashboard/AdminPortal.tsx',
-              "  createAgent,\n",
-              "  createAgent,\n  deleteAgent,\n",
-          )
-          replace_once(
-              'src/dashboard/AdminPortal.tsx',
-              "  const [saving, setSaving] = useState(false);\n",
-              "  const [saving, setSaving] = useState(false);\n  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);\n",
-          )
-          delete_handler = r'''
-  async function removeAgent(agent: AgentAccount) {
-    if (deletingAgentId) return;
-    const confirmed = window.confirm(
-      `确定永久删除客服「${agent.name}」？\n\n删除后该账号将立即无法登录，当前未结束会话会释放并重新分配；历史聊天与统计记录会保留。`,
-    );
-    if (!confirmed) return;
-
-    setDeletingAgentId(agent.id);
-    setError('');
-    try {
-      await deleteAgent(agent.id);
-      if (statisticsAgent?.id === agent.id) setStatisticsAgent(null);
-      if (draft.id === agent.id) {
-        setEditorOpen(false);
-        setDraft(emptyAgentDraft);
-        resetQuotaLedgerState();
-      }
-      await refresh();
-    } catch (reason) {
-      setError(message(reason, '删除客服失败'));
-    } finally {
-      setDeletingAgentId(null);
-    }
-  }
-
-'''
-          replace_once(
-              'src/dashboard/AdminPortal.tsx',
-              "  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';\n",
-              delete_handler + "  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';\n",
-          )
-          replace_once(
-              'src/dashboard/AdminPortal.tsx',
-              "                                <button\n                                  type=\"button\"\n                                  className=\"table-action\"\n                                  onClick={() => editAgent(agent)}\n                                >\n                                  编辑\n                                </button>\n",
-              "                                <button\n                                  type=\"button\"\n                                  className=\"table-action\"\n                                  onClick={() => editAgent(agent)}\n                                >\n                                  编辑\n                                </button>\n                                <button\n                                  type=\"button\"\n                                  className=\"table-action danger-action\"\n                                  aria-label={`删除客服 ${agent.name}`}\n                                  disabled={deletingAgentId === agent.id}\n                                  onClick={() => void removeAgent(agent)}\n                                >\n                                  {deletingAgentId === agent.id ? '删除中…' : '删除'}\n                                </button>\n",
-          )
-
-          replace_once(
-              'src/dashboard/admin-agents.css',
-              "    padding: 0 120px 12px 0;\n",
-              "    padding: 0 190px 12px 0;\n",
-          )
-          replace_once(
-              'src/dashboard/admin-agents.css',
-              "  min-width: 102px;\n",
-              "  min-width: 166px;\n",
-          )
-          replace_once(
-              'src/dashboard/admin-agents.css',
-              ".admin-agent-actions .statistics-action:hover {\n  border-color: #bbb7ee;\n  background: #eceaff;\n}\n",
-              ".admin-agent-actions .statistics-action:hover {\n  border-color: #bbb7ee;\n  background: #eceaff;\n}\n\n.admin-agent-actions .danger-action {\n  border-color: #f0d0d0;\n  background: #fff7f7;\n  color: #b42318;\n}\n\n.admin-agent-actions .danger-action:hover:not(:disabled) {\n  border-color: #e6aaaa;\n  background: #fff0f0;\n}\n\n.admin-agent-actions .danger-action:disabled {\n  cursor: wait;\n  opacity: 0.58;\n}\n",
-          )
-
-          delete_route = r'''
-adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
-  if (!(await adminAuthorized(c))) return unauthorized(c);
-  const id = c.req.param('id');
-  if (id === 'admin') return c.json({ error: 'NOT_FOUND' }, 404);
-
-  const current = await c.env.DB.prepare(
-    `SELECT id
-     FROM agents
-     WHERE id = ?1 AND site_id = 'default'`,
-  )
-    .bind(id)
-    .first<{ id: string }>();
-  if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
-
-  try {
-    await c.env.DB.prepare(
-      `UPDATE agents
-       SET is_enabled = 0,
-           status = 'offline',
-           last_seen_at = NULL,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1 AND site_id = 'default'`,
-    )
-      .bind(id)
-      .run();
-
-    const conversationsToReassign = await assignedActiveConversationIds(
-      c.env.DB,
-      id,
-    );
-
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(id),
-      c.env.DB.prepare(
-        `UPDATE conversations
-         SET assigned_agent = NULL,
-             assigned_at = NULL,
-             assigned_business_date = NULL,
-             status = 'open',
-             updated_at = CURRENT_TIMESTAMP
-         WHERE assigned_agent = ?1
-           AND status IN ('open', 'pending')
-           AND expires_at > CURRENT_TIMESTAMP`,
-      ).bind(id),
-      c.env.DB.prepare(
-        `UPDATE conversations
-         SET cta_affinity_agent_id = NULL,
-             cta_affinity_expires_at = NULL,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE cta_affinity_agent_id = ?1`,
-      ).bind(id),
-      c.env.DB.prepare(
-        `DELETE FROM agents
-         WHERE id = ?1 AND site_id = 'default'`,
-      ).bind(id),
-    ]);
-
-    if (conversationsToReassign.length) {
-      await disconnectAgentRealtime(c.env, id, conversationsToReassign);
-      for (const conversationId of conversationsToReassign) {
-        await assignConversationAgent(c.env.DB, conversationId);
-        await broadcastClientConversationEvent(
-          c.env,
-          conversationId,
-          'conversation.assigned',
-        );
-      }
-    }
-
-    return c.json({
-      ok: true,
-      reassignedConversationCount: conversationsToReassign.length,
-    });
-  } catch (error) {
-    console.error('agent.delete.failed', { agentId: id, error });
-    return c.json({ error: 'AGENT_DELETE_FAILED' }, 500);
-  }
-});
-
-'''
-          replace_once(
-              'src/worker/admin-config-api.ts',
-              "adminConfigApi.get('/api/admin/products', async (c) => {\n",
-              delete_route + "adminConfigApi.get('/api/admin/products', async (c) => {\n",
-          )
-
-          test_path = Path('test/customer-service-full-flow.test.mjs')
-          test_text = test_path.read_text()
-          test_text += r'''
-
-test('admin permanently deletes an agent while preserving historical records', async () => {
-  const database = new DatabaseSync(':memory:');
-  applyMigrations(database);
-  const adminPassword = 'admin-password';
-  const rooms = fakeRooms();
-  const env = {
-    DB: d1(database),
-    CONVERSATION_ROOMS: rooms.namespace,
-    ADMIN_PASSWORD: adminPassword,
-  };
-
-  const createResponse = await adminConfigApi.request(
-    '/api/admin/agents',
-    {
-      method: 'POST',
-      headers: {
-        cookie: adminCookie(adminPassword),
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: 'Delete Me',
-        username: 'delete-me',
-        password: 'pass',
-        routingScope: { type: 'none' },
-        maxActiveConversations: 0,
-        dailyConversationLimit: 0,
-        trafficQuotaEnabled: true,
-        trafficQuotaTopUp: 10,
-        trafficQuotaRequestId: 'delete-agent-quota-001',
-        isEnabled: true,
-      }),
-    },
-    env,
-  );
-  assert.equal(createResponse.status, 201);
-  const created = await createResponse.json();
-  const agentId = created.id;
-
-  database
-    .prepare(
-      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
-       VALUES (?, ?, ?, datetime('now', '+1 hour'))`,
-    )
-    .run('delete-agent-session', agentId, 'delete-agent-session-token');
-  database
-    .prepare(
-      `INSERT INTO agent_routing_scopes (
-         site_id, agent_id, scope_type, section_id, category_id, product_id
-       ) VALUES ('default', ?, 'section', 'west', '', '')`,
-    )
-    .run(agentId);
-  database
-    .prepare(
-      `INSERT INTO agent_daily_stats (
-         site_id, agent_id, business_date, conversation_count
-       ) VALUES ('default', ?, '2026-08-26', 3)`,
-    )
-    .run(agentId);
-  database.exec(`
-    INSERT INTO visitors (id, site_id, token_hash)
-    VALUES
-      ('delete-active-visitor', 'default', 'delete-active-token'),
-      ('delete-history-visitor', 'default', 'delete-history-token');
-  `);
-  database
-    .prepare(
-      `INSERT INTO conversations (
-         id, site_id, visitor_id, status, assigned_agent, assigned_at,
-         assigned_business_date, expires_at, cta_affinity_agent_id,
-         cta_affinity_expires_at
-       ) VALUES (
-         'delete-active-conversation', 'default', 'delete-active-visitor',
-         'pending', ?, CURRENT_TIMESTAMP, '2026-08-26',
-         datetime('now', '+1 hour'), ?, datetime('now', '+2 hours')
-       )`,
-    )
-    .run(agentId, agentId);
-  database
-    .prepare(
-      `INSERT INTO conversations (
-         id, site_id, visitor_id, status, assigned_agent, assigned_at,
-         assigned_business_date, expires_at, cta_affinity_agent_id,
-         cta_affinity_expires_at
-       ) VALUES (
-         'delete-history-conversation', 'default', 'delete-history-visitor',
-         'closed', ?, CURRENT_TIMESTAMP, '2026-08-26',
-         datetime('now', '+1 hour'), ?, datetime('now', '+2 hours')
-       )`,
-    )
-    .run(agentId, agentId);
-  database
-    .prepare(
-      `INSERT INTO messages (
-         id, conversation_id, sender_type, sender_id, body
-       ) VALUES (
-         'delete-history-message', 'delete-history-conversation',
-         'agent', ?, 'historical reply'
-       )`,
-    )
-    .run(agentId);
-
-  const deleteResponse = await adminConfigApi.request(
-    `/api/admin/agents/${encodeURIComponent(agentId)}`,
-    {
-      method: 'DELETE',
-      headers: { cookie: adminCookie(adminPassword) },
-    },
-    env,
-  );
-  const deleted = await deleteResponse.json();
-  assert.equal(deleteResponse.status, 200);
-  assert.equal(deleted.reassignedConversationCount, 1);
-  assert.equal(
-    database.prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?').get(agentId).count,
-    0,
-  );
-  assert.equal(
-    database.prepare('SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?').get(agentId).count,
-    0,
-  );
-  assert.equal(
-    database.prepare('SELECT COUNT(*) AS count FROM agent_routing_scopes WHERE agent_id = ?').get(agentId).count,
-    0,
-  );
-  assert.equal(
-    database.prepare('SELECT COUNT(*) AS count FROM agent_quota_adjustments WHERE agent_id = ?').get(agentId).count,
-    0,
-  );
-
-  const active = database
-    .prepare(
-      `SELECT status, assigned_agent, cta_affinity_agent_id
-       FROM conversations WHERE id = 'delete-active-conversation'`,
-    )
-    .get();
-  assert.equal(active.status, 'open');
-  assert.equal(active.assigned_agent, null);
-  assert.equal(active.cta_affinity_agent_id, null);
-
-  const historical = database
-    .prepare(
-      `SELECT status, assigned_agent, cta_affinity_agent_id
-       FROM conversations WHERE id = 'delete-history-conversation'`,
-    )
-    .get();
-  assert.equal(historical.status, 'closed');
-  assert.equal(historical.assigned_agent, agentId);
-  assert.equal(historical.cta_affinity_agent_id, null);
-  assert.equal(
-    database
-      .prepare("SELECT sender_id FROM messages WHERE id = 'delete-history-message'")
-      .get().sender_id,
-    agentId,
-  );
-  assert.equal(
-    database
-      .prepare(
-        `SELECT conversation_count
-         FROM agent_daily_stats
-         WHERE site_id = 'default' AND agent_id = ? AND business_date = '2026-08-26'`,
-      )
-      .get(agentId).conversation_count,
-    3,
-  );
-});
-'''
-          test_path.write_text(test_text)
-
-          Path('test/agent-delete-ui-contract.test.mjs').write_text(r'''import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import test from 'node:test';
-
-const portal = readFileSync(
-  new URL('../src/dashboard/AdminPortal.tsx', import.meta.url),
-  'utf8',
-);
-const api = readFileSync(
-  new URL('../src/dashboard/api.ts', import.meta.url),
-  'utf8',
-);
-
-test('admin agent list exposes confirmed permanent deletion', () => {
-  assert.match(portal, /deleteAgent/);
-  assert.match(portal, /danger-action/);
-  assert.match(portal, /确定永久删除客服/);
-  assert.match(api, /method: 'DELETE'/);
-});
-''')
-          PY
-
-          pnpm exec prettier --write \
-            src/dashboard/api.ts \
-            src/dashboard/AdminPortal.tsx \
-            src/dashboard/admin-agents.css \
-            src/worker/admin-config-api.ts \
-            test/customer-service-full-flow.test.mjs \
-            test/agent-delete-ui-contract.test.mjs
+          echo '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' | base64 -d | gzip -d > /tmp/restore-agent-delete.py
+          python /tmp/restore-agent-delete.py
+          pnpm exec prettier --write src/dashboard/api.ts src/dashboard/AdminPortal.tsx src/dashboard/admin-agents.css src/worker/admin-config-api.ts test/customer-service-full-flow.test.mjs test/agent-delete-ui-contract.test.mjs
           git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
 
       - name: Repository guardrails
@@ -452,30 +75,16 @@ test('admin agent list exposes confirmed permanent deletion', () => {
         shell: bash
         run: |
           set -euo pipefail
-          pnpm exec wrangler dev --local --port 8787 \
-            --var ADMIN_PASSWORD:ui-smoke-admin-password \
-            --var ENVIRONMENT:ui-smoke \
-            --var APP_VERSION:ui-smoke \
-            > /tmp/ui-smoke-agent-worker.log 2>&1 &
+          pnpm exec wrangler dev --local --port 8787 --var ADMIN_PASSWORD:ui-smoke-admin-password --var ENVIRONMENT:ui-smoke --var APP_VERSION:ui-smoke > /tmp/ui-smoke-agent-worker.log 2>&1 &
           worker_pid=$!
           trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
-              ready=1
-              break
-            fi
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then ready=1; break; fi
             sleep 1
           done
-          if [ "$ready" -ne 1 ]; then
-            cat /tmp/ui-smoke-agent-worker.log
-            exit 1
-          fi
-          pnpm exec playwright test \
-            test/agent-browser-smoke.spec.mjs \
-            test/agent-mobile-menu-smoke.spec.mjs \
-            --workers=1 \
-            --reporter=github
+          if [ "$ready" -ne 1 ]; then cat /tmp/ui-smoke-agent-worker.log; exit 1; fi
+          pnpm exec playwright test test/agent-browser-smoke.spec.mjs test/agent-mobile-menu-smoke.spec.mjs --workers=1 --reporter=github
 
       - name: Smoke test admin UI in Chromium
         env:
@@ -484,57 +93,23 @@ test('admin agent list exposes confirmed permanent deletion', () => {
         shell: bash
         run: |
           set -euo pipefail
-          pnpm exec wrangler dev --local --port 8787 \
-            --var ADMIN_PASSWORD:ui-smoke-admin-password \
-            --var ENVIRONMENT:ui-smoke \
-            --var APP_VERSION:ui-smoke \
-            > /tmp/ui-smoke-admin-worker.log 2>&1 &
+          pnpm exec wrangler dev --local --port 8787 --var ADMIN_PASSWORD:ui-smoke-admin-password --var ENVIRONMENT:ui-smoke --var APP_VERSION:ui-smoke > /tmp/ui-smoke-admin-worker.log 2>&1 &
           worker_pid=$!
           trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
-              ready=1
-              break
-            fi
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then ready=1; break; fi
             sleep 1
           done
-          if [ "$ready" -ne 1 ]; then
-            cat /tmp/ui-smoke-admin-worker.log
-            exit 1
-          fi
+          if [ "$ready" -ne 1 ]; then cat /tmp/ui-smoke-admin-worker.log; exit 1; fi
           pnpm exec playwright test test/admin-browser-smoke.spec.mjs --workers=1 --reporter=github
 
       - name: Commit verified repair
-        if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "Ali Lee"
           git config user.email "fcqz121314@gmail.com"
           git add -A
-          if git diff --cached --quiet; then
-            exit 0
-          fi
           git commit -m "fix(admin): restore agent deletion"
-          git push origin HEAD:${{ github.head_ref }}
-
-      - name: Deploy production to Cloudflare
-        id: deploy
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm deploy:cloudflare | tee /tmp/deploy.log
-          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
-          test -n "$url"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      - name: Smoke test production protocols
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        env:
-          BASE_URL: ${{ steps.deploy.outputs.url }}
-        run: pnpm smoke:production
+          git push origin HEAD:fix/restore-agent-delete
