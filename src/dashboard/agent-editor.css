@@ -576,10 +576,12 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  margin-left: auto;
 }
 
 .agent-editor-footer .primary-button,
-.agent-editor-footer .secondary-button {
+.agent-editor-footer .secondary-button,
+.agent-editor-footer .destructive-button {
   min-width: 84px;
   min-height: 36px;
   padding: 0 14px;
@@ -597,6 +599,18 @@
 .agent-editor-footer .primary-button:not(:disabled):hover {
   border-color: #e84b12;
   background: #e84b12;
+  transform: none;
+}
+
+.agent-editor-footer .destructive-button {
+  border-color: #f3c5c5;
+  color: #b42318;
+  background: #fff7f7;
+}
+
+.agent-editor-footer .destructive-button:not(:disabled):hover {
+  border-color: #e9a5a5;
+  background: #fff0f0;
   transform: none;
 }
 

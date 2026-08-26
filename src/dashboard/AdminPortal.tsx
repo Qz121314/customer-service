@@ -8,6 +8,7 @@ import {
   adminLogin,
   adminLogout,
   createAgent,
+  deleteAgent,
   getAdminSession,
   getTrafficOverviewStats,
   getAgentQuotaLedger,
@@ -96,6 +97,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
   const [trafficStats, setTrafficStats] = useState<TrafficOverviewStats | null>(
@@ -295,6 +297,32 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
+  async function removeAgent(agent: Pick<AgentAccount, 'id' | 'name'>) {
+    if (deletingAgentId) return;
+    const confirmed = window.confirm(
+      `确定永久删除客服「${agent.name}」？\n\n删除后该账号将立即无法登录，当前未结束会话会释放并重新分配；历史聊天与统计记录会保留。`,
+    );
+    if (!confirmed) return;
+
+    setDeletingAgentId(agent.id);
+    setError('');
+    try {
+      await deleteAgent(agent.id);
+      if (statisticsAgent?.id === agent.id) setStatisticsAgent(null);
+      if (draft.id === agent.id) {
+        setEditorOpen(false);
+        setDraft(emptyAgentDraft);
+        resetQuotaLedgerState();
+      }
+      await refresh();
+    } catch (reason) {
+      setError(message(reason, '删除客服失败'));
+    } finally {
+      setDeletingAgentId(null);
+    }
+  }
+
+  const editingAgentId = draft.id;
   const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';
   const sectionHint =
     section === 'agents'
@@ -631,14 +659,24 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           draft={draft}
           products={products}
           saving={saving}
+          deleting={deletingAgentId === draft.id}
           quotaAdjustments={quotaAdjustments}
           quotaLedger={quotaLedger}
           quotaHistoryBusy={quotaHistoryBusy}
           quotaHistoryError={quotaHistoryError}
           onDraftChange={setDraft}
           onLoadQuotaLedger={() => void loadQuotaLedger()}
+          onDelete={
+            editingAgentId
+              ? () =>
+                  void removeAgent({
+                    id: editingAgentId,
+                    name: draft.name,
+                  })
+              : undefined
+          }
           onClose={() => {
-            if (!saving) setEditorOpen(false);
+            if (!saving && !deletingAgentId) setEditorOpen(false);
           }}
           onSubmit={(event) => void saveAgent(event)}
         />

@@ -1411,3 +1411,185 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
 
   database.close();
 });
+
+test('admin permanently deletes an agent while preserving historical records', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const adminPassword = 'admin-password';
+  const rooms = fakeRooms();
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: rooms.namespace,
+    ADMIN_PASSWORD: adminPassword,
+  };
+
+  const createResponse = await adminConfigApi.request(
+    '/api/admin/agents',
+    {
+      method: 'POST',
+      headers: {
+        cookie: adminCookie(adminPassword),
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Delete Me',
+        username: 'delete-me',
+        password: 'pass',
+        routingScope: { type: 'none' },
+        maxActiveConversations: 0,
+        dailyConversationLimit: 0,
+        trafficQuotaEnabled: true,
+        trafficQuotaTopUp: 10,
+        trafficQuotaRequestId: 'delete-agent-quota-001',
+        isEnabled: true,
+      }),
+    },
+    env,
+  );
+  assert.equal(createResponse.status, 201);
+  const created = await createResponse.json();
+  const agentId = created.id;
+
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES (?, ?, ?, datetime('now', '+1 hour'))`,
+    )
+    .run('delete-agent-session', agentId, 'delete-agent-session-token');
+  database
+    .prepare(
+      `INSERT INTO agent_routing_scopes (
+         site_id, agent_id, scope_type, section_id, category_id, product_id
+       ) VALUES ('default', ?, 'section', 'west', '', '')`,
+    )
+    .run(agentId);
+  database
+    .prepare(
+      `INSERT INTO agent_daily_stats (
+         site_id, agent_id, business_date, conversation_count
+       ) VALUES ('default', ?, '2026-08-26', 3)`,
+    )
+    .run(agentId);
+  database.exec(`
+    INSERT INTO visitors (id, site_id, token_hash)
+    VALUES
+      ('delete-active-visitor', 'default', 'delete-active-token'),
+      ('delete-history-visitor', 'default', 'delete-history-token');
+  `);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, assigned_at,
+         assigned_business_date, expires_at, cta_affinity_agent_id,
+         cta_affinity_expires_at
+       ) VALUES (
+         'delete-active-conversation', 'default', 'delete-active-visitor',
+         'pending', ?, CURRENT_TIMESTAMP, '2026-08-26',
+         datetime('now', '+1 hour'), ?, datetime('now', '+2 hours')
+       )`,
+    )
+    .run(agentId, agentId);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, assigned_at,
+         assigned_business_date, expires_at, cta_affinity_agent_id,
+         cta_affinity_expires_at
+       ) VALUES (
+         'delete-history-conversation', 'default', 'delete-history-visitor',
+         'closed', ?, CURRENT_TIMESTAMP, '2026-08-26',
+         datetime('now', '+1 hour'), ?, datetime('now', '+2 hours')
+       )`,
+    )
+    .run(agentId, agentId);
+  database
+    .prepare(
+      `INSERT INTO messages (
+         id, conversation_id, sender_type, sender_id, body
+       ) VALUES (
+         'delete-history-message', 'delete-history-conversation',
+         'agent', ?, 'historical reply'
+       )`,
+    )
+    .run(agentId);
+
+  const deleteResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(agentId)}`,
+    {
+      method: 'DELETE',
+      headers: { cookie: adminCookie(adminPassword) },
+    },
+    env,
+  );
+  const deleted = await deleteResponse.json();
+  assert.equal(deleteResponse.status, 200);
+  assert.equal(deleted.reassignedConversationCount, 1);
+  assert.equal(
+    database
+      .prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?')
+      .get(agentId).count,
+    0,
+  );
+  assert.equal(
+    database
+      .prepare(
+        'SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?',
+      )
+      .get(agentId).count,
+    0,
+  );
+  assert.equal(
+    database
+      .prepare(
+        'SELECT COUNT(*) AS count FROM agent_routing_scopes WHERE agent_id = ?',
+      )
+      .get(agentId).count,
+    0,
+  );
+  assert.equal(
+    database
+      .prepare(
+        'SELECT COUNT(*) AS count FROM agent_quota_adjustments WHERE agent_id = ?',
+      )
+      .get(agentId).count,
+    0,
+  );
+
+  const active = database
+    .prepare(
+      `SELECT status, assigned_agent, cta_affinity_agent_id
+       FROM conversations WHERE id = 'delete-active-conversation'`,
+    )
+    .get();
+  assert.equal(active.status, 'open');
+  assert.equal(active.assigned_agent, null);
+  assert.equal(active.cta_affinity_agent_id, null);
+
+  const historical = database
+    .prepare(
+      `SELECT status, assigned_agent, cta_affinity_agent_id
+       FROM conversations WHERE id = 'delete-history-conversation'`,
+    )
+    .get();
+  assert.equal(historical.status, 'closed');
+  assert.equal(historical.assigned_agent, agentId);
+  assert.equal(historical.cta_affinity_agent_id, null);
+  assert.equal(
+    database
+      .prepare(
+        "SELECT sender_id FROM messages WHERE id = 'delete-history-message'",
+      )
+      .get().sender_id,
+    agentId,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT conversation_count
+         FROM agent_daily_stats
+         WHERE site_id = 'default' AND agent_id = ? AND business_date = '2026-08-26'`,
+      )
+      .get(agentId).conversation_count,
+    3,
+  );
+});

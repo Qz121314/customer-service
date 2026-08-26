@@ -639,6 +639,87 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   return c.json({ ok: true, quotaApplied, assignedWaitingCount });
 });
 
+adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const id = c.req.param('id');
+  if (id === 'admin') return c.json({ error: 'NOT_FOUND' }, 404);
+
+  const current = await c.env.DB.prepare(
+    `SELECT id
+     FROM agents
+     WHERE id = ?1 AND site_id = 'default'`,
+  )
+    .bind(id)
+    .first<{ id: string }>();
+  if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
+
+  try {
+    await c.env.DB.prepare(
+      `UPDATE agents
+       SET is_enabled = 0,
+           status = 'offline',
+           last_seen_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?1 AND site_id = 'default'`,
+    )
+      .bind(id)
+      .run();
+
+    const conversationsToReassign = await assignedActiveConversationIds(
+      c.env.DB,
+      id,
+    );
+
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
+        id,
+      ),
+      c.env.DB.prepare(
+        `UPDATE conversations
+         SET assigned_agent = NULL,
+             assigned_at = NULL,
+             assigned_business_date = NULL,
+             status = 'open',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE assigned_agent = ?1
+           AND status IN ('open', 'pending')
+           AND expires_at > CURRENT_TIMESTAMP`,
+      ).bind(id),
+      c.env.DB.prepare(
+        `UPDATE conversations
+         SET cta_affinity_agent_id = NULL,
+             cta_affinity_expires_at = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE cta_affinity_agent_id = ?1`,
+      ).bind(id),
+      c.env.DB.prepare(
+        `DELETE FROM agents
+         WHERE id = ?1 AND site_id = 'default'`,
+      ).bind(id),
+    ]);
+
+    if (conversationsToReassign.length) {
+      await disconnectAgentRealtime(c.env, id, conversationsToReassign);
+      for (const conversationId of conversationsToReassign) {
+        await assignConversationAgent(c.env.DB, conversationId);
+        await broadcastClientConversationEvent(
+          c.env,
+          conversationId,
+          'conversation.assigned',
+        );
+      }
+    }
+
+    return c.json({
+      ok: true,
+      reassignedConversationCount: conversationsToReassign.length,
+    });
+  } catch (error) {
+    console.error('agent.delete.failed', { agentId: id, error });
+    return c.json({ error: 'AGENT_DELETE_FAILED' }, 500);
+  }
+});
+
 adminConfigApi.get('/api/admin/products', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   return c.json({ products: await loadProducts(c.env.DB) });
