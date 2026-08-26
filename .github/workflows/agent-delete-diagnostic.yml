@@ -1,0 +1,83 @@
+name: Agent Delete Diagnostic
+
+on:
+  push:
+    branches: [fix/restore-agent-delete]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore staged agent deletion changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(sed -n "35s/.*echo '\([^']*\)'.*/\1/p" .github/workflows/ci.yml)"
+          test -n "$payload"
+          printf '%s' "$payload" | base64 -d | gzip -d > /tmp/restore-agent-delete.py
+          python /tmp/restore-agent-delete.py
+
+      - name: Apply current narrowing repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/AdminDashboard.tsx')
+          if not p.exists():
+              print('src/AdminDashboard.tsx does not exist after restore')
+              raise SystemExit(0)
+          s = p.read_text()
+          old = '''      onDeleteAgent={async () => {
+                if (!draft.id) return;
+                const ok = await onDeleteAgent(draft.id);
+          '''
+          new = '''      onDeleteAgent={async () => {
+                const id = draft.id;
+                if (!id) return;
+                const ok = await onDeleteAgent(id);
+          '''
+          if old in s:
+              p.write_text(s.replace(old, new))
+              print('narrowing repair applied')
+          else:
+              print('narrowing repair pattern not found')
+          PY
+
+      - name: Capture typecheck output
+        shell: bash
+        run: |
+          set +e
+          pnpm typecheck > /tmp/typecheck.log 2>&1
+          status=$?
+          cat /tmp/typecheck.log
+          echo "$status" > /tmp/typecheck-status.txt
+          exit 0
+
+      - name: Upload typecheck diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-delete-typecheck
+          path: |
+            /tmp/typecheck.log
+            /tmp/typecheck-status.txt
+          if-no-files-found: error
