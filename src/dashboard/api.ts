@@ -231,6 +231,7 @@ const errorMessages: Record<string, string> = {
   QUOTA_TOP_UP_FAILED: '额度追加失败，请重试',
   INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
+  AGENT_DELETE_FAILED: '删除客服失败，请稍后重试',
   CONVERSATION_CLOSED: '会话已关闭',
   CONVERSATION_REOPEN_CAPACITY: '当前接待并发已满，请先结束其他处理中会话',
   INVALID_TRANSFER_TARGET: '请选择有效的转接客服',
@@ -298,6 +299,14 @@ export async function updateAgent(
   await request(`/api/admin/agents/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     body: JSON.stringify(input),
+  });
+}
+
+export async function deleteAgent(
+  id: string,
+): Promise<{ reassignedConversationCount: number }> {
+  return request(`/api/admin/agents/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
   });
 }
 

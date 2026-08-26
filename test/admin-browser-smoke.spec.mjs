@@ -225,6 +225,7 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   const editor = page.getByRole('dialog', { name: '编辑客服' });
   await expect(editor).toBeVisible();
   await expect(editor.getByRole('button', { name: '保存修改' })).toBeVisible();
+  await expect(editor.getByRole('button', { name: '删除客服' })).toBeVisible();
   const editorGeometry = await editor.evaluate((element) => {
     const browser = globalThis;
     const layout = element.querySelector('.agent-editor-layout');

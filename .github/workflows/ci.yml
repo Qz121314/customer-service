@@ -2,20 +2,24 @@ name: CI and Deploy
 
 on:
   push:
-    branches: [fix/restore-agent-delete]
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: customer-service-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  validate-and-repair:
+  validate-and-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -27,23 +31,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Restore agent deletion
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo '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' | base64 -d | gzip -d > /tmp/restore-agent-delete.py
-          python /tmp/restore-agent-delete.py
-          pnpm exec prettier --write \
-            src/dashboard/api.ts \
-            src/dashboard/AdminPortal.tsx \
-            src/dashboard/AgentEditorModal.tsx \
-            src/dashboard/agent-editor.css \
-            src/worker/admin-config-api.ts \
-            test/customer-service-full-flow.test.mjs \
-            test/agent-delete-ui-contract.test.mjs \
-            test/admin-browser-smoke.spec.mjs
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
 
       - name: Repository guardrails
         run: pnpm guardrails
@@ -81,7 +68,13 @@ jobs:
             '; then
               exit 0
             fi
-            if [ "$attempt" -eq 2 ]; then exit 1; fi
+
+            if [ "$attempt" -eq 2 ]; then
+              echo "::error::Chromium smoke runtime installation failed after two bounded attempts."
+              exit 1
+            fi
+
+            echo "::warning::Chromium smoke runtime installation timed out or failed; retrying once."
             sleep 5
           done
 
@@ -99,13 +92,25 @@ jobs:
             > /tmp/ui-smoke-agent-worker.log 2>&1 &
           worker_pid=$!
           trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then ready=1; break; fi
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
             sleep 1
           done
-          if [ "$ready" -ne 1 ]; then cat /tmp/ui-smoke-agent-worker.log; exit 1; fi
-          pnpm exec playwright test test/agent-browser-smoke.spec.mjs test/agent-mobile-menu-smoke.spec.mjs --workers=1 --reporter=github
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-agent-worker.log
+            exit 1
+          fi
+
+          pnpm exec playwright test \
+            test/agent-browser-smoke.spec.mjs \
+            test/agent-mobile-menu-smoke.spec.mjs \
+            --workers=1 \
+            --reporter=github
 
       - name: Smoke test admin UI in Chromium
         env:
@@ -121,20 +126,50 @@ jobs:
             > /tmp/ui-smoke-admin-worker.log 2>&1 &
           worker_pid=$!
           trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then ready=1; break; fi
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
             sleep 1
           done
-          if [ "$ready" -ne 1 ]; then cat /tmp/ui-smoke-admin-worker.log; exit 1; fi
-          pnpm exec playwright test test/admin-browser-smoke.spec.mjs --workers=1 --reporter=github
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-admin-worker.log
+            exit 1
+          fi
 
-      - name: Commit verified repair
+          pnpm exec playwright test \
+            test/admin-browser-smoke.spec.mjs \
+            --workers=1 \
+            --reporter=github
+
+      - name: Upload admin viewport diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-viewport-geometry
+          path: /tmp/admin-viewport-geometry.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Deploy production to Cloudflare
+        id: deploy
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "Ali Lee"
-          git config user.email "fcqz121314@gmail.com"
-          git add -A
-          git commit -m "fix(admin): restore agent deletion"
-          git push origin HEAD:fix/restore-agent-delete
+          pnpm deploy:cloudflare | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test production protocols
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+        run: pnpm smoke:production

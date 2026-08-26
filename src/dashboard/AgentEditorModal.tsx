@@ -14,24 +14,28 @@ export function AgentEditorModal({
   draft,
   products,
   saving,
+  deleting,
   quotaAdjustments,
   quotaLedger,
   quotaHistoryBusy,
   quotaHistoryError,
   onDraftChange,
   onLoadQuotaLedger,
+  onDelete,
   onClose,
   onSubmit,
 }: {
   draft: AgentDraft;
   products: ProductCatalogItem[];
   saving: boolean;
+  deleting: boolean;
   quotaAdjustments: AgentQuotaAdjustment[];
   quotaLedger: AgentQuotaLedger | null;
   quotaHistoryBusy: boolean;
   quotaHistoryError: string;
   onDraftChange: (draft: AgentDraft) => void;
   onLoadQuotaLedger: () => void;
+  onDelete?: () => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
@@ -45,7 +49,10 @@ export function AgentEditorModal({
   );
 
   return (
-    <div className="modal-backdrop" onMouseDown={() => !saving && onClose()}>
+    <div
+      className="modal-backdrop"
+      onMouseDown={() => !saving && !deleting && onClose()}
+    >
       <section
         className="agent-modal"
         role="dialog"
@@ -66,8 +73,8 @@ export function AgentEditorModal({
             type="button"
             className="modal-close"
             aria-label="关闭"
-            disabled={saving}
-            onClick={() => !saving && onClose()}
+            disabled={saving || deleting}
+            onClick={() => !saving && !deleting && onClose()}
           >
             <UiIcon name="close" />
           </button>
@@ -352,7 +359,7 @@ export function AgentEditorModal({
               <ProductAssignmentPicker
                 products={products}
                 scope={draft.routingScope}
-                disabled={saving}
+                disabled={saving || deleting}
                 onChange={(routingScope) =>
                   onDraftChange({ ...draft, routingScope })
                 }
@@ -361,16 +368,27 @@ export function AgentEditorModal({
           </div>
 
           <footer className="agent-editor-footer">
+            {draft.id && onDelete ? (
+              <Button
+                type="button"
+                variant="destructive"
+                className="agent-delete-button"
+                disabled={saving || deleting}
+                onClick={onDelete}
+              >
+                {deleting ? '删除中…' : '删除客服'}
+              </Button>
+            ) : null}
             <div className="agent-editor-footer-actions">
               <Button
                 type="button"
                 variant="secondary"
-                disabled={saving}
+                disabled={saving || deleting}
                 onClick={onClose}
               >
                 取消
               </Button>
-              <Button type="submit" disabled={saving || !canSave}>
+              <Button type="submit" disabled={saving || deleting || !canSave}>
                 {saving ? '保存中…' : draft.id ? '保存修改' : '创建客服'}
               </Button>
             </div>
