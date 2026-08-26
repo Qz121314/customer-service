@@ -61,10 +61,11 @@ function assignmentResult(
  * can always be requeued without consuming another unit.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
- * eligible. All other traffic follows deterministic round robin through the
- * least-recently-assigned seat. The database assignment statement is atomic, and
- * migration 0042 advances last_assigned_at in the same statement via trigger so
- * concurrent requests observe the latest round-robin cursor.
+ * eligible. All other traffic follows strict deterministic round robin through a
+ * monotonic database cursor. The database assignment statement is atomic, and
+ * migration 0042 advances the cursor in the same statement via trigger so rapid
+ * or concurrent assignments cannot collapse onto one seat because of timestamp
+ * ties.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -149,7 +150,7 @@ export async function assignConversationAgent(
              THEN 0
              ELSE 1
            END ASC,
-           COALESCE(a.last_assigned_at, '') ASC,
+           a.round_robin_seq ASC,
            a.id ASC
          LIMIT 1
        )
