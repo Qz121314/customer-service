@@ -14,10 +14,7 @@ test('waiting recovery delegates ownership to canonical round robin', async () =
   );
   assert.match(waiting, /ORDER BY last_message_at ASC, id ASC/u);
   assert.match(waiting, /LIMIT \?1/u);
-  assert.match(
-    waiting,
-    /assignConversationAgent\(env\.DB, row\.id\)/u,
-  );
+  assert.match(waiting, /assignConversationAgent\(env\.DB, row\.id\)/u);
   assert.match(waiting, /assignment\.id/u);
   assert.match(waiting, /MAX_RECOVERY_ASSIGNMENTS = 10/u);
 

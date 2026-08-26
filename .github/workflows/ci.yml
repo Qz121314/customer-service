@@ -1,26 +1,25 @@
-name: Routing repair
+name: CI and Deploy
 
 on:
   push:
-    branches: [refactor/simple-round-robin-routing]
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: routing-repair-${{ github.ref }}
-  cancel-in-progress: true
+  group: customer-service-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  repair:
+  validate-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
-      - name: Checkout branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: refactor/simple-round-robin-routing
-          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -33,35 +32,144 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Format routing changes
-        run: |
-          pnpm exec prettier --write \
-            src/worker/routing.ts \
-            src/worker/waiting-assignment.ts \
-            src/dashboard/AgentWorkspacePanels.tsx \
-            test/product-agent-routing.test.mjs \
-            test/agent-daily-quota.test.mjs \
-            test/agent-traffic-quota.test.mjs \
-            test/agent-presence-cost.test.mjs \
-            test/agent-reception-reliability.test.mjs \
-            test/waiting-assignment-batch.test.mjs
+      - name: Repository guardrails
+        run: pnpm guardrails
 
-      - name: Restore formal workflow
-        run: git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+      - name: Format
+        run: pnpm format
 
-      - name: Verify formatting and guardrails
-        run: |
-          pnpm guardrails
-          pnpm format
+      - name: Validate local D1 migrations
+        run: pnpm db:migrate:local
 
-      - name: Commit formatted routing changes
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Worker bundle
+        run: pnpm cf:check
+
+      - name: Install browser smoke runtime
+        shell: bash
         run: |
-          if git diff --quiet; then
-            echo "No formatting changes required."
-            exit 0
+          set -euo pipefail
+          for attempt in 1 2; do
+            if timeout --kill-after=30s 420s bash -c '
+              set -euo pipefail
+              pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
+              pnpm exec playwright install --with-deps chromium
+            '; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 2 ]; then
+              echo "::error::Chromium smoke runtime installation failed after two bounded attempts."
+              exit 1
+            fi
+
+            echo "::warning::Chromium smoke runtime installation timed out or failed; retrying once."
+            sleep 5
+          done
+
+      - name: Smoke test agent UI in Chromium
+        env:
+          UI_SMOKE_BASE_URL: http://127.0.0.1:8787
+          UI_SMOKE_ADMIN_PASSWORD: ui-smoke-admin-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler dev --local --port 8787 \
+            --var ADMIN_PASSWORD:ui-smoke-admin-password \
+            --var ENVIRONMENT:ui-smoke \
+            --var APP_VERSION:ui-smoke \
+            > /tmp/ui-smoke-agent-worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-agent-worker.log
+            exit 1
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "style: format routing refactor"
-          git push origin HEAD:refactor/simple-round-robin-routing
+
+          pnpm exec playwright test \
+            test/agent-browser-smoke.spec.mjs \
+            test/agent-mobile-menu-smoke.spec.mjs \
+            --workers=1 \
+            --reporter=github
+
+      - name: Smoke test admin UI in Chromium
+        env:
+          UI_SMOKE_BASE_URL: http://127.0.0.1:8787
+          UI_SMOKE_ADMIN_PASSWORD: ui-smoke-admin-password
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec wrangler dev --local --port 8787 \
+            --var ADMIN_PASSWORD:ui-smoke-admin-password \
+            --var ENVIRONMENT:ui-smoke \
+            --var APP_VERSION:ui-smoke \
+            > /tmp/ui-smoke-admin-worker.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" >/dev/null 2>&1 || true' EXIT
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat /tmp/ui-smoke-admin-worker.log
+            exit 1
+          fi
+
+          pnpm exec playwright test \
+            test/admin-browser-smoke.spec.mjs \
+            --workers=1 \
+            --reporter=github
+
+      - name: Upload admin viewport diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-viewport-geometry
+          path: /tmp/admin-viewport-geometry.json
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - name: Deploy production to Cloudflare
+        id: deploy
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm deploy:cloudflare | tee /tmp/deploy.log
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test production protocols
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+        run: pnpm smoke:production

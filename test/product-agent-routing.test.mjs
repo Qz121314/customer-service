@@ -94,7 +94,9 @@ async function createDatabase() {
       conversation_id TEXT PRIMARY KEY
     );
   `);
-  database.exec(await read('../migrations/0042_simple_round_robin_routing.sql'));
+  database.exec(
+    await read('../migrations/0042_simple_round_robin_routing.sql'),
+  );
   return database;
 }
 

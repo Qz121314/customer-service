@@ -123,7 +123,9 @@ async function databaseWithDailyLimit(limit) {
       site_id, agent_id, scope_type, section_id, category_id, product_id, is_enabled
     ) VALUES ('default', 'agent-a', 'section', 'west', '', '', 1);
   `);
-  database.exec(await read('../migrations/0042_simple_round_robin_routing.sql'));
+  database.exec(
+    await read('../migrations/0042_simple_round_robin_routing.sql'),
+  );
   return database;
 }
 
