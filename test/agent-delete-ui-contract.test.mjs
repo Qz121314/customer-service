@@ -18,6 +18,7 @@ const api = readFileSync(
 test('admin edit modal exposes confirmed permanent agent deletion', () => {
   assert.match(portal, /deleteAgent/);
   assert.match(portal, /确定永久删除客服/);
+  assert.match(portal, /const editingAgentId = draft\.id/);
   assert.match(editor, /variant="destructive"/);
   assert.match(editor, /删除客服/);
   assert.match(api, /method: 'DELETE'/);
