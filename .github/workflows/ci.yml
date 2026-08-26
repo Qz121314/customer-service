@@ -38,6 +38,9 @@ jobs:
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
 
+      - name: Format
+        run: pnpm format
+
       - name: Lint
         run: pnpm lint
 
