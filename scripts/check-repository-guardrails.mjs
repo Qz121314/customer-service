@@ -50,7 +50,12 @@ for (const scriptName of [
   );
 }
 
-for (const requiredStep of ['pnpm guardrails', 'pnpm lint', 'pnpm typecheck']) {
+for (const requiredStep of [
+  'pnpm guardrails',
+  'pnpm format',
+  'pnpm lint',
+  'pnpm typecheck',
+]) {
   assert.match(
     scripts.preflight,
     new RegExp(requiredStep.replaceAll(' ', '\\s+'), 'u'),
@@ -171,12 +176,14 @@ assert.ok(
 );
 
 const guardrailsIndex = ciWorkflow.indexOf('pnpm guardrails');
+const formatIndex = ciWorkflow.indexOf('pnpm format');
 const migrationIndex = ciWorkflow.indexOf('pnpm db:migrate:local');
 assert.notEqual(guardrailsIndex, -1, 'CI must run pnpm guardrails');
+assert.notEqual(formatIndex, -1, 'CI must run pnpm format');
 assert.notEqual(migrationIndex, -1, 'CI must validate local D1 migrations');
 assert.ok(
-  guardrailsIndex < migrationIndex,
-  'CI must validate repository guardrails before D1 migrations and implementation checks',
+  guardrailsIndex < formatIndex && formatIndex < migrationIndex,
+  'CI must validate guardrails and formatting before D1 migrations and implementation checks',
 );
 
 console.log(
