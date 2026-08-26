@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { AgentAccount } from './api';
 import { Button } from './ui';
 
@@ -12,6 +13,15 @@ export function DeleteAgentDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  useEffect(() => {
+    if (deleting) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCancel();
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [deleting, onCancel]);
+
   return (
     <div
       className="modal-backdrop"
