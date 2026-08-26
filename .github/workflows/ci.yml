@@ -39,7 +39,6 @@ jobs:
             src/worker/routing.ts \
             src/worker/waiting-assignment.ts \
             src/dashboard/AgentWorkspacePanels.tsx \
-            migrations/0042_simple_round_robin_routing.sql \
             test/product-agent-routing.test.mjs \
             test/agent-daily-quota.test.mjs \
             test/agent-traffic-quota.test.mjs \
