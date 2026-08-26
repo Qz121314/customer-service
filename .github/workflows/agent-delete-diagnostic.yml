@@ -36,31 +36,30 @@ jobs:
           printf '%s' "$payload" | base64 -d | gzip -d > /tmp/restore-agent-delete.py
           python /tmp/restore-agent-delete.py
 
-      - name: Apply current narrowing repair
+      - name: Apply narrowing repair
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          p = Path('src/AdminDashboard.tsx')
-          if not p.exists():
-              print('src/AdminDashboard.tsx does not exist after restore')
-              raise SystemExit(0)
+          p = Path('src/dashboard/AdminPortal.tsx')
           s = p.read_text()
-          old = '''      onDeleteAgent={async () => {
-                if (!draft.id) return;
-                const ok = await onDeleteAgent(draft.id);
+          old = '''          onDeleteAgent={async () => {
+            if (!draft.id) return;
+            const ok = await onDeleteAgent(draft.id);
           '''
-          new = '''      onDeleteAgent={async () => {
-                const id = draft.id;
-                if (!id) return;
-                const ok = await onDeleteAgent(id);
+          new = '''          onDeleteAgent={async () => {
+            const id = draft.id;
+            if (!id) return;
+            const ok = await onDeleteAgent(id);
           '''
-          if old in s:
-              p.write_text(s.replace(old, new))
-              print('narrowing repair applied')
+          if old not in s:
+              print('narrowing repair pattern not found; source excerpt follows')
+              marker = s.find('onDeleteAgent={async')
+              print(s[max(0, marker - 240):marker + 520])
           else:
-              print('narrowing repair pattern not found')
+              p.write_text(s.replace(old, new, 1))
+              print('narrowing repair applied')
           PY
 
       - name: Capture typecheck output
@@ -80,4 +79,5 @@ jobs:
           path: |
             /tmp/typecheck.log
             /tmp/typecheck-status.txt
+            src/dashboard/AdminPortal.tsx
           if-no-files-found: error
