@@ -32,9 +32,8 @@ for (const directory of [workerDirectory, sharedDirectory]) {
 
 let adminAgentDeleteApi;
 try {
-  ({ adminAgentDeleteApi } = await import(
-    '../src/worker/admin-agent-delete-api.ts',
-  ));
+  ({ adminAgentDeleteApi } =
+    await import('../src/worker/admin-agent-delete-api.ts'));
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }
