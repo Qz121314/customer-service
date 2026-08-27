@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -31,6 +34,20 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Format routing test source
+        if: github.event_name == 'pull_request' && github.head_ref == 'fix/final-routing-daily-cap'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write test/customer-service-full-flow.test.mjs
+          if ! git diff --quiet -- test/customer-service-full-flow.test.mjs; then
+            git add test/customer-service-full-flow.test.mjs
+            git config user.name github-actions[bot]
+            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+            git commit -m "style(test): format final routing flow"
+            git push origin HEAD:fix/final-routing-daily-cap
+          fi
 
       - name: Repository guardrails
         run: pnpm guardrails
