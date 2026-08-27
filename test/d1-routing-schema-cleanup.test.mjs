@@ -6,7 +6,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('stale agent routing fields are removed without losing the round robin cursor trigger', async () => {
+test('stale routing fields are removed without losing cursor updates', async () => {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     CREATE TABLE agents (
@@ -35,7 +35,9 @@ test('stale agent routing fields are removed without losing the round robin curs
     END;
   `);
 
-  database.exec(await read('../migrations/0045_remove_stale_agent_routing_fields.sql'));
+  database.exec(
+    await read('../migrations/0045_remove_stale_agent_routing_fields.sql'),
+  );
 
   const columns = database
     .prepare('PRAGMA table_info(agents)')
