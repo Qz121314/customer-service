@@ -15,7 +15,6 @@ import {
   Conversation,
   ConversationDetail,
   Message,
-  TransferTarget,
   agentLogin,
   agentLogout,
   getAgentInbox,
@@ -29,7 +28,6 @@ import {
   sendMessage,
   setAgentAvailability,
   setConversationStatus,
-  transferConversation,
   updateAgentNickname,
 } from './api';
 import { Button } from './ui';
@@ -163,8 +161,6 @@ function AgentWorkspace({
     trafficQuotaRemaining: 0,
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [transferTargets, setTransferTargets] = useState<TransferTarget[]>([]);
-  const [transferring, setTransferring] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [mediaItems, setMediaItems] = useState<AgentMediaItem[]>([]);
@@ -374,7 +370,6 @@ function AgentWorkspace({
         conversation.agent_unread_count,
       ]),
     );
-    setTransferTargets(inbox.transferTargets);
     setAvailability(inbox.availability);
   }, []);
 
@@ -689,13 +684,6 @@ function AgentWorkspace({
                 setVisitorTyping(false);
               }, REMOTE_TYPING_STALE_MS)
             : null;
-          return;
-        }
-
-        if (payload.type === 'conversation.transferred') {
-          setSelectedId(null);
-          setDetail(null);
-          void refresh().catch(() => undefined);
           return;
         }
 
@@ -1220,28 +1208,6 @@ function AgentWorkspace({
     await onLogout();
   }
 
-  async function handoffConversation(targetAgentId: string | null) {
-    if (!selectedId || transferring) return;
-    setTransferring(true);
-    try {
-      await transferConversation(selectedId, targetAgentId);
-      clearConversationDraft(selectedId);
-      setPendingTextMessages((current) => {
-        if (!current[selectedId]) return current;
-        const next = { ...current };
-        delete next[selectedId];
-        return next;
-      });
-      setSelectedId(null);
-      setDetail(null);
-      await refresh();
-    } catch (reason) {
-      setError(message(reason, '转接会话失败'));
-    } finally {
-      setTransferring(false);
-    }
-  }
-
   return (
     <div className={`workspace-shell${selectedId ? ' is-thread-open' : ''}`}>
       <AgentSidebar
@@ -1357,47 +1323,6 @@ function AgentWorkspace({
                       ? '结束会话'
                       : '重新处理'}
                 </button>
-                {detail.conversation.status !== 'closed' && (
-                  <details className="transfer-menu">
-                    <summary>
-                      <UiIcon name="transfer" />
-                      <span>转接</span>
-                    </summary>
-                    <div className="transfer-menu-panel">
-                      <header>
-                        <strong>转接会话</strong>
-                        <span>转给其他可接待客服，或重新交回分配队列。</span>
-                      </header>
-                      <button
-                        type="button"
-                        disabled={transferring}
-                        onClick={() => void handoffConversation(null)}
-                      >
-                        <span>重新分配</span>
-                        <small>交给其他可接待客服</small>
-                      </button>
-                      {transferTargets.map((target) => (
-                        <button
-                          type="button"
-                          key={target.id}
-                          disabled={transferring}
-                          onClick={() => void handoffConversation(target.id)}
-                        >
-                          <span>{target.name}</span>
-                          <small>
-                            处理中 {target.active_count}
-                            {target.max_active_conversations > 0
-                              ? ` / ${target.max_active_conversations}`
-                              : ''}
-                          </small>
-                        </button>
-                      ))}
-                      {transferTargets.length === 0 && (
-                        <p>当前没有其他可接收会话的在线客服。</p>
-                      )}
-                    </div>
-                  </details>
-                )}
               </div>
             </header>
             {detail.conversation.product_title && (

@@ -70,23 +70,19 @@ test('a conversation counts only for its first receiving seat', async () => {
   );
 });
 
-test('agent workspace exposes transfer, requeue and product context', async () => {
-  const [worker, routing, dashboard, styles] = await Promise.all([
+test('manual transfer is absent from worker and agent workspace contracts', async () => {
+  const [worker, dashboard, api] = await Promise.all([
     read('../src/worker/agent-api.ts'),
-    read('../src/worker/routing.ts'),
     read('../src/dashboard/AgentPortal.tsx'),
-    read('../src/dashboard/cloud-service-ui.css'),
+    read('../src/dashboard/api.ts'),
   ]);
 
-  assert.match(worker, /conversations\/:id\/transfer/u);
-  assert.match(worker, /target\.status = 'online'/u);
-  assert.match(worker, /loadTransferTargets/u);
-  assert.doesNotMatch(worker, /agent_quick_replies/u);
-  assert.match(routing, /excludedAgentId/u);
-  assert.match(dashboard, /重新分配/u);
-  assert.doesNotMatch(dashboard, /重新排队/u);
-  assert.doesNotMatch(dashboard, /快捷回复/u);
-  assert.match(dashboard, /conversation-context-card/u);
-  assert.match(styles, /\.transfer-menu-panel/u);
-  assert.doesNotMatch(styles, /\.quick-repl/u);
+  assert.doesNotMatch(worker, /conversations\/:id\/transfer/u);
+  assert.doesNotMatch(worker, /loadTransferTargets/u);
+  assert.doesNotMatch(worker, /TransferTargetRow/u);
+  assert.doesNotMatch(dashboard, /transferConversation/u);
+  assert.doesNotMatch(dashboard, /transferTargets/u);
+  assert.doesNotMatch(dashboard, /重新分配/u);
+  assert.doesNotMatch(api, /transferConversation/u);
+  assert.doesNotMatch(api, /TRANSFER_TARGET_UNAVAILABLE/u);
 });

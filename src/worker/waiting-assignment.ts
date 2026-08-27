@@ -13,8 +13,9 @@ const MAX_RECOVERY_ASSIGNMENTS = 10;
  *
  * Agent presence is only a convenient recovery trigger here; the triggering
  * agent never receives preferential treatment. Every waiting conversation goes
- * back through the canonical scope + enabled + quota + CTA affinity + round
- * robin routing function, so online/offline state cannot change ownership.
+ * back through the canonical scope + enabled + daily cap + paid quota + CTA
+ * affinity + strict round-robin routing function, so online/offline state cannot
+ * change ownership.
  */
 export async function assignWaitingConversations(
   env: WaitingAssignmentEnv,

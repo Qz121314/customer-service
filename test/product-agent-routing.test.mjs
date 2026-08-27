@@ -95,6 +95,9 @@ async function createDatabase() {
     );
   `);
   database.exec(
+    await read('../migrations/0017_agent_daily_stats_retention.sql'),
+  );
+  database.exec(
     await read('../migrations/0042_simple_round_robin_routing.sql'),
   );
   return database;
@@ -273,7 +276,7 @@ test('disabled or quota-exhausted affinity falls back without waiting', async ()
   database.close();
 });
 
-test('active and daily limits do not block purchased traffic delivery', async () => {
+test('active load stays ignored while daily limit blocks new traffic', async () => {
   const database = await createDatabase();
   addAgent(database, {
     id: 'agent-a',
@@ -290,8 +293,9 @@ test('active and daily limits do not block purchased traffic delivery', async ()
     'agent-a',
   );
   assert.equal(
-    (await assignConversationAgent(db, 'conversation-2'))?.id,
-    'agent-a',
+    await assignConversationAgent(db, 'conversation-2'),
+    null,
+    'daily reception limit must gate fresh traffic even though active load is ignored',
   );
   database.close();
 });
@@ -335,7 +339,7 @@ test('section, category and product scopes remain authoritative', async () => {
   database.close();
 });
 
-test('manual requeue exclusion skips the releasing seat', async () => {
+test('internal reallocation exclusion skips the releasing seat', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-a' });
   addAgent(database, { id: 'agent-b' });

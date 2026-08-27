@@ -191,16 +191,7 @@ export type ConversationMediaItem = {
 export type AgentInbox = {
   conversations: Conversation[];
   overview: Overview;
-  transferTargets: TransferTarget[];
   availability: AgentAvailability;
-};
-
-export type TransferTarget = {
-  id: string;
-  name: string;
-  status: 'online' | 'busy' | 'offline';
-  active_count: number;
-  max_active_conversations: number;
 };
 
 type AdminBootstrapPayload = {
@@ -233,9 +224,6 @@ const errorMessages: Record<string, string> = {
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   AGENT_DELETE_FAILED: '删除客服失败，请稍后重试',
   CONVERSATION_CLOSED: '会话已关闭',
-  CONVERSATION_REOPEN_CAPACITY: '当前接待并发已满，请先结束其他处理中会话',
-  INVALID_TRANSFER_TARGET: '请选择有效的转接客服',
-  TRANSFER_TARGET_UNAVAILABLE: '该客服当前无法接收新会话',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
   MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
   INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
@@ -456,19 +444,6 @@ export async function setConversationStatus(
     method: 'POST',
     body: JSON.stringify({ status }),
   });
-}
-
-export async function transferConversation(
-  id: string,
-  targetAgentId: string | null,
-): Promise<{ assignment: { id: string; name: string } | null }> {
-  return request(
-    `/api/agent/conversations/${encodeURIComponent(id)}/transfer`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ targetAgentId }),
-    },
-  );
 }
 
 export function openAgentInboxSocket(): WebSocket {

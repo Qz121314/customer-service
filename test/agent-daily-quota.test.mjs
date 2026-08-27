@@ -160,7 +160,7 @@ test('daily reporting uses Los Angeles natural-day boundaries', () => {
   );
 });
 
-test('daily and active limits do not block automatic traffic delivery', async () => {
+test('daily limit gates automatic traffic while presence and active load stay ignored', async () => {
   const database = await databaseWithDailyLimit(1);
   addConversation(database, 'conversation-1');
   addConversation(database, 'conversation-2');
@@ -170,7 +170,11 @@ test('daily and active limits do not block automatic traffic delivery', async ()
   const second = await assignConversationAgent(db, 'conversation-2');
 
   assert.equal(first?.id, 'agent-a');
-  assert.equal(second?.id, 'agent-a');
+  assert.equal(
+    second,
+    null,
+    'the offline seat is eligible for the first assignment but stops receiving new traffic after its daily cap',
+  );
   assert.equal(
     database
       .prepare(
@@ -179,8 +183,34 @@ test('daily and active limits do not block automatic traffic delivery', async ()
          WHERE agent_id = 'agent-a'`,
       )
       .get().count,
-    2,
-    'daily counts remain available for reporting even though they do not gate traffic',
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT assigned_agent
+         FROM conversations
+         WHERE id = 'conversation-2'`,
+      )
+      .get().assigned_agent,
+    null,
+  );
+  database.close();
+});
+
+test('zero daily limit remains unlimited', async () => {
+  const database = await databaseWithDailyLimit(0);
+  addConversation(database, 'conversation-1');
+  addConversation(database, 'conversation-2');
+
+  const db = d1(database);
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-1'))?.id,
+    'agent-a',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-2'))?.id,
+    'agent-a',
   );
   database.close();
 });
