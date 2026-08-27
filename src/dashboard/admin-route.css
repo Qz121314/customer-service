@@ -1,3 +1,16 @@
+@import './product-assignment.css';
+@import './chat-dialogue.css';
+@import './agent-statistics.css';
+@import './month-picker.css';
+@import './cloud-service-ui.css';
+@import './agent-editor.css';
+@import './agent-avatar.css';
+@import './admin-commercial.css';
+@import './admin-agents.css';
+@import './admin-statistics.css';
+@import './admin-layout.css';
+@import './admin-design-system.css';
+
 .eyebrow {
   display: block;
   margin-bottom: 6px;

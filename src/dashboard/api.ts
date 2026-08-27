@@ -212,8 +212,6 @@ const errorMessages: Record<string, string> = {
   INVALID_PASSWORD: '密码至少 4 个字符',
   PASSWORD_REQUIRED: '请先为客服设置登录密码',
   USERNAME_EXISTS: '登录账号已存在',
-  INVALID_GROUP: '客服分组名称无效',
-  INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
   INVALID_ROUTING_SCOPE: '负责范围无效，请重新选择分区、分类或产品',
   INVALID_TRAFFIC_QUOTA: '额度数量无效，单次最多追加 100 万次',
   INVALID_QUOTA_REQUEST: '额度追加请求无效，请重新打开编辑窗口',
@@ -378,20 +376,6 @@ export async function setAgentAvailability(
   });
 }
 
-export async function getOverview(): Promise<Overview> {
-  return request('/api/agent/overview');
-}
-
-export async function getConversations(
-  status?: Conversation['status'],
-): Promise<Conversation[]> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  const response = await request<{ conversations: Conversation[] }>(
-    `/api/agent/conversations${query}`,
-  );
-  return response.conversations;
-}
-
 export async function getAgentInbox(): Promise<AgentInbox> {
   return request<AgentInbox>('/api/agent/conversations');
 }
@@ -476,9 +460,10 @@ async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
   if (adminBootstrapRequest) return adminBootstrapRequest;
   const requestPromise = request<AdminBootstrapPayload>('/api/admin/bootstrap');
   adminBootstrapRequest = requestPromise;
-  requestPromise.finally(() => {
+  const clearRequest = () => {
     if (adminBootstrapRequest === requestPromise) adminBootstrapRequest = null;
-  });
+  };
+  void requestPromise.then(clearRequest, clearRequest);
   return requestPromise;
 }
 
