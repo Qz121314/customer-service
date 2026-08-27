@@ -39,7 +39,6 @@ async function createDatabase() {
       password_hash TEXT,
       status TEXT NOT NULL,
       is_enabled INTEGER NOT NULL,
-      max_active_conversations INTEGER NOT NULL DEFAULT 0,
       daily_conversation_limit INTEGER NOT NULL DEFAULT 0,
       traffic_quota_enabled INTEGER NOT NULL DEFAULT 0,
       traffic_quota_total INTEGER NOT NULL DEFAULT 0,
@@ -74,7 +73,6 @@ async function createDatabase() {
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
-      requeue_excluded_agent_id TEXT,
       cta_affinity_agent_id TEXT,
       cta_affinity_expires_at TEXT,
       status TEXT NOT NULL,
@@ -106,7 +104,6 @@ function addAgent(
     id,
     status = 'online',
     enabled = true,
-    maxActiveConversations = 0,
     dailyConversationLimit = 0,
     quotaEnabled = false,
     quotaTotal = 0,
@@ -118,10 +115,10 @@ function addAgent(
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, status, is_enabled,
-         max_active_conversations, daily_conversation_limit,
-         traffic_quota_enabled, traffic_quota_total, traffic_quota_used,
-         last_seen_at, last_assigned_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+         daily_conversation_limit, traffic_quota_enabled,
+         traffic_quota_total, traffic_quota_used, last_seen_at,
+         last_assigned_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
     )
     .run(
       id,
@@ -130,7 +127,6 @@ function addAgent(
       `hash-${id}`,
       status,
       enabled ? 1 : 0,
-      maxActiveConversations,
       dailyConversationLimit,
       quotaEnabled ? 1 : 0,
       quotaTotal,
@@ -273,29 +269,6 @@ test('disabled or quota-exhausted affinity falls back without waiting', async ()
   database.close();
 });
 
-test('active and daily limits do not block purchased traffic delivery', async () => {
-  const database = await createDatabase();
-  addAgent(database, {
-    id: 'agent-a',
-    maxActiveConversations: 1,
-    dailyConversationLimit: 1,
-  });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'conversation-1', 'product-a');
-  addConversation(database, 'conversation-2', 'product-b');
-
-  const db = d1(database);
-  assert.equal(
-    (await assignConversationAgent(db, 'conversation-1'))?.id,
-    'agent-a',
-  );
-  assert.equal(
-    (await assignConversationAgent(db, 'conversation-2'))?.id,
-    'agent-a',
-  );
-  database.close();
-});
-
 test('section, category and product scopes remain authoritative', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'section-agent' });
@@ -332,28 +305,6 @@ test('section, category and product scopes remain authoritative', async () => {
     (await assignConversationAgent(db, 'product-conversation'))?.id,
     'product-agent',
   );
-  database.close();
-});
-
-test('manual requeue exclusion skips the releasing seat', async () => {
-  const database = await createDatabase();
-  addAgent(database, { id: 'agent-a' });
-  addAgent(database, { id: 'agent-b' });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'conversation-1', 'product-a');
-  database.exec(`
-    UPDATE conversations
-    SET requeue_excluded_agent_id = 'agent-a'
-    WHERE id = 'conversation-1';
-  `);
-
-  const assignment = await assignConversationAgent(
-    d1(database),
-    'conversation-1',
-    'agent-a',
-  );
-  assert.equal(assignment?.id, 'agent-b');
   database.close();
 });
 

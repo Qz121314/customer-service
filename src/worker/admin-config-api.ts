@@ -20,7 +20,6 @@ type AgentRow = {
   username: string | null;
   status: 'online' | 'busy' | 'offline';
   is_enabled: number;
-  max_active_conversations: number;
   daily_conversation_limit: number;
   traffic_quota_enabled: number;
   traffic_quota_total: number;
@@ -202,7 +201,6 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     username?: string;
     password?: string;
     routingScope?: unknown;
-    maxActiveConversations?: number;
     dailyConversationLimit?: number;
     trafficQuotaEnabled?: boolean;
     trafficQuotaTopUp?: number;
@@ -228,7 +226,6 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
   }
 
-  const maxActive = normalizeCapacity(body?.maxActiveConversations);
   const dailyLimit = normalizeDailyLimit(body?.dailyConversationLimit);
   const trafficQuotaTopUp = normalizeTrafficQuotaTopUp(body?.trafficQuotaTopUp);
   if (trafficQuotaTopUp === null) {
@@ -249,11 +246,10 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     c.env.DB.prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         password_iterations, status, is_enabled, max_active_conversations,
-         daily_conversation_limit, traffic_quota_enabled,
-         traffic_quota_total
+         password_iterations, status, is_enabled, daily_conversation_limit,
+         traffic_quota_enabled, traffic_quota_total
        ) VALUES (
-         ?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8, ?9, ?10, ?11
+         ?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8, ?9, ?10
        )`,
     ).bind(
       id,
@@ -263,7 +259,6 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
       credentials.salt,
       credentials.iterations,
       enabled,
-      maxActive,
       dailyLimit,
       trafficQuotaEnabled,
       trafficQuotaTopUp,
@@ -329,7 +324,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   if (id === 'admin') return c.json({ error: 'NOT_FOUND' }, 404);
 
   const current = await c.env.DB.prepare(
-    `SELECT id, name, username, status, is_enabled, max_active_conversations,
+    `SELECT id, name, username, status, is_enabled,
        daily_conversation_limit, last_login_at, last_seen_at, password_hash,
        password_salt, password_iterations, traffic_quota_enabled,
        traffic_quota_total, traffic_quota_used
@@ -344,7 +339,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     username?: string;
     password?: string;
     routingScope?: unknown;
-    maxActiveConversations?: number;
     dailyConversationLimit?: number;
     trafficQuotaEnabled?: boolean;
     trafficQuotaTopUp?: number;
@@ -385,10 +379,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     current.is_enabled === 1 && enabled === 0
       ? await assignedActiveConversationIds(c.env.DB, id)
       : [];
-  const maxActive =
-    body.maxActiveConversations === undefined
-      ? current.max_active_conversations
-      : normalizeCapacity(body.maxActiveConversations);
   const dailyLimit =
     body.dailyConversationLimit === undefined
       ? current.daily_conversation_limit
@@ -461,13 +451,12 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            password_salt = ?4,
            password_iterations = ?5,
            is_enabled = ?6,
-           max_active_conversations = ?7,
-           daily_conversation_limit = ?8,
-           traffic_quota_enabled = ?9,
+           daily_conversation_limit = ?7,
+           traffic_quota_enabled = ?8,
            status = CASE WHEN ?6 = 0 THEN 'offline' ELSE status END,
            last_seen_at = CASE WHEN ?6 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?10 AND site_id = 'default'`,
+       WHERE id = ?9 AND site_id = 'default'`,
     ).bind(
       name,
       username,
@@ -475,7 +464,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       passwordSalt,
       passwordIterations,
       enabled,
-      maxActive,
       dailyLimit,
       trafficQuotaEnabled,
       id,
@@ -730,7 +718,7 @@ async function loadAgents(db: D1Database) {
   const [agentsResult, assignmentsResult, todayResult] = await Promise.all([
     db
       .prepare(
-        `SELECT id, name, username, status, is_enabled, max_active_conversations,
+        `SELECT id, name, username, status, is_enabled,
            daily_conversation_limit, last_login_at, last_seen_at, password_hash,
            password_salt, password_iterations, traffic_quota_enabled,
            traffic_quota_total, traffic_quota_used
@@ -778,7 +766,6 @@ async function loadAgents(db: D1Database) {
       username: agent.username,
       status: agent.status,
       isEnabled: agent.is_enabled === 1,
-      maxActiveConversations: agent.max_active_conversations,
       dailyConversationLimit: agent.daily_conversation_limit,
       todayConversationCount: todayByAgent.get(agent.id) ?? 0,
       trafficQuotaEnabled: agent.traffic_quota_enabled === 1,
@@ -1160,11 +1147,6 @@ function normalizeUsername(value?: string | null): string | null {
 function normalizePassword(value?: string | null): string | null {
   if (!value || value.length < 4 || value.length > 128) return null;
   return value;
-}
-
-function normalizeCapacity(value?: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(999, Math.trunc(value ?? 0)));
 }
 
 function normalizeDailyLimit(value?: number): number {

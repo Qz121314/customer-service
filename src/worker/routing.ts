@@ -54,23 +54,23 @@ function assignmentResult(
 /**
  * Assign one conversation to one enabled seat with matching routing scope.
  *
- * Automatic traffic delivery is deliberately presence-agnostic: online/busy,
- * heartbeat freshness, active load and daily reception limits do not decide who
- * receives traffic. A fresh billable conversation only requires an enabled,
- * configured seat with available paid traffic quota. Already-receipted traffic
- * can always be requeued without consuming another unit.
+ * Automatic routing is intentionally independent from online/busy presence and
+ * heartbeat freshness. Fresh traffic requires an enabled, configured seat that
+ * is below its Los Angeles business-day reception cap (0 means unlimited) and
+ * has paid traffic quota available when quota enforcement is enabled. A
+ * conversation that already has an immutable reception receipt may be recovered
+ * after a seat is disabled without consuming or requiring a second daily/paid
+ * traffic unit.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
  * eligible. All other traffic follows strict deterministic round robin through a
- * monotonic database cursor. The database assignment statement is atomic, and
- * migration 0042 advances the cursor in the same statement via trigger so rapid
- * or concurrent assignments cannot collapse onto one seat because of timestamp
- * ties.
+ * monotonic database cursor. Candidate selection and assignment are performed in
+ * one D1 statement; database triggers advance the cursor and maintain daily
+ * counts in the same write path.
  */
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
-  excludedAgentId: string | null = null,
 ): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -82,7 +82,6 @@ export async function assignConversationAgent(
            c.product_id,
            COALESCE(c.section_id, p.section_id) AS section_id,
            COALESCE(c.category_id, p.category_id) AS category_id,
-           c.requeue_excluded_agent_id,
            c.cta_affinity_agent_id,
            c.cta_affinity_expires_at,
            EXISTS (
@@ -130,13 +129,20 @@ export async function assignConversationAgent(
          JOIN agents a ON a.id = m.agent_id
          JOIN context ctx ON ctx.site_id = a.site_id
          WHERE a.is_enabled = 1
-           AND (?4 = '' OR a.id <> ?4)
-           AND (
-             ctx.requeue_excluded_agent_id IS NULL
-             OR a.id <> ctx.requeue_excluded_agent_id
-           )
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
+           AND (
+             ctx.already_received = 1
+             OR a.daily_conversation_limit <= 0
+             OR COALESCE((
+               SELECT daily.conversation_count
+               FROM agent_daily_stats daily
+               WHERE daily.site_id = a.site_id
+                 AND daily.agent_id = a.id
+                 AND daily.business_date = ?3
+               LIMIT 1
+             ), 0) < a.daily_conversation_limit
+           )
            AND (
              ctx.already_received = 1
              OR a.traffic_quota_enabled = 0
@@ -167,7 +173,7 @@ export async function assignConversationAgent(
        RETURNING assigned_agent AS id,
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
     )
-    .bind(conversationId, now, businessDate, excludedAgentId ?? '')
+    .bind(conversationId, now, businessDate)
     .first<AgentAssignment>();
   if (!assignment) return assignedAgent(db, conversationId);
 

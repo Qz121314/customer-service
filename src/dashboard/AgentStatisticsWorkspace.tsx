@@ -86,7 +86,7 @@ export function AgentStatisticsModal({
           <div>
             <span className="eyebrow">坐席统计</span>
             <h2 id="agent-statistics-title">{identity.name} · 接待数据</h2>
-            <p>访客首次进入坐席时计 1 次，转接和重新排队不重复计数。</p>
+            <p>访客首次进入坐席时计 1 次，系统恢复同一会话不重复计数。</p>
           </div>
           <div className="agent-statistics-head-actions">
             <MonthPicker value={month} onChange={setMonth} label="月份" />

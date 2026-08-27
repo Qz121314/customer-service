@@ -1,6 +1,5 @@
 import {
   ArrowLeft,
-  ArrowLeftRight,
   Bell,
   CalendarDays,
   ChartNoAxesColumnIncreasing,
@@ -48,7 +47,6 @@ export type UiIconName =
   | 'clock'
   | 'check'
   | 'check-double'
-  | 'transfer'
   | 'user'
   | 'plus';
 
@@ -74,7 +72,6 @@ const ICONS: Record<UiIconName, LucideIcon> = {
   clock: Clock,
   check: Check,
   'check-double': CheckCheck,
-  transfer: ArrowLeftRight,
   user: UserRound,
   plus: Plus,
 };

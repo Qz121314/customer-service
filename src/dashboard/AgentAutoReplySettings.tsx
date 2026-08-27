@@ -167,7 +167,7 @@ export function AgentAutoReplySettingsModal({
             </label>
 
             <div className="agent-auto-reply-note">
-              未开启或未配置问候语时，会话仍会正常创建和分配，不会发送任何默认文案。转接、重新排队和重连也不会重复发送。
+              未开启或未配置问候语时，会话仍会正常创建和分配，不会发送任何默认文案。系统恢复分配和重连也不会重复发送。
             </div>
             {error ? <div className="auth-error">{error}</div> : null}
           </div>

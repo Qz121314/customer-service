@@ -3,10 +3,6 @@
  * this layer only refines the active conversation surface.
  */
 
-.workspace-shell .transfer-menu {
-  display: none !important;
-}
-
 .workspace-shell .thread-head .eyebrow,
 .workspace-shell .thread-head p,
 .workspace-shell .conversation-context-card > div > span {

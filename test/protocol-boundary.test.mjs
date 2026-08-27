@@ -12,7 +12,6 @@ test('removed protocol prefixes are blocked before routing or assets', () => {
     '/api/admin/conversations',
     '/api/admin/conversations/abc/messages',
     '/api/admin/realtime/abc',
-    '/api/agent/conversations/abc/transfer',
   ]) {
     assert.equal(isRemovedProtocolPath(pathname), true, pathname);
   }

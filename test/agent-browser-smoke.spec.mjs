@@ -46,7 +46,6 @@ async function seedConversationAndAgent(page) {
       username: agentUsername,
       password: agentPassword,
       routingScope: { type: 'product', productIds: [productId] },
-      maxActiveConversations: 5,
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,
@@ -94,9 +93,6 @@ async function expectMobileThreadGeometry(page) {
   await expect(primaryAction).toBeVisible();
   const primaryActionBox = await primaryAction.boundingBox();
   expect(primaryActionBox?.height ?? 0).toBeGreaterThanOrEqual(38);
-
-  await expect(page.locator('.transfer-menu')).toBeHidden();
-  await expect(page.getByRole('button', { name: '转接' })).toHaveCount(0);
 
   const productContext = page.locator('.conversation-context-card');
   await expect(productContext).toBeVisible();
@@ -236,7 +232,6 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(composer).toBeVisible();
   await expect(page).toHaveURL(url('/agent'));
   await expect(page.getByLabel('会话状态')).toBeVisible();
-  await expect(page.locator('.transfer-menu')).toBeHidden();
 
   await page.setViewportSize({ width: 390, height: 700 });
   const mobileComposer = page.getByPlaceholder('输入回复内容…');

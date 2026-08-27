@@ -23,166 +23,68 @@ async function createDatabase() {
       created_at TEXT NOT NULL
     );
   `);
-  const migration = await readFile(
-    new URL(
-      '../migrations/0036_conversation_lifecycle_guards.sql',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-  database.exec(migration);
+  for (const name of [
+    '0036_conversation_lifecycle_guards.sql',
+    '0043_remove_manual_transfer_residue.sql',
+  ]) {
+    database.exec(
+      await readFile(new URL(`../migrations/${name}`, import.meta.url), 'utf8'),
+    );
+  }
   return database;
 }
 
-test('manual requeue excludes the releasing seat until another seat accepts it', async () => {
+test('final lifecycle schema removes manual requeue state and trigger', async () => {
   const database = await createDatabase();
-  database.exec(`
-    INSERT INTO agents (id, site_id, is_enabled) VALUES
-      ('agent-a', 'default', 1),
-      ('agent-b', 'default', 1);
-    INSERT INTO conversations (
-      id, site_id, assigned_agent, status, agent_unread_count,
-      expires_at, created_at
-    ) VALUES (
-      'conversation-1', 'default', 'agent-a', 'pending', 0,
-      datetime('now', '+1 day'), CURRENT_TIMESTAMP
-    );
-  `);
-
-  database
+  const columns = database.prepare('PRAGMA table_info(conversations)').all();
+  const triggers = database
     .prepare(
-      `UPDATE conversations
-       SET assigned_agent = NULL
-       WHERE id = 'conversation-1'`,
+      `SELECT name
+       FROM sqlite_master
+       WHERE type = 'trigger'
+       ORDER BY name`,
     )
-    .run();
+    .all();
+
   assert.equal(
-    database
-      .prepare(
-        `SELECT requeue_excluded_agent_id AS excluded
-         FROM conversations WHERE id = 'conversation-1'`,
-      )
-      .get().excluded,
-    'agent-a',
+    columns.some((column) => column.name === 'requeue_excluded_agent_id'),
+    false,
   );
-
-  database
-    .prepare(
-      `UPDATE conversations
-       SET assigned_agent = 'agent-b'
-       WHERE id = 'conversation-1'`,
-    )
-    .run();
-  const received = database
-    .prepare(
-      `SELECT requeue_excluded_agent_id AS excluded,
-         agent_unread_count AS unread
-       FROM conversations WHERE id = 'conversation-1'`,
-    )
-    .get();
-  assert.equal(received.excluded, null);
-  assert.equal(received.unread, 1);
-
+  assert.equal(
+    triggers.some(
+      (trigger) => trigger.name === 'trg_conversation_requeue_exclusion',
+    ),
+    false,
+  );
   database.close();
 });
 
-test('administrative disable release does not create a manual requeue exclusion', async () => {
+test('assignment attention survives removal of manual requeue state', async () => {
   const database = await createDatabase();
   database.exec(`
     INSERT INTO agents (id, site_id, is_enabled)
     VALUES ('agent-a', 'default', 1);
     INSERT INTO conversations (
-      id, site_id, assigned_agent, status, expires_at, created_at
+      id, site_id, assigned_agent, status, agent_unread_count,
+      expires_at, created_at
     ) VALUES (
-      'conversation-1', 'default', 'agent-a', 'pending',
+      'conversation-1', 'default', NULL, 'open', 0,
       datetime('now', '+1 day'), CURRENT_TIMESTAMP
     );
-    UPDATE agents SET is_enabled = 0 WHERE id = 'agent-a';
+    UPDATE conversations
+    SET assigned_agent = 'agent-a'
+    WHERE id = 'conversation-1';
   `);
 
-  database
-    .prepare(
-      `UPDATE conversations
-       SET assigned_agent = NULL
-       WHERE id = 'conversation-1'`,
-    )
-    .run();
   assert.equal(
     database
       .prepare(
-        `SELECT requeue_excluded_agent_id AS excluded
-         FROM conversations WHERE id = 'conversation-1'`,
+        `SELECT agent_unread_count AS unread
+         FROM conversations
+         WHERE id = 'conversation-1'`,
       )
-      .get().excluded,
-    null,
+      .get().unread,
+    1,
   );
-
-  database.close();
-});
-
-test('closed conversation must reclaim active capacity before reopening', async () => {
-  const database = await createDatabase();
-  database.exec(`
-    INSERT INTO agents (
-      id, site_id, is_enabled, max_active_conversations
-    ) VALUES ('agent-a', 'default', 1, 1);
-    INSERT INTO conversations (
-      id, site_id, assigned_agent, status, expires_at, created_at
-    ) VALUES
-      (
-        'active-conversation', 'default', 'agent-a', 'pending',
-        datetime('now', '+1 day'), CURRENT_TIMESTAMP
-      ),
-      (
-        'closed-conversation', 'default', 'agent-a', 'closed',
-        datetime('now', '+1 day'), CURRENT_TIMESTAMP
-      );
-  `);
-
-  assert.throws(
-    () =>
-      database
-        .prepare(
-          `UPDATE conversations
-           SET status = 'pending'
-           WHERE id = 'closed-conversation'`,
-        )
-        .run(),
-    /CONVERSATION_REOPEN_CAPACITY/u,
-  );
-  assert.equal(
-    database
-      .prepare(
-        `SELECT status FROM conversations
-         WHERE id = 'closed-conversation'`,
-      )
-      .get().status,
-    'closed',
-  );
-
-  database
-    .prepare(
-      `UPDATE conversations
-       SET status = 'closed'
-       WHERE id = 'active-conversation'`,
-    )
-    .run();
-  database
-    .prepare(
-      `UPDATE conversations
-       SET status = 'pending'
-       WHERE id = 'closed-conversation'`,
-    )
-    .run();
-  assert.equal(
-    database
-      .prepare(
-        `SELECT status FROM conversations
-         WHERE id = 'closed-conversation'`,
-      )
-      .get().status,
-    'pending',
-  );
-
   database.close();
 });

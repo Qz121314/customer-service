@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
+import test from 'node:test';
 import { URL } from 'node:url';
 import {
   assignConversationAgent,
@@ -9,6 +9,9 @@ import {
 } from '../src/worker/routing.ts';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+const roundRobinMigration = '../migrations/0042_simple_round_robin_routing.sql';
+const dailyLimitMigration =
+  '../migrations/0044_daily_reception_limit_guard.sql';
 
 function d1(database) {
   return {
@@ -31,7 +34,7 @@ function d1(database) {
   };
 }
 
-async function databaseWithDailyLimit(limit) {
+async function createDatabase(agents) {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     CREATE TABLE agents (
@@ -77,7 +80,6 @@ async function databaseWithDailyLimit(limit) {
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
-      requeue_excluded_agent_id TEXT,
       cta_affinity_agent_id TEXT,
       cta_affinity_expires_at TEXT,
       status TEXT NOT NULL,
@@ -96,7 +98,7 @@ async function databaseWithDailyLimit(limit) {
     CREATE TABLE agent_traffic_receipts (
       conversation_id TEXT PRIMARY KEY
     );
-    CREATE TRIGGER test_assignment_daily_stats
+    CREATE TRIGGER test_daily_stats
     AFTER UPDATE OF assigned_agent ON conversations
     WHEN OLD.assigned_agent IS NULL
       AND NEW.assigned_agent IS NOT NULL
@@ -105,27 +107,38 @@ async function databaseWithDailyLimit(limit) {
       INSERT INTO agent_daily_stats (
         site_id, agent_id, business_date, conversation_count
       ) VALUES (
-        NEW.site_id, NEW.assigned_agent, NEW.assigned_business_date, 1
+        NEW.site_id,
+        NEW.assigned_agent,
+        NEW.assigned_business_date,
+        1
       )
       ON CONFLICT(site_id, agent_id, business_date) DO UPDATE SET
-        conversation_count = conversation_count + 1;
+        conversation_count = conversation_count + 1,
+        updated_at = CURRENT_TIMESTAMP;
     END;
-
-    INSERT INTO agents (
-      id, site_id, name, username, password_hash, status, is_enabled,
-      max_active_conversations, daily_conversation_limit,
-      last_seen_at, last_assigned_at
-    ) VALUES (
-      'agent-a', 'default', 'Agent A', 'agent-a', 'hash', 'offline', 1,
-      1, ${Number(limit)}, NULL, NULL
-    );
-    INSERT INTO agent_routing_scopes (
-      site_id, agent_id, scope_type, section_id, category_id, product_id, is_enabled
-    ) VALUES ('default', 'agent-a', 'section', 'west', '', '', 1);
   `);
-  database.exec(
-    await read('../migrations/0042_simple_round_robin_routing.sql'),
-  );
+
+  for (const agent of agents) {
+    database
+      .prepare(
+        `INSERT INTO agents (
+           id, site_id, name, username, password_hash,
+           status, is_enabled, daily_conversation_limit
+         ) VALUES (?, 'default', ?, ?, 'hash', 'offline', 1, ?)`,
+      )
+      .run(agent.id, agent.name, agent.id, agent.limit);
+    database
+      .prepare(
+        `INSERT INTO agent_routing_scopes (
+           site_id, agent_id, scope_type, section_id,
+           category_id, product_id, is_enabled
+         ) VALUES ('default', ?, 'section', 'west', '', '', 1)`,
+      )
+      .run(agent.id);
+  }
+
+  database.exec(await read(roundRobinMigration));
+  database.exec(await read(dailyLimitMigration));
   return database;
 }
 
@@ -134,14 +147,34 @@ function addConversation(database, id) {
     .prepare(
       `INSERT INTO conversations (
          id, site_id, product_id, section_id, category_id,
-         assigned_agent, status, expires_at, created_at
-       ) VALUES (?, 'default', ?, 'west', 'escorts', NULL, 'open',
-         '2099-01-01T00:00:00.000Z', CURRENT_TIMESTAMP)`,
+         status, expires_at, created_at
+       ) VALUES (
+         ?, 'default', ?, 'west', 'support', 'open',
+         '2099-01-01T00:00:00.000Z', CURRENT_TIMESTAMP
+       )`,
     )
     .run(id, `product-${id}`);
 }
 
-test('daily reporting uses Los Angeles natural-day boundaries', () => {
+async function assign(database, id) {
+  const result = await assignConversationAgent(d1(database), id);
+  return result?.id ?? null;
+}
+
+function count(database, agentId) {
+  const row = database
+    .prepare(
+      `SELECT conversation_count AS count
+       FROM agent_daily_stats
+       WHERE site_id = 'default'
+         AND agent_id = ?
+         AND business_date = ?`,
+    )
+    .get(agentId, routingBusinessDate());
+  return Number(row?.count ?? 0);
+}
+
+test('business date follows Los Angeles', () => {
   assert.equal(
     routingBusinessDate(new Date('2026-08-15T06:59:59.000Z')),
     '2026-08-14',
@@ -160,27 +193,68 @@ test('daily reporting uses Los Angeles natural-day boundaries', () => {
   );
 });
 
-test('daily and active limits do not block automatic traffic delivery', async () => {
-  const database = await databaseWithDailyLimit(1);
-  addConversation(database, 'conversation-1');
-  addConversation(database, 'conversation-2');
+test('daily cap skips capped seats and leaves overflow waiting', async () => {
+  const database = await createDatabase([
+    { id: 'agent-a', name: 'Agent A', limit: 1 },
+    { id: 'agent-b', name: 'Agent B', limit: 2 },
+  ]);
+  for (let index = 1; index <= 4; index += 1) {
+    addConversation(database, `conversation-${index}`);
+  }
 
-  const db = d1(database);
-  const first = await assignConversationAgent(db, 'conversation-1');
-  const second = await assignConversationAgent(db, 'conversation-2');
+  assert.equal(await assign(database, 'conversation-1'), 'agent-a');
+  assert.equal(await assign(database, 'conversation-2'), 'agent-b');
+  assert.equal(await assign(database, 'conversation-3'), 'agent-b');
+  assert.equal(count(database, 'agent-a'), 1);
+  assert.equal(count(database, 'agent-b'), 2);
 
-  assert.equal(first?.id, 'agent-a');
-  assert.equal(second?.id, 'agent-a');
-  assert.equal(
-    database
-      .prepare(
-        `SELECT conversation_count AS count
-         FROM agent_daily_stats
-         WHERE agent_id = 'agent-a'`,
-      )
-      .get().count,
-    2,
-    'daily counts remain available for reporting even though they do not gate traffic',
-  );
+  const before = database
+    .prepare('SELECT id, round_robin_seq FROM agents ORDER BY id')
+    .all();
+  assert.equal(await assign(database, 'conversation-4'), null);
+  const after = database
+    .prepare('SELECT id, round_robin_seq FROM agents ORDER BY id')
+    .all();
+  assert.deepEqual(after, before);
+
+  database.close();
+});
+
+test('daily cap zero is unlimited', async () => {
+  const database = await createDatabase([
+    {
+      id: 'agent-a',
+      name: 'Agent A',
+      limit: 0,
+    },
+  ]);
+  for (let index = 1; index <= 3; index += 1) {
+    const id = `conversation-${index}`;
+    addConversation(database, id);
+    assert.equal(await assign(database, id), 'agent-a');
+  }
+  assert.equal(count(database, 'agent-a'), 3);
+  database.close();
+});
+
+test('previous-day counts do not block today', async () => {
+  const database = await createDatabase([
+    {
+      id: 'agent-a',
+      name: 'Agent A',
+      limit: 1,
+    },
+  ]);
+  database
+    .prepare(
+      `INSERT INTO agent_daily_stats (
+         site_id, agent_id, business_date, conversation_count
+       ) VALUES ('default', 'agent-a', '2000-01-01', 999)`,
+    )
+    .run();
+  addConversation(database, 'new-day');
+
+  assert.equal(await assign(database, 'new-day'), 'agent-a');
+  assert.equal(count(database, 'agent-a'), 1);
   database.close();
 });

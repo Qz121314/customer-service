@@ -197,7 +197,6 @@ test('admin can save multiple whole-section routing rules in one request', async
         username: 'multi-section',
         password: 'pass',
         routingScope: { type: 'section', sectionIds: ['west', 'east'] },
-        maxActiveConversations: 0,
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 100,
@@ -411,8 +410,8 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, max_active_conversations, last_seen_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
+         status, is_enabled, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
     .run('agent-e2e', 'Agent E2E', 'agent-e2e', 'hash', 'salt');
   database
@@ -840,8 +839,8 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, max_active_conversations, last_seen_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
+         status, is_enabled, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
     .run('agent-standby', 'Agent Standby', 'agent-standby', 'hash', 'salt');
   database
@@ -894,101 +893,6 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     ),
   );
 
-  const standbyToken = 'agent-session-standby';
-  const transferToken = 'agent-session-transfer';
-  database
-    .prepare(
-      `INSERT INTO agents (
-         id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, max_active_conversations, last_seen_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
-    )
-    .run('agent-transfer', 'Agent Transfer', 'agent-transfer', 'hash', 'salt');
-  database
-    .prepare(
-      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
-       VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
-    )
-    .run(
-      'session-standby',
-      'agent-standby',
-      sha256(standbyToken),
-      expiresAt,
-      'session-transfer',
-      'agent-transfer',
-      sha256(transferToken),
-      expiresAt,
-    );
-
-  const standbyCookie = `cs_agent_session=${standbyToken}`;
-  const standbyInbox = await json(
-    await agentApi.request(
-      '/api/agent/conversations',
-      { headers: { cookie: standbyCookie } },
-      env,
-    ),
-  );
-  assert.ok(
-    standbyInbox.transferTargets.some(
-      (target) => target.id === 'agent-transfer',
-    ),
-  );
-
-  const transferResponse = await agentApi.fetch(
-    new globalThis.Request(
-      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(conversationId)}/transfer`,
-      {
-        method: 'POST',
-        headers: { cookie: standbyCookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ targetAgentId: 'agent-transfer' }),
-      },
-    ),
-    env,
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-  const transferred = await json(transferResponse);
-  assert.equal(transferred.assignment.id, 'agent-transfer');
-  assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get(conversationId).assigned_agent,
-    'agent-transfer',
-  );
-  assert.ok(
-    (rooms.events.get('agent-inbox:agent-transfer') ?? []).some(
-      (event) => event.type === 'conversation.changed',
-    ),
-  );
-  assert.ok(
-    (rooms.events.get('agent-inbox:agent-standby') ?? []).some(
-      (event) => event.type === 'conversation.changed',
-    ),
-  );
-
-  const requeueResponse = await agentApi.fetch(
-    new globalThis.Request(
-      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(conversationId)}/transfer`,
-      {
-        method: 'POST',
-        headers: {
-          cookie: `cs_agent_session=${transferToken}`,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ targetAgentId: null }),
-      },
-    ),
-    env,
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-  const requeued = await json(requeueResponse);
-  assert.equal(requeued.assignment.id, 'agent-standby');
-
   database.close();
 });
 
@@ -1039,7 +943,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
           username,
           password: 'pass',
           routingScope: { type: 'section', sectionIds },
-          maxActiveConversations: 0,
           dailyConversationLimit: dailyLimit,
           trafficQuotaEnabled: true,
           trafficQuotaTopUp: quota,
@@ -1182,21 +1085,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     Object.assign(Object.create(null), { total: 2, used: 2 }),
   );
 
-  const cookieA = `cs_agent_session=${tokenA}`;
-  const cookieB = `cs_agent_session=${tokenB}`;
-  const inboxA = await json(
-    await agentApi.request(
-      '/api/agent/conversations',
-      { headers: { cookie: cookieA } },
-      env,
-    ),
-  );
-  assert.ok(
-    inboxA.transferTargets.some((target) => target.id === agentB),
-    'an exhausted seat with spare active capacity must remain a transfer target for already-counted traffic',
-  );
-
-  const beforeTransferB = database
+  const beforeReassignmentB = database
     .prepare(
       `SELECT a.traffic_quota_used AS used,
          COALESCE(SUM(s.conversation_count), 0) AS daily
@@ -1206,66 +1095,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
        GROUP BY a.id`,
     )
     .get(agentB);
-  const transferResponse = await agentApi.fetch(
-    new globalThis.Request(
-      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(westOneId)}/transfer`,
-      {
-        method: 'POST',
-        headers: {
-          cookie: cookieA,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ targetAgentId: agentB }),
-      },
-    ),
-    env,
-    executionCtx,
-  );
-  const transferred = await json(transferResponse);
-  assert.equal(transferred.assignment.id, agentB);
-  assert.deepEqual(
-    database
-      .prepare(
-        `SELECT a.traffic_quota_used AS used,
-           COALESCE(SUM(s.conversation_count), 0) AS daily
-         FROM agents a
-         LEFT JOIN agent_daily_stats s ON s.agent_id = a.id
-         WHERE a.id = ?
-         GROUP BY a.id`,
-      )
-      .get(agentB),
-    beforeTransferB,
-    'transfer must not consume paid or daily new-traffic quota again',
-  );
-
-  const requeueResponse = await agentApi.fetch(
-    new globalThis.Request(
-      `https://customer-service.test/api/agent/conversations/${encodeURIComponent(westOneId)}/transfer`,
-      {
-        method: 'POST',
-        headers: {
-          cookie: cookieB,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({ targetAgentId: null }),
-      },
-    ),
-    env,
-    executionCtx,
-  );
-  const requeued = await json(requeueResponse);
-  assert.equal(
-    requeued.assignment.id,
-    agentA,
-    'already-counted traffic must recover to a matching exhausted seat without another unit',
-  );
-  assert.equal(
-    database
-      .prepare('SELECT traffic_quota_used FROM agents WHERE id = ?')
-      .get(agentA).traffic_quota_used,
-    2,
-  );
-
   const topUpResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(agentA)}`,
     {
@@ -1340,7 +1169,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          GROUP BY a.id`,
       )
       .get(agentB),
-    beforeTransferB,
+    beforeReassignmentB,
     'reassignment after seat disable must not bill the target again',
   );
 
@@ -1359,7 +1188,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       { agentId: agentA, count: 3 },
       { agentId: agentB, count: 1 },
     ].sort((left, right) => left.agentId.localeCompare(right.agentId)),
-    'immutable first-reception receipts must remain the billing source of truth after transfers',
+    'immutable first-reception receipts must remain the billing source of truth after reassignment',
   );
 
   function readQuotaLedger(agentId) {
@@ -1436,7 +1265,6 @@ test('admin permanently deletes an agent while preserving historical records', a
         username: 'delete-me',
         password: 'pass',
         routingScope: { type: 'none' },
-        maxActiveConversations: 0,
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 10,

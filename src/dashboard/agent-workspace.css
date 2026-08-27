@@ -516,68 +516,6 @@
   color: #a34e4e;
   background: #fff8f8;
 }
-
-.transfer-menu {
-  position: relative;
-}
-
-.transfer-menu > summary {
-  display: grid;
-  place-items: center;
-  list-style: none;
-  cursor: pointer;
-}
-
-.transfer-menu > summary > span {
-  display: inline;
-}
-
-.transfer-menu > summary::-webkit-details-marker {
-  display: none;
-}
-
-.transfer-menu-panel {
-  position: absolute;
-  z-index: 50;
-  display: grid;
-  width: min(340px, calc(100vw - 24px));
-  overflow: hidden;
-  border: 1px solid #dfe4ea;
-  background: #fff;
-}
-
-.transfer-menu-panel header {
-  display: grid;
-  gap: 3px;
-  border-bottom: 1px solid #edf0f3;
-}
-
-.transfer-menu-panel header span,
-.transfer-menu-panel button small,
-.transfer-menu-panel > p {
-  color: var(--agent-muted);
-}
-
-.transfer-menu-panel button {
-  display: grid;
-  gap: 3px;
-  border: 0;
-  border-bottom: 1px solid #f0f2f4;
-  color: var(--agent-text);
-  background: #fff;
-  text-align: left;
-}
-
-.transfer-menu-panel button:hover:not(:disabled) {
-  background: #f7f9fb;
-}
-
-.transfer-menu-panel > p {
-  margin: 0;
-  padding: 14px;
-  font-size: 11px;
-}
-
 .conversation-context-card {
   display: grid;
   z-index: 3;
