@@ -894,7 +894,6 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     ),
   );
 
-
   database.close();
 });
 
@@ -1087,7 +1086,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .get(agentA),
     Object.assign(Object.create(null), { total: 2, used: 2 }),
   );
-
 
   const topUpResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(agentA)}`,
