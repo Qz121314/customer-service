@@ -58,7 +58,7 @@ function assignmentResult(
  * heartbeat freshness, active load and daily reception limits do not decide who
  * receives traffic. A fresh billable conversation only requires an enabled,
  * configured seat with available paid traffic quota. Already-receipted traffic
- * can always be requeued without consuming another unit.
+ * can be reassigned without consuming another unit.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
  * eligible. All other traffic follows strict deterministic round robin through a
@@ -70,7 +70,6 @@ function assignmentResult(
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
-  excludedAgentId: string | null = null,
 ): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -82,7 +81,6 @@ export async function assignConversationAgent(
            c.product_id,
            COALESCE(c.section_id, p.section_id) AS section_id,
            COALESCE(c.category_id, p.category_id) AS category_id,
-           c.requeue_excluded_agent_id,
            c.cta_affinity_agent_id,
            c.cta_affinity_expires_at,
            EXISTS (
@@ -130,11 +128,6 @@ export async function assignConversationAgent(
          JOIN agents a ON a.id = m.agent_id
          JOIN context ctx ON ctx.site_id = a.site_id
          WHERE a.is_enabled = 1
-           AND (?4 = '' OR a.id <> ?4)
-           AND (
-             ctx.requeue_excluded_agent_id IS NULL
-             OR a.id <> ctx.requeue_excluded_agent_id
-           )
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
            AND (
@@ -167,7 +160,7 @@ export async function assignConversationAgent(
        RETURNING assigned_agent AS id,
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
     )
-    .bind(conversationId, now, businessDate, excludedAgentId ?? '')
+    .bind(conversationId, now, businessDate)
     .first<AgentAssignment>();
   if (!assignment) return assignedAgent(db, conversationId);
 

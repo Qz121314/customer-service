@@ -169,7 +169,6 @@ type ThreadRealtimeEvent = {
   reader?: 'agent' | 'visitor';
   lastMessageId?: string | null;
   status?: Conversation['status'];
-  assignment?: { id: string; name: string } | null;
   actor?: 'agent' | 'visitor';
   active?: boolean;
 };

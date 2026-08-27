@@ -373,28 +373,6 @@
   .workspace-shell .conversation-expiry {
     color: #626c7a;
   }
-
-  .workspace-shell .transfer-menu > summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border-color: #cfd5de;
-    background: #fff;
-    color: #28313e;
-  }
-
-  .workspace-shell .transfer-menu > summary .ui-icon {
-    width: 15px;
-    height: 15px;
-  }
-
-  .workspace-shell .transfer-menu > summary:hover,
-  .workspace-shell .transfer-menu[open] > summary {
-    border-color: #c9c7f7;
-    background: #f0efff;
-    color: #403bb6;
-  }
-
   .workspace-shell .conversation-context-card > div > span,
   .workspace-shell .conversation-context-card > div > small {
     color: #667180;
@@ -468,8 +446,7 @@
   }
 
   .workspace-shell .thread-status,
-  .workspace-shell .thread-status-action,
-  .workspace-shell .transfer-menu > summary {
+  .workspace-shell .thread-status-action {
     min-height: 34px;
     border-radius: 8px;
     font-size: 11px;
@@ -482,11 +459,6 @@
   .workspace-shell .thread-status-action {
     min-width: 76px;
   }
-
-  .workspace-shell .transfer-menu > summary {
-    padding-inline: 11px;
-  }
-
   .workspace-shell .conversation-context-card {
     width: min(720px, calc(100% - 40px));
     min-height: 58px;
