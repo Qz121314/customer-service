@@ -188,28 +188,30 @@ test('matching seats receive fresh conversations in deterministic round robin', 
   database.close();
 });
 
-test('offline and busy seats remain eligible for automatic traffic', async () => {
+test('only online seats receive automatic traffic', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-offline', status: 'offline' });
   addAgent(database, { id: 'agent-busy', status: 'busy' });
+  addAgent(database, { id: 'agent-online', status: 'online' });
   addScope(database, 'agent-offline', { type: 'section', sectionId: 'west' });
   addScope(database, 'agent-busy', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-online', { type: 'section', sectionId: 'west' });
   addConversation(database, 'conversation-1', 'product-a');
   addConversation(database, 'conversation-2', 'product-b');
 
   const db = d1(database);
   assert.equal(
     (await assignConversationAgent(db, 'conversation-1'))?.id,
-    'agent-busy',
+    'agent-online',
   );
   assert.equal(
     (await assignConversationAgent(db, 'conversation-2'))?.id,
-    'agent-offline',
+    'agent-online',
   );
   database.close();
 });
 
-test('active two-hour affinity keeps traffic on its offline seat', async () => {
+test('active two-hour affinity falls back when its seat is not online', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-a', status: 'offline' });
   addAgent(database, { id: 'agent-b' });
@@ -227,7 +229,7 @@ test('active two-hour affinity keeps traffic on its offline seat', async () => {
     d1(database),
     'protected-conversation',
   );
-  assert.equal(assignment?.id, 'agent-a');
+  assert.equal(assignment?.id, 'agent-b');
   database.close();
 });
 

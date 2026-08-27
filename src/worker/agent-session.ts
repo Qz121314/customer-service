@@ -7,6 +7,7 @@ export type AgentSessionIdentity = {
   name: string;
   username: string;
   status: 'online' | 'busy' | 'offline';
+  is_enabled: number;
 };
 
 export async function authenticateAgentSession(
@@ -17,12 +18,11 @@ export async function authenticateAgentSession(
   if (!token) return null;
   return db
     .prepare(
-      `SELECT a.id, a.name, a.username, a.status
+      `SELECT a.id, a.name, a.username, a.status, a.is_enabled
        FROM agent_sessions s
        JOIN agents a ON a.id = s.agent_id
        WHERE s.token_hash = ?1
          AND datetime(s.expires_at) > CURRENT_TIMESTAMP
-         AND a.is_enabled = 1
          AND a.username IS NOT NULL
        LIMIT 1`,
     )

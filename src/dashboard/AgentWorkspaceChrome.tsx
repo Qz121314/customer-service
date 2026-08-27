@@ -40,11 +40,13 @@ export function AgentActionToolbar({
           title={
             notificationState === 'unsupported'
               ? '当前浏览器不支持后台通知'
-              : notificationState === 'blocked'
-                ? '通知已被浏览器阻止'
-                : notificationState === 'enabled'
-                  ? '新消息通知已开启'
-                  : '开启新消息通知'
+              : notificationState === 'install-required'
+                ? '请先添加到主屏幕，再从桌面打开并开启通知'
+                : notificationState === 'blocked'
+                  ? '通知已被浏览器阻止'
+                  : notificationState === 'enabled'
+                    ? '新消息通知已开启'
+                    : '开启新消息通知'
           }
           disabled={notificationBusy || notificationState === 'unsupported'}
           onClick={onToggleNotifications}
@@ -55,9 +57,11 @@ export function AgentActionToolbar({
               ? '正在设置…'
               : notificationState === 'enabled'
                 ? '新消息通知已开启'
-                : notificationState === 'blocked'
-                  ? '通知已被阻止'
-                  : '开启新消息通知'}
+                : notificationState === 'install-required'
+                  ? '添加到主屏幕后开启通知'
+                  : notificationState === 'blocked'
+                    ? '通知已被阻止'
+                    : '开启新消息通知'}
           </span>
         </Button>
         <Button
@@ -244,11 +248,13 @@ export function AgentMobileSettingsPage({
                     ? '正在设置…'
                     : notificationState === 'enabled'
                       ? '已开启 · 后台可接收系统通知'
-                      : notificationState === 'blocked'
-                        ? '已被浏览器阻止'
-                        : notificationState === 'unsupported'
-                          ? '当前浏览器不支持'
-                          : '未开启'}
+                      : notificationState === 'install-required'
+                        ? 'iPhone/iPad 请先添加到主屏幕'
+                        : notificationState === 'blocked'
+                          ? '已被浏览器阻止'
+                          : notificationState === 'unsupported'
+                            ? '当前浏览器不支持'
+                            : '未开启'}
                 </small>
               </span>
               <b aria-hidden="true" />

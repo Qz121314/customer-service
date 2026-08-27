@@ -51,7 +51,7 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
      SET auto_greeting_enabled = ?1,
          auto_greeting_text = ?2,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?3 AND is_enabled = 1
+     WHERE id = ?3
      RETURNING id, auto_greeting_enabled, auto_greeting_text`,
   )
     .bind(body.enabled ? 1 : 0, text || null, agent.id)
@@ -79,7 +79,6 @@ async function authenticateAgentSettings(
      JOIN agents a ON a.id = session.agent_id
      WHERE session.token_hash = ?1
        AND datetime(session.expires_at) > CURRENT_TIMESTAMP
-       AND a.is_enabled = 1
        AND a.username IS NOT NULL
      LIMIT 1`,
   )

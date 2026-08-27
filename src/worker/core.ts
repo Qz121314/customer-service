@@ -195,7 +195,6 @@ export class ConversationRoom extends DurableObject<Bindings> {
            last_seen_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?1
-         AND is_enabled = 1
          AND (
            last_seen_at IS NULL
            OR datetime(last_seen_at) <= datetime('now', '-90 seconds')

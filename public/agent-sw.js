@@ -2,7 +2,7 @@
 
 const AGENT_WORKSPACE_URL = '/agent';
 const AGENT_NOTIFICATION_URL = '/agent?notification=latest-unread';
-const AGENT_CACHE = 'agent-workspace-v2';
+const AGENT_CACHE = 'agent-workspace-v3';
 const APP_SHELL = [
   AGENT_WORKSPACE_URL,
   '/agent.webmanifest',
@@ -102,6 +102,8 @@ self.addEventListener('push', (event) => {
           badge: '/icons/customer-service-192.svg',
           tag: 'agent-new-message',
           renotify: true,
+          silent: false,
+          vibrate: [200, 100, 200],
           data: { url: AGENT_NOTIFICATION_URL },
         });
       }),

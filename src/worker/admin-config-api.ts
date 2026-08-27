@@ -375,10 +375,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   const enabled =
     body.isEnabled === undefined ? current.is_enabled : body.isEnabled ? 1 : 0;
-  const conversationsToReassign =
-    current.is_enabled === 1 && enabled === 0
-      ? await assignedActiveConversationIds(c.env.DB, id)
-      : [];
   const dailyLimit =
     body.dailyConversationLimit === undefined
       ? current.daily_conversation_limit
@@ -453,8 +449,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            is_enabled = ?6,
            daily_conversation_limit = ?7,
            traffic_quota_enabled = ?8,
-           status = CASE WHEN ?6 = 0 THEN 'offline' ELSE status END,
-           last_seen_at = CASE WHEN ?6 = 0 THEN NULL ELSE last_seen_at END,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?9 AND site_id = 'default'`,
     ).bind(
@@ -533,24 +527,6 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     ).bind(id),
     ...routingScopeStatements(c.env.DB, id, routingScope),
   );
-  if (enabled === 0) {
-    statements.push(
-      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
-        id,
-      ),
-      c.env.DB.prepare(
-        `UPDATE conversations
-           SET assigned_agent = NULL,
-               assigned_at = NULL,
-               assigned_business_date = NULL,
-               status = 'open',
-               updated_at = CURRENT_TIMESTAMP
-           WHERE assigned_agent = ?1
-             AND status IN ('open', 'pending')
-             AND expires_at > CURRENT_TIMESTAMP`,
-      ).bind(id),
-    );
-  }
   const results = await c.env.DB.batch(statements);
   const quotaApplied =
     quotaUpdateIndex >= 0 &&
@@ -588,27 +564,17 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       );
     }
   }
-  if (conversationsToReassign.length) {
-    await disconnectAgentRealtime(c.env, id, conversationsToReassign);
-    for (const conversationId of conversationsToReassign) {
-      await assignConversationAgent(c.env.DB, conversationId);
-      await broadcastClientConversationEvent(
-        c.env,
-        conversationId,
-        'conversation.assigned',
-      );
-    }
-  }
   const quotaWasBlocking =
     current.traffic_quota_enabled === 1 &&
     current.traffic_quota_used >= current.traffic_quota_total;
   const quotaEligibilityRestored =
     quotaWasBlocking && (quotaApplied || trafficQuotaEnabled === 0);
+  const enabledEligibilityRestored = current.is_enabled === 0 && enabled === 1;
   let assignedWaitingCount = 0;
   if (
     enabled === 1 &&
     current.status === 'online' &&
-    quotaEligibilityRestored
+    (enabledEligibilityRestored || quotaEligibilityRestored)
   ) {
     const assignedConversationIds = await assignWaitingConversations(
       c.env,

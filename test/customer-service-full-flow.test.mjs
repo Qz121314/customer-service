@@ -33,14 +33,21 @@ let adminConfigApi;
 let agentApi;
 let clientApi;
 let mediaApi;
+let hashAgentPassword;
 try {
-  [{ adminConfigApi }, { agentApi }, { clientApi }, { mediaApi }] =
-    await Promise.all([
-      import('../src/worker/admin-config-api.ts'),
-      import('../src/worker/agent-api.ts'),
-      import('../src/worker/client-api.ts'),
-      import('../src/worker/media-api.ts'),
-    ]);
+  [
+    { adminConfigApi },
+    { agentApi },
+    { clientApi },
+    { mediaApi },
+    { hashAgentPassword },
+  ] = await Promise.all([
+    import('../src/worker/admin-config-api.ts'),
+    import('../src/worker/agent-api.ts'),
+    import('../src/worker/client-api.ts'),
+    import('../src/worker/media-api.ts'),
+    import('../src/worker/agent-password.ts'),
+  ]);
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }
@@ -405,15 +412,24 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   };
 
   const token = 'agent-session-e2e';
+  const agentPassword = 'agent-e2e-password';
+  const agentCredentials = await hashAgentPassword(agentPassword, 1_000);
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   database
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, last_seen_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
+         password_iterations, status, is_enabled, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
-    .run('agent-e2e', 'Agent E2E', 'agent-e2e', 'hash', 'salt');
+    .run(
+      'agent-e2e',
+      'Agent E2E',
+      'agent-e2e',
+      agentCredentials.hash,
+      agentCredentials.salt,
+      agentCredentials.iterations,
+    );
   database
     .prepare(
       `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
@@ -869,7 +885,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   const disabledAgent = database
     .prepare('SELECT status, is_enabled FROM agents WHERE id = ?')
     .get('agent-e2e');
-  assert.equal(disabledAgent.status, 'offline');
+  assert.equal(disabledAgent.status, 'online');
   assert.equal(disabledAgent.is_enabled, 0);
   assert.equal(
     database
@@ -877,21 +893,77 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
         'SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?',
       )
       .get('agent-e2e').count,
-    0,
+    1,
   );
   assert.equal(
     database
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(conversationId).assigned_agent,
-    'agent-standby',
+    'agent-e2e',
   );
-  assert.ok(
-    (rooms.events.get('agent-inbox:agent-standby') ?? []).some(
-      (event) =>
-        event.type === 'conversation.changed' &&
-        event.conversation?.id === conversationId,
+  const disabledStatus = await json(
+    await agentApi.request(
+      '/api/agent/auth/status',
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'busy' }),
+      },
+      env,
     ),
   );
+  assert.equal(disabledStatus.availability, 'busy');
+
+  const disabledLoginResponse = await agentApi.request(
+    '/api/agent/auth/login',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'agent-e2e', password: agentPassword }),
+    },
+    env,
+  );
+  const disabledLogin = await json(disabledLoginResponse);
+  assert.equal(disabledLogin.agent.status, 'online');
+  const disabledCookie =
+    disabledLoginResponse.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
+  assert.ok(disabledCookie.startsWith('cs_agent_session='));
+  const disabledSession = await json(
+    await agentApi.request(
+      '/api/agent/auth/session',
+      { headers: { cookie: disabledCookie } },
+      env,
+    ),
+  );
+  assert.equal(disabledSession.authenticated, true);
+
+  const postDisableConversation = await json(
+    await clientApi.request(
+      '/client/v1/conversations',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          visitorId: 'NEW456',
+          sourceHandoffId: '018f47c2-6c72-4d8a-9f11-4b0db21c7999',
+          clientMessageId: 'client-message-after-disable',
+          message: 'Route only to an enabled online seat',
+          product: {
+            id: 'product-after-disable',
+            sectionId: 'west',
+            sectionName: 'West',
+            categoryId: 'massage',
+            categoryName: 'Massage',
+            title: 'Product After Disable',
+            href: '/sections/west/products/product-after-disable/',
+            coverUrl: null,
+          },
+        }),
+      },
+      env,
+    ),
+  );
+  assert.equal(postDisableConversation.conversation.agentName, 'Agent Standby');
 
   database.close();
 });
@@ -1085,7 +1157,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     Object.assign(Object.create(null), { total: 2, used: 2 }),
   );
 
-  const beforeReassignmentB = database
+  const beforeDisableB = database
     .prepare(
       `SELECT a.traffic_quota_used AS used,
          COALESCE(SUM(s.conversation_count), 0) AS daily
@@ -1155,8 +1227,8 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       )
       .all(westOneId, westTwoId, westThreeId)
       .map((row) => row.assigned_agent),
-    [agentB, agentB, agentB],
-    'disabling a seat must reassign its already-counted active traffic even when the target has no new-traffic quota',
+    [agentA, agentA, agentA],
+    'disabling a seat must preserve its existing active conversations',
   );
   assert.deepEqual(
     database
@@ -1169,8 +1241,8 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          GROUP BY a.id`,
       )
       .get(agentB),
-    beforeReassignmentB,
-    'reassignment after seat disable must not bill the target again',
+    beforeDisableB,
+    'disabling another seat must not alter this seat quota or daily count',
   );
 
   assert.deepEqual(
@@ -1188,7 +1260,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       { agentId: agentA, count: 3 },
       { agentId: agentB, count: 1 },
     ].sort((left, right) => left.agentId.localeCompare(right.agentId)),
-    'immutable first-reception receipts must remain the billing source of truth after reassignment',
+    'immutable first-reception receipts must remain the billing source of truth after disable',
   );
 
   function readQuotaLedger(agentId) {

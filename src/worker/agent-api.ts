@@ -22,6 +22,7 @@ type AgentSession = {
   name: string;
   username: string;
   status: 'online' | 'busy' | 'offline';
+  is_enabled: number;
 };
 
 type AgentCredentialRow = AgentSession & {
@@ -76,8 +77,8 @@ agentApi.patch('/api/agent/profile', async (c) => {
   const updated = await c.env.DB.prepare(
     `UPDATE agents
      SET name = ?1, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?2 AND is_enabled = 1
-     RETURNING id, name, username, status`,
+     WHERE id = ?2
+     RETURNING id, name, username, status, is_enabled`,
   )
     .bind(nickname, agent.id)
     .first<AgentSession>();
@@ -95,10 +96,10 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
 
   const agent = await c.env.DB.prepare(
-    `SELECT id, name, username, status, password_hash, password_salt, password_iterations
+    `SELECT id, name, username, status, is_enabled,
+       password_hash, password_salt, password_iterations
      FROM agents
      WHERE lower(username) = lower(?1)
-       AND is_enabled = 1
        AND password_hash IS NOT NULL
        AND password_salt IS NOT NULL
      LIMIT 1`,
@@ -147,10 +148,10 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   });
-  const assignedConversationIds = await assignWaitingConversations(
-    c.env,
-    agent.id,
-  );
+  const assignedConversationIds =
+    agent.is_enabled === 1
+      ? await assignWaitingConversations(c.env, agent.id)
+      : [];
   scheduleAgentPush(c, assignedConversationIds);
   return c.json({
     ok: true,
@@ -195,7 +196,6 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
          last_seen_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?1
-       AND is_enabled = 1
        AND (
          last_seen_at IS NULL
          OR datetime(last_seen_at) <= datetime('now', '-90 seconds')
@@ -203,7 +203,7 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
   )
     .bind(agent.id)
     .run();
-  if (nextStatus === 'online') {
+  if (agent.is_enabled === 1 && nextStatus === 'online') {
     const assignedConversationIds = await assignWaitingConversations(
       c.env,
       agent.id,
@@ -228,12 +228,12 @@ agentApi.post('/api/agent/auth/status', async (c) => {
     `UPDATE agents
      SET status = ?1, last_seen_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?2 AND is_enabled = 1`,
+     WHERE id = ?2`,
   )
     .bind(body.status, agent.id)
     .run();
 
-  if (body.status === 'online') {
+  if (agent.is_enabled === 1 && body.status === 'online') {
     const assignedConversationIds = await assignWaitingConversations(
       c.env,
       agent.id,
@@ -799,12 +799,11 @@ async function authenticateAgentToken(
 ): Promise<AgentSession | null> {
   return db
     .prepare(
-      `SELECT a.id, a.name, a.username, a.status
+      `SELECT a.id, a.name, a.username, a.status, a.is_enabled
        FROM agent_sessions s
        JOIN agents a ON a.id = s.agent_id
        WHERE s.token_hash = ?1
          AND datetime(s.expires_at) > CURRENT_TIMESTAMP
-         AND a.is_enabled = 1
          AND a.username IS NOT NULL
        LIMIT 1`,
     )

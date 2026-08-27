@@ -31,4 +31,7 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   );
   assert.match(dashboard, /Notification\.requestPermission\(\)/u);
   assert.match(dashboard, /pushManager\.subscribe/u);
+  assert.match(dashboard, /install-required/u);
+  assert.match(dashboard, /bindAgentSubscription\(subscription, agentId/u);
+  assert.match(dashboard, /cs-agent-push-binding:v2/u);
 });
