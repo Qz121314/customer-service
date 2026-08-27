@@ -9,6 +9,9 @@ function source(path) {
 
 test('mobile agent follows the visual viewport when the keyboard opens', () => {
   const main = source('../src/dashboard/main.tsx');
+  const agentEntry = source('../src/dashboard/agent-entry.tsx');
+
+  assert.ok(main.includes("import('./agent-entry')"));
 
   for (const contract of [
     "window.matchMedia('(max-width: 760px)')",
@@ -24,19 +27,19 @@ test('mobile agent follows the visual viewport when the keyboard opens', () => {
     '`calc(100% - ${Math.round(sidebarHeight)}px)`',
     "threadPane.style.height = '100%'",
   ]) {
-    assert.ok(main.includes(contract), contract);
+    assert.ok(agentEntry.includes(contract), contract);
   }
 
   assert.equal(
-    main.includes("conversationPane.style.height = 'calc(100% - 60px)'"),
+    agentEntry.includes("conversationPane.style.height = 'calc(100% - 60px)'"),
     false,
     'mobile inbox height must not drift from the rendered sidebar height',
   );
 
-  const renderIndex = main.indexOf(
+  const renderIndex = agentEntry.indexOf(
     "createRoot(document.getElementById('root')!).render(",
   );
-  const viewportInstallIndex = main.lastIndexOf(
+  const viewportInstallIndex = agentEntry.lastIndexOf(
     'installAgentVisualViewportSync();',
   );
   assert.ok(renderIndex >= 0, 'app root rendering must exist');
