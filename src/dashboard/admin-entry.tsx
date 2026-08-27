@@ -1,21 +1,25 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AdminPortal } from './AdminPortal';
-import './styles.css';
-import './product-assignment.css';
-import './agent-statistics.css';
-import './month-picker.css';
-import './cloud-service-ui.css';
-import './agent-editor.css';
-import './agent-avatar.css';
-import './admin-commercial.css';
-import './admin-agents.css';
-import './admin-statistics.css';
-import './admin-layout.css';
-import './commercial-polish.css';
-import './admin-design-system.css';
 
-export function bootstrap() {
+async function loadAdminStyles() {
+  await import('./styles.css');
+  await import('./product-assignment.css');
+  await import('./agent-statistics.css');
+  await import('./month-picker.css');
+  await import('./cloud-service-ui.css');
+  await import('./agent-editor.css');
+  await import('./agent-avatar.css');
+  await import('./admin-commercial.css');
+  await import('./admin-agents.css');
+  await import('./admin-statistics.css');
+  await import('./admin-layout.css');
+  await import('./commercial-polish.css');
+  await import('./admin-design-system.css');
+}
+
+export async function bootstrap() {
+  await loadAdminStyles();
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <AdminPortal />
