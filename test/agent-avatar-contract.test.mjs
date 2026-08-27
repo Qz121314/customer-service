@@ -33,8 +33,10 @@ test('agent avatar is locally prepared, explicitly confirmed and stored as one R
   assert.ok(control.includes("import { createPortal } from 'react-dom';"));
   assert.ok(control.includes('createPortal(dialog, document.body)'));
   assert.ok(control.includes('prepareAgentAvatar(file)'));
-  assert.ok(control.includes('confirmAvatar'));
-  assert.ok(control.includes('确认使用'));
+  assert.ok(control.includes('confirmProfile'));
+  assert.ok(control.includes('客服资料'));
+  assert.ok(control.includes('对外昵称'));
+  assert.ok(control.includes('保存资料'));
   assert.ok(image.includes('MAX_AVATAR_EDGE = 512'));
   assert.ok(image.includes("compressCanvas(canvas, 'image/webp')"));
   assert.ok(styles.includes('place-items: center'));

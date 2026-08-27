@@ -69,7 +69,7 @@ async function loginAgent(page) {
 }
 
 async function expectCenteredDialog(page) {
-  const dialog = page.getByRole('dialog', { name: '客服头像' });
+  const dialog = page.getByRole('dialog', { name: '客服资料' });
   await expect(dialog).toBeVisible();
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize();
@@ -214,13 +214,14 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     .click();
   await expect(autoReplyDialog).toBeHidden();
 
-  const avatarButton = page.getByRole('button', { name: '更换客服头像' });
+  const avatarButton = page.getByRole('button', { name: '客服资料' });
   await expect(avatarButton).toBeVisible();
   await avatarButton.click();
   await expectCenteredDialog(page);
   await expect(
-    page.getByText('图片只在本机压缩和预览，确认后才上传。'),
+    page.getByText('访客端只显示对外昵称和客服头像。'),
   ).toBeVisible();
+  await expect(page.getByLabel('对外昵称')).toBeVisible();
   await page.getByRole('button', { name: '关闭', exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });

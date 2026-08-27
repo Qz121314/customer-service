@@ -14,9 +14,13 @@ import { UiIcon } from './icons';
 export function AgentAvatarControl({
   agentId,
   agentName,
+  agentUsername,
+  onNicknameChange,
 }: {
   agentId: string;
   agentName: string;
+  agentUsername: string;
+  onNicknameChange: (nickname: string) => Promise<void>;
 }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -25,6 +29,7 @@ export function AgentAvatarControl({
   const [processing, setProcessing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [nickname, setNickname] = useState(agentName);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const clearPrepared = useCallback(() => {
@@ -89,17 +94,28 @@ export function AgentAvatarControl({
     }
   }
 
-  async function confirmAvatar() {
-    if (!prepared || saving) return;
+  async function confirmProfile() {
+    const nextNickname = nickname.trim();
+    if (!nextNickname || nextNickname.length > 40 || saving || processing) {
+      return;
+    }
     setSaving(true);
     setError('');
     try {
-      const profile = await uploadAgentAvatar(prepared.blob, prepared.mimeType);
-      setAvatarUrl(profile.avatarUrl);
+      if (nextNickname !== agentName) {
+        await onNicknameChange(nextNickname);
+      }
+      if (prepared) {
+        const profile = await uploadAgentAvatar(
+          prepared.blob,
+          prepared.mimeType,
+        );
+        setAvatarUrl(profile.avatarUrl);
+      }
       clearPrepared();
       setOpen(false);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '头像上传失败');
+      setError(reason instanceof Error ? reason.message : '客服资料保存失败');
     } finally {
       setSaving(false);
     }
@@ -113,7 +129,6 @@ export function AgentAvatarControl({
       const profile = await deleteAgentAvatar();
       setAvatarUrl(profile.avatarUrl);
       clearPrepared();
-      setOpen(false);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '头像删除失败');
     } finally {
@@ -137,8 +152,8 @@ export function AgentAvatarControl({
       >
         <header>
           <div>
-            <h2 id="agent-avatar-title">客服头像</h2>
-            <p>图片只在本机压缩和预览，确认后才上传。</p>
+            <h2 id="agent-avatar-title">客服资料</h2>
+            <p>访客端只显示对外昵称和客服头像。</p>
           </div>
           <button
             type="button"
@@ -150,6 +165,19 @@ export function AgentAvatarControl({
             <UiIcon name="close" />
           </button>
         </header>
+
+        <label className="agent-nickname-field">
+          <span>对外昵称</span>
+          <input
+            autoFocus
+            required
+            maxLength={40}
+            value={nickname}
+            placeholder="例如 Amy"
+            onChange={(event) => setNickname(event.target.value)}
+          />
+          <small>登录账号：@{agentUsername}（不可在此修改）</small>
+        </label>
 
         <div className="agent-avatar-preview-stage">
           <div className="agent-avatar-preview">
@@ -195,9 +223,6 @@ export function AgentAvatarControl({
               if (file) void selectFile(file);
             }}
           />
-        </div>
-
-        <footer>
           {avatarUrl && !prepared ? (
             <button
               type="button"
@@ -207,23 +232,31 @@ export function AgentAvatarControl({
             >
               删除头像
             </button>
-          ) : (
-            <button
-              type="button"
-              className="agent-avatar-cancel"
-              disabled={saving || processing}
-              onClick={closeDialog}
-            >
-              取消
-            </button>
-          )}
+          ) : null}
+        </div>
+
+        <footer>
+          <button
+            type="button"
+            className="agent-avatar-cancel"
+            disabled={saving || processing}
+            onClick={closeDialog}
+          >
+            取消
+          </button>
           <button
             type="button"
             className="agent-avatar-confirm"
-            disabled={!prepared || saving || processing}
-            onClick={() => void confirmAvatar()}
+            disabled={
+              saving ||
+              processing ||
+              !nickname.trim() ||
+              nickname.trim().length > 40 ||
+              (!prepared && nickname.trim() === agentName)
+            }
+            onClick={() => void confirmProfile()}
           >
-            {saving ? '上传中…' : '确认使用'}
+            {saving ? '保存中…' : '保存资料'}
           </button>
         </footer>
       </section>
@@ -234,14 +267,18 @@ export function AgentAvatarControl({
     <>
       <button
         type="button"
-        className="agent-avatar-button"
-        aria-label="更换客服头像"
-        title="更换客服头像"
-        onClick={() => setOpen(true)}
+        className="agent-avatar-button agent-profile-button"
+        aria-label="客服资料"
+        title="客服资料"
+        onClick={() => {
+          setNickname(agentName);
+          setError('');
+          setOpen(true);
+        }}
       >
         {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{initials}</span>}
         <i aria-hidden="true">
-          <UiIcon name="plus" />
+          <UiIcon name="user" />
         </i>
       </button>
       {dialog ? createPortal(dialog, document.body) : null}

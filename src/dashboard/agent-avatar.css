@@ -78,73 +78,6 @@
   outline-offset: 2px;
 }
 
-.agent-nickname-trigger {
-  max-width: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 760;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.agent-nickname-trigger:hover,
-.agent-nickname-trigger:focus-visible {
-  color: #5b5ce2;
-}
-
-.agent-profile-backdrop {
-  position: fixed;
-  z-index: 2100;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: max(18px, env(safe-area-inset-top)) 14px
-    max(18px, env(safe-area-inset-bottom));
-  background: rgba(15, 23, 42, 0.52);
-  backdrop-filter: blur(8px);
-}
-
-.agent-profile-dialog {
-  width: min(392px, 100%);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.68);
-  border-radius: 20px;
-  background: #fff;
-  color: #1d2027;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
-}
-
-.agent-profile-dialog > header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 18px 10px;
-}
-
-.agent-profile-dialog h2,
-.agent-profile-dialog p {
-  margin: 0;
-}
-
-.agent-profile-dialog h2 {
-  font-size: 18px;
-}
-
-.agent-profile-dialog header p {
-  margin-top: 5px;
-  color: #737b88;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .agent-nickname-field {
   padding: 12px 18px 8px;
   display: grid;
@@ -177,23 +110,6 @@
 .agent-nickname-field input:focus {
   border-color: #5b5ce2;
   outline: 3px solid rgba(91, 92, 226, 0.13);
-}
-
-.agent-profile-dialog > .agent-avatar-error {
-  margin: 4px 18px 0;
-}
-
-.agent-profile-dialog > footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 18px 18px;
-}
-
-.agent-profile-dialog > footer button {
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 10px;
 }
 
 .agent-avatar-backdrop {
@@ -322,10 +238,12 @@
 .agent-avatar-picker-row {
   display: flex;
   justify-content: center;
+  gap: 8px;
   padding: 4px 18px 20px;
 }
 
 .agent-avatar-select,
+.agent-avatar-picker-row .agent-avatar-remove,
 .agent-avatar-dialog footer button {
   min-height: 44px;
   border-radius: 12px;
@@ -334,6 +252,11 @@
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.agent-avatar-picker-row .agent-avatar-remove {
+  padding: 0 14px;
+  border: 1px solid #f1c7c4;
 }
 
 .agent-avatar-select {

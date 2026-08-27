@@ -139,6 +139,8 @@
     flex: 0 0 auto;
     overflow-x: auto;
     overflow-y: visible;
+    overscroll-behavior-x: contain;
+    overscroll-behavior-y: auto;
   }
 
   .admin-content:has(.admin-statistics-page) {

@@ -178,6 +178,29 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     .getByRole('row')
     .filter({ hasText: 'UI Admin Smoke Agent' })
     .first();
+  await expect(agentRow).toBeVisible();
+
+  await page.evaluate(() => {
+    const body = globalThis.document.querySelector('.admin-agent-table tbody');
+    const row = body?.querySelector('tr');
+    if (!body || !row) return;
+    for (let index = 0; index < 12; index += 1) {
+      body.append(row.cloneNode(true));
+    }
+  });
+  await agentRow.hover();
+  const scrollBefore = await page
+    .locator('.admin-content')
+    .evaluate((element) => element.scrollTop);
+  await page.mouse.wheel(0, 520);
+  await expect
+    .poll(() =>
+      page.locator('.admin-content').evaluate((element) => element.scrollTop),
+    )
+    .toBeGreaterThan(scrollBefore);
+  await page
+    .locator('.admin-content')
+    .evaluate((element) => element.scrollTo({ top: 0 }));
   const rowActions = agentRow.locator('.admin-agent-actions');
   await expect(rowActions).toBeVisible();
   const actionGeometry = await rowActions.evaluate((element) => {
