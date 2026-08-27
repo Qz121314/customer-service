@@ -11,8 +11,10 @@ test('agent workspace exposes business actions instead of a raw status selector'
   assert.match(portal, /开始处理/u);
   assert.match(portal, /结束会话/u);
   assert.match(portal, /重新处理/u);
-  assert.match(portal, /重新分配/u);
-  assert.doesNotMatch(portal, /重新进入自动分流|排除当前客服后自动分流/u);
+  assert.doesNotMatch(
+    portal,
+    /重新分配|重新进入自动分流|排除当前客服后自动分流|人工转接/u,
+  );
 });
 
 test('agent inbox exposes conversation status without routing implementation copy', async () => {

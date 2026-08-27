@@ -149,35 +149,15 @@ export function AgentEditorModal({
 
               <div className="agent-editor-section agent-editor-capacity-section">
                 <div className="agent-editor-section-head">
-                  <strong>人工转接限制</strong>
+                  <strong>每日接待上限</strong>
                   <span className="agent-editor-section-hint">
-                    0 = 不限制 · 不影响自动轮询
+                    0 = 不限制 · 达到上限后暂停新的咨询分流
                   </span>
                 </div>
 
                 <div className="agent-editor-capacity-grid">
                   <label className="agent-editor-number-field">
-                    <strong>并发上限</strong>
-                    <div>
-                      <input
-                        type="number"
-                        min="0"
-                        max="999"
-                        value={draft.maxActiveConversations}
-                        onChange={(event) =>
-                          onDraftChange({
-                            ...draft,
-                            maxActiveConversations:
-                              Number(event.target.value) || 0,
-                          })
-                        }
-                      />
-                      <em>个</em>
-                    </div>
-                  </label>
-
-                  <label className="agent-editor-number-field">
-                    <strong>每日接待上限</strong>
+                    <strong>每日最多接待</strong>
                     <div>
                       <input
                         type="number"
@@ -277,7 +257,7 @@ export function AgentEditorModal({
 
                 <p className="agent-editor-quota-note">
                   每个会话首次有效接待只扣 1
-                  次。并发和每日接待上限只限制人工指定转接，不参与自动轮询；每日接待上限按天重置，咨询额度按累计总量计算。转接、重新排队和恢复同一会话不会重复扣减。
+                  次。每日接待上限按天重置并参与新流量分配，咨询额度按累计总量计算；系统恢复同一会话不会重复扣减。
                 </p>
 
                 {draft.id ? (

@@ -220,7 +220,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       username: agent.username ?? '',
       password: '',
       routingScope: agent.routingScope,
-      maxActiveConversations: agent.maxActiveConversations,
       dailyConversationLimit: agent.dailyConversationLimit,
       trafficQuotaEnabled: agent.trafficQuotaEnabled,
       trafficQuotaTotal: agent.trafficQuotaTotal,
@@ -265,7 +264,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           username: draft.username,
           password: draft.password || undefined,
           routingScope: draft.routingScope,
-          maxActiveConversations: draft.maxActiveConversations,
           dailyConversationLimit: draft.dailyConversationLimit,
           trafficQuotaEnabled: draft.trafficQuotaEnabled,
           trafficQuotaTopUp: draft.trafficQuotaTopUp,
@@ -278,7 +276,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           username: draft.username,
           password: draft.password,
           routingScope: draft.routingScope,
-          maxActiveConversations: draft.maxActiveConversations,
           dailyConversationLimit: draft.dailyConversationLimit,
           trafficQuotaEnabled: draft.trafficQuotaEnabled,
           trafficQuotaTopUp: draft.trafficQuotaTopUp,
@@ -326,7 +323,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';
   const sectionHint =
     section === 'agents'
-      ? '管理登录身份、人工转接限制、咨询额度和产品负责范围。自动分流采用严格轮询。'
+      ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
       : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
 
   return (
@@ -504,7 +501,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                         <th>客服账号</th>
                         <th>负责范围</th>
                         <th>状态</th>
-                        <th>人工转接</th>
+                        <th>今日接待</th>
                         <th>咨询额度</th>
                         <th aria-label="操作" />
                       </tr>
@@ -567,14 +564,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                 </strong>
                                 <small className={dailyFull ? 'is-full' : ''}>
                                   {dailyFull
-                                    ? '人工转接已达每日上限'
-                                    : `人工转接：同时 ${
-                                        agent.maxActiveConversations || '不限'
-                                      } · ${
-                                        agent.dailyConversationLimit > 0
-                                          ? `今日剩余 ${dailyRemaining}`
-                                          : '每日不限'
-                                      }`}
+                                    ? '已达每日接待上限，暂停新分流'
+                                    : agent.dailyConversationLimit > 0
+                                      ? `今日剩余 ${dailyRemaining}`
+                                      : '每日不限'}
                                 </small>
                               </div>
                             </td>
@@ -695,9 +688,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
 function agentIsLimited(agent: AgentAccount): boolean {
   if (!agent.isEnabled) return false;
+  const dailyFull =
+    agent.dailyConversationLimit > 0 &&
+    agent.todayConversationCount >= agent.dailyConversationLimit;
   const trafficExhausted =
     agent.trafficQuotaEnabled && agent.trafficQuotaRemaining <= 0;
-  return trafficExhausted;
+  return dailyFull || trafficExhausted;
 }
 
 function currentBusinessDate(): string {

@@ -334,7 +334,7 @@
   }
 
   .admin-agent-layout .admin-agent-table td:nth-child(4)::before {
-    content: '人工转接';
+    content: '今日接待';
   }
 
   .admin-agent-layout .admin-agent-table td:nth-child(5)::before {

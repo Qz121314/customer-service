@@ -197,7 +197,6 @@ test('admin can save multiple whole-section routing rules in one request', async
         username: 'multi-section',
         password: 'pass',
         routingScope: { type: 'section', sectionIds: ['west', 'east'] },
-        maxActiveConversations: 0,
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 100,
@@ -411,8 +410,8 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, max_active_conversations, last_seen_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
+         status, is_enabled, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
     .run('agent-e2e', 'Agent E2E', 'agent-e2e', 'hash', 'salt');
   database
@@ -840,8 +839,8 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, max_active_conversations, last_seen_at
-       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, 5, CURRENT_TIMESTAMP)`,
+         status, is_enabled, last_seen_at
+       ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
     .run('agent-standby', 'Agent Standby', 'agent-standby', 'hash', 'salt');
   database
@@ -944,7 +943,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
           username,
           password: 'pass',
           routingScope: { type: 'section', sectionIds },
-          maxActiveConversations: 0,
           dailyConversationLimit: dailyLimit,
           trafficQuotaEnabled: true,
           trafficQuotaTopUp: quota,
@@ -1267,7 +1265,6 @@ test('admin permanently deletes an agent while preserving historical records', a
         username: 'delete-me',
         password: 'pass',
         routingScope: { type: 'none' },
-        maxActiveConversations: 0,
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 10,

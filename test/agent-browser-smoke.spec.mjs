@@ -46,7 +46,6 @@ async function seedConversationAndAgent(page) {
       username: agentUsername,
       password: agentPassword,
       routingScope: { type: 'product', productIds: [productId] },
-      maxActiveConversations: 5,
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,

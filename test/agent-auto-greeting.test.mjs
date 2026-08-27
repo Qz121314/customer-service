@@ -192,7 +192,7 @@ test('greeting is optional and a disabled greeting never blocks first reception'
   database.close();
 });
 
-test('requeue, transfer and later setting changes cannot repeat or retroactively add a greeting', () => {
+test('system reassignment and later setting changes cannot repeat or retroactively add a greeting', () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   addAgent(database, 'first-agent', {

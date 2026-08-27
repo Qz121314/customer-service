@@ -22,7 +22,7 @@ test('admin agent list exposes the operational information administrators own', 
     '客服账号',
     '负责范围',
     '状态',
-    '人工转接',
+    '今日接待',
     '咨询额度',
   ]) {
     assert.ok(admin.includes(`<th>${heading}</th>`));
@@ -30,7 +30,6 @@ test('admin agent list exposes the operational information administrators own', 
 
   assert.doesNotMatch(admin, /<th>登录账号<\/th>/u);
   assert.doesNotMatch(admin, /<th>同时会话<\/th>/u);
-  assert.doesNotMatch(admin, /<th>今日接待<\/th>/u);
 });
 
 test('agent search and status filtering stay client-side on already loaded data', () => {
@@ -39,7 +38,6 @@ test('agent search and status filtering stay client-side on already loaded data'
   assert.match(admin, /const visibleAgents = useMemo/u);
   assert.match(admin, /visibleAgents\.map/u);
   assert.match(admin, /agentIsLimited/u);
-  assert.match(admin, /return trafficExhausted/u);
-  assert.doesNotMatch(admin, /return dailyFull \|\| trafficExhausted/u);
+  assert.match(admin, /return dailyFull \|\| trafficExhausted/u);
   assert.doesNotMatch(admin, /getAgents\([^)]/u);
 });

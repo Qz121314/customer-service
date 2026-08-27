@@ -130,14 +130,13 @@ function setup({ greetingEnabled, greetingText = null }) {
     .prepare(
       `INSERT INTO agents (
          id, site_id, name, username, password_hash, password_salt,
-         status, is_enabled, last_seen_at, max_active_conversations,
-         daily_conversation_limit, traffic_quota_enabled,
+         status, is_enabled, last_seen_at, daily_conversation_limit,
+         traffic_quota_enabled,
          traffic_quota_total, traffic_quota_used,
          auto_greeting_enabled, auto_greeting_text
        ) VALUES (
          'cta-agent', 'default', 'CTA Agent', 'cta-agent', 'hash', 'salt',
-         'online', 1, CURRENT_TIMESTAMP, 0,
-         0, 1, 10, 0, ?, ?
+         'online', 1, CURRENT_TIMESTAMP, 0, 1, 10, 0, ?, ?
        )`,
     )
     .run(greetingEnabled ? 1 : 0, greetingText);
@@ -358,13 +357,12 @@ test('a fresh closed conversation prefers its original eligible agent', async ()
   database.exec(`
     INSERT INTO agents (
       id, site_id, name, username, password_hash, password_salt,
-      status, is_enabled, last_seen_at, max_active_conversations,
-      daily_conversation_limit, traffic_quota_enabled,
+      status, is_enabled, last_seen_at, daily_conversation_limit,
+      traffic_quota_enabled,
       traffic_quota_total, traffic_quota_used
     ) VALUES (
       'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
-      'online', 1, CURRENT_TIMESTAMP, 0,
-      0, 1, 10, 0
+      'online', 1, CURRENT_TIMESTAMP, 0, 1, 10, 0
     );
     INSERT INTO agent_routing_scopes (
       site_id, agent_id, scope_type, section_id, category_id, product_id,
@@ -422,13 +420,12 @@ test('active affinity keeps the original offline agent eligible', async () => {
 
     INSERT INTO agents (
       id, site_id, name, username, password_hash, password_salt,
-      status, is_enabled, last_seen_at, max_active_conversations,
-      daily_conversation_limit, traffic_quota_enabled,
+      status, is_enabled, last_seen_at, daily_conversation_limit,
+      traffic_quota_enabled,
       traffic_quota_total, traffic_quota_used
     ) VALUES (
       'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
-      'online', 1, CURRENT_TIMESTAMP, 0,
-      0, 1, 10, 0
+      'online', 1, CURRENT_TIMESTAMP, 0, 1, 10, 0
     );
     INSERT INTO agent_routing_scopes (
       site_id, agent_id, scope_type, section_id, category_id, product_id,
@@ -495,13 +492,12 @@ test('after two hours a fresh start returns to normal routing', async () => {
   database.exec(`
     INSERT INTO agents (
       id, site_id, name, username, password_hash, password_salt,
-      status, is_enabled, last_seen_at, max_active_conversations,
-      daily_conversation_limit, traffic_quota_enabled,
+      status, is_enabled, last_seen_at, daily_conversation_limit,
+      traffic_quota_enabled,
       traffic_quota_total, traffic_quota_used
     ) VALUES (
       'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
-      'online', 1, CURRENT_TIMESTAMP, 0,
-      0, 1, 10, 0
+      'online', 1, CURRENT_TIMESTAMP, 0, 1, 10, 0
     );
     INSERT INTO agent_routing_scopes (
       site_id, agent_id, scope_type, section_id, category_id, product_id,

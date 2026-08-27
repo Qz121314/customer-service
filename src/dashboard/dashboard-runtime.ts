@@ -18,7 +18,6 @@ type AgentDraft = {
   username: string;
   password: string;
   routingScope: AgentRoutingScope;
-  maxActiveConversations: number;
   dailyConversationLimit: number;
   trafficQuotaEnabled: boolean;
   trafficQuotaTotal: number;
@@ -34,7 +33,6 @@ const emptyAgentDraft: AgentDraft = {
   username: '',
   password: '',
   routingScope: { type: 'none' },
-  maxActiveConversations: 0,
   dailyConversationLimit: 0,
   trafficQuotaEnabled: true,
   trafficQuotaTotal: 0,

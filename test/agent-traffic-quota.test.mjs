@@ -39,7 +39,6 @@ async function createDatabase({ quotaEnabled = true, quotaTotal = 2 } = {}) {
       password_hash TEXT,
       status TEXT NOT NULL,
       is_enabled INTEGER NOT NULL,
-      max_active_conversations INTEGER NOT NULL DEFAULT 0,
       daily_conversation_limit INTEGER NOT NULL DEFAULT 0,
       last_seen_at TEXT,
       last_assigned_at TEXT,
@@ -84,7 +83,6 @@ async function createDatabase({ quotaEnabled = true, quotaTotal = 2 } = {}) {
       assigned_agent TEXT,
       assigned_at TEXT,
       assigned_business_date TEXT,
-      requeue_excluded_agent_id TEXT,
       source_handoff_id TEXT,
       cta_affinity_agent_id TEXT,
       cta_affinity_expires_at TEXT,
@@ -179,7 +177,7 @@ test('seat quota is consumed once and exhausted seats stop receiving traffic', a
     database.prepare(`SELECT traffic_quota_used FROM agents`).get()
       .traffic_quota_used,
     1,
-    'requeueing the same conversation must not consume quota twice',
+    'recovering the same conversation must not consume quota twice',
   );
 
   assert.equal(

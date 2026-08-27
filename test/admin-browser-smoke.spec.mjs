@@ -23,7 +23,6 @@ async function seedAdminStatistics(page) {
       username: agentUsername,
       password: agentPassword,
       routingScope: { type: 'none' },
-      maxActiveConversations: 5,
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,

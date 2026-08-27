@@ -27,7 +27,6 @@ export type AgentAccount = {
   username: string | null;
   status: 'online' | 'busy' | 'offline';
   isEnabled: boolean;
-  maxActiveConversations: number;
   dailyConversationLimit: number;
   todayConversationCount: number;
   trafficQuotaEnabled: boolean;
@@ -224,7 +223,6 @@ const errorMessages: Record<string, string> = {
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   AGENT_DELETE_FAILED: '删除客服失败，请稍后重试',
   CONVERSATION_CLOSED: '会话已关闭',
-  CONVERSATION_REOPEN_CAPACITY: '当前接待并发已满，请先结束其他处理中会话',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
   MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
   INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
@@ -257,7 +255,6 @@ export async function createAgent(input: {
   username: string;
   password: string;
   routingScope: AgentRoutingScope;
-  maxActiveConversations: number;
   dailyConversationLimit: number;
   trafficQuotaEnabled: boolean;
   trafficQuotaTopUp: number;
@@ -277,7 +274,6 @@ export async function updateAgent(
     username: string;
     password?: string;
     routingScope: AgentRoutingScope;
-    maxActiveConversations: number;
     dailyConversationLimit: number;
     trafficQuotaEnabled: boolean;
     trafficQuotaTopUp: number;
