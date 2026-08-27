@@ -449,6 +449,8 @@ function AgentWorkspace({
 
         const next = payload.conversation;
         const belongsToAgent = next.assigned_agent === identity.id;
+        const isNewAssignment =
+          belongsToAgent && !unreadCountRef.current.has(next.id);
         const previousUnread = unreadCountRef.current.get(next.id) ?? 0;
         if (belongsToAgent) {
           unreadCountRef.current.set(next.id, next.agent_unread_count);
@@ -457,7 +459,7 @@ function AgentWorkspace({
         }
         if (
           belongsToAgent &&
-          next.agent_unread_count > previousUnread &&
+          (isNewAssignment || next.agent_unread_count > previousUnread) &&
           document.visibilityState === 'visible'
         ) {
           playIncomingTone();

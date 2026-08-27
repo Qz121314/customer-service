@@ -33,6 +33,14 @@ test('agent workspace offers local sound and typing presence', () => {
   assert.ok(runtime.includes('emitAgentMessageTone'));
   assert.ok(agent.includes("document.visibilityState !== 'visible'"));
   assert.ok(
+    agent.includes('belongsToAgent && !unreadCountRef.current.has(next.id)'),
+  );
+  assert.ok(
+    agent.includes(
+      '(isNewAssignment || next.agent_unread_count > previousUnread)',
+    ),
+  );
+  assert.ok(
     agent.includes("socket.send(JSON.stringify({ type: 'typing', active }))"),
   );
   assert.ok(agent.includes('访客正在输入'));

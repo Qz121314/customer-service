@@ -34,19 +34,19 @@ export function AgentActionToolbar({
           className={`full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
           aria-label={
             notificationState === 'enabled'
-              ? '关闭新消息通知'
-              : '开启新消息通知'
+              ? '关闭新会话通知'
+              : '开启新会话通知'
           }
           title={
             notificationState === 'unsupported'
-              ? '当前浏览器不支持后台通知'
+              ? '当前浏览器不支持系统通知'
               : notificationState === 'install-required'
                 ? '请先添加到主屏幕，再从桌面打开并开启通知'
                 : notificationState === 'blocked'
                   ? '通知已被浏览器阻止'
                   : notificationState === 'enabled'
-                    ? '新消息通知已开启'
-                    : '开启新消息通知'
+                    ? '新会话通知已开启'
+                    : '开启新会话通知'
           }
           disabled={notificationBusy || notificationState === 'unsupported'}
           onClick={onToggleNotifications}
@@ -56,12 +56,12 @@ export function AgentActionToolbar({
             {notificationBusy
               ? '正在设置…'
               : notificationState === 'enabled'
-                ? '新消息通知已开启'
+                ? '新会话通知已开启'
                 : notificationState === 'install-required'
                   ? '添加到主屏幕后开启通知'
                   : notificationState === 'blocked'
                     ? '通知已被阻止'
-                    : '开启新消息通知'}
+                    : '开启新会话通知'}
           </span>
         </Button>
         <Button
@@ -69,14 +69,14 @@ export function AgentActionToolbar({
           variant="ghost"
           className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
           aria-pressed={soundEnabled}
-          aria-label={
-            soundEnabled ? '关闭前台消息提示音' : '开启前台消息提示音'
-          }
-          title={soundEnabled ? '前台消息提示音已开启' : '前台消息提示音已静音'}
+          aria-label={soundEnabled ? '关闭工作台提示音' : '开启工作台提示音'}
+          title={soundEnabled ? '工作台提示音已开启' : '工作台提示音已静音'}
           onClick={onToggleSound}
         >
           <UiIcon name="sound" />
-          <span>{soundEnabled ? '前台提示音已开启' : '前台提示音已静音'}</span>
+          <span>
+            {soundEnabled ? '工作台提示音已开启' : '工作台提示音已静音'}
+          </span>
         </Button>
         <Button
           type="button"
@@ -242,19 +242,19 @@ export function AgentMobileSettingsPage({
                 <UiIcon name="notification" />
               </i>
               <span>
-                <strong>新消息通知</strong>
+                <strong>新会话通知</strong>
                 <small>
                   {notificationBusy
                     ? '正在设置…'
                     : notificationState === 'enabled'
-                      ? '已开启 · 后台可接收系统通知'
+                      ? '已开启 · 切换应用或锁屏也会提醒'
                       : notificationState === 'install-required'
                         ? 'iPhone/iPad 请先添加到主屏幕'
                         : notificationState === 'blocked'
                           ? '已被浏览器阻止'
                           : notificationState === 'unsupported'
                             ? '当前浏览器不支持'
-                            : '未开启'}
+                            : '接到新会话时显示系统通知'}
                 </small>
               </span>
               <b aria-hidden="true" />
@@ -268,8 +268,10 @@ export function AgentMobileSettingsPage({
                 <UiIcon name="sound" />
               </i>
               <span>
-                <strong>前台提示音</strong>
-                <small>{soundEnabled ? '已开启' : '已静音'}</small>
+                <strong>工作台提示音</strong>
+                <small>
+                  {soundEnabled ? '已开启 · 工作台打开时响铃' : '已静音'}
+                </small>
               </span>
               <b aria-hidden="true" />
             </button>
