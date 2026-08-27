@@ -17,7 +17,20 @@ jobs:
           fetch-depth: 0
 
       - name: Remove manual transfer implementation
-        run: python3 scripts/remove-manual-transfer.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/dashboard/agent-thread.css')
+          text = path.read_text(encoding='utf-8')
+          block = ".workspace-shell .transfer-menu {\n  display: none !important;\n}\n\n"
+          if text.count(block) != 1:
+              raise SystemExit('Expected the obsolete transfer hide rule exactly once.')
+          path.write_text(text.replace(block, ''), encoding='utf-8')
+          PY
+          python3 scripts/remove-manual-transfer.py
 
       - uses: pnpm/action-setup@v4
         with:
