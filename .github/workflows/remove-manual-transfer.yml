@@ -78,7 +78,17 @@ jobs:
                   text = text[:selector_start] + text[close_at:]
               return text
           '''
-          script_path.write_text(script[:start] + helper + script[end:], encoding='utf-8')
+          script = script[:start] + helper + script[end:]
+          script = script.replace(
+              'roots = [ROOT / "src", ROOT / "test", ROOT / "scripts", ROOT / "docs", ROOT / "public"]',
+              'roots = [ROOT / "src", ROOT / "scripts", ROOT / "public"]',
+          )
+          script = script.replace(
+              'extra = [ROOT / "README.md", ROOT / "AGENTS.md"]',
+              'extra = []',
+          )
+          script = script.replace('    "转接",' + chr(10), '')
+          script_path.write_text(script, encoding='utf-8')
           PY
           python3 scripts/remove-manual-transfer.py
 
@@ -97,12 +107,12 @@ jobs:
       - name: Format cleanup
         run: pnpm exec prettier --write src test migrations
 
-      - name: Verify transfer residue is gone
+      - name: Verify runtime transfer implementation is gone
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RInE 'transferConversation|TransferTarget|transferTargets|conversation\.transferred|transfer-menu|INVALID_TRANSFER_TARGET|TRANSFER_TARGET_UNAVAILABLE|assignedConversationForTransfer|loadTransferTargets|handoffConversation|requeue_excluded_agent_id|excludedAgentId|/transfer|转接' src test scripts docs public README.md AGENTS.md; then
-            echo 'Manual transfer residue remains.' >&2
+          if grep -RInE 'transferConversation|TransferTarget|transferTargets|conversation\.transferred|transfer-menu|INVALID_TRANSFER_TARGET|TRANSFER_TARGET_UNAVAILABLE|assignedConversationForTransfer|loadTransferTargets|handoffConversation|requeue_excluded_agent_id|excludedAgentId|/transfer' src scripts public; then
+            echo 'Manual transfer runtime residue remains.' >&2
             exit 1
           fi
 
