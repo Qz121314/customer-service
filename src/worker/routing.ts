@@ -55,9 +55,12 @@ function assignmentResult(
  * Assign one conversation to one enabled seat with matching routing scope.
  *
  * Automatic routing is intentionally independent from online/busy presence and
- * heartbeat freshness. A candidate must be enabled, configured for the product,
- * remain below its Los Angeles business-day reception cap (0 means unlimited),
- * and have paid traffic quota available when quota enforcement is enabled.
+ * heartbeat freshness. Fresh traffic requires an enabled, configured seat that
+ * is below its Los Angeles business-day reception cap (0 means unlimited) and
+ * has paid traffic quota available when quota enforcement is enabled. A
+ * conversation that already has an immutable reception receipt may be recovered
+ * after a seat is disabled without consuming or requiring a second daily/paid
+ * traffic unit.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
  * eligible. All other traffic follows strict deterministic round robin through a
@@ -129,7 +132,8 @@ export async function assignConversationAgent(
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
            AND (
-             a.daily_conversation_limit <= 0
+             ctx.already_received = 1
+             OR a.daily_conversation_limit <= 0
              OR COALESCE((
                SELECT daily.conversation_count
                FROM agent_daily_stats daily
