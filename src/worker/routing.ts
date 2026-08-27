@@ -54,18 +54,16 @@ function assignmentResult(
 /**
  * Assign one conversation to one enabled seat with matching routing scope.
  *
- * Automatic traffic delivery is deliberately presence-agnostic: online/busy,
- * heartbeat freshness, active load and daily reception limits do not decide who
- * receives traffic. A fresh billable conversation only requires an enabled,
- * configured seat with available paid traffic quota. Already-receipted traffic
- * can be reassigned without consuming another unit.
+ * Automatic routing is intentionally independent from online/busy presence and
+ * heartbeat freshness. A candidate must be enabled, configured for the product,
+ * remain below its Los Angeles business-day reception cap (0 means unlimited),
+ * and have paid traffic quota available when quota enforcement is enabled.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
  * eligible. All other traffic follows strict deterministic round robin through a
- * monotonic database cursor. The database assignment statement is atomic, and
- * migration 0042 advances the cursor in the same statement via trigger so rapid
- * or concurrent assignments cannot collapse onto one seat because of timestamp
- * ties.
+ * monotonic database cursor. Candidate selection and assignment are performed in
+ * one D1 statement; database triggers advance the cursor and maintain daily
+ * counts in the same write path.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -130,6 +128,17 @@ export async function assignConversationAgent(
          WHERE a.is_enabled = 1
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
+           AND (
+             a.daily_conversation_limit <= 0
+             OR COALESCE((
+               SELECT daily.conversation_count
+               FROM agent_daily_stats daily
+               WHERE daily.site_id = a.site_id
+                 AND daily.agent_id = a.id
+                 AND daily.business_date = ?3
+               LIMIT 1
+             ), 0) < a.daily_conversation_limit
+           )
            AND (
              ctx.already_received = 1
              OR a.traffic_quota_enabled = 0
