@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -20,69 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref_name }}
-          fetch-depth: 0
-
-      - name: Align final routing test contract
-        if: github.event_name == 'pull_request' && github.head_ref == 'fix/final-routing-daily-cap'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          path = Path('test/customer-service-full-flow.test.mjs')
-          text = path.read_text()
-          original = text
-
-          text = re.sub(
-              r"\n  const standbyToken = 'agent-session-standby';.*?  assert\.equal\(requeued\.assignment\.id, 'agent-standby'\);\n",
-              '\n',
-              text,
-              count=1,
-              flags=re.S,
-          )
-          text = re.sub(
-              r"\n  const cookieA = `cs_agent_session=\$\{tokenA\}`;.*?(?=\n  const topUpResponse = await adminConfigApi\.request)",
-              '\n',
-              text,
-              count=1,
-              flags=re.S,
-          )
-
-          old_disable = re.compile(
-              r"  await json\(disableResponse\);\n.*?(?=  assert\.deepEqual\(\n    database\n      \.prepare\(\n        `SELECT agent_id, COUNT\(\*\) AS count)",
-              re.S,
-          )
-          if old_disable.search(text):
-              text = old_disable.sub(
-                  """  await json(disableResponse);\n  assert.deepEqual(\n    database\n      .prepare(\n        `SELECT id, assigned_agent\n         FROM conversations\n         WHERE id IN (?, ?, ?)\n         ORDER BY id`,\n      )\n      .all(westOneId, westTwoId, westThreeId)\n      .map((row) => row.assigned_agent),\n    [null, null, null],\n    'disabling a seat must leave its conversations waiting when every matching target has reached the daily reception limit',\n  );\n  assert.deepEqual(\n    database\n      .prepare(\n        `SELECT a.traffic_quota_used AS used,\n           COALESCE(SUM(s.conversation_count), 0) AS daily\n         FROM agents a\n         LEFT JOIN agent_daily_stats s ON s.agent_id = a.id\n         WHERE a.id = ?\n         GROUP BY a.id`,\n      )\n      .get(agentB),\n    Object.assign(Object.create(null), { used: 1, daily: 1 }),\n    'automatic reassignment must not bypass the target seat daily reception limit or consume quota again',\n  );\n\n""",
-                  text,
-                  count=1,
-              )
-
-          text = text.replace(
-              'immutable first-reception receipts must remain the billing source of truth after transfers',
-              'immutable first-reception receipts must remain the billing source of truth after automatic routing changes',
-          )
-
-          for forbidden in ('transferTargets', '/transfer', 'targetAgentId'):
-              if forbidden in text:
-                  raise SystemExit(f'obsolete manual transfer contract remains: {forbidden}')
-
-          if text != original:
-              path.write_text(text)
-          PY
-
-          if ! git diff --quiet -- test/customer-service-full-flow.test.mjs; then
-            git add test/customer-service-full-flow.test.mjs
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git commit -m "test(routing): remove manual transfer contracts"
-            git push origin HEAD:fix/final-routing-daily-cap
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
