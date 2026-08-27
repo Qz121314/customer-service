@@ -94,7 +94,9 @@ async function createDatabase() {
       conversation_id TEXT PRIMARY KEY
     );
   `);
-  database.exec(await read('../migrations/0017_agent_daily_stats_retention.sql'));
+  database.exec(
+    await read('../migrations/0017_agent_daily_stats_retention.sql'),
+  );
   database.exec(
     await read('../migrations/0042_simple_round_robin_routing.sql'),
   );
@@ -274,29 +276,32 @@ test('disabled or quota-exhausted affinity falls back without waiting', async ()
   database.close();
 });
 
-test('active load stays ignored while daily limit blocks new traffic', async () => {
-  const database = await createDatabase();
-  addAgent(database, {
-    id: 'agent-a',
-    maxActiveConversations: 1,
-    dailyConversationLimit: 1,
-  });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'conversation-1', 'product-a');
-  addConversation(database, 'conversation-2', 'product-b');
+test(
+  'active load stays ignored while daily limit blocks new traffic',
+  async () => {
+    const database = await createDatabase();
+    addAgent(database, {
+      id: 'agent-a',
+      maxActiveConversations: 1,
+      dailyConversationLimit: 1,
+    });
+    addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+    addConversation(database, 'conversation-1', 'product-a');
+    addConversation(database, 'conversation-2', 'product-b');
 
-  const db = d1(database);
-  assert.equal(
-    (await assignConversationAgent(db, 'conversation-1'))?.id,
-    'agent-a',
-  );
-  assert.equal(
-    await assignConversationAgent(db, 'conversation-2'),
-    null,
-    'daily reception limit must gate fresh traffic even though active load is ignored',
-  );
-  database.close();
-});
+    const db = d1(database);
+    assert.equal(
+      (await assignConversationAgent(db, 'conversation-1'))?.id,
+      'agent-a',
+    );
+    assert.equal(
+      await assignConversationAgent(db, 'conversation-2'),
+      null,
+      'daily reception limit must gate fresh traffic even though active load is ignored',
+    );
+    database.close();
+  },
+);
 
 test('section, category and product scopes remain authoritative', async () => {
   const database = await createDatabase();
