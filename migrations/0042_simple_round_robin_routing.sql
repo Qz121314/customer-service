@@ -1,8 +1,8 @@
 PRAGMA foreign_keys = ON;
 
--- Automatic traffic delivery is presence-agnostic. Active-conversation and
--- daily reception limits remain operational/reporting settings, but they do not
--- block automatic delivery of purchased traffic.
+-- Automatic traffic delivery is presence- and active-load-agnostic. Daily
+-- reception limits are enforced by the canonical Worker routing query, while
+-- this migration removes the obsolete concurrent-capacity reopen guard.
 DROP TRIGGER IF EXISTS trg_conversation_reopen_capacity;
 
 -- A monotonic per-site cursor makes round robin strict even when several
@@ -37,8 +37,8 @@ CREATE INDEX IF NOT EXISTS idx_agents_round_robin_seq
 ON agents(site_id, is_enabled, round_robin_seq, id);
 
 -- One fresh conversation can consume at most one paid traffic unit. The
--- immutable receipt remains the billing source of truth, so transfers and
--- requeues never require or consume another unit.
+-- immutable receipt remains the billing source of truth, so recovery/requeue of
+-- the same receipted conversation never consumes another unit.
 DROP TRIGGER IF EXISTS trg_conversation_new_traffic_limit_guard;
 CREATE TRIGGER trg_conversation_new_traffic_limit_guard
 BEFORE UPDATE OF assigned_agent ON conversations
