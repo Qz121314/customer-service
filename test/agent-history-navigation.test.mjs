@@ -23,9 +23,7 @@ test('agent conversations participate in browser history for native back gesture
   assert.ok(
     agentEntry.includes("document.body.style.overscrollBehaviorX = 'auto';"),
   );
-  assert.ok(
-    agentEntry.includes("'.conversation-row[data-conversation-id]'"),
-  );
+  assert.ok(agentEntry.includes("'.conversation-row[data-conversation-id]'"));
   assert.ok(agentEntry.includes("'.thread-back-button'"));
   assert.ok(agentEntry.includes('window.history.back();'));
 });
