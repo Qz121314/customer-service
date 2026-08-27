@@ -12,7 +12,11 @@ test('agent overlays enter on stable compositor-owned geometry', async () => {
   ]);
 
   assert.ok(main.includes("import('./agent-entry')"));
-  assert.ok(agentEntry.includes("import './agent-overlays.css';"));
+  assert.ok(agentEntry.includes("await import('./agent-overlays.css');"));
+  assert.ok(
+    agentEntry.indexOf("await import('./commercial-polish.css');") >
+      agentEntry.indexOf("await import('./agent-desktop-layout.css');"),
+  );
   assert.match(overlays, /agent-overlay-backdrop-in/u);
   assert.match(overlays, /agent-overlay-dialog-in/u);
   assert.match(overlays, /agent-overlay-sheet-in/u);
