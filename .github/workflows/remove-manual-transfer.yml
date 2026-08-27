@@ -68,12 +68,12 @@ jobs:
                   if close_at is None:
                       raise RuntimeError(f"Unbalanced CSS rule containing {token!r}")
                   if kept:
-                      replacement = ",\n".join(kept) + " "
+                      replacement = ("," + chr(10)).join(kept) + " "
                       text = text[:selector_start] + replacement + text[open_at:]
                       continue
                   while close_at < len(text) and text[close_at] in " \\t":
                       close_at += 1
-                  if close_at < len(text) and text[close_at] == "\\n":
+                  if close_at < len(text) and text[close_at] == chr(10):
                       close_at += 1
                   text = text[:selector_start] + text[close_at:]
               return text
