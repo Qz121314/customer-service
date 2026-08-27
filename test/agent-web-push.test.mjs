@@ -34,4 +34,7 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   assert.match(dashboard, /install-required/u);
   assert.match(dashboard, /bindAgentSubscription\(subscription, agentId/u);
   assert.match(dashboard, /cs-agent-push-binding:v2/u);
+  assert.match(dashboard, /AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000/u);
+  assert.match(dashboard, /Promise\.race\(\[/u);
+  assert.match(dashboard, /通知服务启动超时，请刷新页面后重试/u);
 });

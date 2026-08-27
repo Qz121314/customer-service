@@ -156,6 +156,23 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await seedConversationAndAgent(page);
   await loginAgent(page);
 
+  const serviceWorker = await page.evaluate(async () => {
+    const ready = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise((resolve) =>
+        globalThis.setTimeout(() => resolve(null), 5_000),
+      ),
+    ]);
+    if (!ready) return null;
+    return {
+      activeState: ready.active?.state ?? null,
+      scope: ready.scope,
+    };
+  });
+  expect(serviceWorker).not.toBeNull();
+  expect(serviceWorker?.activeState).toBe('activated');
+  expect(serviceWorker?.scope).toBe(url('/agent'));
+
   const desktopVisuals = await page.evaluate(() => {
     const browser = globalThis;
     const shell = browser.document.querySelector('.workspace-shell');

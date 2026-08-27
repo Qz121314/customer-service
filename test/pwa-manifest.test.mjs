@@ -74,7 +74,12 @@ test('agent service worker stays inside agent navigation and handles background 
   );
   assert.match(source, /addEventListener\('install'/u);
   assert.match(source, /addEventListener\('fetch'/u);
-  assert.match(source, /agent-workspace-v3/u);
+  assert.match(source, /agent-workspace-v4/u);
+  assert.match(source, /const AGENT_SHELL_URL = '\/index\.html';/u);
+  assert.match(source, /const APP_SHELL = \[\s*AGENT_SHELL_URL,/u);
+  assert.doesNotMatch(source, /const APP_SHELL = \[\s*AGENT_WORKSPACE_URL,/u);
+  assert.match(source, /cache\.put\(AGENT_SHELL_URL, response\.clone\(\)\)/u);
+  assert.match(source, /caches\.match\(AGENT_SHELL_URL\)/u);
   assert.match(source, /!url\.pathname\.startsWith\('\/agent'\)/u);
   assert.match(source, /addEventListener\('push'/u);
   assert.match(source, /visibilityState === 'visible'/u);

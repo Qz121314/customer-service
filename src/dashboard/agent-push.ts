@@ -6,6 +6,7 @@ const AGENT_NOTIFICATION_TARGET = 'latest-unread';
 const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
 const AGENT_SERVICE_WORKER_SCOPE = '/agent';
 const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v2';
+const AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
 
 type PushConfig = {
   enabled: boolean;
@@ -140,7 +141,22 @@ async function agentServiceWorkerRegistration(): Promise<ServiceWorkerRegistrati
   const registration = await navigator.serviceWorker.register('/agent-sw.js', {
     scope: AGENT_SERVICE_WORKER_SCOPE,
   });
-  return registration.active ? registration : navigator.serviceWorker.ready;
+  if (registration.active) return registration;
+
+  let timeoutId: number | undefined;
+  try {
+    return await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_resolve, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error('通知服务启动超时，请刷新页面后重试')),
+          AGENT_SERVICE_WORKER_READY_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  }
 }
 
 async function bindAgentSubscription(
