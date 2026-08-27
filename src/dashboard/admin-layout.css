@@ -114,6 +114,33 @@
     scrollbar-width: thin;
   }
 
+  /* The account directory grows with its data. Keep the admin content column
+   * as the only vertical scroll owner so a long list never looks clipped by a
+   * fixed-height card or a nested, visually hidden scrollbar. */
+  .admin-content:has(.admin-agent-layout) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .admin-content:has(.admin-agent-layout) .admin-agent-layout {
+    min-height: auto;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .admin-content:has(.admin-agent-layout) .admin-table-card {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .admin-content:has(.admin-agent-layout) .admin-table-wrap {
+    min-height: auto;
+    flex: 0 0 auto;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
   .admin-content:has(.admin-statistics-page) {
     padding: 12px 18px;
   }

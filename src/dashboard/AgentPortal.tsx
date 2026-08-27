@@ -30,6 +30,7 @@ import {
   setAgentAvailability,
   setConversationStatus,
   transferConversation,
+  updateAgentNickname,
 } from './api';
 import { Button } from './ui';
 import {
@@ -115,14 +116,22 @@ export function AgentPortal() {
     setState('signed-out');
   };
 
-  return <AgentWorkspace identity={identity} onLogout={onLogout} />;
+  return (
+    <AgentWorkspace
+      identity={identity}
+      onIdentityChange={setIdentity}
+      onLogout={onLogout}
+    />
+  );
 }
 
 function AgentWorkspace({
   identity,
+  onIdentityChange,
   onLogout,
 }: {
   identity: AgentIdentity;
+  onIdentityChange: (identity: AgentIdentity) => void;
   onLogout: () => Promise<void>;
 }) {
   const [filter, setFilter] = useState<Filter>('all');
@@ -1241,6 +1250,10 @@ function AgentWorkspace({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
+        onNicknameChange={async (nickname) => {
+          const updated = await updateAgentNickname(nickname);
+          onIdentityChange(updated);
+        }}
         onToggleNotifications={() => void toggleNotifications()}
         onToggleSound={toggleSound}
         onOpenStatistics={() => setStatisticsOpen(true)}

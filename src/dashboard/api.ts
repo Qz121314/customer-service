@@ -367,6 +367,19 @@ export async function agentLogout(): Promise<void> {
   await request('/api/agent/auth/logout', { method: 'POST' });
 }
 
+export async function updateAgentNickname(
+  nickname: string,
+): Promise<AgentIdentity> {
+  const response = await request<{ agent: AgentIdentity }>(
+    '/api/agent/profile',
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ nickname }),
+    },
+  );
+  return response.agent;
+}
+
 export async function heartbeat(): Promise<AgentInbox> {
   return request<AgentInbox>('/api/agent/auth/heartbeat', { method: 'POST' });
 }

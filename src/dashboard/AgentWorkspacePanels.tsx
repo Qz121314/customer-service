@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { createPortal } from 'react-dom';
 import type {
   AgentAvailability,
   AgentIdentity,
@@ -30,6 +37,7 @@ export function AgentSidebar({
   soundEnabled,
   onToggleNotifications,
   onToggleSound,
+  onNicknameChange,
   onOpenStatistics,
   onLogout,
 }: {
@@ -40,11 +48,34 @@ export function AgentSidebar({
   soundEnabled: boolean;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
+  onNicknameChange: (nickname: string) => Promise<void>;
   onOpenStatistics: () => void;
   onLogout: () => void;
 }) {
   const [autoReplyOpen, setAutoReplyOpen] = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [nicknameOpen, setNicknameOpen] = useState(false);
+  const [nickname, setNickname] = useState(identity.name);
+  const [nicknameSaving, setNicknameSaving] = useState(false);
+  const [nicknameError, setNicknameError] = useState('');
+
+  async function saveNickname(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const next = nickname.trim();
+    if (!next || next.length > 40 || nicknameSaving) return;
+    setNicknameSaving(true);
+    setNicknameError('');
+    try {
+      await onNicknameChange(next);
+      setNicknameOpen(false);
+    } catch (reason) {
+      setNicknameError(
+        reason instanceof Error ? reason.message : '昵称保存失败',
+      );
+    } finally {
+      setNicknameSaving(false);
+    }
+  }
 
   return (
     <>
@@ -56,7 +87,18 @@ export function AgentSidebar({
         <div className="agent-profile">
           <AgentAvatarControl agentId={identity.id} agentName={identity.name} />
           <div>
-            <strong>{identity.name}</strong>
+            <button
+              type="button"
+              className="agent-nickname-trigger"
+              aria-label="修改对外昵称"
+              onClick={() => {
+                setNickname(identity.name);
+                setNicknameError('');
+                setNicknameOpen(true);
+              }}
+            >
+              {identity.name}
+            </button>
             <small>@{identity.username}</small>
           </div>
           <i className={`presence ${availability}`} />
@@ -89,6 +131,80 @@ export function AgentSidebar({
         open={autoReplyOpen}
         onClose={() => setAutoReplyOpen(false)}
       />
+      {nicknameOpen
+        ? createPortal(
+            <div
+              className="agent-profile-backdrop"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !nicknameSaving) {
+                  setNicknameOpen(false);
+                }
+              }}
+            >
+              <form
+                className="agent-profile-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="agent-nickname-title"
+                onSubmit={(event) => void saveNickname(event)}
+              >
+                <header>
+                  <div>
+                    <h2 id="agent-nickname-title">对外昵称</h2>
+                    <p>访客聊天页面会显示这个昵称，登录账号不会改变。</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="agent-avatar-close"
+                    aria-label="关闭昵称设置"
+                    disabled={nicknameSaving}
+                    onClick={() => setNicknameOpen(false)}
+                  >
+                    <UiIcon name="close" />
+                  </button>
+                </header>
+                <label className="agent-nickname-field">
+                  <span>昵称</span>
+                  <input
+                    autoFocus
+                    required
+                    maxLength={40}
+                    value={nickname}
+                    placeholder="例如 Amy"
+                    onChange={(event) => setNickname(event.target.value)}
+                  />
+                  <small>登录账号：@{identity.username}</small>
+                </label>
+                {nicknameError ? (
+                  <p className="agent-avatar-error">{nicknameError}</p>
+                ) : null}
+                <footer>
+                  <button
+                    type="button"
+                    className="agent-avatar-cancel"
+                    disabled={nicknameSaving}
+                    onClick={() => setNicknameOpen(false)}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    className="agent-avatar-confirm"
+                    disabled={
+                      nicknameSaving ||
+                      !nickname.trim() ||
+                      nickname.trim().length > 40
+                    }
+                  >
+                    {nicknameSaving ? '保存中…' : '保存昵称'}
+                  </button>
+                </footer>
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

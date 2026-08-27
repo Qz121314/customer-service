@@ -77,6 +77,27 @@ agentApi.get('/api/agent/auth/session', async (c) => {
   return c.json({ authenticated: Boolean(agent), agent: agent ?? null });
 });
 
+agentApi.patch('/api/agent/profile', async (c) => {
+  const agent = await authenticateAgent(c);
+  if (!agent) return unauthorized(c);
+  const body = await readJson<{ nickname?: string }>(c.req.raw);
+  const nickname = body?.nickname?.trim() ?? '';
+  if (!nickname || nickname.length > 40) {
+    return c.json({ error: 'INVALID_AGENT_NICKNAME' }, 400);
+  }
+
+  const updated = await c.env.DB.prepare(
+    `UPDATE agents
+     SET name = ?1, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?2 AND is_enabled = 1
+     RETURNING id, name, username, status`,
+  )
+    .bind(nickname, agent.id)
+    .first<AgentSession>();
+  if (!updated) return unauthorized(c);
+  return c.json({ ok: true, agent: updated });
+});
+
 agentApi.post('/api/agent/auth/login', async (c) => {
   const body = await readJson<{ username?: string; password?: string }>(
     c.req.raw,
