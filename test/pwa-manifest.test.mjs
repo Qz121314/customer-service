@@ -27,9 +27,13 @@ test('agent PWA opens directly into the standalone workspace', () => {
 });
 
 test('agent shell exposes mobile standalone metadata and registers an agent-only service worker', async () => {
-  const [index, main, install, chrome, mobileCss] = await Promise.all([
+  const [index, main, agentEntry, install, chrome, mobileCss] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
     readFile(new URL('../src/dashboard/main.tsx', import.meta.url), 'utf8'),
+    readFile(
+      new URL('../src/dashboard/agent-entry.tsx', import.meta.url),
+      'utf8',
+    ),
     readFile(
       new URL('../src/dashboard/agent-install.ts', import.meta.url),
       'utf8',
@@ -47,7 +51,10 @@ test('agent shell exposes mobile standalone metadata and registers an agent-only
   assert.match(index, /apple-mobile-web-app-capable/u);
   assert.match(index, /apple-mobile-web-app-title/u);
   assert.match(index, /viewport-fit=cover/u);
-  assert.ok(main.includes(".register('/agent-sw.js', { scope: '/agent' })"));
+  assert.ok(main.includes("import('./agent-entry')"));
+  assert.ok(
+    agentEntry.includes(".register('/agent-sw.js', { scope: '/agent' })"),
+  );
   assert.match(install, /addEventListener\('beforeinstallprompt'/u);
   assert.match(install, /deferredInstallPrompt/u);
   assert.match(install, /await prompt\.prompt\(\)/u);
