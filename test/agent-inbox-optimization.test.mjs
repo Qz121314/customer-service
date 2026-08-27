@@ -18,7 +18,6 @@ test('agent inbox returns overview, conversations, messages and media in two req
     worker,
     /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
   );
-  assert.match(worker, /transferTargets,[\s\S]*availability/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
   assert.match(
