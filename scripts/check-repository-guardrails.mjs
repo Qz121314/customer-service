@@ -180,7 +180,10 @@ assert.ok(
 );
 
 const executableTests = testFiles.filter((name) => name.endsWith('.test.mjs'));
-assert.ok(executableTests.length > 0, 'repository must keep executable tests in test/');
+assert.ok(
+  executableTests.length > 0,
+  'repository must keep executable tests in test/',
+);
 
 const namedContractTests = executableTests.filter((name) =>
   name.endsWith('-contract.test.mjs'),
