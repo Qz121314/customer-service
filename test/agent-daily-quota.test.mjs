@@ -9,6 +9,8 @@ import {
 } from '../src/worker/routing.ts';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
+const roundRobinMigration = '../migrations/0042_simple_round_robin_routing.sql';
+const dailyLimitMigration = '../migrations/0044_daily_reception_limit_guard.sql';
 
 function d1(database) {
   return {
@@ -134,12 +136,8 @@ async function createDatabase(agents) {
       .run(agent.id);
   }
 
-  database.exec(
-    await read('../migrations/0042_simple_round_robin_routing.sql'),
-  );
-  database.exec(
-    await read('../migrations/0044_daily_reception_limit_guard.sql'),
-  );
+  database.exec(await read(roundRobinMigration));
+  database.exec(await read(dailyLimitMigration));
   return database;
 }
 
@@ -223,7 +221,11 @@ test('daily cap skips capped seats and leaves overflow waiting', async () => {
 
 test('daily cap zero is unlimited', async () => {
   const database = await createDatabase([
-    { id: 'agent-a', name: 'Agent A', limit: 0 },
+    {
+      id: 'agent-a',
+      name: 'Agent A',
+      limit: 0,
+    },
   ]);
   for (let index = 1; index <= 3; index += 1) {
     const id = `conversation-${index}`;
@@ -236,7 +238,11 @@ test('daily cap zero is unlimited', async () => {
 
 test('previous-day counts do not block today', async () => {
   const database = await createDatabase([
-    { id: 'agent-a', name: 'Agent A', limit: 1 },
+    {
+      id: 'agent-a',
+      name: 'Agent A',
+      limit: 1,
+    },
   ]);
   database
     .prepare(
