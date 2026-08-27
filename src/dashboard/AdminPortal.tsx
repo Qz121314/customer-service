@@ -326,7 +326,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';
   const sectionHint =
     section === 'agents'
-      ? '管理登录身份、人工转接限制、咨询额度和产品负责范围。自动分流采用严格轮询。'
+      ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
       : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
 
   return (
