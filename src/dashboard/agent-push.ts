@@ -1,10 +1,11 @@
 export type AgentNotificationState =
-  'unsupported' | 'disabled' | 'blocked' | 'enabled';
+  'unsupported' | 'install-required' | 'disabled' | 'blocked' | 'enabled';
 
 const AGENT_NOTIFICATION_PARAM = 'notification';
 const AGENT_NOTIFICATION_TARGET = 'latest-unread';
 const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
 const AGENT_SERVICE_WORKER_SCOPE = '/agent';
+const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v2';
 
 type PushConfig = {
   enabled: boolean;
@@ -43,36 +44,40 @@ export function isAgentNotificationOpenMessage(value: unknown): boolean {
   );
 }
 
-export async function prepareAgentNotifications(): Promise<AgentNotificationState> {
-  if (!supported()) return 'unsupported';
-  const registration = await navigator.serviceWorker.register('/agent-sw.js', {
-    scope: AGENT_SERVICE_WORKER_SCOPE,
-  });
+export async function prepareAgentNotifications(
+  agentId: string,
+): Promise<AgentNotificationState> {
+  const prerequisite = notificationPrerequisite();
+  if (prerequisite) return prerequisite;
+  const registration = await agentServiceWorkerRegistration();
   if (Notification.permission === 'denied') return 'blocked';
   const subscription = await registration.pushManager.getSubscription();
-  return subscription ? 'enabled' : 'disabled';
+  if (!subscription) return 'disabled';
+  await bindAgentSubscription(subscription, agentId);
+  return 'enabled';
 }
 
-export async function enableAgentNotifications(): Promise<AgentNotificationState> {
-  if (!supported()) return 'unsupported';
+export async function enableAgentNotifications(
+  agentId: string,
+): Promise<AgentNotificationState> {
+  const prerequisite = notificationPrerequisite();
+  if (prerequisite) return prerequisite;
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
     return permission === 'denied' ? 'blocked' : 'disabled';
   }
 
-  const registration = await navigator.serviceWorker.register('/agent-sw.js', {
-    scope: AGENT_SERVICE_WORKER_SCOPE,
-  });
+  const registration = await agentServiceWorkerRegistration();
   const config = await request<PushConfig>('/api/agent/push/config');
+  if (!config.enabled || !config.applicationServerKey) {
+    throw new Error('通知服务尚未就绪');
+  }
   let subscription = await registration.pushManager.getSubscription();
   subscription ??= await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: base64UrlBytes(config.applicationServerKey),
   });
-  await request('/api/agent/push/subscriptions', {
-    method: 'POST',
-    body: JSON.stringify({ subscription: subscription.toJSON() }),
-  });
+  await bindAgentSubscription(subscription, agentId, true);
   return 'enabled';
 }
 
@@ -93,18 +98,83 @@ export async function disableAgentNotifications(): Promise<AgentNotificationStat
       removalError = error;
     }
     await subscription.unsubscribe();
+    clearAgentPushBinding();
     if (removalError) throw removalError;
   }
+  clearAgentPushBinding();
   return Notification.permission === 'denied' ? 'blocked' : 'disabled';
+}
+
+function notificationPrerequisite(): AgentNotificationState | null {
+  if (!window.isSecureContext) return 'unsupported';
+  if (isIosDevice() && !isStandaloneAgentPwa()) return 'install-required';
+  return supported() ? null : 'unsupported';
 }
 
 function supported(): boolean {
   return (
-    window.isSecureContext &&
     'serviceWorker' in navigator &&
     'PushManager' in window &&
     'Notification' in window
   );
+}
+
+function isIosDevice(): boolean {
+  return (
+    /iPad|iPhone|iPod/u.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
+function isStandaloneAgentPwa(): boolean {
+  const standaloneNavigator = navigator as Navigator & {
+    standalone?: boolean;
+  };
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    standaloneNavigator.standalone === true
+  );
+}
+
+async function agentServiceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  const registration = await navigator.serviceWorker.register('/agent-sw.js', {
+    scope: AGENT_SERVICE_WORKER_SCOPE,
+  });
+  return registration.active ? registration : navigator.serviceWorker.ready;
+}
+
+async function bindAgentSubscription(
+  subscription: PushSubscription,
+  agentId: string,
+  force = false,
+): Promise<void> {
+  const marker = `${agentId}\n${subscription.endpoint}`;
+  if (!force && readAgentPushBinding() === marker) return;
+  await request('/api/agent/push/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify({ subscription: subscription.toJSON() }),
+  });
+  try {
+    window.localStorage.setItem(AGENT_PUSH_BINDING_KEY, marker);
+  } catch {
+    // The server binding remains valid when private storage is unavailable.
+  }
+}
+
+function readAgentPushBinding(): string | null {
+  try {
+    return window.localStorage.getItem(AGENT_PUSH_BINDING_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function clearAgentPushBinding(): void {
+  try {
+    window.localStorage.removeItem(AGENT_PUSH_BINDING_KEY);
+  } catch {
+    // Nothing else is required after the server subscription is removed.
+  }
 }
 
 function base64UrlBytes(value: string): Uint8Array<ArrayBuffer> {

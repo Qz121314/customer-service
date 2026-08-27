@@ -251,17 +251,17 @@ function AgentWorkspace({
 
   useEffect(() => {
     let active = true;
-    void prepareAgentNotifications()
+    void prepareAgentNotifications(identity.id)
       .then((state) => {
         if (active) setNotificationState(state);
       })
       .catch(() => {
-        if (active) setNotificationState('unsupported');
+        if (active) setNotificationState('disabled');
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [identity.id]);
 
   useEffect(() => {
     saveAgentConversationDrafts(identity.id, drafts);
@@ -1163,6 +1163,12 @@ function AgentWorkspace({
 
   async function toggleNotifications() {
     if (notificationBusy || notificationState === 'unsupported') return;
+    if (notificationState === 'install-required') {
+      setError(
+        'iPhone 或 iPad 需要先添加到主屏幕，再从桌面打开客服坐席并开启通知',
+      );
+      return;
+    }
     if (notificationState === 'blocked') {
       setError('浏览器已阻止通知，请在站点权限中重新开启');
       return;
@@ -1172,7 +1178,7 @@ function AgentWorkspace({
       const nextState =
         notificationState === 'enabled'
           ? await disableAgentNotifications()
-          : await enableAgentNotifications();
+          : await enableAgentNotifications(identity.id);
       setNotificationState(nextState);
       if (nextState === 'blocked') {
         setError('浏览器已阻止通知，请在站点权限中重新开启');

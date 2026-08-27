@@ -10,6 +10,7 @@ type Env = { Bindings: Bindings };
 type AgentAvatarSession = {
   id: string;
   avatar_version: string | null;
+  is_enabled: number;
 };
 
 const COOKIE = 'cs_agent_session';
@@ -79,7 +80,7 @@ agentAvatarApi.put('/api/agent/avatar', async (c) => {
      SET avatar_version = ?1,
          avatar_updated_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?2 AND is_enabled = 1`,
+     WHERE id = ?2`,
   )
     .bind(version, agent.id)
     .run();
@@ -104,7 +105,7 @@ agentAvatarApi.delete('/api/agent/avatar', async (c) => {
      SET avatar_version = NULL,
          avatar_updated_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?1 AND is_enabled = 1`,
+     WHERE id = ?1`,
   )
     .bind(agent.id)
     .run();
@@ -192,12 +193,11 @@ async function authenticateAgent(
   const token = cookieValue(c.req.header('Cookie'), COOKIE);
   if (!token) return null;
   return c.env.DB.prepare(
-    `SELECT a.id, a.avatar_version
+    `SELECT a.id, a.avatar_version, a.is_enabled
      FROM agent_sessions s
      JOIN agents a ON a.id = s.agent_id
      WHERE s.token_hash = ?1
        AND datetime(s.expires_at) > CURRENT_TIMESTAMP
-       AND a.is_enabled = 1
        AND a.username IS NOT NULL
      LIMIT 1`,
   )

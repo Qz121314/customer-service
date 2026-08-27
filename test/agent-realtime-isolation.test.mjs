@@ -30,12 +30,18 @@ test('agent inbox realtime events are isolated by authenticated agent id', () =>
   assert.doesNotMatch(clientApi, /broadcastRoom\(env, 'admin-inbox'/u);
 });
 
-test('disabling an agent releases conversations and revokes realtime access', () => {
-  assert.match(
-    adminConfigApi,
-    /SET assigned_agent = NULL,[\s\S]*assigned_business_date = NULL,[\s\S]*status = 'open'/u,
+test('disabling an agent preserves current sessions and conversation ownership', () => {
+  const editStart = adminConfigApi.indexOf(
+    "adminConfigApi.patch('/api/admin/agents/:id'",
   );
-  assert.match(adminConfigApi, /DELETE FROM agent_sessions/u);
-  assert.match(adminConfigApi, /disconnectAgentRealtime/u);
-  assert.match(adminConfigApi, /assignConversationAgent/u);
+  const deleteStart = adminConfigApi.indexOf(
+    "adminConfigApi.delete('/api/admin/agents/:id'",
+  );
+  assert.ok(editStart >= 0 && deleteStart > editStart);
+  const editAgent = adminConfigApi.slice(editStart, deleteStart);
+
+  assert.match(editAgent, /is_enabled = \?6/u);
+  assert.doesNotMatch(editAgent, /DELETE FROM agent_sessions/u);
+  assert.doesNotMatch(editAgent, /SET assigned_agent = NULL/u);
+  assert.doesNotMatch(editAgent, /disconnectAgentRealtime/u);
 });

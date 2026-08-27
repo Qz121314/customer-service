@@ -400,7 +400,7 @@ test('a fresh closed conversation prefers its original eligible agent', async ()
   database.close();
 });
 
-test('active affinity keeps the original offline agent eligible', async () => {
+test('active affinity falls back when the original agent is offline', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(
@@ -449,8 +449,8 @@ test('active affinity keeps the original offline agent eligible', async () => {
 
   assert.equal(second.status, 201);
   assert.equal(secondValue.conversation.status, 'active');
-  assert.equal(secondValue.conversation.agentName, 'CTA Agent');
-  assert.equal(secondRow.assigned_agent, 'cta-agent');
+  assert.equal(secondValue.conversation.agentName, 'AAA Agent');
+  assert.equal(secondRow.assigned_agent, 'aaa-agent');
   assert.equal(secondRow.cta_affinity_agent_id, 'cta-agent');
   assert.equal(
     scalar(
@@ -458,7 +458,7 @@ test('active affinity keeps the original offline agent eligible', async () => {
       `SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'`,
       'traffic_quota_used',
     ),
-    2,
+    1,
   );
   assert.equal(
     scalar(
@@ -466,7 +466,7 @@ test('active affinity keeps the original offline agent eligible', async () => {
       `SELECT traffic_quota_used FROM agents WHERE id = 'aaa-agent'`,
       'traffic_quota_used',
     ),
-    0,
+    1,
   );
 
   database.close();

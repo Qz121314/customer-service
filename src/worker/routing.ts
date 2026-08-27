@@ -52,15 +52,16 @@ function assignmentResult(
 }
 
 /**
- * Assign one conversation to one enabled seat with matching routing scope.
+ * Assign one conversation to one enabled, online seat with matching routing
+ * scope.
  *
- * Automatic routing is intentionally independent from online/busy presence and
- * heartbeat freshness. Fresh traffic requires an enabled, configured seat that
- * is below its Los Angeles business-day reception cap (0 means unlimited) and
- * has paid traffic quota available when quota enforcement is enabled. A
- * conversation that already has an immutable reception receipt may be recovered
- * after a seat is disabled without consuming or requiring a second daily/paid
- * traffic unit.
+ * Fresh traffic requires an enabled, online, configured seat that is below its
+ * Los Angeles business-day reception cap (0 means unlimited) and has paid
+ * traffic quota available when quota enforcement is enabled. Busy and offline
+ * seats remain connected to their existing conversations but do not receive new
+ * assignments. A conversation that already has an immutable reception receipt
+ * may be recovered after a seat is deleted without consuming or requiring a
+ * second daily/paid traffic unit.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
  * eligible. All other traffic follows strict deterministic round robin through a
@@ -129,6 +130,7 @@ export async function assignConversationAgent(
          JOIN agents a ON a.id = m.agent_id
          JOIN context ctx ON ctx.site_id = a.site_id
          WHERE a.is_enabled = 1
+           AND a.status = 'online'
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
            AND (

@@ -74,11 +74,13 @@ test('agent service worker stays inside agent navigation and handles background 
   );
   assert.match(source, /addEventListener\('install'/u);
   assert.match(source, /addEventListener\('fetch'/u);
-  assert.match(source, /agent-workspace-v2/u);
+  assert.match(source, /agent-workspace-v3/u);
   assert.match(source, /!url\.pathname\.startsWith\('\/agent'\)/u);
   assert.match(source, /addEventListener\('push'/u);
   assert.match(source, /visibilityState === 'visible'/u);
   assert.match(source, /showNotification\('客服坐席有新消息'/u);
+  assert.match(source, /silent: false/u);
+  assert.match(source, /vibrate: \[200, 100, 200\]/u);
   assert.match(source, /addEventListener\('notificationclick'/u);
   assert.match(source, /'\/agent'/u);
 });

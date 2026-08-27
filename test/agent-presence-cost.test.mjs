@@ -5,7 +5,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('presence writes are coalesced and do not gate automatic routing', async () => {
+test('presence writes are coalesced while online status gates routing', async () => {
   const [core, agentApi, routing, waiting, dashboardApi] = await Promise.all([
     read('../src/worker/core.ts'),
     read('../src/worker/agent-api.ts'),
@@ -18,7 +18,7 @@ test('presence writes are coalesced and do not gate automatic routing', async ()
     /datetime\(last_seen_at\) <= datetime\('now', '-90 seconds'\)/u;
   assert.match(core, writeWindow);
   assert.match(agentApi, writeWindow);
-  assert.doesNotMatch(routing, /a\.status = 'online'/u);
+  assert.match(routing, /a\.status = 'online'/u);
   assert.doesNotMatch(routing, /a\.last_seen_at/u);
   assert.doesNotMatch(waiting, /last_seen_at/u);
   assert.match(waiting, /assignConversationAgent/u);
