@@ -220,7 +220,7 @@ test('seat quota is consumed once and exhausted seats stop receiving traffic', a
   );
 });
 
-test('already-counted traffic recovers after daily and paid quota are exhausted', async () => {
+test('already-counted traffic still obeys daily cap without consuming quota twice', async () => {
   const database = await createDatabase({ quotaTotal: 1 });
   database.exec(`UPDATE agents SET daily_conversation_limit = 1`);
   addConversation(database, 'conversation-paid');
@@ -249,9 +249,26 @@ test('already-counted traffic recovers after daily and paid quota are exhausted'
   `);
 
   assert.equal(
+    await assignConversationAgent(d1(database), 'conversation-paid'),
+    null,
+    'an unassigned conversation must still obey the daily reception limit',
+  );
+  assert.equal(
+    database.prepare(`SELECT traffic_quota_used FROM agents`).get()
+      .traffic_quota_used,
+    1,
+  );
+  assert.equal(
+    database.prepare(`SELECT conversation_count FROM agent_daily_stats`).get()
+      .conversation_count,
+    1,
+  );
+
+  database.exec(`UPDATE agents SET daily_conversation_limit = 2`);
+  assert.equal(
     (await assignConversationAgent(d1(database), 'conversation-paid'))?.id,
     'agent-a',
-    'a paid conversation must recover without another new-traffic unit',
+    'raising daily capacity may restore already-paid traffic without another quota unit',
   );
   assert.equal(
     database.prepare(`SELECT traffic_quota_used FROM agents`).get()
