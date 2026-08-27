@@ -203,11 +203,21 @@ test('a seat stops receiving new routing after reaching its daily limit', async 
   }
 
   const db = d1(database);
-  assert.equal((await assignConversationAgent(db, 'conversation-1'))?.id, 'agent-a');
-  assert.equal((await assignConversationAgent(db, 'conversation-2'))?.id, 'agent-b');
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-1'))?.id,
+    'agent-a',
+  );
+  assert.equal(
+    (await assignConversationAgent(db, 'conversation-2'))?.id,
+    'agent-b',
+  );
 
   const third = await assignConversationAgent(db, 'conversation-3');
-  assert.equal(third?.id, 'agent-b', 'agent-a must be skipped after reaching 1/1');
+  assert.equal(
+    third?.id,
+    'agent-b',
+    'agent-a must be skipped after reaching 1/1',
+  );
   assert.equal(assignedAgent(database, 'conversation-3'), 'agent-b');
   assert.equal(todayCount(database, 'agent-a'), 1);
   assert.equal(todayCount(database, 'agent-b'), 2);
@@ -220,7 +230,11 @@ test('a seat stops receiving new routing after reaching its daily limit', async 
     .prepare('SELECT id, round_robin_seq FROM agents ORDER BY id')
     .all();
 
-  assert.equal(fourth, null, 'all capped seats must leave the conversation waiting');
+  assert.equal(
+    fourth,
+    null,
+    'all capped seats must leave the conversation waiting',
+  );
   assert.equal(assignedAgent(database, 'conversation-4'), null);
   assert.deepEqual(
     cursorAfterWaiting,
