@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
-import { assignConversationAgent, routingBusinessDate } from './routing';
+import { routingBusinessDate } from './routing';
 import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
@@ -50,19 +50,6 @@ type MessageReadState = Pick<
 type ReadBoundary = {
   id: string;
   created_at: string;
-};
-
-type TransferTargetRow = {
-  id: string;
-  name: string;
-  status: 'online' | 'busy' | 'offline';
-  active_count: number;
-  max_active_conversations: number;
-};
-
-type TransferConversationRow = {
-  site_id: string;
-  status: ConversationStatus;
 };
 
 const COOKIE = 'cs_agent_session';
@@ -321,36 +308,6 @@ async function loadAgentOverview(db: D1Database, agentId: string) {
   };
 }
 
-async function loadTransferTargets(db: D1Database, agentId: string) {
-  const result = await db
-    .prepare(
-      `SELECT a.id, a.name, a.status, a.max_active_conversations,
-         COUNT(load.id) AS active_count
-       FROM agents current
-       JOIN agents a ON a.site_id = current.site_id AND a.id <> current.id
-       LEFT JOIN conversations load
-         ON load.assigned_agent = a.id
-        AND load.status IN ('open', 'pending')
-        AND load.expires_at > CURRENT_TIMESTAMP
-       WHERE current.id = ?1
-         AND a.is_enabled = 1
-         AND a.status = 'online'
-         AND a.username IS NOT NULL
-         AND a.password_hash IS NOT NULL
-         AND a.last_seen_at IS NOT NULL
-         AND datetime(a.last_seen_at) >= datetime('now', '-2 minutes')
-       GROUP BY a.id, a.name, a.status, a.max_active_conversations
-       HAVING (
-         a.max_active_conversations = 0
-         OR COUNT(load.id) < a.max_active_conversations
-       )
-       ORDER BY COUNT(load.id) ASC, a.name ASC, a.id ASC`,
-    )
-    .bind(agentId)
-    .all<TransferTargetRow>();
-  return result.results ?? [];
-}
-
 async function loadAgentInbox(
   db: D1Database,
   agent: AgentSession,
@@ -370,7 +327,6 @@ async function loadAgentInbox(
     requestedStatus === 'open' ||
     requestedStatus === 'pending' ||
     requestedStatus === 'closed';
-  const transferTargetsRequest = loadTransferTargets(db, agent.id);
 
   if (filtered) {
     const shouldBoundClosed = requestedStatus === 'closed';
@@ -389,7 +345,7 @@ async function loadAgentInbox(
        ORDER BY c.last_message_at DESC, c.id DESC
        LIMIT COALESCE(?3, -1)`,
     );
-    const [result, overview, transferTargets] = await Promise.all([
+    const [result, overview] = await Promise.all([
       statement
         .bind(
           agent.id,
@@ -398,12 +354,10 @@ async function loadAgentInbox(
         )
         .all<InboxConversationRow>(),
       loadAgentOverview(db, agent.id),
-      transferTargetsRequest,
     ]);
     return {
       conversations: result.results ?? [],
       overview,
-      transferTargets,
       availability: agent.status === 'busy' ? 'busy' : 'online',
     };
   }
@@ -436,12 +390,11 @@ async function loadAgentInbox(
      ORDER BY CASE WHEN status = 'closed' THEN 1 ELSE 0 END,
        last_message_at DESC, id DESC`,
   );
-  const [result, quotaOverview, transferTargets] = await Promise.all([
+  const [result, quotaOverview] = await Promise.all([
     statement
       .bind(agent.id, CLOSED_INBOX_PREVIEW_LIMIT)
       .all<InboxConversationRow>(),
     loadAgentQuotaOverview(db, agent.id),
-    transferTargetsRequest,
   ]);
   const conversations = result.results ?? [];
   const firstConversation = conversations[0];
@@ -465,7 +418,6 @@ async function loadAgentInbox(
       total: counts.open + counts.pending + counts.closed,
       ...quotaOverview,
     },
-    transferTargets,
     availability: agent.status === 'busy' ? 'busy' : 'online',
     history: {
       closedLoaded,
@@ -783,22 +735,16 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
   if (!body || !['open', 'pending', 'closed'].includes(body.status ?? '')) {
     return c.json({ error: 'INVALID_STATUS' }, 400);
   }
-  try {
-    const result = await c.env.DB.prepare(
-      `UPDATE conversations
-       SET status = ?1, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?2 AND assigned_agent = ?3
-         AND expires_at > CURRENT_TIMESTAMP`,
-    )
-      .bind(body.status, id, agent.id)
-      .run();
-    if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-  } catch (reason) {
-    if (String(reason).includes('CONVERSATION_REOPEN_CAPACITY')) {
-      return c.json({ error: 'CONVERSATION_REOPEN_CAPACITY' }, 409);
-    }
-    throw reason;
-  }
+  const result = await c.env.DB.prepare(
+    `UPDATE conversations
+     SET status = ?1, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?2 AND assigned_agent = ?3
+       AND expires_at > CURRENT_TIMESTAMP`,
+  )
+    .bind(body.status, id, agent.id)
+    .run();
+  if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
+
   await broadcastConversationRoom(c.env, id, {
     type: 'conversation.status',
     status: body.status,
@@ -812,148 +758,6 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
     await assignWaitingConversations(c.env, agent.id);
   }
   return c.json({ ok: true });
-});
-
-agentApi.post('/api/agent/conversations/:id/transfer', async (c) => {
-  const agent = await authenticateAgent(c);
-  if (!agent) return unauthorized(c);
-  const id = c.req.param('id');
-  const conversation = await assignedConversationForTransfer(
-    c.env.DB,
-    id,
-    agent.id,
-  );
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  if (conversation.status === 'closed')
-    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
-  const body = await readJson<{ targetAgentId?: string | null }>(c.req.raw);
-  const targetAgentId = normalizeOptionalId(body?.targetAgentId);
-  if (body?.targetAgentId && !targetAgentId)
-    return c.json({ error: 'INVALID_TRANSFER_TARGET' }, 400);
-  if (targetAgentId === agent.id)
-    return c.json({ error: 'INVALID_TRANSFER_TARGET' }, 400);
-
-  let assignment: { id: string; name: string } | null = null;
-  if (targetAgentId) {
-    const now = new Date().toISOString();
-    const businessDate = routingBusinessDate(new Date(now));
-    const transfer = await c.env.DB.prepare(
-      `UPDATE conversations
-       SET assigned_agent = ?1,
-           assigned_at = ?2,
-           assigned_business_date = ?3,
-           status = 'pending',
-           updated_at = ?2
-       WHERE id = ?4
-         AND assigned_agent = ?5
-         AND status IN ('open', 'pending')
-         AND expires_at > CURRENT_TIMESTAMP
-         AND EXISTS (
-           SELECT 1
-           FROM agents target
-           LEFT JOIN agent_daily_stats daily
-             ON daily.site_id = target.site_id
-            AND daily.agent_id = target.id
-            AND daily.business_date = ?3
-           WHERE target.id = ?1
-             AND target.site_id = ?6
-             AND target.is_enabled = 1
-             AND target.status = 'online'
-             AND target.username IS NOT NULL
-             AND target.password_hash IS NOT NULL
-             AND target.last_seen_at IS NOT NULL
-             AND datetime(target.last_seen_at) >= datetime('now', '-2 minutes')
-             AND (
-               target.max_active_conversations = 0
-               OR (
-                 SELECT COUNT(*)
-                 FROM conversations load
-                 WHERE load.assigned_agent = target.id
-                   AND load.status IN ('open', 'pending')
-                   AND load.expires_at > CURRENT_TIMESTAMP
-               ) < target.max_active_conversations
-             )
-             AND (
-     EXISTS (
-       SELECT 1
-       FROM agent_traffic_receipts receipt
-       WHERE receipt.conversation_id = ?4
-     )
-     OR (
-       (
-         target.daily_conversation_limit = 0
-         OR COALESCE(daily.conversation_count, 0) < target.daily_conversation_limit
-       )
-       AND (
-         target.traffic_quota_enabled = 0
-         OR target.traffic_quota_used < target.traffic_quota_total
-       )
-     )
-   )
-         )
-       RETURNING assigned_agent AS id,
-         (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
-    )
-      .bind(
-        targetAgentId,
-        now,
-        businessDate,
-        id,
-        agent.id,
-        conversation.site_id,
-      )
-      .first<{ id: string; name: string }>();
-    if (!transfer) return c.json({ error: 'TRANSFER_TARGET_UNAVAILABLE' }, 409);
-
-    await c.env.DB.prepare(
-      `UPDATE agents
-       SET last_assigned_at = ?1, updated_at = ?1
-       WHERE id = ?2 AND site_id = ?3`,
-    )
-      .bind(now, targetAgentId, String(conversation.site_id))
-      .run();
-    assignment = { id: transfer.id, name: transfer.name };
-  } else {
-    const released = await c.env.DB.prepare(
-      `UPDATE conversations
-       SET assigned_agent = NULL,
-           assigned_at = NULL,
-           assigned_business_date = NULL,
-           status = 'open',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1
-         AND assigned_agent = ?2
-         AND status IN ('open', 'pending')
-         AND expires_at > CURRENT_TIMESTAMP`,
-    )
-      .bind(id, agent.id)
-      .run();
-    if (!released.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-    assignment = await assignConversationAgent(c.env.DB, id, agent.id);
-  }
-
-  const realtimeUpdates: Promise<void>[] = [
-    broadcastConversationRoom(c.env, id, {
-      type: 'conversation.transferred',
-      assignment,
-    }),
-    broadcastClientConversationEvent(
-      c.env,
-      id,
-      'conversation.assigned',
-      {},
-      { previousAgentId: agent.id },
-    ).then(() => undefined),
-  ];
-  await Promise.all(realtimeUpdates);
-  if (assignment) {
-    c.executionCtx.waitUntil(
-      sendAgentPushForConversation(c.env, id).catch((error) => {
-        console.warn('Agent push dispatch failed.', error);
-      }),
-    );
-  }
-  return c.json({ ok: true, assignment });
 });
 
 agentApi.get('/api/agent/realtime/inbox', async (c) => {
@@ -1020,23 +824,6 @@ async function assignedConversationForMessageWrite(
     )
     .bind(id, agentId)
     .first<{ id: string; status: ConversationStatus }>();
-}
-
-async function assignedConversationForTransfer(
-  db: D1Database,
-  id: string,
-  agentId: string,
-): Promise<TransferConversationRow | null> {
-  return db
-    .prepare(
-      `SELECT site_id, status
-       FROM conversations
-       WHERE id = ?1 AND assigned_agent = ?2
-         AND expires_at > CURRENT_TIMESTAMP
-       LIMIT 1`,
-    )
-    .bind(id, agentId)
-    .first<TransferConversationRow>();
 }
 
 async function assignedConversation(
@@ -1115,12 +902,6 @@ function cookieValue(header: string | undefined, name: string): string | null {
 function normalizeMessageId(value?: string | null): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 200 ? trimmed : null;
-}
-
-function normalizeOptionalId(value?: string | null): string | null {
-  if (value === null || value === undefined || value === '') return null;
-  const id = value.trim();
-  return id && id.length <= 200 ? id : null;
 }
 
 function normalizeCursorDateTime(value?: string | null): string | null {
