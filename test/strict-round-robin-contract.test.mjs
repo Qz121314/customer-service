@@ -95,7 +95,9 @@ async function routingDatabase(agentIds = ['agent-a', 'agent-b', 'agent-c']) {
     insertScope.run(id);
   }
 
-  database.exec(await read('../migrations/0042_simple_round_robin_routing.sql'));
+  database.exec(
+    await read('../migrations/0042_simple_round_robin_routing.sql'),
+  );
   return database;
 }
 
@@ -124,12 +126,7 @@ test('strict round robin assigns agents in deterministic rotation order', async 
     assigned.push((await assignConversationAgent(db, id))?.id ?? null);
   }
 
-  assert.deepEqual(assigned, [
-    'agent-a',
-    'agent-b',
-    'agent-c',
-    'agent-a',
-  ]);
+  assert.deepEqual(assigned, ['agent-a', 'agent-b', 'agent-c', 'agent-a']);
   database.close();
 });
 
