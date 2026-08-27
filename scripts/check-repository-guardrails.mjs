@@ -4,6 +4,7 @@ import { readFile, readdir } from 'node:fs/promises';
 const [
   packageText,
   engineeringContract,
+  developmentStandards,
   preCommit,
   prePush,
   ciWorkflow,
@@ -16,6 +17,7 @@ const [
 ] = await Promise.all([
   readFile('package.json', 'utf8'),
   readFile('AGENTS.md', 'utf8'),
+  readFile('docs/development-standards.md', 'utf8'),
   readFile('.githooks/pre-commit', 'utf8'),
   readFile('.githooks/pre-push', 'utf8'),
   readFile('.github/workflows/ci.yml', 'utf8'),
@@ -130,6 +132,16 @@ assert.match(
   /Keep exactly one GitHub Actions workflow/u,
   'engineering contract must prohibit temporary and one-shot workflows',
 );
+assert.match(
+  developmentStandards,
+  /测试默认验证可观察行为/u,
+  'development standards must keep behavior-first testing as the default',
+);
+assert.match(
+  developmentStandards,
+  /业务、API 和 UI 契约测试禁止把 `src\/`/u,
+  'development standards must reject source-string business contracts',
+);
 
 for (const dependency of [
   '@radix-ui/react-slot',
@@ -167,13 +179,20 @@ assert.ok(
   `Dashboard CSS ownership regressed to ${dashboardCssFiles.length} files`,
 );
 
-const executableContracts = testFiles.filter((name) =>
-  name.endsWith('.test.mjs'),
+const executableTests = testFiles.filter((name) => name.endsWith('.test.mjs'));
+assert.ok(executableTests.length > 0, 'repository must keep executable tests in test/');
+
+const namedContractTests = executableTests.filter((name) =>
+  name.endsWith('-contract.test.mjs'),
 );
-assert.ok(
-  executableContracts.length > 0,
-  'repository must keep executable contracts in test/',
-);
+for (const name of namedContractTests) {
+  const source = await readFile(`test/${name}`, 'utf8');
+  assert.doesNotMatch(
+    source,
+    /from ['"]node:fs(?:\/promises)?['"]/u,
+    `${name} must execute observable behavior instead of reading source files as text`,
+  );
+}
 
 const guardrailsIndex = ciWorkflow.indexOf('pnpm guardrails');
 const formatIndex = ciWorkflow.indexOf('pnpm format');
@@ -187,5 +206,5 @@ assert.ok(
 );
 
 console.log(
-  `Repository guardrails passed (${executableContracts.length} executable test contracts discovered).`,
+  `Repository guardrails passed (${executableTests.length} executable tests discovered).`,
 );
