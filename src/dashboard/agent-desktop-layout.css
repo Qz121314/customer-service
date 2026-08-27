@@ -734,8 +734,7 @@
     gap: 6px;
   }
 
-  .workspace-shell .media-picker,
-  .workspace-shell .quick-replies-trigger {
+  .workspace-shell .media-picker {
     width: 42px;
     min-width: 42px;
     height: 42px;
@@ -754,15 +753,13 @@
       transform 140ms ease;
   }
 
-  .workspace-shell .media-picker::before,
-  .workspace-shell .quick-replies-trigger::before {
+  .workspace-shell .media-picker::before {
     width: 20px;
     height: 20px;
     background-size: 20px 20px;
   }
 
-  .workspace-shell .media-picker:hover,
-  .workspace-shell .quick-replies-trigger:hover:not(:disabled) {
+  .workspace-shell .media-picker:hover {
     border-color: #c5ccd6;
     background: #f9fafb;
     color: #252c36;
@@ -770,14 +767,12 @@
     transform: translateY(-1px);
   }
 
-  .workspace-shell .media-picker:active,
-  .workspace-shell .quick-replies-trigger:active:not(:disabled) {
+  .workspace-shell .media-picker:active {
     background: #f2f4f7;
     transform: translateY(0);
   }
 
-  .workspace-shell .media-picker:focus-within,
-  .workspace-shell .quick-replies-trigger:focus-visible {
+  .workspace-shell .media-picker:focus-within {
     border-color: #aaa9e6;
     box-shadow: 0 0 0 3px rgba(88, 86, 214, 0.08);
   }

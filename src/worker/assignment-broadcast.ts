@@ -26,7 +26,6 @@ export type AssignmentConversationSnapshot = {
   agent_name: string | null;
   agent_avatar_version: string | null;
   subject: string | null;
-  group_id: string | null;
   product_id: string | null;
   section_id: string | null;
   section_name: string | null;
@@ -71,7 +70,7 @@ export async function broadcastAssignments(
     env.DB.prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
          a.name AS agent_name, a.avatar_version AS agent_avatar_version,
-         c.subject, c.group_id, c.product_id, c.section_id,
+         c.subject, c.product_id, c.section_id,
          c.section_name, c.category_id, c.category_name, c.product_title,
          c.product_cover_url, c.product_href, c.expires_at,
          c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
@@ -275,7 +274,6 @@ function agentConversationSummary(
     visitor_id: conversation.visitor_id,
     status: conversation.status,
     subject: conversation.subject,
-    group_id: conversation.group_id,
     product_id: conversation.product_id,
     section_id: conversation.section_id,
     section_name: conversation.section_name,

@@ -9,6 +9,8 @@ type RealtimeSocketAttachment = {
   agentId: string | null;
   participantId: string | null;
   participantRole: RealtimeParticipantRole | null;
+  tracksAgentPresence: boolean;
+  presenceWrittenAt: number | null;
 };
 
 interface Bindings {
@@ -23,6 +25,7 @@ type AppEnv = { Bindings: Bindings };
 
 const SESSION_COOKIE = 'cs_session';
 const SESSION_TTL = 60 * 60 * 24 * 7;
+const AGENT_PRESENCE_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
 export const coreApp = new Hono<AppEnv>();
 
@@ -133,14 +136,25 @@ export class ConversationRoom extends DurableObject<Bindings> {
     );
     const participantId =
       request.headers.get('X-CS-Participant-ID')?.trim().slice(0, 200) || null;
+    const tracksAgentPresence =
+      agentId !== null && request.headers.get('X-CS-Track-Presence') === '1';
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment({
       connectedAt: Date.now(),
       agentId,
       participantId,
       participantRole,
+      tracksAgentPresence,
+      presenceWrittenAt: null,
     } satisfies RealtimeSocketAttachment);
-    if (agentId) await this.touchAgent(agentId);
+    if (
+      agentId &&
+      tracksAgentPresence &&
+      this.agentPresenceWriteDue(agentId, Date.now())
+    ) {
+      await this.touchAgent(agentId);
+      this.markAgentPresenceWritten(agentId, Date.now());
+    }
     server.send(
       JSON.stringify({ type: 'ready', time: new Date().toISOString() }),
     );
@@ -154,7 +168,15 @@ export class ConversationRoom extends DurableObject<Bindings> {
     const attachment =
       socket.deserializeAttachment() as RealtimeSocketAttachment | null;
     if (message === 'ping') {
-      if (attachment?.agentId) await this.touchAgent(attachment.agentId);
+      const now = Date.now();
+      if (
+        attachment?.agentId &&
+        attachment.tracksAgentPresence &&
+        this.agentPresenceWriteDue(attachment.agentId, now)
+      ) {
+        await this.touchAgent(attachment.agentId);
+        this.markAgentPresenceWritten(attachment.agentId, now);
+      }
       socket.send(
         JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
       );
@@ -203,6 +225,33 @@ export class ConversationRoom extends DurableObject<Bindings> {
     )
       .bind(agentId)
       .run();
+  }
+
+  private agentPresenceWriteDue(agentId: string, now: number): boolean {
+    return !this.ctx.getWebSockets().some((socket) => {
+      const attachment =
+        socket.deserializeAttachment() as RealtimeSocketAttachment | null;
+      return (
+        attachment?.agentId === agentId &&
+        attachment.tracksAgentPresence &&
+        attachment.presenceWrittenAt !== null &&
+        now - attachment.presenceWrittenAt < AGENT_PRESENCE_WRITE_INTERVAL_MS
+      );
+    });
+  }
+
+  private markAgentPresenceWritten(agentId: string, writtenAt: number): void {
+    for (const socket of this.ctx.getWebSockets()) {
+      const attachment =
+        socket.deserializeAttachment() as RealtimeSocketAttachment | null;
+      if (attachment?.agentId !== agentId || !attachment.tracksAgentPresence) {
+        continue;
+      }
+      socket.serializeAttachment({
+        ...attachment,
+        presenceWrittenAt: writtenAt,
+      } satisfies RealtimeSocketAttachment);
+    }
   }
 
   webSocketClose(socket: WebSocket, code: number, reason: string): void {

@@ -6,6 +6,7 @@ const dashboardDirectory = 'src/dashboard';
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const vite = readFileSync('vite.config.ts', 'utf8');
 const main = readFileSync(`${dashboardDirectory}/main.tsx`, 'utf8');
+const app = readFileSync(`${dashboardDirectory}/App.tsx`, 'utf8');
 const uiSystem = readFileSync(`${dashboardDirectory}/ui-system.css`, 'utf8');
 const componentConfig = JSON.parse(readFileSync('components.json', 'utf8'));
 
@@ -60,6 +61,10 @@ test('route CSS stays consolidated behind stable ownership files', () => {
     `dashboard CSS file count regressed to ${cssFiles.length}`,
   );
   assert.match(main, /import '\.\/ui-system\.css'/u);
+  assert.match(main, /import\('\.\/agent-route\.css'\)/u);
+  assert.match(main, /import\('\.\/admin-route\.css'\)/u);
+  assert.match(app, /lazy\(\(\) =>[\s\S]*import\('\.\/AdminPortal'\)/u);
+  assert.match(app, /lazy\(\(\) =>[\s\S]*import\('\.\/AgentPortal'\)/u);
 
   for (const removedFile of [
     'admin-agent-directory.css',
@@ -73,6 +78,8 @@ test('route CSS stays consolidated behind stable ownership files', () => {
     'agent-mobile.css',
     'agent-overlay-motion.css',
     'media-view.css',
+    'commercial-polish.css',
+    'styles.css',
   ]) {
     assert.equal(cssFiles.includes(removedFile), false, removedFile);
     assert.equal(main.includes(removedFile), false, removedFile);

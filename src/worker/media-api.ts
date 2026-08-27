@@ -206,20 +206,6 @@ mediaApi.post('/api/agent/conversations/:id/media/init', async (c) => {
   );
 });
 
-mediaApi.get('/api/agent/conversations/:id/media', async (c) => {
-  const agent = await requireAgentSession(c);
-  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const conversation = await assignedConversation(
-    c.env.DB,
-    c.req.param('id'),
-    agent.id,
-  );
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  return c.json({
-    items: await listConversationMedia(c.env.DB, conversation.id),
-  });
-});
-
 mediaApi.put('/api/agent/media/:id/content', async (c) => {
   const media = await authorizedAgentMedia(c, false);
   if (!media.ok) return c.json({ error: media.code }, media.status);

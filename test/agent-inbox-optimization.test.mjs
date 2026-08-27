@@ -5,19 +5,21 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('agent inbox returns overview, conversations, messages and media in two requests', async () => {
-  const [api, worker, app] = await Promise.all([
-    read('../src/dashboard/api.ts'),
-    read('../src/worker/agent-api.ts'),
-    read('../src/dashboard/AgentPortal.tsx'),
-  ]);
+test('agent inbox owns overview, conversations, messages and media without superseded reads', async () => {
+  const [api, worker, app, mediaClient, mediaApi, desktopCss] =
+    await Promise.all([
+      read('../src/dashboard/api.ts'),
+      read('../src/worker/agent-api.ts'),
+      read('../src/dashboard/AgentPortal.tsx'),
+      read('../src/dashboard/agent-media.ts'),
+      read('../src/worker/media-api.ts'),
+      read('../src/dashboard/agent-desktop-layout.css'),
+    ]);
 
   assert.match(api, /getAgentInbox/u);
   assert.match(api, /request<AgentInbox>\('\/api\/agent\/conversations'\)/u);
-  assert.match(
-    worker,
-    /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
-  );
+  assert.match(worker, /const conversations = result\.results \?\? \[\]/u);
+  assert.match(worker, /return \{[\s\S]*conversations,[\s\S]*overview:/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
   assert.match(
@@ -26,6 +28,17 @@ test('agent inbox returns overview, conversations, messages and media in two req
   );
   assert.doesNotMatch(app, /getConversations\(filter/u);
   assert.doesNotMatch(app, /getAgentMedia\(selectedId\)/u);
+  assert.doesNotMatch(
+    api,
+    /export async function getOverview|getConversations/u,
+  );
+  assert.doesNotMatch(mediaClient, /export async function getAgentMedia/u);
+  assert.doesNotMatch(worker, /\/api\/agent\/overview/u);
+  assert.doesNotMatch(
+    mediaApi,
+    /mediaApi\.get\('\/api\/agent\/conversations\/:id\/media'/u,
+  );
+  assert.doesNotMatch(desktopCss, /quick-replies-trigger/u);
 });
 
 test('agent inbox filters, searches and prioritizes unread conversations locally', async () => {
@@ -61,13 +74,6 @@ test('agent inbox folds unfiltered overview counts into the conversation scan', 
     /SUM\(CASE WHEN c\.status = 'closed' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_closed/u,
   );
   assert.match(inbox, /loadAgentQuotaOverview\(db, agent\.id\)/u);
-  assert.match(
-    inbox,
-    /if \(filtered\) \{[\s\S]*loadAgentOverview\(db, agent\.id\)/u,
-  );
-  assert.equal(
-    (inbox.match(/loadAgentOverview\(db, agent\.id\)/gu) ?? []).length,
-    1,
-  );
+  assert.doesNotMatch(inbox, /requestedStatus|loadAgentOverview/u);
   assert.match(inbox, /delete conversation\.__overview_open/u);
 });

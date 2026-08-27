@@ -19,21 +19,14 @@ test('default agent inbox never hides active conversations behind a global row l
   assert.match(inbox, /closedHasMore: counts\.closed > closedLoaded/u);
 });
 
-test('only closed conversations are bounded in explicit filtered inbox reads', async () => {
+test('superseded server-side inbox filtering stays removed', async () => {
   const worker = await read('../src/worker/agent-api.ts');
   const start = worker.indexOf('async function loadAgentInbox');
   const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
   const inbox = worker.slice(start, end);
 
-  assert.match(
-    inbox,
-    /const shouldBoundClosed = requestedStatus === 'closed'/u,
-  );
-  assert.match(inbox, /LIMIT COALESCE\(\?3, -1\)/u);
-  assert.match(
-    inbox,
-    /shouldBoundClosed \? CLOSED_INBOX_PREVIEW_LIMIT : null/u,
-  );
+  assert.doesNotMatch(inbox, /requestedStatus|shouldBoundClosed|filtered/u);
+  assert.equal((inbox.match(/db\.prepare\(/gu) ?? []).length, 1);
 });
 
 test('initial load, heartbeat and availability changes share one inbox loader', async () => {

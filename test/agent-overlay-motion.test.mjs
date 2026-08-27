@@ -5,12 +5,12 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('agent overlays enter on stable compositor-owned geometry', async () => {
-  const [main, overlays] = await Promise.all([
-    read('../src/dashboard/main.tsx'),
+  const [routeStyles, overlays] = await Promise.all([
+    read('../src/dashboard/agent-route.css'),
     read('../src/dashboard/agent-overlays.css'),
   ]);
 
-  assert.ok(main.includes("import('./agent-overlays.css')"));
+  assert.ok(routeStyles.includes("@import './agent-overlays.css'"));
   assert.match(overlays, /agent-overlay-backdrop-in/u);
   assert.match(overlays, /agent-overlay-dialog-in/u);
   assert.match(overlays, /agent-overlay-sheet-in/u);

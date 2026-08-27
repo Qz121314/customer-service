@@ -1,6 +1,17 @@
-/* Final visual owner for the agent workspace.
+@import './agent-foundation.css';
+@import './agent-statistics.css';
+@import './month-picker.css';
+@import './agent-overlays.css';
+@import './agent-avatar.css';
+@import './agent-workspace.css';
+@import './agent-desktop-layout.css';
+@import './agent-mobile-layout.css';
+@import './agent-thread.css';
+@import './agent-state.css';
+
+/* Route-owned visual finish for the agent workspace.
  * Geometry stays in agent-desktop-layout.css / agent-mobile-layout.css and feature CSS.
- * This layer owns only tokens, surfaces, borders, shadows, states and motion.
+ * These route-level rules own only tokens, surfaces, borders, shadows, states and motion.
  */
 
 .workspace-shell {

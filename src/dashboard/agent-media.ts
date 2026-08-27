@@ -23,18 +23,6 @@ type InitResponse = {
   completed?: { messageId: string; createdAt: string };
 };
 
-export async function getAgentMedia(
-  conversationId: string,
-): Promise<AgentMediaItem[]> {
-  const response = await request<{ items: Array<Omit<AgentMediaItem, 'url'>> }>(
-    `/api/agent/conversations/${encodeURIComponent(conversationId)}/media`,
-  );
-  return response.items.map((item) => ({
-    ...item,
-    url: `/api/agent/media/${encodeURIComponent(item.id)}/content`,
-  }));
-}
-
 export async function sendAgentImage(
   conversationId: string,
   file: File,

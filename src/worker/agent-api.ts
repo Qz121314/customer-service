@@ -241,12 +241,6 @@ agentApi.post('/api/agent/auth/status', async (c) => {
   });
 });
 
-agentApi.get('/api/agent/overview', async (c) => {
-  const agent = await authenticateAgent(c);
-  if (!agent) return unauthorized(c);
-  return c.json(await loadAgentOverview(c.env.DB, agent.id));
-});
-
 async function loadAgentQuotaOverview(db: D1Database, agentId: string) {
   const businessDate = routingBusinessDate();
   const quotaRow = await db
@@ -284,35 +278,7 @@ async function loadAgentQuotaOverview(db: D1Database, agentId: string) {
   };
 }
 
-async function loadAgentOverview(db: D1Database, agentId: string) {
-  const [statusResult, quotaOverview] = await Promise.all([
-    db
-      .prepare(
-        `SELECT status, COUNT(*) AS count
-       FROM conversations
-       WHERE assigned_agent = ?1
-         AND expires_at > CURRENT_TIMESTAMP
-       GROUP BY status`,
-      )
-      .bind(agentId)
-      .all<{ status: ConversationStatus; count: number }>(),
-    loadAgentQuotaOverview(db, agentId),
-  ]);
-  const counts = { open: 0, pending: 0, closed: 0 };
-  for (const row of statusResult.results ?? [])
-    counts[row.status] = Number(row.count ?? 0);
-  return {
-    ...counts,
-    total: counts.open + counts.pending + counts.closed,
-    ...quotaOverview,
-  };
-}
-
-async function loadAgentInbox(
-  db: D1Database,
-  agent: AgentSession,
-  requestedStatus?: string,
-) {
+async function loadAgentInbox(db: D1Database, agent: AgentSession) {
   type InboxConversationRow = Record<string, unknown> & {
     id: string;
     status: ConversationStatus;
@@ -322,44 +288,6 @@ async function loadAgentInbox(
     __overview_closed?: number;
     __closed_rank?: number;
   };
-
-  const filtered =
-    requestedStatus === 'open' ||
-    requestedStatus === 'pending' ||
-    requestedStatus === 'closed';
-  if (filtered) {
-    const shouldBoundClosed = requestedStatus === 'closed';
-    const statement = db.prepare(
-      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject,
-         c.product_id, c.section_id, c.section_name, c.category_id,
-         c.category_name, c.product_title, c.product_cover_url, c.product_href,
-         c.assigned_agent, c.agent_unread_count, c.last_message_at, c.created_at,
-         c.expires_at, v.display_name AS visitor_name,
-         c.last_message_preview AS last_message
-       FROM conversations c
-       JOIN visitors v ON v.id = c.visitor_id
-       WHERE c.assigned_agent = ?1
-         AND c.status = ?2
-         AND c.expires_at > CURRENT_TIMESTAMP
-       ORDER BY c.last_message_at DESC, c.id DESC
-       LIMIT COALESCE(?3, -1)`,
-    );
-    const [result, overview] = await Promise.all([
-      statement
-        .bind(
-          agent.id,
-          requestedStatus,
-          shouldBoundClosed ? CLOSED_INBOX_PREVIEW_LIMIT : null,
-        )
-        .all<InboxConversationRow>(),
-      loadAgentOverview(db, agent.id),
-    ]);
-    return {
-      conversations: result.results ?? [],
-      overview,
-      availability: agent.status === 'busy' ? 'busy' : 'online',
-    };
-  }
 
   const statement = db.prepare(
     `WITH ranked AS (
@@ -494,7 +422,7 @@ agentApi.get('/api/agent/stats', async (c) => {
 agentApi.get('/api/agent/conversations', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  return c.json(await loadAgentInbox(c.env.DB, agent, c.req.query('status')));
+  return c.json(await loadAgentInbox(c.env.DB, agent));
 });
 
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
@@ -762,7 +690,7 @@ agentApi.get('/api/agent/realtime/inbox', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   return room(c.env, agentInboxRoom(agent.id)).fetch(
-    authenticatedRealtimeRequest(c.req.raw, agent.id),
+    authenticatedRealtimeRequest(c.req.raw, agent.id, true),
   );
 });
 
@@ -944,12 +872,14 @@ function clientRealtimeMessage(message: MessageRow) {
 function authenticatedRealtimeRequest(
   request: Request,
   agentId: string,
+  tracksPresence = false,
 ): Request {
   const url = new URL(request.url);
   const headers = new Headers(request.headers);
   headers.set('X-CS-Agent-ID', agentId);
   headers.set('X-CS-Participant-Role', 'agent');
   headers.set('X-CS-Participant-ID', agentId);
+  if (tracksPresence) headers.set('X-CS-Track-Presence', '1');
   return new Request(url, { ...request, headers });
 }
 
