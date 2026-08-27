@@ -2,12 +2,12 @@ name: CI and Deploy
 
 on:
   push:
-    branches: [main, routing-final-rules]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: customer-service-${{ github.workflow }}-${{ github.ref }}
@@ -31,23 +31,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Finalize routing staging branch
-        if: github.ref == 'refs/heads/routing-final-rules'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 scripts/finalize-routing-rules.py
-          pnpm format:write
-          git fetch origin main:refs/remotes/origin/main
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm -f .github/workflows/routing-finalize-once.yml
-          rm -f scripts/finalize-routing-rules.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "refactor(routing): enforce daily cap and remove transfers"
-          git push origin HEAD:routing-final-rules
 
       - name: Repository guardrails
         run: pnpm guardrails

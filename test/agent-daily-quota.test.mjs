@@ -160,7 +160,7 @@ test('daily reporting uses Los Angeles natural-day boundaries', () => {
   );
 });
 
-test('daily and active limits do not block automatic traffic delivery', async () => {
+test('daily reception limit blocks fresh automatic traffic after the cap', async () => {
   const database = await databaseWithDailyLimit(1);
   addConversation(database, 'conversation-1');
   addConversation(database, 'conversation-2');
@@ -170,7 +170,7 @@ test('daily and active limits do not block automatic traffic delivery', async ()
   const second = await assignConversationAgent(db, 'conversation-2');
 
   assert.equal(first?.id, 'agent-a');
-  assert.equal(second?.id, 'agent-a');
+  assert.equal(second, null);
   assert.equal(
     database
       .prepare(
@@ -179,8 +179,16 @@ test('daily and active limits do not block automatic traffic delivery', async ()
          WHERE agent_id = 'agent-a'`,
       )
       .get().count,
-    2,
-    'daily counts remain available for reporting even though they do not gate traffic',
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT assigned_agent FROM conversations
+         WHERE id = 'conversation-2'`,
+      )
+      .get().assigned_agent,
+    null,
   );
   database.close();
 });

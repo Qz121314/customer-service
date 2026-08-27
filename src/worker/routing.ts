@@ -55,10 +55,10 @@ function assignmentResult(
  * Assign one conversation to one enabled seat with matching routing scope.
  *
  * Automatic traffic delivery is deliberately presence-agnostic: online/busy,
- * heartbeat freshness, active load and daily reception limits do not decide who
- * receives traffic. A fresh billable conversation only requires an enabled,
- * configured seat with available paid traffic quota. Already-receipted traffic
- * can always be requeued without consuming another unit.
+ * heartbeat freshness and active load do not decide who receives traffic. A seat
+ * must still be below its Los Angeles business-day reception limit and, for fresh
+ * billable traffic, have available paid traffic quota. Already-receipted traffic
+ * never consumes another paid unit, but it still respects the daily reception cap.
  *
  * An active two-hour CTA affinity is preferred when that seat is otherwise
  * eligible. All other traffic follows strict deterministic round robin through a
@@ -129,6 +129,10 @@ export async function assignConversationAgent(
          FROM matching m
          JOIN agents a ON a.id = m.agent_id
          JOIN context ctx ON ctx.site_id = a.site_id
+         LEFT JOIN agent_daily_stats daily
+           ON daily.site_id = a.site_id
+          AND daily.agent_id = a.id
+          AND daily.business_date = ?3
          WHERE a.is_enabled = 1
            AND (?4 = '' OR a.id <> ?4)
            AND (
@@ -137,6 +141,10 @@ export async function assignConversationAgent(
            )
            AND a.username IS NOT NULL
            AND a.password_hash IS NOT NULL
+           AND (
+             a.daily_conversation_limit = 0
+             OR COALESCE(daily.conversation_count, 0) < a.daily_conversation_limit
+           )
            AND (
              ctx.already_received = 1
              OR a.traffic_quota_enabled = 0
