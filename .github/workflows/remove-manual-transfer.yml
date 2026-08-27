@@ -23,12 +23,62 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('src/dashboard/agent-thread.css')
-          text = path.read_text(encoding='utf-8')
-          block = ".workspace-shell .transfer-menu {\n  display: none !important;\n}\n\n"
-          if text.count(block) != 1:
+          thread_path = Path('src/dashboard/agent-thread.css')
+          thread = thread_path.read_text(encoding='utf-8')
+          hide_rule = ".workspace-shell .transfer-menu {\n  display: none !important;\n}\n\n"
+          if thread.count(hide_rule) != 1:
               raise SystemExit('Expected the obsolete transfer hide rule exactly once.')
-          path.write_text(text.replace(block, ''), encoding='utf-8')
+          thread_path.write_text(thread.replace(hide_rule, ''), encoding='utf-8')
+
+          script_path = Path('scripts/remove-manual-transfer.py')
+          script = script_path.read_text(encoding='utf-8')
+          start = script.index('def remove_css_rules_with_token')
+          end = script.index('\n\n# Agent workspace', start)
+          helper = '''def remove_css_rules_with_token(text: str, token: str) -> str:
+              while token in text:
+                  token_at = text.index(token)
+                  open_at = text.find("{", token_at)
+                  if open_at < 0:
+                      raise RuntimeError(f"CSS token {token!r} has no rule block")
+                  previous_close = text.rfind("}", 0, token_at)
+                  previous_open = text.rfind("{", 0, token_at)
+                  selector_start = max(previous_close, previous_open) + 1
+                  comment_end = text.rfind("*/", selector_start, open_at)
+                  if comment_end >= selector_start:
+                      selector_start = comment_end + 2
+                  prelude = text[selector_start:open_at].strip()
+                  selectors = [part.strip() for part in prelude.split(",") if part.strip()]
+                  if not selectors:
+                      raise RuntimeError(f"CSS token {token!r} has no selectors")
+                  kept = [selector for selector in selectors if token not in selector]
+                  removed = [selector for selector in selectors if token in selector]
+                  if not removed:
+                      raise RuntimeError(f"CSS token {token!r} was not found in parsed selectors")
+                  depth = 0
+                  close_at = None
+                  for index in range(open_at, len(text)):
+                      char = text[index]
+                      if char == "{":
+                          depth += 1
+                      elif char == "}":
+                          depth -= 1
+                          if depth == 0:
+                              close_at = index + 1
+                              break
+                  if close_at is None:
+                      raise RuntimeError(f"Unbalanced CSS rule containing {token!r}")
+                  if kept:
+                      replacement = ",\n".join(kept) + " "
+                      text = text[:selector_start] + replacement + text[open_at:]
+                      continue
+                  while close_at < len(text) and text[close_at] in " \\t":
+                      close_at += 1
+                  if close_at < len(text) and text[close_at] == "\\n":
+                      close_at += 1
+                  text = text[:selector_start] + text[close_at:]
+              return text
+          '''
+          script_path.write_text(script[:start] + helper + script[end:], encoding='utf-8')
           PY
           python3 scripts/remove-manual-transfer.py
 
