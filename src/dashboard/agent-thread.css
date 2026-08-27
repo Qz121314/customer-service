@@ -3,6 +3,10 @@
  * this layer only refines the active conversation surface.
  */
 
+.workspace-shell .transfer-menu {
+  display: none !important;
+}
+
 .workspace-shell .thread-head .eyebrow,
 .workspace-shell .thread-head p,
 .workspace-shell .conversation-context-card > div > span {
@@ -41,8 +45,7 @@
   }
 
   .workspace-shell .thread-status,
-  .workspace-shell .thread-status-action,
-  .workspace-shell .transfer-menu > summary {
+  .workspace-shell .thread-status-action {
     min-height: 32px;
     border-radius: 8px;
     font-size: 10px;
@@ -55,10 +58,6 @@
 
   .workspace-shell .thread-status-action {
     min-width: 72px;
-    padding-inline: 10px;
-  }
-
-  .workspace-shell .transfer-menu > summary {
     padding-inline: 10px;
   }
 
@@ -212,7 +211,7 @@
 
   .workspace-shell .thread-actions {
     min-height: 38px;
-    grid-template-columns: auto 38px;
+    grid-template-columns: auto;
     gap: 4px;
   }
 
@@ -331,7 +330,7 @@
   }
 
   .workspace-shell .thread-actions {
-    grid-template-columns: auto 38px;
+    grid-template-columns: auto;
   }
 
   .workspace-shell .thread-status-action {
