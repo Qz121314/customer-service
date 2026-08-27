@@ -165,13 +165,21 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     ]);
     if (!ready) return null;
     return {
-      activeState: ready.active?.state ?? null,
       scope: ready.scope,
     };
   });
   expect(serviceWorker).not.toBeNull();
-  expect(serviceWorker?.activeState).toBe('activated');
   expect(serviceWorker?.scope).toBe(url('/agent'));
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const ready = await navigator.serviceWorker.ready;
+          return ready.active?.state ?? null;
+        }),
+      { timeout: 10_000 },
+    )
+    .toBe('activated');
 
   const desktopVisuals = await page.evaluate(() => {
     const browser = globalThis;
