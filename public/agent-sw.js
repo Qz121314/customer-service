@@ -1,10 +1,11 @@
 /* global self, URL, caches, fetch */
 
 const AGENT_WORKSPACE_URL = '/agent';
+const AGENT_SHELL_URL = '/index.html';
 const AGENT_NOTIFICATION_URL = '/agent?notification=latest-unread';
-const AGENT_CACHE = 'agent-workspace-v3';
+const AGENT_CACHE = 'agent-workspace-v4';
 const APP_SHELL = [
-  AGENT_WORKSPACE_URL,
+  AGENT_SHELL_URL,
   '/agent.webmanifest',
   '/icons/customer-service-192.svg',
   '/icons/customer-service-512.svg',
@@ -54,13 +55,11 @@ self.addEventListener('fetch', (event) => {
           if (response.ok) {
             void caches
               .open(AGENT_CACHE)
-              .then((cache) =>
-                cache.put(AGENT_WORKSPACE_URL, response.clone()),
-              );
+              .then((cache) => cache.put(AGENT_SHELL_URL, response.clone()));
           }
           return response;
         })
-        .catch(() => caches.match(AGENT_WORKSPACE_URL)),
+        .catch(() => caches.match(AGENT_SHELL_URL)),
     );
     return;
   }
