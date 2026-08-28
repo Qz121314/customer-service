@@ -198,7 +198,12 @@ type AdminBootstrapPayload = {
   products: ProductCatalogItem[];
 };
 
+type AgentBootstrapPayload = AgentSessionState & {
+  inbox: AgentInbox | null;
+};
+
 let adminBootstrapRequest: Promise<AdminBootstrapPayload> | null = null;
+let agentBootstrapInbox: AgentInbox | null = null;
 
 const errorMessages: Record<string, string> = {
   INVALID_CREDENTIALS: '账号或密码错误',
@@ -331,13 +336,19 @@ export async function getAgentSelfMonthlyStats(
 }
 
 export async function getAgentSession(): Promise<AgentSessionState> {
-  return request('/api/agent/auth/session');
+  const response = await request<AgentBootstrapPayload>('/api/agent/bootstrap');
+  agentBootstrapInbox = response.authenticated ? response.inbox : null;
+  return {
+    authenticated: response.authenticated,
+    agent: response.agent,
+  };
 }
 
 export async function agentLogin(
   username: string,
   password: string,
 ): Promise<AgentIdentity> {
+  agentBootstrapInbox = null;
   const response = await request<{ agent: AgentIdentity }>(
     '/api/agent/auth/login',
     {
@@ -349,6 +360,7 @@ export async function agentLogin(
 }
 
 export async function agentLogout(): Promise<void> {
+  agentBootstrapInbox = null;
   await request('/api/agent/auth/logout', { method: 'POST' });
 }
 
@@ -393,6 +405,11 @@ export async function getConversations(
 }
 
 export async function getAgentInbox(): Promise<AgentInbox> {
+  if (agentBootstrapInbox) {
+    const inbox = agentBootstrapInbox;
+    agentBootstrapInbox = null;
+    return inbox;
+  }
   return request<AgentInbox>('/api/agent/conversations');
 }
 
