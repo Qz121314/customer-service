@@ -74,10 +74,7 @@ async function loadAgentQuotaOverview(db: D1Database, agentId: string) {
   };
 }
 
-async function loadBootstrapInbox(
-  db: D1Database,
-  agent: AgentSessionIdentity,
-) {
+async function loadBootstrapInbox(db: D1Database, agent: AgentSessionIdentity) {
   type InboxConversationRow = Record<string, unknown> & {
     id: string;
     status: ConversationStatus;
