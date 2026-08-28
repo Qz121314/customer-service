@@ -1,6 +1,9 @@
 import { Hono } from 'hono';
 import { routingBusinessDate } from './routing';
-import { authenticateAgentSession, type AgentSessionIdentity } from './agent-session';
+import {
+  authenticateAgentSession,
+  type AgentSessionIdentity,
+} from './agent-session';
 
 type Bindings = {
   DB: D1Database;
@@ -18,7 +21,10 @@ export const agentBootstrapApi = new Hono<Env>();
 // lookup. The inbox query intentionally mirrors the unfiltered agent inbox so
 // the existing AgentPortal startup state remains unchanged.
 agentBootstrapApi.get('/api/agent/bootstrap', async (c) => {
-  const agent = await authenticateAgentSession(c.env.DB, c.req.header('Cookie'));
+  const agent = await authenticateAgentSession(
+    c.env.DB,
+    c.req.header('Cookie'),
+  );
   if (!agent) {
     return c.json({ authenticated: false, agent: null, inbox: null });
   }
