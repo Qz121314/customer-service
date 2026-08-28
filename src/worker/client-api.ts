@@ -715,11 +715,6 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     return c.json({ message: clientMessage(persistedMessage.message) });
   }
   const createdMessage = persistedMessage.message;
-  await c.env.DB.prepare(
-    'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
-  )
-    .bind(conversation.visitor_id)
-    .run();
 
   const assignment = !conversation.assigned_agent
     ? await assignConversationAgent(c.env.DB, conversation.id)
@@ -775,45 +770,50 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
     );
 
   const requestedLastMessageId = normalizeId(body?.lastMessageId, 200);
-  let boundary: ReadBoundary | null = null;
-  if (requestedLastMessageId) {
-    boundary = await c.env.DB.prepare(
-      `SELECT id, created_at
-       FROM messages
-       WHERE id = ?1 AND conversation_id = ?2 AND sender_type = 'agent'
-       LIMIT 1`,
-    )
-      .bind(requestedLastMessageId, conversation.id)
-      .first<ReadBoundary>();
-  }
+  const boundary = await c.env.DB.prepare(
+    `SELECT id, created_at
+     FROM messages
+     WHERE conversation_id = ?1 AND sender_type = 'agent'
+     ORDER BY CASE WHEN id = ?2 THEN 0 ELSE 1 END,
+       created_at DESC, id DESC
+     LIMIT 1`,
+  )
+    .bind(conversation.id, requestedLastMessageId)
+    .first<ReadBoundary>();
 
-  const [readResult] = await c.env.DB.batch([
-    c.env.DB.prepare(
-      `UPDATE messages
-       SET read_by_visitor_at = COALESCE(read_by_visitor_at, CURRENT_TIMESTAMP)
-       WHERE conversation_id = ?1
-         AND sender_type = 'agent'
-         AND (
-           ?2 IS NULL
-           OR created_at < ?3
-           OR (created_at = ?3 AND id <= ?2)
-         )`,
-    ).bind(conversation.id, boundary?.id ?? null, boundary?.created_at ?? null),
-    c.env.DB.prepare(
-      `UPDATE conversations
-       SET visitor_unread_count = (
-         SELECT COUNT(*)
-         FROM messages
-         WHERE conversation_id = ?1
-           AND sender_type = 'agent'
-           AND read_by_visitor_at IS NULL
-       ),
-       updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1`,
-    ).bind(conversation.id),
-  ]);
+  const readResult = boundary
+    ? await c.env.DB.prepare(
+        `UPDATE conversations
+         SET visitor_read_through_at = ?2,
+             visitor_read_through_id = ?3,
+             visitor_read_at = CURRENT_TIMESTAMP,
+             visitor_unread_count = (
+               SELECT COUNT(*)
+               FROM messages
+               WHERE conversation_id = ?1
+                 AND sender_type = 'agent'
+                 AND read_by_visitor_at IS NULL
+                 AND (
+                   created_at > ?2
+                   OR (created_at = ?2 AND id > ?3)
+                 )
+             ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?1
+           AND (
+             visitor_read_through_at IS NULL
+             OR visitor_read_through_at < ?2
+             OR (
+               visitor_read_through_at = ?2
+               AND visitor_read_through_id < ?3
+             )
+           )`,
+      )
+        .bind(conversation.id, boundary.created_at, boundary.id)
+        .run()
+    : null;
 
-  if (readResult.meta.changes) {
+  if (readResult?.meta.changes) {
     await Promise.all([
       broadcastRoom(c.env, conversation.id, {
         type: 'message.read',
@@ -1426,11 +1426,6 @@ async function continueReusedConversationStart(
     });
     if (!persisted.duplicate) {
       createdMessage = persisted.message;
-      await env.DB.prepare(
-        'UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?1',
-      )
-        .bind(conversation.visitor_id)
-        .run();
     }
   }
 
@@ -1498,12 +1493,44 @@ async function conversationDetail(
 ) {
   const result = await db
     .prepare(
-      `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
-       read_by_visitor_at, read_by_agent_at, created_at
-     FROM messages
-     WHERE conversation_id = ?1
-       AND (?2 IS NULL OR created_at < ?2)
-     ORDER BY created_at DESC, id DESC
+      `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
+       m.client_message_id,
+       COALESCE(
+         m.read_by_visitor_at,
+         CASE
+           WHEN m.sender_type = 'agent'
+             AND c.visitor_read_through_at IS NOT NULL
+             AND (
+               m.created_at < c.visitor_read_through_at
+               OR (
+                 m.created_at = c.visitor_read_through_at
+                 AND m.id <= c.visitor_read_through_id
+               )
+             )
+             THEN c.visitor_read_at
+         END
+       ) AS read_by_visitor_at,
+       COALESCE(
+         m.read_by_agent_at,
+         CASE
+           WHEN m.sender_type = 'visitor'
+             AND c.agent_read_through_at IS NOT NULL
+             AND (
+               m.created_at < c.agent_read_through_at
+               OR (
+                 m.created_at = c.agent_read_through_at
+                 AND m.id <= c.agent_read_through_id
+               )
+             )
+             THEN c.agent_read_at
+         END
+       ) AS read_by_agent_at,
+       m.created_at
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     WHERE m.conversation_id = ?1
+       AND (?2 IS NULL OR m.created_at < ?2)
+     ORDER BY m.created_at DESC, m.id DESC
      LIMIT ?3`,
     )
     .bind(conversation.id, before, limit + 1)

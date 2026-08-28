@@ -90,6 +90,18 @@ coreApp.all('*', (c) => {
 });
 
 export class ConversationRoom extends DurableObject<Bindings> {
+  constructor(ctx: DurableObjectState, env: Bindings) {
+    super(ctx, env);
+    // Let the runtime answer application heartbeats without waking this
+    // Durable Object. The dashboard accepts any JSON `pong` payload.
+    this.ctx.setWebSocketAutoResponse(
+      new WebSocketRequestResponsePair(
+        'ping',
+        JSON.stringify({ type: 'pong' }),
+      ),
+    );
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (
@@ -153,14 +165,6 @@ export class ConversationRoom extends DurableObject<Bindings> {
   ): Promise<void> {
     const attachment =
       socket.deserializeAttachment() as RealtimeSocketAttachment | null;
-    if (message === 'ping') {
-      if (attachment?.agentId) await this.touchAgent(attachment.agentId);
-      socket.send(
-        JSON.stringify({ type: 'pong', time: new Date().toISOString() }),
-      );
-      return;
-    }
-
     if (
       typeof message !== 'string' ||
       message.length > 512 ||

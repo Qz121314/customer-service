@@ -83,6 +83,10 @@ test('visitor text sends keep duplicate reads off the normal write path', () => 
   );
   assert.doesNotMatch(ownership, /last_message/u);
   assert.doesNotMatch(ownership, /LEFT JOIN agents/u);
+  assert.doesNotMatch(
+    route,
+    /UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP/u,
+  );
 });
 
 test('realtime overview scans run only when assignment or status counts can change', () => {

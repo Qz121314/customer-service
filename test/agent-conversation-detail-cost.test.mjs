@@ -30,7 +30,7 @@ test('already-read detail loads skip the separate read request', async () => {
   );
 });
 
-test('agent read acknowledgement avoids a duplicate conversation ownership read', async () => {
+test('agent read acknowledgement writes one conversation cursor instead of message rows', async () => {
   const worker = await read('../src/worker/agent-api.ts');
   const route = block(
     worker,
@@ -38,21 +38,12 @@ test('agent read acknowledgement avoids a duplicate conversation ownership read'
     "agentApi.post('/api/agent/conversations/:id/messages', async (c) => {",
   );
 
-  assert.doesNotMatch(
-    route,
-    /const conversation = await assignedConversation/u,
-  );
-  assert.match(route, /JOIN conversations c ON c\.id = m\.conversation_id/u);
-  assert.match(route, /AND c\.assigned_agent = \?3/u);
-  assert.match(
-    route,
-    /AND EXISTS \([\s\S]*FROM conversations c[\s\S]*c\.assigned_agent = \?4/u,
-  );
-  assert.match(
-    route,
-    /const \[readResult, conversationResult\] = await c\.env\.DB\.batch/u,
-  );
-  assert.match(route, /if \(!conversationResult\.meta\.changes\)/u);
+  assert.doesNotMatch(route, /UPDATE messages/u);
+  assert.match(route, /UPDATE conversations/u);
+  assert.match(route, /agent_read_through_at = \?2/u);
+  assert.match(route, /agent_read_through_id = \?3/u);
+  assert.match(route, /read_by_agent_at IS NULL/u);
+  assert.match(route, /if \(!conversation\)/u);
 });
 
 test('conversation detail cursors use normalized timestamp index semantics', async () => {
@@ -83,9 +74,9 @@ test('conversation detail cursors use normalized timestamp index semantics', asy
   );
   assert.match(normalization, /trg_messages_normalize_created_at/u);
   assert.doesNotMatch(detail, /julianday\(created_at\)/u);
-  assert.match(detail, /OR created_at > \?2/u);
-  assert.match(detail, /OR \(created_at = \?2 AND id > \?3\)/u);
-  assert.match(detail, /ORDER BY created_at ASC, id ASC/u);
+  assert.match(detail, /OR m\.created_at > \?2/u);
+  assert.match(detail, /OR \(m\.created_at = \?2 AND m\.id > \?3\)/u);
+  assert.match(detail, /ORDER BY m\.created_at ASC, m\.id ASC/u);
   assert.doesNotMatch(mediaList, /julianday\(m\.created_at\)/u);
   assert.match(mediaList, /OR m\.created_at > \?2/u);
   assert.match(mediaList, /ORDER BY m\.created_at ASC, m\.id ASC/u);

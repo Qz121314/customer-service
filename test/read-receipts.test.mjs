@@ -8,6 +8,13 @@ const migration = await readFile(
   new URL('../migrations/0011_read_receipts.sql', import.meta.url),
   'utf8',
 );
+const cursorMigration = await readFile(
+  new URL(
+    '../migrations/0046_reduce_free_tier_write_amplification.sql',
+    import.meta.url,
+  ),
+  'utf8',
+);
 
 test('read receipt migration adds persistent agent read state', () => {
   const db = new DatabaseSync(':memory:');
@@ -45,4 +52,85 @@ test('read receipt migration adds persistent agent read state', () => {
   assert.equal(row.read_by_agent_at, null);
 
   db.close();
+});
+
+test('conversation read cursors replace hot per-message writes and stale indexes', () => {
+  const db = new DatabaseSync(':memory:');
+  db.exec(`
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY,
+      status TEXT NOT NULL,
+      site_id TEXT NOT NULL,
+      group_id TEXT,
+      assigned_agent TEXT,
+      assigned_business_date TEXT,
+      last_message_at TEXT NOT NULL
+    );
+    CREATE INDEX idx_conversations_status_last_message
+      ON conversations(status, last_message_at DESC);
+    CREATE INDEX idx_conversations_site_last_message
+      ON conversations(site_id, last_message_at DESC);
+    CREATE INDEX idx_conversations_group_assignment
+      ON conversations(site_id, group_id, status, assigned_agent, last_message_at DESC);
+    CREATE INDEX idx_conversations_agent_business_date
+      ON conversations(site_id, assigned_agent, assigned_business_date);
+    CREATE INDEX idx_conversations_business_date
+      ON conversations(site_id, assigned_business_date);
+  `);
+  db.exec(cursorMigration);
+
+  const columns = db.prepare('PRAGMA table_info(conversations)').all();
+  for (const name of [
+    'agent_read_through_at',
+    'agent_read_through_id',
+    'agent_read_at',
+    'visitor_read_through_at',
+    'visitor_read_through_id',
+    'visitor_read_at',
+  ]) {
+    assert.equal(
+      columns.some((column) => column.name === name),
+      true,
+      name,
+    );
+  }
+
+  const indexes = new Set(
+    db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index'")
+      .all()
+      .map((row) => row.name),
+  );
+  for (const name of [
+    'idx_conversations_status_last_message',
+    'idx_conversations_site_last_message',
+    'idx_conversations_group_assignment',
+    'idx_conversations_agent_business_date',
+    'idx_conversations_business_date',
+  ]) {
+    assert.equal(indexes.has(name), false, name);
+  }
+  db.close();
+});
+
+test('read APIs preserve payload fields while updating only conversation cursors', async () => {
+  const [agent, client] = await Promise.all([
+    readFile(new URL('../src/worker/agent-api.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/worker/client-api.ts', import.meta.url), 'utf8'),
+  ]);
+  const agentRead = agent.slice(
+    agent.indexOf("agentApi.post('/api/agent/conversations/:id/read'"),
+    agent.indexOf("agentApi.post('/api/agent/conversations/:id/messages'"),
+  );
+  const visitorRead = client.slice(
+    client.indexOf("clientApi.post('/client/v1/conversations/:id/read'"),
+    client.indexOf("clientApi.get('/client/v1/realtime'"),
+  );
+
+  assert.doesNotMatch(agentRead, /UPDATE messages/u);
+  assert.doesNotMatch(visitorRead, /UPDATE messages/u);
+  assert.match(agentRead, /agent_read_through_at/u);
+  assert.match(visitorRead, /visitor_read_through_at/u);
+  assert.match(agent, /AS read_by_agent_at/u);
+  assert.match(client, /AS read_by_visitor_at/u);
 });

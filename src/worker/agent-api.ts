@@ -527,11 +527,67 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
   const readStateRequest = after
     ? c.env.DB.prepare(
-        `SELECT id, read_by_visitor_at, read_by_agent_at
-         FROM messages
-         WHERE conversation_id = ?1
-           AND (read_by_visitor_at IS NOT NULL OR read_by_agent_at IS NOT NULL)
-         ORDER BY created_at ASC, id ASC
+        `SELECT m.id,
+         COALESCE(
+           m.read_by_visitor_at,
+           CASE
+             WHEN m.sender_type = 'agent'
+               AND c.visitor_read_through_at IS NOT NULL
+               AND (
+                 m.created_at < c.visitor_read_through_at
+                 OR (
+                   m.created_at = c.visitor_read_through_at
+                   AND m.id <= c.visitor_read_through_id
+                 )
+               )
+               THEN c.visitor_read_at
+           END
+         ) AS read_by_visitor_at,
+         COALESCE(
+           m.read_by_agent_at,
+           CASE
+             WHEN m.sender_type = 'visitor'
+               AND c.agent_read_through_at IS NOT NULL
+               AND (
+                 m.created_at < c.agent_read_through_at
+                 OR (
+                   m.created_at = c.agent_read_through_at
+                   AND m.id <= c.agent_read_through_id
+                 )
+               )
+               THEN c.agent_read_at
+           END
+         ) AS read_by_agent_at
+         FROM messages m
+         JOIN conversations c ON c.id = m.conversation_id
+         WHERE m.conversation_id = ?1
+           AND (
+             m.read_by_visitor_at IS NOT NULL
+             OR m.read_by_agent_at IS NOT NULL
+             OR (
+               m.sender_type = 'agent'
+               AND c.visitor_read_through_at IS NOT NULL
+               AND (
+                 m.created_at < c.visitor_read_through_at
+                 OR (
+                   m.created_at = c.visitor_read_through_at
+                   AND m.id <= c.visitor_read_through_id
+                 )
+               )
+             )
+             OR (
+               m.sender_type = 'visitor'
+               AND c.agent_read_through_at IS NOT NULL
+               AND (
+                 m.created_at < c.agent_read_through_at
+                 OR (
+                   m.created_at = c.agent_read_through_at
+                   AND m.id <= c.agent_read_through_id
+                 )
+               )
+             )
+           )
+         ORDER BY m.created_at ASC, m.id ASC
          LIMIT 500`,
       )
         .bind(c.req.param('id'))
@@ -539,16 +595,48 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
     : Promise.resolve({ results: [] as MessageReadState[] });
   const [messages, media, readState] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT id, conversation_id, sender_type, sender_id, body,
-       client_message_id, read_by_visitor_at, read_by_agent_at, created_at
-     FROM messages
-     WHERE conversation_id = ?1
+      `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
+       m.client_message_id,
+       COALESCE(
+         m.read_by_visitor_at,
+         CASE
+           WHEN m.sender_type = 'agent'
+             AND c.visitor_read_through_at IS NOT NULL
+             AND (
+               m.created_at < c.visitor_read_through_at
+               OR (
+                 m.created_at = c.visitor_read_through_at
+                 AND m.id <= c.visitor_read_through_id
+               )
+             )
+             THEN c.visitor_read_at
+         END
+       ) AS read_by_visitor_at,
+       COALESCE(
+         m.read_by_agent_at,
+         CASE
+           WHEN m.sender_type = 'visitor'
+             AND c.agent_read_through_at IS NOT NULL
+             AND (
+               m.created_at < c.agent_read_through_at
+               OR (
+                 m.created_at = c.agent_read_through_at
+                 AND m.id <= c.agent_read_through_id
+               )
+             )
+             THEN c.agent_read_at
+         END
+       ) AS read_by_agent_at,
+       m.created_at
+     FROM messages m
+     JOIN conversations c ON c.id = m.conversation_id
+     WHERE m.conversation_id = ?1
        AND (
          ?2 IS NULL
-         OR created_at > ?2
-         OR (created_at = ?2 AND id > ?3)
+         OR m.created_at > ?2
+         OR (m.created_at = ?2 AND m.id > ?3)
        )
-     ORDER BY created_at ASC, id ASC
+     ORDER BY m.created_at ASC, m.id ASC
      LIMIT 500`,
     )
       .bind(c.req.param('id'), after?.createdAt ?? null, after?.id ?? null)
@@ -570,60 +658,65 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
   const id = c.req.param('id');
   const body = await readJson<{ lastMessageId?: string | null }>(c.req.raw);
   const requestedLastMessageId = normalizeMessageId(body?.lastMessageId);
-  let boundary: ReadBoundary | null = null;
-  if (requestedLastMessageId) {
-    boundary = await c.env.DB.prepare(
-      `SELECT m.id, m.created_at
-       FROM messages m
-       JOIN conversations c ON c.id = m.conversation_id
-       WHERE m.id = ?1 AND m.conversation_id = ?2
-         AND m.sender_type = 'visitor'
-         AND c.assigned_agent = ?3
-         AND c.expires_at > CURRENT_TIMESTAMP
+  const [conversation, boundary] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id
+       FROM conversations
+       WHERE id = ?1 AND assigned_agent = ?2
+         AND expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
-      .bind(requestedLastMessageId, id, agent.id)
-      .first<ReadBoundary>();
-  }
-
-  const [readResult, conversationResult] = await c.env.DB.batch([
+      .bind(id, agent.id)
+      .first<{ id: string }>(),
     c.env.DB.prepare(
-      `UPDATE messages
-       SET read_by_agent_at = COALESCE(read_by_agent_at, CURRENT_TIMESTAMP)
-       WHERE conversation_id = ?1
-         AND sender_type = 'visitor'
-         AND EXISTS (
-           SELECT 1
-           FROM conversations c
-           WHERE c.id = ?1 AND c.assigned_agent = ?4
-             AND c.expires_at > CURRENT_TIMESTAMP
-         )
-         AND (
-           ?2 IS NULL
-           OR created_at < ?3
-           OR (created_at = ?3 AND id <= ?2)
-         )`,
-    ).bind(id, boundary?.id ?? null, boundary?.created_at ?? null, agent.id),
-    c.env.DB.prepare(
-      `UPDATE conversations
-       SET agent_unread_count = (
-         SELECT COUNT(*)
-         FROM messages
-         WHERE conversation_id = ?1
-           AND sender_type = 'visitor'
-           AND read_by_agent_at IS NULL
-       ),
-       updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1 AND assigned_agent = ?2
-         AND expires_at > CURRENT_TIMESTAMP`,
-    ).bind(id, agent.id),
+      `SELECT id, created_at
+       FROM messages
+       WHERE conversation_id = ?1 AND sender_type = 'visitor'
+       ORDER BY CASE WHEN id = ?2 THEN 0 ELSE 1 END,
+         created_at DESC, id DESC
+       LIMIT 1`,
+    )
+      .bind(id, requestedLastMessageId)
+      .first<ReadBoundary>(),
   ]);
 
-  if (!conversationResult.meta.changes) {
+  if (!conversation) {
     return c.json({ error: 'NOT_FOUND' }, 404);
   }
 
-  if (readResult.meta.changes) {
+  const readResult = boundary
+    ? await c.env.DB.prepare(
+        `UPDATE conversations
+         SET agent_read_through_at = ?2,
+             agent_read_through_id = ?3,
+             agent_read_at = CURRENT_TIMESTAMP,
+             agent_unread_count = (
+               SELECT COUNT(*)
+               FROM messages
+               WHERE conversation_id = ?1
+                 AND sender_type = 'visitor'
+                 AND read_by_agent_at IS NULL
+                 AND (
+                   created_at > ?2
+                   OR (created_at = ?2 AND id > ?3)
+                 )
+             ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?1
+           AND (
+             agent_read_through_at IS NULL
+             OR agent_read_through_at < ?2
+             OR (
+               agent_read_through_at = ?2
+               AND agent_read_through_id < ?3
+             )
+           )`,
+      )
+        .bind(id, boundary.created_at, boundary.id)
+        .run()
+    : null;
+
+  if (readResult?.meta.changes) {
     await Promise.all([
       broadcastConversationRoom(c.env, id, {
         type: 'message.read',

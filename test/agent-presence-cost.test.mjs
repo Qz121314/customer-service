@@ -5,7 +5,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('presence writes are coalesced while online status gates routing', async () => {
+test('runtime heartbeats avoid DO wakeups while online status gates routing', async () => {
   const [core, agentApi, routing, waiting, dashboardApi] = await Promise.all([
     read('../src/worker/core.ts'),
     read('../src/worker/agent-api.ts'),
@@ -23,4 +23,12 @@ test('presence writes are coalesced while online status gates routing', async ()
   assert.doesNotMatch(waiting, /last_seen_at/u);
   assert.match(waiting, /assignConversationAgent/u);
   assert.match(dashboardApi, /window\.setInterval\(ping, 60_000\)/u);
+  assert.match(core, /setWebSocketAutoResponse/u);
+  assert.match(core, /new WebSocketRequestResponsePair\(/u);
+  const messageHandler = core.slice(
+    core.indexOf('async webSocketMessage('),
+    core.indexOf('private async touchAgent('),
+  );
+  assert.doesNotMatch(messageHandler, /message === 'ping'/u);
+  assert.doesNotMatch(messageHandler, /touchAgent/u);
 });
