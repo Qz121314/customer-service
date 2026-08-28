@@ -14,6 +14,7 @@ const [
   viteConfig,
   dashboardMain,
   dashboardFiles,
+  wranglerConfig,
 ] = await Promise.all([
   readFile('package.json', 'utf8'),
   readFile('AGENTS.md', 'utf8'),
@@ -27,6 +28,7 @@ const [
   readFile('vite.config.ts', 'utf8'),
   readFile('src/dashboard/main.tsx', 'utf8'),
   readdir('src/dashboard'),
+  readFile('wrangler.jsonc', 'utf8'),
 ]);
 
 const packageJson = JSON.parse(packageText);
@@ -42,6 +44,7 @@ for (const scriptName of [
   'test',
   'build',
   'cf:check',
+  'cf:provision',
   'preflight',
   'verify',
 ]) {
@@ -105,6 +108,36 @@ assert.doesNotMatch(
   ciWorkflow,
   /\b(?:git\s+push|gh\s+pr|contents:\s*write)\b/u,
   'CI must validate and deploy only; it must never patch or push repository code',
+);
+
+assert.doesNotMatch(
+  wranglerConfig,
+  /"database_id"\s*:/u,
+  'wrangler.jsonc must not commit an account-bound D1 database_id',
+);
+assert.match(
+  scripts['db:migrate:remote'],
+  /wrangler\s+d1\s+migrations\s+apply\s+DB\s+--remote/u,
+  'remote D1 migrations must target the portable DB binding',
+);
+for (const requiredStep of [
+  'pnpm cf:provision',
+  'pnpm db:migrate:remote',
+  'wrangler deploy',
+]) {
+  assert.match(
+    scripts['deploy:cloudflare'],
+    new RegExp(requiredStep.replaceAll(' ', '\\s+'), 'u'),
+    `deploy:cloudflare must include: ${requiredStep}`,
+  );
+}
+const cloudflareSecretReferences = [
+  ...ciWorkflow.matchAll(/secrets\.([A-Z0-9_]+)/gu),
+].map((match) => match[1]);
+assert.deepEqual(
+  [...new Set(cloudflareSecretReferences)].toSorted(),
+  ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'],
+  'CI deployment must depend on only the two Cloudflare GitHub Secrets',
 );
 
 assert.match(

@@ -27,7 +27,6 @@
     {
       "binding": "DB",
       "database_name": "customer-service-db",
-      "database_id": "75ad7759-b287-45fe-9905-cd9e7971c7e0",
       "migrations_dir": "./migrations",
     },
   ],

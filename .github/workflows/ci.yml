@@ -173,3 +173,19 @@ jobs:
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
         run: pnpm smoke:production
+
+      - name: Publish deployment handoff
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+        shell: bash
+        run: |
+          {
+            echo '## Customer Service deployment ready'
+            echo
+            echo "- Worker: ${BASE_URL}"
+            echo '- D1 migrations: applied'
+            echo '- R2, Durable Object, Rate Limit, Cron and static assets: provisioned'
+            echo '- Next: set `ADMIN_PASSWORD` and `INTEGRATION_VERIFY_TOKEN` as Worker secrets'
+            echo '- Optional: attach a Worker custom domain; keep the private chat-media R2 bucket without a public domain'
+          } >> "$GITHUB_STEP_SUMMARY"

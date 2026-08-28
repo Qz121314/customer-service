@@ -363,6 +363,47 @@ Repository guardrails
 → production protocol smoke
 ```
 
+### 空 Cloudflare 账号一键部署
+
+仓库中的 `wrangler.jsonc` 只声明可移植的资源名称和绑定，不保存任何 Cloudflare 账号专属 D1 UUID。复制仓库到新的 GitHub 仓库后，只需要添加两个 Repository Secrets：
+
+```text
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+```
+
+API Token 至少需要目标账号的以下权限：
+
+```text
+Workers Scripts: Edit
+D1: Edit
+Workers R2 Storage: Edit
+```
+
+Cloudflare 的 R2 是唯一的账号级前置条件：全新账号必须先在 Dashboard 的 `Storage & databases → R2` 完成一次 R2 subscription 开通。R2 有免费用量，但 Cloudflare 要求先完成该 checkout；这个账号动作不能由 GitHub Actions 或普通 API Token 代替。除此之外，不需要提前创建 Worker、D1、R2 Bucket 或 Durable Object。
+
+第一次从 GitHub Actions 手动运行 `CI and Deploy`，部署流程会按资源名称执行幂等引导：
+
+```text
+复用已有 D1 / R2，缺失时创建
+→ 应用全部 D1 migrations
+→ 部署 Worker + Durable Object
+→ 绑定 Rate Limit + Cron
+→ 上传 Static Assets
+→ 执行生产协议 Smoke
+```
+
+同一个流程同时兼容当前已经运营的 Cloudflare 账号：`customer-service-db` 和 `customer-service-media` 已存在时只会复用，不会删除、清空或新建替代资源；Worker Secret 也不会因部署而被删除。
+
+首次部署成功后，在 Cloudflare Worker 中人工设置：
+
+```text
+ADMIN_PASSWORD
+INTEGRATION_VERIFY_TOKEN
+```
+
+Worker 自定义域名按实际运营域名人工绑定。R2 自定义域名保持可选；聊天媒体桶默认保持私有，不需要为一键部署绑定公开域名。
+
 Pull Request 全绿只代表可以合并。真正发布完成必须同时满足：
 
 ```text
