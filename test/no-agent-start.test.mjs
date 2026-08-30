@@ -31,9 +31,11 @@ for (const name of [
 let clientApi;
 let rejectUnassignedConversationStart;
 try {
-  ({ clientApi } = await import('../src/worker/client-api.ts'));
-  ({ rejectUnassignedConversationStart } =
-    await import('../src/worker/no-agent-start.ts'));
+  const clientApiModule = await import('../src/worker/client-api.ts');
+  const noAgentStartModule = await import('../src/worker/no-agent-start.ts');
+  clientApi = clientApiModule.clientApi;
+  rejectUnassignedConversationStart =
+    noAgentStartModule.rejectUnassignedConversationStart;
 } finally {
   for (const shimPath of shims) unlinkSync(shimPath);
 }
