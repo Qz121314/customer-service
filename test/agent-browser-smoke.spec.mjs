@@ -12,6 +12,29 @@ function url(path) {
 }
 
 async function seedConversationAndAgent(page) {
+  const noAgentConversation = await page.request.post(
+    url('/client/v1/conversations'),
+    {
+      data: {
+        visitorId: 'UIT001',
+        sourceHandoffId: '11111111-1111-4111-8111-111111111111',
+        clientMessageId: 'ui-smoke-message-no-agent',
+        message: '无客服时不应创建会话',
+        product: {
+          id: productId,
+          sectionId: 'ui-smoke-section',
+          sectionName: 'Smoke Section',
+          categoryId: 'ui-smoke-category',
+          categoryName: 'Smoke Category',
+          title: 'UI Smoke Product',
+          href: 'https://example.com/ui-smoke-product',
+          coverUrl: null,
+        },
+      },
+    },
+  );
+  expect(noAgentConversation.status()).toBe(503);
+
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -36,8 +59,8 @@ async function seedConversationAndAgent(page) {
     url('/client/v1/conversations'),
     {
       data: {
-        visitorId: 'UIT001',
-        sourceHandoffId: '11111111-1111-4111-8111-111111111111',
+        visitorId: 'UIT002',
+        sourceHandoffId: '22222222-2222-4222-8222-222222222222',
         clientMessageId: 'ui-smoke-message-1',
         message: '你好，这是 UI smoke 会话',
         product: {
