@@ -11,7 +11,7 @@ import {
   passesBurstLimit,
   requestSourceHash,
 } from './abuse-control';
-import { rejectUnassignedConversationStart } from './no-agent-start';
+import { rejectUnassignedConversationStart } from './no-agent-start.ts';
 
 type ClientBindings = {
   DB: D1Database;
@@ -648,7 +648,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   let conversation: ConversationRow | null = null;
 
-  if (assignment.newlyAssigned && assignment.assignedAt) {
+  if (assignment?.newlyAssigned && assignment.assignedAt) {
     const snapshots = await broadcastAssignments(
       c.env,
       assignment.id,
