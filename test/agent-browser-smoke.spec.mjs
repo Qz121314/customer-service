@@ -71,6 +71,11 @@ async function seedAgent(page) {
       isEnabled: true,
     },
   });
+  console.log(
+    'SMOKE_CREATE_AGENT',
+    createAgent.status(),
+    await createAgent.text(),
+  );
   expect(createAgent.ok()).toBeTruthy();
   await page.context().clearCookies();
 }
