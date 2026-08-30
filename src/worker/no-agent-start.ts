@@ -38,9 +38,7 @@ export async function rejectUnassignedConversationStart(
 
   const payload = await responsePayload(response);
   const conversationId = normalizeConversationId(payload?.conversation?.id);
-  if (!conversationId || payload?.conversation?.status !== 'waiting') {
-    return response;
-  }
+  if (!conversationId) return response;
 
   const row = await env.DB.prepare(
     `SELECT c.site_id, c.visitor_id, v.external_id, c.start_reuse_key,
