@@ -431,10 +431,9 @@ test('waiting discovery skips blocked head rows', async () => {
     lastMessageAt: '2026-08-01 00:01:00',
   });
 
-  assert.deepEqual(
-    await findRoutableWaitingConversationIds(d1(database), 10),
-    ['routable-11'],
-  );
+  assert.deepEqual(await findRoutableWaitingConversationIds(d1(database), 10), [
+    'routable-11',
+  ]);
   assert.equal(await assigned(database, 'routable-11'), 'agent-a');
   database.close();
 });
