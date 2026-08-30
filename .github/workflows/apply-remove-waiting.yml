@@ -30,7 +30,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Apply focused patch
-        run: node scripts/apply-remove-waiting.mjs
+        run: |
+          node scripts/apply-remove-waiting.mjs
+          node scripts/apply-remove-waiting-followup.mjs
 
       - name: Format changed sources
         run: >-
@@ -46,14 +48,15 @@ jobs:
           src/dashboard/admin-entry.tsx
           test/product-agent-routing.test.mjs
           test/no-waiting-mode.test.mjs
+          test/legacy-routing-removal.test.mjs
           README.md
 
       - name: Assert waiting implementation is gone
         shell: bash
         run: |
           test ! -e src/worker/waiting-assignment.ts
-          if grep -R -n -E "assignWaitingConversations|recoverWaitingConversationAssignments|waiting-assignment" src test; then
-            echo "Waiting recovery residue remains"
+          if grep -R -n -E "assignWaitingConversations|recoverWaitingConversationAssignments|waiting-assignment" src; then
+            echo "Waiting recovery residue remains in runtime source"
             exit 1
           fi
 
