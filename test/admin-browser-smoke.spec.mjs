@@ -11,7 +11,10 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-async function seedAdminStatistics(page) {
+async function seedAdminStatistics(
+  page,
+  { name = 'UI Admin Smoke Agent', username = agentUsername } = {},
+) {
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -19,8 +22,8 @@ async function seedAdminStatistics(page) {
 
   const createAgent = await page.request.post(url('/api/admin/agents'), {
     data: {
-      name: 'UI Admin Smoke Agent',
-      username: agentUsername,
+      name,
+      username,
       password: agentPassword,
       routingScope: { type: 'none' },
       dailyConversationLimit: 0,
@@ -32,6 +35,171 @@ async function seedAdminStatistics(page) {
   });
   expect(createAgent.ok()).toBeTruthy();
 }
+
+test('admin mobile viewport keeps monitoring and utilities touch-friendly', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await seedAdminStatistics(page, {
+    name: 'UI Admin Mobile Agent',
+    username: 'ui-admin-mobile-agent',
+  });
+  await page.goto(url('/'));
+
+  await expect(page.getByRole('heading', { name: '客服坐席' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '坐席工作台' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '退出管理' })).toBeVisible();
+
+  const agentRow = page
+    .getByRole('row')
+    .filter({ hasText: 'UI Admin Mobile Agent' })
+    .first();
+  await expect(agentRow).toBeVisible();
+
+  const agentsGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const root = browser.document.scrollingElement;
+    const sidebar = browser.document.querySelector('.admin-sidebar');
+    const nav = browser.document.querySelector('.admin-nav');
+    const utilities = browser.document.querySelectorAll(
+      '.admin-sidebar-foot > a, .admin-sidebar-foot > button',
+    );
+    const overviewCards = browser.document.querySelectorAll(
+      '.admin-overview-strip > div',
+    );
+    const overview = browser.document.querySelector('.admin-overview-strip');
+    const row = [...browser.document.querySelectorAll('tbody tr')].find(
+      (element) => element.textContent?.includes('UI Admin Mobile Agent'),
+    );
+    const actions = row?.querySelector('.admin-agent-actions');
+
+    if (
+      !root ||
+      !(sidebar instanceof browser.HTMLElement) ||
+      !(nav instanceof browser.HTMLElement) ||
+      !(overview instanceof browser.HTMLElement) ||
+      !(row instanceof browser.HTMLElement) ||
+      !(actions instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+
+    return {
+      rootClientWidth: root.clientWidth,
+      rootScrollWidth: root.scrollWidth,
+      sidebarPosition: browser.getComputedStyle(sidebar).position,
+      navColumns: browser.getComputedStyle(nav).gridTemplateColumns,
+      utilitySizes: [...utilities].map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { width: rect.width, height: rect.height };
+      }),
+      overviewCount: overviewCards.length,
+      overviewColumns: browser.getComputedStyle(overview).gridTemplateColumns,
+      rowWidth: row.getBoundingClientRect().width,
+      viewportWidth: browser.innerWidth,
+      actionsDisplay: browser.getComputedStyle(actions).display,
+      actionHeights: [...actions.querySelectorAll('button')].map(
+        (button) => button.getBoundingClientRect().height,
+      ),
+    };
+  });
+
+  expect(agentsGeometry).not.toBeNull();
+  if (agentsGeometry) {
+    expect(agentsGeometry.rootScrollWidth).toBeLessThanOrEqual(
+      agentsGeometry.rootClientWidth + 1,
+    );
+    expect(agentsGeometry.sidebarPosition).toBe('sticky');
+    expect(agentsGeometry.navColumns.split(' ')).toHaveLength(2);
+    expect(agentsGeometry.utilitySizes).toHaveLength(2);
+    for (const utility of agentsGeometry.utilitySizes) {
+      expect(utility.width).toBeGreaterThanOrEqual(40);
+      expect(utility.height).toBeGreaterThanOrEqual(40);
+    }
+    expect(agentsGeometry.overviewCount).toBe(4);
+    expect(agentsGeometry.overviewColumns.split(' ')).toHaveLength(2);
+    expect(agentsGeometry.rowWidth).toBeLessThanOrEqual(
+      agentsGeometry.viewportWidth,
+    );
+    expect(agentsGeometry.actionsDisplay).toBe('grid');
+    for (const height of agentsGeometry.actionHeights) {
+      expect(height).toBeGreaterThanOrEqual(44);
+    }
+  }
+
+  await page.getByRole('button', { name: /流量统计/u }).click();
+  await expect(page.getByText('会话流量分布', { exact: true })).toBeVisible();
+  const statisticsGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const total = browser.document.querySelector('.traffic-total-card');
+    const distribution = browser.document.querySelector(
+      '.traffic-distribution-card',
+    );
+    const rangeButton = browser.document.querySelector(
+      '.traffic-range-switcher button',
+    );
+    if (
+      !(total instanceof browser.HTMLElement) ||
+      !(distribution instanceof browser.HTMLElement) ||
+      !(rangeButton instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    return {
+      totalHeight: total.getBoundingClientRect().height,
+      distributionHeight: distribution.getBoundingClientRect().height,
+      rangeButtonHeight: rangeButton.getBoundingClientRect().height,
+      scrollWidth: browser.document.scrollingElement?.scrollWidth ?? 0,
+      clientWidth: browser.document.scrollingElement?.clientWidth ?? 0,
+    };
+  });
+  expect(statisticsGeometry).not.toBeNull();
+  if (statisticsGeometry) {
+    expect(statisticsGeometry.totalHeight).toBeLessThanOrEqual(300);
+    expect(statisticsGeometry.distributionHeight).toBeLessThanOrEqual(430);
+    expect(statisticsGeometry.rangeButtonHeight).toBeGreaterThanOrEqual(40);
+    expect(statisticsGeometry.scrollWidth).toBeLessThanOrEqual(
+      statisticsGeometry.clientWidth + 1,
+    );
+  }
+
+  await page.getByRole('button', { name: /客服账号/u }).click();
+  await agentRow.getByRole('button', { name: '编辑', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '编辑客服' });
+  await expect(editor).toBeVisible();
+  const editorGeometry = await editor.evaluate((element) => {
+    const browser = globalThis;
+    const input = element.querySelector('input');
+    const footerButton = element.querySelector(
+      '.agent-editor-footer .primary-button',
+    );
+    const rect = element.getBoundingClientRect();
+    return {
+      width: rect.width,
+      height: rect.height,
+      viewportWidth: browser.innerWidth,
+      viewportHeight: browser.innerHeight,
+      radius: Number.parseFloat(browser.getComputedStyle(element).borderRadius),
+      inputFontSize:
+        input instanceof browser.HTMLElement
+          ? Number.parseFloat(browser.getComputedStyle(input).fontSize)
+          : 0,
+      footerButtonHeight:
+        footerButton instanceof browser.HTMLElement
+          ? footerButton.getBoundingClientRect().height
+          : 0,
+    };
+  });
+  expect(editorGeometry.width).toBeGreaterThanOrEqual(
+    editorGeometry.viewportWidth - 1,
+  );
+  expect(editorGeometry.height).toBeGreaterThanOrEqual(
+    editorGeometry.viewportHeight - 1,
+  );
+  expect(editorGeometry.radius).toBe(0);
+  expect(editorGeometry.inputFontSize).toBeGreaterThanOrEqual(16);
+  expect(editorGeometry.footerButtonHeight).toBeGreaterThanOrEqual(48);
+});
 
 test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 650 });

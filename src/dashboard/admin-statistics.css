@@ -508,28 +508,114 @@
 
 @media (max-width: 760px) {
   .traffic-overview-toolbar {
-    padding: 13px;
+    min-height: 0;
+    padding: 12px;
     align-items: stretch;
     flex-direction: column;
+    gap: 11px;
+    border-radius: 14px;
   }
 
   .traffic-range-switcher {
+    width: 100%;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .traffic-range-switcher::-webkit-scrollbar {
+    display: none;
   }
 
   .traffic-range-switcher button {
+    min-width: 68px;
+    min-height: 40px;
     flex: 1 0 auto;
+    font-size: 10px;
   }
 
   .traffic-overview-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
 
-  .traffic-total-card,
+  .traffic-total-card {
+    min-height: 272px;
+    padding: 16px;
+    grid-column: 1;
+    border-radius: 16px;
+  }
+
+  .traffic-total-value {
+    margin-top: 28px;
+  }
+
+  .traffic-total-value > strong {
+    font-size: clamp(44px, 16vw, 60px);
+  }
+
+  .traffic-total-visual {
+    top: 72px;
+    right: 16px;
+    width: 34%;
+    height: 68px;
+    gap: 4px;
+  }
+
+  .traffic-total-visual i {
+    width: 6px;
+  }
+
+  .traffic-total-breakdown {
+    right: 16px;
+    bottom: 54px;
+    left: 16px;
+  }
+
+  .traffic-total-breakdown > div {
+    min-height: 50px;
+  }
+
+  .traffic-total-period {
+    right: 16px;
+    bottom: 15px;
+    left: 16px;
+  }
+
   .traffic-distribution-card,
   .traffic-distribution-card:last-child {
-    min-height: 360px;
+    height: auto;
+    min-height: 0;
     grid-column: 1;
+    border-radius: 16px;
+  }
+
+  .traffic-distribution-card > header {
+    min-height: 58px;
+    padding: 11px 13px;
+  }
+
+  .traffic-distribution-row {
+    min-height: 62px;
+    padding: 7px;
+  }
+
+  .traffic-distribution-list {
+    max-height: 320px;
+    flex: 0 1 auto;
+  }
+
+  .traffic-distribution-empty {
+    min-height: 180px;
+  }
+
+  .traffic-row-copy > strong {
+    font-size: 12px;
+  }
+
+  .traffic-row-copy > small,
+  .traffic-row-value small {
+    font-size: 9px;
   }
 
   .traffic-overview-foot {
@@ -541,5 +627,23 @@
 
   .traffic-overview-foot strong {
     white-space: normal;
+  }
+}
+
+@media (max-width: 390px) {
+  .traffic-overview-toolbar > div:first-child > small {
+    display: none;
+  }
+
+  .traffic-range-switcher button {
+    min-width: 64px;
+  }
+
+  .traffic-total-card {
+    min-height: 260px;
+  }
+
+  .traffic-distribution-list {
+    max-height: 292px;
   }
 }
