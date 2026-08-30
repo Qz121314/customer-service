@@ -85,8 +85,7 @@ export async function rejectUnassignedConversationStart(
        SET accepted_count = MAX(accepted_count - 1, 0),
            updated_at = ?4
        WHERE site_id = ?1
-         AND subject_key IN (?2, ?3)
-         AND changes() = 1`,
+         AND subject_key IN (?2, ?3)`,
     ).bind(row.site_id, visitorLimitKey, sourceLimitKey, now),
     env.DB.prepare(
       `DELETE FROM visitors
