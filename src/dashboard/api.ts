@@ -3,6 +3,13 @@ export type AdminSessionState = {
   configured: boolean;
 };
 
+export type NoAgentMessageFormat = 'plain' | 'markdown';
+
+export type NoAgentMessageSettings = {
+  message: string;
+  format: NoAgentMessageFormat;
+};
+
 export type ProductCatalogItem = {
   id: string;
   title: string;
@@ -197,6 +204,7 @@ export type AgentInbox = {
 type AdminBootstrapPayload = {
   agents: AgentAccount[];
   products: ProductCatalogItem[];
+  noAgentMessage: NoAgentMessageSettings;
 };
 
 type AgentBootstrapPayload = AgentSessionState & {
@@ -213,6 +221,7 @@ const errorMessages: Record<string, string> = {
   ADMIN_NOT_CONFIGURED: '管理员密码尚未配置',
   NOT_FOUND: '请求的内容不存在',
   INVALID_MESSAGE: '消息内容无效',
+  INVALID_NO_AGENT_MESSAGE: '无客服提示语无效，请输入内容并选择格式',
   INVALID_STATUS: '会话状态无效',
   INVALID_AGENT: '客服账号信息不完整',
   INVALID_AGENT_LABEL: '客服标记最多 10 个字符',
@@ -250,6 +259,24 @@ export async function adminLogin(password: string): Promise<void> {
 
 export async function adminLogout(): Promise<void> {
   await request('/api/auth/logout', { method: 'POST' });
+}
+
+export async function getNoAgentMessage(): Promise<NoAgentMessageSettings> {
+  const response = await getAdminBootstrap();
+  return response.noAgentMessage;
+}
+
+export async function updateNoAgentMessage(
+  settings: NoAgentMessageSettings,
+): Promise<NoAgentMessageSettings> {
+  const response = await request<{ noAgentMessage: NoAgentMessageSettings }>(
+    '/api/admin/no-agent-message',
+    {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    },
+  );
+  return response.noAgentMessage;
 }
 
 export async function getAgents(): Promise<AgentAccount[]> {
