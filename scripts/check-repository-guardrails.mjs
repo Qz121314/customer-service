@@ -34,7 +34,9 @@ const [
 const packageJson = JSON.parse(packageText);
 const scripts = packageJson.scripts ?? {};
 const componentConfig = JSON.parse(componentConfigText);
-const dashboardTsxFiles = dashboardFiles.filter((name) => name.endsWith('.tsx'));
+const dashboardTsxFiles = dashboardFiles.filter((name) =>
+  name.endsWith('.tsx'),
+);
 const dashboardCssFiles = dashboardFiles.filter((name) =>
   name.endsWith('.css'),
 );
