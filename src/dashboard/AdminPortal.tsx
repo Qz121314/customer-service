@@ -340,6 +340,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           <button
             type="button"
             className={section === 'agents' ? 'active' : ''}
+            aria-current={section === 'agents' ? 'page' : undefined}
             onClick={() => setSection('agents')}
           >
             <span className="admin-nav-label">
@@ -351,6 +352,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           <button
             type="button"
             className={section === 'statistics' ? 'active' : ''}
+            aria-current={section === 'statistics' ? 'page' : undefined}
             onClick={() => setSection('statistics')}
           >
             <span className="admin-nav-label">
@@ -364,13 +366,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           <a href="/agent" target="_blank" rel="noreferrer">
             <span>
               <UiIcon name="external" />
-              坐席工作台
+              <span className="admin-sidebar-foot-label">坐席工作台</span>
             </span>
           </a>
           <button type="button" onClick={() => void onLogout()}>
             <span>
               <UiIcon name="logout" />
-              退出管理
+              <span className="admin-sidebar-foot-label">退出管理</span>
             </span>
           </button>
         </div>
@@ -519,7 +521,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                             agent.todayConversationCount,
                         );
                         return (
-                          <tr key={agent.id}>
+                          <tr
+                            key={agent.id}
+                            className={
+                              !agent.isEnabled
+                                ? 'is-disabled'
+                                : agentIsLimited(agent)
+                                  ? 'is-limited'
+                                  : undefined
+                            }
+                          >
                             <td>
                               <div className="admin-agent-cell">
                                 <span className="admin-agent-avatar">

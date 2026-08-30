@@ -472,6 +472,24 @@
   }
 }
 
+@media (max-width: 720px) {
+  .admin-console .modal-backdrop:has(.agent-modal) {
+    background: #f4f5f7;
+    backdrop-filter: none;
+  }
+
+  .admin-console .agent-modal {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .admin-console .agent-editor-header,
+  .admin-console .agent-editor-footer {
+    background: rgb(255 255 255 / 98%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-console *,
   .admin-console *::before,
