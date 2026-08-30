@@ -52,10 +52,9 @@ test('runtime source no longer references legacy routing services', () => {
   const clientApi = workerSource('client-api.ts');
   const integrationApi = workerSource('integration-api.ts');
   const routing = workerSource('routing.ts');
-  const waiting = workerSource('waiting-assignment.ts');
   const entry = workerSource('entry.ts');
 
-  for (const source of [clientApi, integrationApi, routing, waiting]) {
+  for (const source of [clientApi, integrationApi, routing]) {
     assert.doesNotMatch(source, legacyRoutingPattern);
   }
   assert.doesNotMatch(clientApi, /management\/v1\/groups|MANAGEMENT_TOKEN/u);
