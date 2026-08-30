@@ -290,7 +290,7 @@ test('0035 marks every pre-existing conversation resolved without retroactive gr
     database,
     `SELECT outcome, agent_id, message_id
      FROM conversation_automation_receipts
-     WHERE conversation_id = 'legacy-waiting'
+     WHERE conversation_id = 'legacy-closed'
        AND automation_key = 'initial_greeting'`,
   );
   assert.equal(automation.outcome, 'skipped');
