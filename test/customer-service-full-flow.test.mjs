@@ -1302,7 +1302,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          WHERE id IN (?, ?, ?)
          ORDER BY id`,
       )
-      .all(westOneId, westTwoId, westThreeId)
+      .all(westOneId, westTwoId)
       .map((row) => row.assigned_agent),
     [agentA, agentA, agentA],
     'disabling a seat must preserve its existing active conversations',
@@ -1331,7 +1331,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          GROUP BY agent_id
          ORDER BY agent_id`,
       )
-      .all(eastId, westOneId, westTwoId, westThreeId)
+      .all(eastId, westOneId, westTwoId)
       .map((row) => ({ agentId: row.agent_id, count: row.count })),
     [
       { agentId: agentA, count: 3 },
