@@ -32,6 +32,11 @@ async function seedConversationAndAgent(page) {
   });
   expect(createAgent.ok()).toBeTruthy();
 
+  const agentLogin = await page.request.post(url('/api/agent/auth/login'), {
+    data: { username: agentUsername, password: agentPassword },
+  });
+  expect(agentLogin.ok()).toBeTruthy();
+
   const conversation = await page.request.post(
     url('/client/v1/conversations'),
     {
