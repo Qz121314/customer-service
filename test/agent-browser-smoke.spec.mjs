@@ -53,7 +53,12 @@ async function seedConversationAndAgent(page) {
       },
     },
   );
-  expect(noAgentConversation.status()).toBe(503);
+  const noAgentStatus = noAgentConversation.status();
+  const noAgentBody = await noAgentConversation.text();
+  console.log(
+    `No-agent smoke response: ${noAgentStatus} ${noAgentBody}`,
+  );
+  expect(noAgentStatus).toBe(503);
 
   const createdAgent = await createAgent.json();
   const routeAgent = await page.request.patch(
