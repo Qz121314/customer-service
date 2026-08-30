@@ -366,6 +366,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
       visitorId,
     );
     if (conversation) {
+      if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
+        return noAgentResponse(c, site);
+      }
       return c.json({
         conversation: await conversationDetail(
           c.env.DB,
@@ -402,6 +405,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       visitorId,
     );
+    if (
+      conversation &&
+      !(await reusableConversationIsAvailable(c.env.DB, conversation))
+    ) {
+      conversation = null;
+    }
     if (conversation) {
       const handoffOwner = await rememberSourceHandoff(
         c.env.DB,
@@ -1345,6 +1354,29 @@ async function ownedConversation(
     )
     .bind(conversationId, siteId, visitorId)
     .first<ConversationRow>();
+}
+
+async function reusableConversationIsAvailable(
+  db: D1Database,
+  conversation: ConversationRow,
+): Promise<boolean> {
+  if (conversation.status === 'closed') return true;
+  if (!conversation.assigned_agent) return false;
+  const agent = await db
+    .prepare(
+      `SELECT 1 AS available
+       FROM agents
+       WHERE id = ?1
+         AND site_id = ?2
+         AND is_enabled = 1
+         AND status = 'online'
+         AND last_seen_at IS NOT NULL
+         AND datetime(last_seen_at) > datetime('now', '-2 minutes')
+       LIMIT 1`,
+    )
+    .bind(conversation.assigned_agent, conversation.site_id)
+    .first<{ available: number }>();
+  return agent?.available === 1;
 }
 
 function isAfterReuseBoundary(value: string): boolean {
