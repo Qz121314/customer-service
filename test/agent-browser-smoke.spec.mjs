@@ -22,7 +22,7 @@ async function seedConversationAndAgent(page) {
       name: 'UI Smoke Agent',
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'product', productIds: [productId] },
+      routingScope: { type: 'none' },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,
