@@ -1,0 +1,2 @@
+ALTER TABLE agents
+  ADD COLUMN admin_label TEXT NOT NULL DEFAULT '';

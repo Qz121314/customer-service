@@ -15,6 +15,7 @@ type AdminSection = 'agents' | 'workspace';
 type AgentDraft = {
   id: string | null;
   name: string;
+  adminLabel: string;
   username: string;
   password: string;
   routingScope: AgentRoutingScope;
@@ -30,6 +31,7 @@ type AgentDraft = {
 const emptyAgentDraft: AgentDraft = {
   id: null,
   name: '',
+  adminLabel: '',
   username: '',
   password: '',
   routingScope: { type: 'none' },

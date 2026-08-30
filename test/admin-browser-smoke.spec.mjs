@@ -23,6 +23,7 @@ async function seedAdminStatistics(
   const createAgent = await page.request.post(url('/api/admin/agents'), {
     data: {
       name,
+      adminLabel: '1号',
       username,
       password: agentPassword,
       routingScope: { type: 'none' },
@@ -55,6 +56,9 @@ test('admin mobile viewport keeps monitoring and utilities touch-friendly', asyn
     .filter({ hasText: 'UI Admin Mobile Agent' })
     .first();
   await expect(agentRow).toBeVisible();
+  const agentMarker = agentRow.getByText('1号', { exact: true });
+  await expect(agentMarker).toBeVisible();
+  await expect(agentMarker).toHaveCSS('color', 'rgb(217, 45, 32)');
 
   const agentsGeometry = await page.evaluate(() => {
     const browser = globalThis;
@@ -167,6 +171,7 @@ test('admin mobile viewport keeps monitoring and utilities touch-friendly', asyn
   await agentRow.getByRole('button', { name: '编辑', exact: true }).click();
   const editor = page.getByRole('dialog', { name: '编辑客服' });
   await expect(editor).toBeVisible();
+  await expect(editor.getByLabel('客服标记')).toHaveValue('1号');
   const editorGeometry = await editor.evaluate((element) => {
     const browser = globalThis;
     const input = element.querySelector('input');
