@@ -13,10 +13,7 @@ test('waiting recovery delegates discovery and ownership to canonical routing', 
     waiting,
     /findRoutableWaitingConversationIds\(env\.DB, limit\)/u,
   );
-  assert.match(
-    waiting,
-    /assignConversationAgent\(env\.DB, conversationId\)/u,
-  );
+  assert.match(waiting, /assignConversationAgent\(env\.DB, conversationId\)/u);
   assert.match(waiting, /assignment\.id/u);
   assert.match(waiting, /MAX_RECOVERY_ASSIGNMENTS = 10/u);
   assert.ok(
