@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
-import type { NoAgentMessageFormat, NoAgentMessageSettings } from "./api";
-import { Button } from "./ui";
+import { useEffect, useState, type FormEvent } from 'react';
+import type { NoAgentMessageFormat, NoAgentMessageSettings } from './api';
+import { Button } from './ui';
 
 export function NoAgentMessageSettingsPanel({
   settings,
@@ -51,17 +51,17 @@ export function NoAgentMessageSettingsPanel({
         >
           <button
             type="button"
-            className={draft.format === "plain" ? "active" : ""}
-            aria-pressed={draft.format === "plain"}
-            onClick={() => selectFormat("plain")}
+            className={draft.format === 'plain' ? 'active' : ''}
+            aria-pressed={draft.format === 'plain'}
+            onClick={() => selectFormat('plain')}
           >
             普通文本
           </button>
           <button
             type="button"
-            className={draft.format === "markdown" ? "active" : ""}
-            aria-pressed={draft.format === "markdown"}
-            onClick={() => selectFormat("markdown")}
+            className={draft.format === 'markdown' ? 'active' : ''}
+            aria-pressed={draft.format === 'markdown'}
+            onClick={() => selectFormat('markdown')}
           >
             Markdown
           </button>
@@ -84,15 +84,15 @@ export function NoAgentMessageSettingsPanel({
             required
           />
           <small>
-            {draft.format === "markdown"
-              ? "保存 Markdown 原文；访客端按 Markdown 格式安全渲染。"
-              : "按普通文本显示，不解析 Markdown。"}
+            {draft.format === 'markdown'
+              ? '保存 Markdown 原文；访客端按 Markdown 格式安全渲染。'
+              : '按普通文本显示，不解析 Markdown。'}
           </small>
         </label>
 
         <div className="no-agent-settings-actions">
           <Button type="submit" disabled={saving || !draft.message.trim()}>
-            {saving ? "保存中…" : "保存提示语"}
+            {saving ? '保存中…' : '保存提示语'}
           </Button>
           {saved ? <span role="status">已保存</span> : null}
         </div>
