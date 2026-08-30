@@ -384,6 +384,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     new Date(toIso(replay.reuse_expires_at) ?? '').getTime() > Date.now();
   const reuseIsActive =
     reuseIsFresh &&
+    Boolean(replay?.reuse_assigned_agent) &&
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
   const affinityAgentId =
     reuseIsFresh && !reuseIsActive
@@ -1210,7 +1211,8 @@ function noAgentResponse(
   site: SiteRow,
 ) {
   const message = site.no_agent_message?.trim() || DEFAULT_NO_AGENT_MESSAGE;
-  const format = normalizeNoAgentMessageFormat(site.no_agent_message_format) ?? 'plain';
+  const format =
+    normalizeNoAgentMessageFormat(site.no_agent_message_format) ?? 'plain';
   return c.json(
     {
       error: {
