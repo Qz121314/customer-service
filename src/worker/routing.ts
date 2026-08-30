@@ -9,6 +9,7 @@ export type AgentAssignmentResult = AgentAssignment & {
 };
 
 const ROUTING_TIME_ZONE = 'America/Los_Angeles';
+const MAX_WAITING_ASSIGNMENTS = 10;
 
 export function routingBusinessDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -53,21 +54,15 @@ function assignmentResult(
 
 /**
  * Assign one conversation to one enabled, online seat with matching routing
- * scope.
+ * scope. Paid quota and the daily reception limit are eligibility gates only;
+ * neither one changes candidate priority.
  *
- * Fresh traffic requires an enabled, online, configured seat that is below its
- * Los Angeles business-day reception cap (0 means unlimited) and has paid
- * traffic quota available when quota enforcement is enabled. Busy and offline
- * seats remain connected to their existing conversations but do not receive new
- * assignments. A conversation that already has an immutable reception receipt
- * may be recovered after a seat is deleted without consuming or requiring a
- * second daily/paid traffic unit.
- *
- * An active two-hour CTA affinity is preferred when that seat is otherwise
- * eligible. All other traffic follows strict deterministic round robin through a
- * monotonic database cursor. Candidate selection and assignment are performed in
- * one D1 statement; database triggers advance the cursor and maintain daily
- * counts in the same write path.
+ * CTA affinity is the only priority override. All other eligible traffic uses a
+ * product-local circular cursor, so assignments for one product never change the
+ * order of another product. Busy/offline/disabled/exhausted seats are skipped
+ * without receiving a catch-up priority when they later become eligible again.
+ * Candidate selection and assignment remain one D1 statement; the product cursor
+ * advances through a database trigger in the same write path.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -99,6 +94,13 @@ export async function assignConversationAgent(
            AND c.expires_at > CURRENT_TIMESTAMP
          LIMIT 1
        ),
+       cursor AS (
+         SELECT rr.last_agent_id
+         FROM context ctx
+         LEFT JOIN routing_round_robin_cursors rr
+           ON rr.site_id = ctx.site_id
+          AND rr.product_id = COALESCE(ctx.product_id, '')
+       ),
        matching AS (
          SELECT DISTINCT ars.agent_id
          FROM agent_routing_scopes ars
@@ -129,6 +131,7 @@ export async function assignConversationAgent(
          FROM matching m
          JOIN agents a ON a.id = m.agent_id
          JOIN context ctx ON ctx.site_id = a.site_id
+         CROSS JOIN cursor rr
          WHERE a.is_enabled = 1
            AND a.status = 'online'
            AND a.username IS NOT NULL
@@ -158,7 +161,10 @@ export async function assignConversationAgent(
              THEN 0
              ELSE 1
            END ASC,
-           a.round_robin_seq ASC,
+           CASE
+             WHEN rr.last_agent_id IS NULL OR a.id > rr.last_agent_id THEN 0
+             ELSE 1
+           END ASC,
            a.id ASC
          LIMIT 1
        )
@@ -205,4 +211,106 @@ async function assignedAgent(
     { id: assignment.id, name: assignment.name },
     { newlyAssigned: false, assignedAt: assignment.assigned_at },
   );
+}
+
+/**
+ * Return only waiting conversations that currently have at least one eligible
+ * receiver. This prevents old unroutable rows from blocking newer routable
+ * traffic while preserving the same scope, status, daily-limit and paid-quota
+ * eligibility gates used by the canonical assignment path.
+ */
+export async function findRoutableWaitingConversationIds(
+  db: D1Database,
+  requestedLimit = MAX_WAITING_ASSIGNMENTS,
+): Promise<string[]> {
+  const limit = Math.max(
+    1,
+    Math.min(MAX_WAITING_ASSIGNMENTS, Math.trunc(requestedLimit)),
+  );
+  const businessDate = routingBusinessDate();
+  const result = await db
+    .prepare(
+      `WITH waiting_context AS (
+         SELECT
+           c.id,
+           c.site_id,
+           c.product_id,
+           COALESCE(c.section_id, p.section_id) AS section_id,
+           COALESCE(c.category_id, p.category_id) AS category_id,
+           c.last_message_at,
+           EXISTS (
+             SELECT 1
+             FROM agent_traffic_receipts receipt
+             WHERE receipt.conversation_id = c.id
+           ) AS already_received
+         FROM conversations c
+         LEFT JOIN product_catalog p
+           ON p.site_id = c.site_id
+          AND p.id = c.product_id
+         WHERE c.assigned_agent IS NULL
+           AND c.status IN ('open', 'pending')
+           AND c.expires_at > CURRENT_TIMESTAMP
+       ),
+       routable AS (
+         SELECT ctx.id, ctx.last_message_at
+         FROM waiting_context ctx
+         WHERE EXISTS (
+           SELECT 1
+           FROM agent_routing_scopes ars
+           JOIN agents a
+             ON a.id = ars.agent_id
+            AND a.site_id = ars.site_id
+           WHERE ars.site_id = ctx.site_id
+             AND ars.is_enabled = 1
+             AND a.is_enabled = 1
+             AND a.status = 'online'
+             AND a.username IS NOT NULL
+             AND a.password_hash IS NOT NULL
+             AND (
+               (
+                 COALESCE(ctx.product_id, '') <> ''
+                 AND ars.scope_type = 'product'
+                 AND ars.product_id = ctx.product_id
+               )
+               OR (
+                 COALESCE(ctx.section_id, '') <> ''
+                 AND ars.scope_type = 'section'
+                 AND ars.section_id = ctx.section_id
+               )
+               OR (
+                 COALESCE(ctx.section_id, '') <> ''
+                 AND COALESCE(ctx.category_id, '') <> ''
+                 AND ars.scope_type = 'category'
+                 AND ars.section_id = ctx.section_id
+                 AND ars.category_id = ctx.category_id
+               )
+             )
+             AND (
+               ctx.already_received = 1
+               OR a.daily_conversation_limit <= 0
+               OR COALESCE((
+                 SELECT daily.conversation_count
+                 FROM agent_daily_stats daily
+                 WHERE daily.site_id = a.site_id
+                   AND daily.agent_id = a.id
+                   AND daily.business_date = ?1
+                 LIMIT 1
+               ), 0) < a.daily_conversation_limit
+             )
+             AND (
+               ctx.already_received = 1
+               OR a.traffic_quota_enabled = 0
+               OR a.traffic_quota_used < a.traffic_quota_total
+             )
+         )
+       )
+       SELECT id
+       FROM routable
+       ORDER BY last_message_at ASC, id ASC
+       LIMIT ?2`,
+    )
+    .bind(businessDate, limit)
+    .all<{ id: string }>();
+
+  return (result.results ?? []).map((row) => row.id);
 }
