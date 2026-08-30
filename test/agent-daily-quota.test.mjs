@@ -12,6 +12,8 @@ const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 const roundRobinMigration = '../migrations/0042_simple_round_robin_routing.sql';
 const dailyLimitMigration =
   '../migrations/0044_daily_reception_limit_guard.sql';
+const productRoundRobinMigration =
+  '../migrations/0048_product_round_robin.sql';
 
 function d1(database) {
   return {
@@ -139,6 +141,7 @@ async function createDatabase(agents) {
 
   database.exec(await read(roundRobinMigration));
   database.exec(await read(dailyLimitMigration));
+  database.exec(await read(productRoundRobinMigration));
   return database;
 }
 
@@ -209,11 +212,19 @@ test('daily cap skips capped seats and leaves overflow waiting', async () => {
   assert.equal(count(database, 'agent-b'), 2);
 
   const before = database
-    .prepare('SELECT id, round_robin_seq FROM agents ORDER BY id')
+    .prepare(
+      `SELECT site_id, product_id, last_agent_id
+       FROM routing_round_robin_cursors
+       ORDER BY site_id, product_id`,
+    )
     .all();
   assert.equal(await assign(database, 'conversation-4'), null);
   const after = database
-    .prepare('SELECT id, round_robin_seq FROM agents ORDER BY id')
+    .prepare(
+      `SELECT site_id, product_id, last_agent_id
+       FROM routing_round_robin_cursors
+       ORDER BY site_id, product_id`,
+    )
     .all();
   assert.deepEqual(after, before);
 
