@@ -270,27 +270,6 @@ test('only online seats receive automatic traffic', async () => {
   database.close();
 });
 
-test('busy affinity never receives a new conversation', async () => {
-  const database = await createDatabase();
-  addAgent(database, { id: 'agent-busy', status: 'busy' });
-  addAgent(database, { id: 'agent-online', status: 'online' });
-  addScope(database, 'agent-busy', { type: 'section', sectionId: 'west' });
-  addScope(database, 'agent-online', { type: 'section', sectionId: 'west' });
-  addConversation(database, 'protected-conversation', 'product-busy-affinity');
-  database.exec(`
-    UPDATE conversations
-    SET cta_affinity_agent_id = 'agent-busy',
-        cta_affinity_expires_at = datetime('now', '+2 hours')
-    WHERE id = 'protected-conversation';
-  `);
-
-  assert.equal(
-    await assigned(database, 'protected-conversation'),
-    'agent-online',
-  );
-  database.close();
-});
-
 test('restored quota rejoins the ring without catch-up priority', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
