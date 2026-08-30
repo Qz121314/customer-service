@@ -1570,3 +1570,58 @@ test('admin permanently deletes an agent while preserving historical records', a
     3,
   );
 });
+
+test('admin can configure the no-agent response as plain text or Markdown', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: fakeRooms().namespace,
+    ADMIN_PASSWORD: 'admin-password',
+  };
+  const headers = {
+    cookie: adminCookie('admin-password'),
+    'content-type': 'application/json',
+  };
+
+  const initial = await json(
+    await adminConfigApi.request(
+      '/api/admin/no-agent-message',
+      { headers },
+      env,
+    ),
+  );
+  assert.equal(initial.noAgentMessage.format, 'plain');
+  assert.equal(initial.noAgentMessage.message.length > 0, true);
+
+  const saved = await json(
+    await adminConfigApi.request(
+      '/api/admin/no-agent-message',
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          message: '  **暂时没有客服**\\n\\n请稍后再试。  ',
+          format: 'markdown',
+        }),
+      },
+      env,
+    ),
+  );
+  assert.deepEqual(saved.noAgentMessage, {
+    message: '**暂时没有客服**\\n\\n请稍后再试。',
+    format: 'markdown',
+  });
+  assert.deepEqual(
+    database
+      .prepare(
+        'SELECT no_agent_message, no_agent_message_format FROM sites WHERE id = ?',
+      )
+      .get('default'),
+    {
+      no_agent_message: '**暂时没有客服**\\n\\n请稍后再试。',
+      no_agent_message_format: 'markdown',
+    },
+  );
+  database.close();
+});
