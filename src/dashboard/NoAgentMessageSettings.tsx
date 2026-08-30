@@ -24,8 +24,12 @@ export function NoAgentMessageSettingsPanel({
   async function submit(event: FormEvent) {
     event.preventDefault();
     setSaved(false);
-    await onSave(draft);
-    setSaved(true);
+    try {
+      await onSave(draft);
+      setSaved(true);
+    } catch {
+      // The parent displays the request error.
+    }
   }
 
   function selectFormat(format: NoAgentMessageFormat) {
