@@ -81,6 +81,11 @@ async function createConversation(page) {
     sourceHandoffId,
     clientMessageId: 'ui-smoke-message-1',
   });
+  console.log(
+    'SMOKE_CONVERSATION',
+    conversation.status(),
+    await conversation.text(),
+  );
   expect(conversation.ok()).toBeTruthy();
 }
 
