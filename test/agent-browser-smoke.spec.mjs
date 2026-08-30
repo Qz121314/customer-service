@@ -66,6 +66,8 @@ async function loginAgent(page) {
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
   await createConversation(page);
+  await page.reload();
+  await expect(page.getByText('我的会话')).toBeVisible();
   await expect(
     page.getByRole('button', { name: /UI Smoke Product/u }),
   ).toBeVisible();
