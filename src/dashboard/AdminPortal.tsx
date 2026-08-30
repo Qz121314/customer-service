@@ -5,6 +5,7 @@ import {
   AgentQuotaLedger,
   ProductCatalogItem,
   TrafficOverviewStats,
+  NoAgentMessageSettings,
   adminLogin,
   adminLogout,
   createAgent,
@@ -14,7 +15,9 @@ import {
   getAgentQuotaLedger,
   getAgents,
   getProductCatalog,
+  getNoAgentMessage,
   updateAgent,
+  updateNoAgentMessage,
 } from './api';
 import {
   LoadState,
@@ -34,9 +37,10 @@ import { UiIcon } from './icons';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
+import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import { Button } from './ui';
 
-type AdminView = 'agents' | 'statistics';
+type AdminView = 'agents' | 'statistics' | 'settings';
 type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
 type TrafficRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
 
@@ -90,6 +94,8 @@ export function AdminPortal() {
 function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
+  const [noAgentMessage, setNoAgentMessage] =
+    useState<NoAgentMessageSettings | null>(null);
   const [section, setSection] = useState<AdminView>('agents');
   const [agentSearch, setAgentSearch] = useState('');
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
@@ -97,6 +103,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
@@ -120,12 +127,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   );
 
   const refresh = useCallback(async () => {
-    const [nextAgents, nextProducts] = await Promise.all([
+    const [nextAgents, nextProducts, nextNoAgentMessage] = await Promise.all([
       getAgents(),
       getProductCatalog(),
+      getNoAgentMessage(),
     ]);
     setAgents(nextAgents);
     setProducts(nextProducts);
+    setNoAgentMessage(nextNoAgentMessage);
   }, []);
 
   useEffect(() => {
@@ -297,6 +306,20 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
+  async function saveNoAgentMessage(settings: NoAgentMessageSettings) {
+    setSettingsSaving(true);
+    setError('');
+    try {
+      const nextSettings = await updateNoAgentMessage(settings);
+      setNoAgentMessage(nextSettings);
+    } catch (reason) {
+      setError(message(reason, '保存无客服提示语失败'));
+      throw reason;
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   async function removeAgent(agent: Pick<AgentAccount, 'id' | 'name'>) {
     if (deletingAgentId) return;
     const confirmed = window.confirm(
@@ -323,11 +346,18 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   }
 
   const editingAgentId = draft.id;
-  const sectionTitle = section === 'agents' ? '客服坐席' : '流量统计';
+  const sectionTitle =
+    section === 'agents'
+      ? '客服坐席'
+      : section === 'settings'
+        ? '访客体验'
+        : '流量统计';
   const sectionHint =
     section === 'agents'
       ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
-      : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
+      : section === 'settings'
+        ? '配置产品无客服可用时返回给访客的提示语。'
+        : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
 
   return (
     <div className="admin-console">
@@ -351,6 +381,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <span>客服账号</span>
             </span>
             <small>{agents.length}</small>
+          </button>
+          <button
+            type="button"
+            className={section === 'settings' ? 'active' : ''}
+            aria-current={section === 'settings' ? 'page' : undefined}
+            onClick={() => setSection('settings')}
+          >
+            <span className="admin-nav-label">
+              <UiIcon name="settings" />
+              <span>访客体验</span>
+            </span>
           </button>
           <button
             type="button"
@@ -405,6 +446,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
         )}
 
+        {section === 'settings' && noAgentMessage ? (
+          <NoAgentMessageSettingsPanel
+            settings={noAgentMessage}
+            saving={settingsSaving}
+            onSave={saveNoAgentMessage}
+          />
+        ) : null}
         {section === 'agents' && (
           <div className="admin-agent-layout">
             <section className="admin-overview-strip" aria-label="客服概览">
