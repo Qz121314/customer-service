@@ -208,7 +208,9 @@ test('one product receives traffic in deterministic circular round robin', async
 
 test('overlapping scopes keep independent product round robin cursors', async () => {
   const database = await createDatabase();
-  for (const id of ['agent-a', 'agent-b', 'agent-c']) addAgent(database, { id });
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+    addAgent(database, { id });
+  }
   addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
   addScope(database, 'agent-a', { type: 'section', sectionId: 'east' });
   addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
@@ -343,7 +345,10 @@ test('disabled or quota-exhausted affinity falls back without waiting', async ()
     WHERE id = 'exhausted-affinity';
   `);
 
-  assert.equal(await assigned(database, 'disabled-affinity'), 'available-agent');
+  assert.equal(
+    await assigned(database, 'disabled-affinity'),
+    'available-agent',
+  );
   assert.equal(
     await assigned(database, 'exhausted-affinity'),
     'available-agent',
@@ -374,12 +379,18 @@ test('section, category and product scopes remain authoritative', async () => {
   });
   addConversation(database, 'product-conversation', 'special-product');
 
-  assert.equal(await assigned(database, 'section-conversation'), 'section-agent');
+  assert.equal(
+    await assigned(database, 'section-conversation'),
+    'section-agent',
+  );
   assert.equal(
     await assigned(database, 'category-conversation'),
     'category-agent',
   );
-  assert.equal(await assigned(database, 'product-conversation'), 'product-agent');
+  assert.equal(
+    await assigned(database, 'product-conversation'),
+    'product-agent',
+  );
   database.close();
 });
 
@@ -392,7 +403,10 @@ test('conversation without a matching scope remains unassigned', async () => {
   });
   addConversation(database, 'conversation-1', 'product-without-scope');
 
-  assert.equal(await assignConversationAgent(d1(database), 'conversation-1'), null);
+  assert.equal(
+    await assignConversationAgent(d1(database), 'conversation-1'),
+    null,
+  );
   database.close();
 });
 
@@ -402,10 +416,15 @@ test('waiting discovery skips blocked head rows and returns routable traffic', a
   addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
 
   for (let index = 1; index <= 10; index += 1) {
-    addConversation(database, `blocked-${String(index).padStart(2, '0')}`, `blocked-product-${index}`, {
-      sectionId: 'blocked',
-      lastMessageAt: `2026-08-01 00:00:${String(index).padStart(2, '0')}`,
-    });
+    addConversation(
+      database,
+      `blocked-${String(index).padStart(2, '0')}`,
+      `blocked-product-${index}`,
+      {
+        sectionId: 'blocked',
+        lastMessageAt: `2026-08-01 00:00:${String(index).padStart(2, '0')}`,
+      },
+    );
   }
   addConversation(database, 'routable-11', 'west-product', {
     sectionId: 'west',
