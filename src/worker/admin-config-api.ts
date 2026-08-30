@@ -1,14 +1,14 @@
-import { Hono, type Context } from 'hono';
-import { hashAgentPassword } from './agent-password';
-import { broadcastClientConversationEvent } from './client-api';
-import { assignConversationAgent } from './routing';
-import { calendarMonthPeriod } from '../shared/calendar-month';
+import { Hono, type Context } from "hono";
+import { hashAgentPassword } from "./agent-password";
+import { broadcastClientConversationEvent } from "./client-api";
+import { assignConversationAgent } from "./routing";
+import { calendarMonthPeriod } from "../shared/calendar-month";
 import {
   DEFAULT_NO_AGENT_MESSAGE,
   normalizeNoAgentMessage,
   normalizeNoAgentMessageFormat,
   type NoAgentMessageFormat,
-} from './no-agent-message';
+} from "./no-agent-message";
 
 type Bindings = {
   DB: D1Database;
@@ -28,7 +28,7 @@ type AgentRow = {
   name: string;
   admin_label: string;
   username: string | null;
-  status: 'online' | 'busy' | 'offline';
+  status: "online" | "busy" | "offline";
   is_enabled: number;
   daily_conversation_limit: number;
   traffic_quota_enabled: number;
@@ -53,7 +53,7 @@ type ProductRow = {
   is_enabled: number;
 };
 
-type ScopeType = 'section' | 'category' | 'product';
+type ScopeType = "section" | "category" | "product";
 
 type ScopeRow = {
   agent_id: string;
@@ -74,17 +74,17 @@ type QuotaAdjustmentRow = {
 };
 
 type AgentRoutingScope =
-  | { type: 'none' }
-  | { type: 'section'; sectionIds: string[] }
-  | { type: 'category'; sectionId: string; categoryIds: string[] }
-  | { type: 'product'; productIds: string[] };
+  | { type: "none" }
+  | { type: "section"; sectionIds: string[] }
+  | { type: "category"; sectionId: string; categoryIds: string[] }
+  | { type: "product"; productIds: string[] };
 
-const SESSION_COOKIE = 'cs_session';
-const REPORTING_TIME_ZONE = 'America/Los_Angeles';
+const SESSION_COOKIE = "cs_session";
+const REPORTING_TIME_ZONE = "America/Los_Angeles";
 
 export const adminConfigApi = new Hono<Env>();
 
-adminConfigApi.get('/api/admin/bootstrap', async (c) => {
+adminConfigApi.get("/api/admin/bootstrap", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const [agents, products, noAgentMessage] = await Promise.all([
     loadAgents(c.env.DB),
@@ -94,18 +94,20 @@ adminConfigApi.get('/api/admin/bootstrap', async (c) => {
   return c.json({ agents, products, noAgentMessage });
 });
 
-adminConfigApi.get('/api/admin/no-agent-message', async (c) => {
+adminConfigApi.get("/api/admin/no-agent-message", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   return c.json({ noAgentMessage: await loadNoAgentMessage(c.env.DB) });
 });
 
-adminConfigApi.put('/api/admin/no-agent-message', async (c) => {
+adminConfigApi.put("/api/admin/no-agent-message", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const body = await readJson<{ message?: unknown; format?: unknown }>(c.req.raw);
+  const body = await readJson<{ message?: unknown; format?: unknown }>(
+    c.req.raw,
+  );
   const message = normalizeNoAgentMessage(body?.message);
   const format = normalizeNoAgentMessageFormat(body?.format);
   if (!message || !format) {
-    return c.json({ error: 'INVALID_NO_AGENT_MESSAGE' }, 400);
+    return c.json({ error: "INVALID_NO_AGENT_MESSAGE" }, 400);
   }
   await c.env.DB.prepare(
     `UPDATE sites
@@ -122,23 +124,23 @@ adminConfigApi.put('/api/admin/no-agent-message', async (c) => {
   });
 });
 
-adminConfigApi.get('/api/admin/agents', async (c) => {
+adminConfigApi.get("/api/admin/agents", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   return c.json({ agents: await loadAgents(c.env.DB) });
 });
 
-adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
+adminConfigApi.get("/api/admin/traffic-stats", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const requestedFrom = normalizeReportingDate(c.req.query('from'));
-  const requestedTo = normalizeReportingDate(c.req.query('to'));
+  const requestedFrom = normalizeReportingDate(c.req.query("from"));
+  const requestedTo = normalizeReportingDate(c.req.query("to"));
   if (!requestedFrom || !requestedTo || requestedFrom > requestedTo) {
-    return c.json({ error: 'INVALID_REPORTING_RANGE' }, 400);
+    return c.json({ error: "INVALID_REPORTING_RANGE" }, 400);
   }
   const retainedFrom = reportingRetentionCutoff();
   const today = reportingBusinessDate();
   const from = requestedFrom < retainedFrom ? retainedFrom : requestedFrom;
   const to = requestedTo > today ? today : requestedTo;
-  if (from > to) return c.json({ error: 'REPORTING_RANGE_EXPIRED' }, 400);
+  if (from > to) return c.json({ error: "REPORTING_RANGE_EXPIRED" }, 400);
   const result = await c.env.DB.prepare(
     `WITH scoped AS MATERIALIZED (
        SELECT product_id, product_title, agent_id, agent_name
@@ -170,7 +172,7 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
   )
     .bind(from, to)
     .all<{
-      dimension: 'summary' | 'agent' | 'product';
+      dimension: "summary" | "agent" | "product";
       item_id: string | null;
       item_name: string | null;
       count: number;
@@ -180,31 +182,31 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
   return c.json({
     from,
     to,
-    total: Number(rows.find((row) => row.dimension === 'summary')?.count ?? 0),
+    total: Number(rows.find((row) => row.dimension === "summary")?.count ?? 0),
     agents: rows
-      .filter((row) => row.dimension === 'agent')
+      .filter((row) => row.dimension === "agent")
       .map((row) => ({
-        agentId: row.item_id === '__pending__' ? null : row.item_id,
-        agentName: row.item_name ?? '待接待',
+        agentId: row.item_id === "__pending__" ? null : row.item_id,
+        agentName: row.item_name ?? "待接待",
         count: Number(row.count),
       })),
     products: rows
-      .filter((row) => row.dimension === 'product')
+      .filter((row) => row.dimension === "product")
       .map((row) => ({
-        productId: row.item_id === '__unknown__' ? null : row.item_id,
-        productTitle: row.item_name ?? '未知产品',
+        productId: row.item_id === "__unknown__" ? null : row.item_id,
+        productTitle: row.item_name ?? "未知产品",
         count: Number(row.count),
       })),
     retainedFrom,
   });
 });
 
-adminConfigApi.get('/api/admin/agent-stats', async (c) => {
+adminConfigApi.get("/api/admin/agent-stats", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const month = normalizeMonth(c.req.query('month'));
-  const agentId = normalizeIdentifier(c.req.query('agentId'));
-  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
-  if (!agentId) return c.json({ error: 'INVALID_AGENT' }, 400);
+  const month = normalizeMonth(c.req.query("month"));
+  const agentId = normalizeIdentifier(c.req.query("agentId"));
+  if (!month) return c.json({ error: "INVALID_MONTH" }, 400);
+  if (!agentId) return c.json({ error: "INVALID_AGENT" }, 400);
   const period = calendarMonthPeriod(month);
   const retainedFrom = reportingRetentionCutoff();
   const result = await c.env.DB.prepare(
@@ -233,7 +235,7 @@ adminConfigApi.get('/api/admin/agent-stats', async (c) => {
   });
 });
 
-adminConfigApi.post('/api/admin/agents', async (c) => {
+adminConfigApi.post("/api/admin/agents", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const body = await readJson<{
     name?: string;
@@ -253,13 +255,13 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   const username = normalizeUsername(body?.username);
   const password = normalizePassword(body?.password);
   if (!name || !username || !password) {
-    return c.json({ error: 'INVALID_AGENT' }, 400);
+    return c.json({ error: "INVALID_AGENT" }, 400);
   }
   if (adminLabel === null) {
-    return c.json({ error: 'INVALID_AGENT_LABEL' }, 400);
+    return c.json({ error: "INVALID_AGENT_LABEL" }, 400);
   }
   if (await usernameExists(c.env.DB, username)) {
-    return c.json({ error: 'USERNAME_EXISTS' }, 409);
+    return c.json({ error: "USERNAME_EXISTS" }, 409);
   }
 
   const routingScope = await normalizeRoutingScope(
@@ -267,20 +269,20 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
     body?.routingScope,
   );
   if (!routingScope) {
-    return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
+    return c.json({ error: "INVALID_ROUTING_SCOPE" }, 400);
   }
 
   const dailyLimit = normalizeDailyLimit(body?.dailyConversationLimit);
   const trafficQuotaTopUp = normalizeTrafficQuotaTopUp(body?.trafficQuotaTopUp);
   if (trafficQuotaTopUp === null) {
-    return c.json({ error: 'INVALID_TRAFFIC_QUOTA' }, 400);
+    return c.json({ error: "INVALID_TRAFFIC_QUOTA" }, 400);
   }
   const trafficQuotaRequestId =
     trafficQuotaTopUp > 0
       ? normalizeQuotaRequestId(body?.trafficQuotaRequestId)
       : null;
   if (trafficQuotaTopUp > 0 && !trafficQuotaRequestId) {
-    return c.json({ error: 'INVALID_QUOTA_REQUEST' }, 400);
+    return c.json({ error: "INVALID_QUOTA_REQUEST" }, 400);
   }
   const trafficQuotaEnabled = body?.trafficQuotaEnabled === true ? 1 : 0;
   const credentials = await hashAgentPassword(password);
@@ -326,18 +328,18 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   try {
     await c.env.DB.batch(statements);
   } catch (error) {
-    console.error('agent.create.failed', error);
-    if (String(error).includes('idx_agents_username')) {
-      return c.json({ error: 'USERNAME_EXISTS' }, 409);
+    console.error("agent.create.failed", error);
+    if (String(error).includes("idx_agents_username")) {
+      return c.json({ error: "USERNAME_EXISTS" }, 409);
     }
-    return c.json({ error: 'AGENT_CREATE_FAILED' }, 500);
+    return c.json({ error: "AGENT_CREATE_FAILED" }, 500);
   }
   return c.json({ ok: true, id }, 201);
 });
 
-adminConfigApi.get('/api/admin/agents/:id/quota-adjustments', async (c) => {
+adminConfigApi.get("/api/admin/agents/:id/quota-adjustments", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const result = await c.env.DB.prepare(
     `SELECT id, request_id, amount, quota_total_before, quota_total_after,
        applied_at, created_at
@@ -363,10 +365,10 @@ adminConfigApi.get('/api/admin/agents/:id/quota-adjustments', async (c) => {
   });
 });
 
-adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
+adminConfigApi.patch("/api/admin/agents/:id", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const id = c.req.param('id');
-  if (id === 'admin') return c.json({ error: 'NOT_FOUND' }, 404);
+  const id = c.req.param("id");
+  if (id === "admin") return c.json({ error: "NOT_FOUND" }, 404);
 
   const current = await c.env.DB.prepare(
     `SELECT id, name, admin_label, username, status, is_enabled,
@@ -377,7 +379,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   )
     .bind(id)
     .first<AgentRow>();
-  if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
+  if (!current) return c.json({ error: "NOT_FOUND" }, 404);
 
   const body = await readJson<{
     name?: string;
@@ -391,7 +393,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     trafficQuotaRequestId?: string;
     isEnabled?: boolean;
   }>(c.req.raw);
-  if (!body) return c.json({ error: 'INVALID_AGENT' }, 400);
+  if (!body) return c.json({ error: "INVALID_AGENT" }, 400);
 
   const name =
     body.name === undefined ? current.name : normalizeName(body.name);
@@ -403,27 +405,27 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     body.username === undefined
       ? current.username
       : normalizeUsername(body.username);
-  if (!name || !username) return c.json({ error: 'INVALID_AGENT' }, 400);
+  if (!name || !username) return c.json({ error: "INVALID_AGENT" }, 400);
   if (adminLabel === null) {
-    return c.json({ error: 'INVALID_AGENT_LABEL' }, 400);
+    return c.json({ error: "INVALID_AGENT_LABEL" }, 400);
   }
   if (await usernameExists(c.env.DB, username, id)) {
-    return c.json({ error: 'USERNAME_EXISTS' }, 409);
+    return c.json({ error: "USERNAME_EXISTS" }, 409);
   }
 
   let passwordHash = current.password_hash;
   let passwordSalt = current.password_salt;
   let passwordIterations = current.password_iterations;
-  if (body.password !== undefined && body.password !== '') {
+  if (body.password !== undefined && body.password !== "") {
     const password = normalizePassword(body.password);
-    if (!password) return c.json({ error: 'INVALID_PASSWORD' }, 400);
+    if (!password) return c.json({ error: "INVALID_PASSWORD" }, 400);
     const credentials = await hashAgentPassword(password);
     passwordHash = credentials.hash;
     passwordSalt = credentials.salt;
     passwordIterations = credentials.iterations;
   }
   if (!passwordHash || !passwordSalt) {
-    return c.json({ error: 'PASSWORD_REQUIRED' }, 400);
+    return c.json({ error: "PASSWORD_REQUIRED" }, 400);
   }
 
   const enabled =
@@ -451,8 +453,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       {
         error:
           trafficQuotaTopUp === null
-            ? 'INVALID_TRAFFIC_QUOTA'
-            : 'INVALID_QUOTA_REQUEST',
+            ? "INVALID_TRAFFIC_QUOTA"
+            : "INVALID_QUOTA_REQUEST",
       },
       400,
     );
@@ -474,13 +476,13 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
     existingAdjustment &&
     Number(existingAdjustment.amount) !== trafficQuotaTopUp
   ) {
-    return c.json({ error: 'QUOTA_REQUEST_CONFLICT' }, 409);
+    return c.json({ error: "QUOTA_REQUEST_CONFLICT" }, 409);
   }
   const pendingTrafficQuotaTopUp = existingAdjustment?.applied_at
     ? 0
     : trafficQuotaTopUp;
   if (current.traffic_quota_total + pendingTrafficQuotaTopUp > 2_000_000_000) {
-    return c.json({ error: 'INVALID_TRAFFIC_QUOTA' }, 400);
+    return c.json({ error: "INVALID_TRAFFIC_QUOTA" }, 400);
   }
 
   const routingScope =
@@ -488,7 +490,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       ? await currentRoutingScope(c.env.DB, id)
       : await normalizeRoutingScope(c.env.DB, body.routingScope);
   if (!routingScope) {
-    return c.json({ error: 'INVALID_ROUTING_SCOPE' }, 400);
+    return c.json({ error: "INVALID_ROUTING_SCOPE" }, 400);
   }
 
   const statements: D1PreparedStatement[] = [
@@ -612,8 +614,8 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
           error:
             resolvedAdjustment &&
             Number(resolvedAdjustment.amount) !== trafficQuotaTopUp
-              ? 'QUOTA_REQUEST_CONFLICT'
-              : 'QUOTA_TOP_UP_FAILED',
+              ? "QUOTA_REQUEST_CONFLICT"
+              : "QUOTA_TOP_UP_FAILED",
         },
         resolvedAdjustment ? 409 : 500,
       );
@@ -622,10 +624,10 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   return c.json({ ok: true, quotaApplied });
 });
 
-adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
+adminConfigApi.delete("/api/admin/agents/:id", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const id = c.req.param('id');
-  if (id === 'admin') return c.json({ error: 'NOT_FOUND' }, 404);
+  const id = c.req.param("id");
+  if (id === "admin") return c.json({ error: "NOT_FOUND" }, 404);
 
   const current = await c.env.DB.prepare(
     `SELECT id
@@ -634,7 +636,7 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
   )
     .bind(id)
     .first<{ id: string }>();
-  if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
+  if (!current) return c.json({ error: "NOT_FOUND" }, 404);
 
   try {
     await c.env.DB.prepare(
@@ -654,7 +656,7 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
     );
 
     await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
+      c.env.DB.prepare("DELETE FROM agent_sessions WHERE agent_id = ?1").bind(
         id,
       ),
       c.env.DB.prepare(
@@ -688,7 +690,7 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
         await broadcastClientConversationEvent(
           c.env,
           conversationId,
-          'conversation.assigned',
+          "conversation.assigned",
         );
       }
     }
@@ -698,12 +700,12 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
       reassignedConversationCount: conversationsToReassign.length,
     });
   } catch (error) {
-    console.error('agent.delete.failed', { agentId: id, error });
-    return c.json({ error: 'AGENT_DELETE_FAILED' }, 500);
+    console.error("agent.delete.failed", { agentId: id, error });
+    return c.json({ error: "AGENT_DELETE_FAILED" }, 500);
   }
 });
 
-adminConfigApi.get('/api/admin/products', async (c) => {
+adminConfigApi.get("/api/admin/products", async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   return c.json({ products: await loadProducts(c.env.DB) });
 });
@@ -724,7 +726,8 @@ async function loadNoAgentMessage(
     }>();
   return {
     message: row?.no_agent_message?.trim() || DEFAULT_NO_AGENT_MESSAGE,
-    format: normalizeNoAgentMessageFormat(row?.no_agent_message_format) ?? 'plain',
+    format:
+      normalizeNoAgentMessageFormat(row?.no_agent_message_format) ?? "plain",
   };
 }
 
@@ -855,9 +858,9 @@ async function disconnectAgentRealtime(
     roomIds.map((roomId) =>
       env.CONVERSATION_ROOMS.get(
         env.CONVERSATION_ROOMS.idFromName(roomId),
-      ).fetch('https://conversation-room/disconnect-agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      ).fetch("https://conversation-room/disconnect-agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agentId }),
       }),
     ),
@@ -883,30 +886,30 @@ async function currentRoutingScope(
 }
 
 function scopeFromRows(rows: ScopeRow[]): AgentRoutingScope {
-  if (!rows.length) return { type: 'none' };
+  if (!rows.length) return { type: "none" };
 
-  const sectionRows = rows.filter((row) => row.scope_type === 'section');
+  const sectionRows = rows.filter((row) => row.scope_type === "section");
   if (sectionRows.length) {
     return {
-      type: 'section',
+      type: "section",
       sectionIds: distinct(sectionRows.map((row) => row.section_id)),
     };
   }
 
-  const categoryRows = rows.filter((row) => row.scope_type === 'category');
+  const categoryRows = rows.filter((row) => row.scope_type === "category");
   if (categoryRows.length) {
     return {
-      type: 'category',
-      sectionId: categoryRows[0]?.section_id ?? '',
+      type: "category",
+      sectionId: categoryRows[0]?.section_id ?? "",
       categoryIds: distinct(categoryRows.map((row) => row.category_id)),
     };
   }
 
   return {
-    type: 'product',
+    type: "product",
     productIds: distinct(
       rows
-        .filter((row) => row.scope_type === 'product')
+        .filter((row) => row.scope_type === "product")
         .map((row) => row.product_id),
     ),
   };
@@ -916,36 +919,36 @@ async function normalizeRoutingScope(
   db: D1Database,
   raw: unknown,
 ): Promise<AgentRoutingScope | null> {
-  if (raw === undefined) return { type: 'none' };
-  if (!isRecord(raw) || typeof raw.type !== 'string') return null;
+  if (raw === undefined) return { type: "none" };
+  if (!isRecord(raw) || typeof raw.type !== "string") return null;
 
-  if (raw.type === 'none') return { type: 'none' };
+  if (raw.type === "none") return { type: "none" };
 
-  if (raw.type === 'section') {
+  if (raw.type === "section") {
     if (!Array.isArray(raw.sectionIds)) return null;
     const sectionIds = normalizedIdentifiers(raw.sectionIds);
     if (!sectionIds.length) return null;
     return (await allEnabledSectionsExist(db, sectionIds))
-      ? { type: 'section', sectionIds }
+      ? { type: "section", sectionIds }
       : null;
   }
 
-  if (raw.type === 'category') {
+  if (raw.type === "category") {
     const sectionId = normalizeIdentifier(raw.sectionId);
     if (!sectionId || !Array.isArray(raw.categoryIds)) return null;
     const categoryIds = normalizedIdentifiers(raw.categoryIds);
     if (!categoryIds.length) return null;
     return (await allEnabledCategoriesExist(db, sectionId, categoryIds))
-      ? { type: 'category', sectionId, categoryIds }
+      ? { type: "category", sectionId, categoryIds }
       : null;
   }
 
-  if (raw.type === 'product') {
+  if (raw.type === "product") {
     if (!Array.isArray(raw.productIds)) return null;
     const productIds = normalizedIdentifiers(raw.productIds);
-    if (!productIds.length) return { type: 'none' };
+    if (!productIds.length) return { type: "none" };
     return (await allEnabledProductsExist(db, productIds))
-      ? { type: 'product', productIds }
+      ? { type: "product", productIds }
       : null;
   }
 
@@ -957,9 +960,9 @@ function routingScopeStatements(
   agentId: string,
   scope: AgentRoutingScope,
 ): D1PreparedStatement[] {
-  if (scope.type === 'none') return [];
+  if (scope.type === "none") return [];
 
-  if (scope.type === 'section') {
+  if (scope.type === "section") {
     return [
       db
         .prepare(
@@ -975,7 +978,7 @@ function routingScopeStatements(
     ];
   }
 
-  if (scope.type === 'category') {
+  if (scope.type === "category") {
     return [
       db
         .prepare(
@@ -1092,7 +1095,7 @@ function normalizedIdentifiers(values: unknown[]): string[] {
 }
 
 function normalizeIdentifier(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed && trimmed.length <= 500 ? trimmed : null;
 }
@@ -1102,32 +1105,32 @@ function distinct(values: string[]): string[] {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === "object" && value !== null;
 }
 
 async function adminAuthorized(c: Context<Env>): Promise<boolean> {
   const password = c.env.ADMIN_PASSWORD;
   if (!password) return false;
-  const header = c.req.header('Cookie') ?? '';
+  const header = c.req.header("Cookie") ?? "";
   const token = header
-    .split(';')
+    .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${SESSION_COOKIE}=`))
     ?.slice(SESSION_COOKIE.length + 1);
   if (!token) return false;
-  const [payload, signature] = token.split('.');
+  const [payload, signature] = token.split(".");
   if (!payload || !signature) return false;
   if (!timingSafeEqual(signature, await hmac(password, payload))) return false;
   try {
     const session = JSON.parse(decode(payload)) as { exp?: number };
-    return typeof session.exp === 'number' && session.exp > Date.now() / 1000;
+    return typeof session.exp === "number" && session.exp > Date.now() / 1000;
   } catch {
     return false;
   }
 }
 
 function unauthorized(c: Context<Env>) {
-  return c.json({ error: 'UNAUTHORIZED' }, 401);
+  return c.json({ error: "UNAUTHORIZED" }, 401);
 }
 
 async function usernameExists(
@@ -1148,19 +1151,19 @@ async function usernameExists(
 }
 
 function normalizeName(value?: string): string | null {
-  const trimmed = value?.trim() ?? '';
+  const trimmed = value?.trim() ?? "";
   return trimmed && trimmed.length <= 80 ? trimmed : null;
 }
 
 function normalizeAdminLabel(value: unknown): string | null {
-  if (value === undefined || value === null) return '';
-  if (typeof value !== 'string') return null;
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length <= 10 ? trimmed : null;
 }
 
 function normalizeUsername(value?: string | null): string | null {
-  const trimmed = value?.trim() ?? '';
+  const trimmed = value?.trim() ?? "";
   if (trimmed.length < 2 || trimmed.length > 40 || /\s/u.test(trimmed)) {
     return null;
   }
@@ -1184,17 +1187,17 @@ function normalizeTrafficQuotaTopUp(value?: number): number | null {
 }
 
 function normalizeQuotaRequestId(value?: string): string | null {
-  const requestId = value?.trim() ?? '';
+  const requestId = value?.trim() ?? "";
   return /^[A-Za-z0-9:_-]{8,120}$/u.test(requestId) ? requestId : null;
 }
 
 function normalizeMonth(value?: string): string | null {
-  const month = value?.trim() ?? '';
+  const month = value?.trim() ?? "";
   return /^\d{4}-(0[1-9]|1[0-2])$/u.test(month) ? month : null;
 }
 
 function normalizeReportingDate(value?: string): string | null {
-  const date = value?.trim() ?? '';
+  const date = value?.trim() ?? "";
   if (!/^\d{4}-(0[1-9]|1[0-2])-([0-2]\d|3[01])$/u.test(date)) return null;
   const parsed = new Date(`${date}T00:00:00.000Z`);
   return Number.isNaN(parsed.getTime()) ||
@@ -1204,11 +1207,11 @@ function normalizeReportingDate(value?: string): string | null {
 }
 
 function reportingBusinessDate(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: REPORTING_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(now);
   const values = Object.fromEntries(
     parts.map((part) => [part.type, part.value]),
@@ -1245,14 +1248,14 @@ function timingSafeEqual(left: string, right: string): boolean {
 async function hmac(secret: string, value: string): Promise<string> {
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
-    'raw',
+    "raw",
     encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
+    { name: "HMAC", hash: "SHA-256" },
     false,
-    ['sign'],
+    ["sign"],
   );
   const signature = await crypto.subtle.sign(
-    'HMAC',
+    "HMAC",
     key,
     encoder.encode(value),
   );
@@ -1260,18 +1263,18 @@ async function hmac(secret: string, value: string): Promise<string> {
 }
 
 function decode(value: string): string {
-  const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
   return new TextDecoder().decode(
     Uint8Array.from(atob(padded), (character) => character.charCodeAt(0)),
   );
 }
 
 function toBase64Url(bytes: Uint8Array): string {
-  let binary = '';
+  let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary)
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '');
+    .replaceAll("+", "-")
+    .replaceAll("/", "_")
+    .replaceAll("=", "");
 }
