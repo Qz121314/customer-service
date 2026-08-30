@@ -12,12 +12,69 @@ function url(path) {
 }
 
 async function seedConversationAndAgent(page) {
-  const conversation = await page.request.post(
+  const adminLogin = await page.request.post(url('/api/auth/login'), {
+    data: { password: adminPassword },
+  });
+  expect(adminLogin.ok()).toBeTruthy();
+
+  const createAgent = await page.request.post(url('/api/admin/agents'), {
+    data: {
+      name: 'UI Smoke Agent',
+      username: agentUsername,
+      password: agentPassword,
+      routingScope: { type: 'none' },
+      dailyConversationLimit: 0,
+      trafficQuotaEnabled: false,
+      trafficQuotaTopUp: 0,
+      trafficQuotaRequestId: '',
+      isEnabled: true,
+    },
+  });
+  expect(createAgent.ok()).toBeTruthy();
+
+  const noAgentConversation = await page.request.post(
     url('/client/v1/conversations'),
     {
       data: {
         visitorId: 'UIT001',
         sourceHandoffId: '11111111-1111-4111-8111-111111111111',
+        clientMessageId: 'ui-smoke-message-no-agent',
+        message: '无客服时不应创建会话',
+        product: {
+          id: productId,
+          sectionId: 'ui-smoke-section',
+          sectionName: 'Smoke Section',
+          categoryId: 'ui-smoke-category',
+          categoryName: 'Smoke Category',
+          title: 'UI Smoke Product',
+          href: 'https://example.com/ui-smoke-product',
+          coverUrl: null,
+        },
+      },
+    },
+  );
+  const noAgentStatus = noAgentConversation.status();
+  const noAgentBody = await noAgentConversation.text();
+  console.log(`No-agent smoke response: ${noAgentStatus} ${noAgentBody}`);
+  expect(noAgentStatus).toBe(503);
+
+  const createdAgent = await createAgent.json();
+  const routeAgent = await page.request.patch(
+    url(`/api/admin/agents/${createdAgent.id}`),
+    {
+      data: {
+        routingScope: { type: 'product', productIds: [productId] },
+      },
+    },
+  );
+  expect(routeAgent.ok()).toBeTruthy();
+
+  const conversation = await page.request.post(
+    url('/client/v1/conversations'),
+    {
+      data: {
+        visitorId: 'UIT002',
+        sourceHandoffId: '22222222-2222-4222-8222-222222222222',
         clientMessageId: 'ui-smoke-message-1',
         message: '你好，这是 UI smoke 会话',
         product: {
@@ -34,26 +91,6 @@ async function seedConversationAndAgent(page) {
     },
   );
   expect(conversation.ok()).toBeTruthy();
-
-  const adminLogin = await page.request.post(url('/api/auth/login'), {
-    data: { password: adminPassword },
-  });
-  expect(adminLogin.ok()).toBeTruthy();
-
-  const createAgent = await page.request.post(url('/api/admin/agents'), {
-    data: {
-      name: 'UI Smoke Agent',
-      username: agentUsername,
-      password: agentPassword,
-      routingScope: { type: 'product', productIds: [productId] },
-      dailyConversationLimit: 0,
-      trafficQuotaEnabled: false,
-      trafficQuotaTopUp: 0,
-      trafficQuotaRequestId: '',
-      isEnabled: true,
-    },
-  });
-  expect(createAgent.ok()).toBeTruthy();
 }
 
 async function loginAgent(page) {

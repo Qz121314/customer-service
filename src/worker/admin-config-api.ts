@@ -3,8 +3,6 @@ import { hashAgentPassword } from './agent-password';
 import { broadcastClientConversationEvent } from './client-api';
 import { assignConversationAgent } from './routing';
 import { calendarMonthPeriod } from '../shared/calendar-month';
-import { sendAgentPushForConversation } from './agent-push';
-import { assignWaitingConversations } from './waiting-assignment';
 
 type Bindings = {
   DB: D1Database;
@@ -581,33 +579,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       );
     }
   }
-  const quotaWasBlocking =
-    current.traffic_quota_enabled === 1 &&
-    current.traffic_quota_used >= current.traffic_quota_total;
-  const quotaEligibilityRestored =
-    quotaWasBlocking && (quotaApplied || trafficQuotaEnabled === 0);
-  const enabledEligibilityRestored = current.is_enabled === 0 && enabled === 1;
-  let assignedWaitingCount = 0;
-  if (
-    enabled === 1 &&
-    current.status === 'online' &&
-    (enabledEligibilityRestored || quotaEligibilityRestored)
-  ) {
-    const assignedConversationIds = await assignWaitingConversations(
-      c.env,
-      id,
-      10,
-    );
-    assignedWaitingCount = assignedConversationIds.length;
-    for (const conversationId of assignedConversationIds) {
-      c.executionCtx.waitUntil(
-        sendAgentPushForConversation(c.env, conversationId).catch((error) => {
-          console.warn('Agent push dispatch failed after quota top-up.', error);
-        }),
-      );
-    }
-  }
-  return c.json({ ok: true, quotaApplied, assignedWaitingCount });
+  return c.json({ ok: true, quotaApplied });
 });
 
 adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
@@ -669,21 +641,51 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
       ).bind(id),
     ]);
 
+    let reassignedConversationCount = 0;
+    let closedConversationCount = 0;
     if (conversationsToReassign.length) {
       await disconnectAgentRealtime(c.env, id, conversationsToReassign);
       for (const conversationId of conversationsToReassign) {
-        await assignConversationAgent(c.env.DB, conversationId);
-        await broadcastClientConversationEvent(
-          c.env,
+        const assignment = await assignConversationAgent(
+          c.env.DB,
           conversationId,
-          'conversation.assigned',
         );
+        if (assignment?.id) {
+          reassignedConversationCount += 1;
+          await broadcastClientConversationEvent(
+            c.env,
+            conversationId,
+            'conversation.assigned',
+          );
+          continue;
+        }
+
+        const closed = await c.env.DB.prepare(
+          `UPDATE conversations
+           SET status = 'closed',
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = ?1
+             AND assigned_agent IS NULL
+             AND status IN ('open', 'pending')
+             AND expires_at > CURRENT_TIMESTAMP`,
+        )
+          .bind(conversationId)
+          .run();
+        if (Number(closed.meta?.changes ?? 0) === 1) {
+          closedConversationCount += 1;
+          await broadcastClientConversationEvent(
+            c.env,
+            conversationId,
+            'conversation.closed',
+          );
+        }
       }
     }
 
     return c.json({
       ok: true,
-      reassignedConversationCount: conversationsToReassign.length,
+      reassignedConversationCount,
+      closedConversationCount,
     });
   } catch (error) {
     console.error('agent.delete.failed', { agentId: id, error });

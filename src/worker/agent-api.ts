@@ -5,8 +5,6 @@ import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { listConversationMedia } from './media-api';
-import { sendAgentPushForConversation } from './agent-push';
-import { assignWaitingConversations } from './waiting-assignment';
 
 type Bindings = {
   DB: D1Database;
@@ -148,11 +146,6 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     path: '/',
     maxAge: SESSION_TTL_SECONDS,
   });
-  const assignedConversationIds =
-    agent.is_enabled === 1
-      ? await assignWaitingConversations(c.env, agent.id)
-      : [];
-  scheduleAgentPush(c, assignedConversationIds);
   return c.json({
     ok: true,
     agent: {
@@ -203,13 +196,6 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
   )
     .bind(agent.id)
     .run();
-  if (agent.is_enabled === 1 && nextStatus === 'online') {
-    const assignedConversationIds = await assignWaitingConversations(
-      c.env,
-      agent.id,
-    );
-    scheduleAgentPush(c, assignedConversationIds);
-  }
   return c.json({
     ok: true,
     ...(await loadAgentInbox(c.env.DB, { ...agent, status: nextStatus })),
@@ -233,13 +219,6 @@ agentApi.post('/api/agent/auth/status', async (c) => {
     .bind(body.status, agent.id)
     .run();
 
-  if (agent.is_enabled === 1 && body.status === 'online') {
-    const assignedConversationIds = await assignWaitingConversations(
-      c.env,
-      agent.id,
-    );
-    scheduleAgentPush(c, assignedConversationIds);
-  }
   return c.json({
     ok: true,
     ...(await loadAgentInbox(c.env.DB, { ...agent, status: body.status })),
@@ -850,9 +829,6 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
     id,
     body.status === 'closed' ? 'conversation.closed' : 'conversation.assigned',
   );
-  if (body.status === 'closed') {
-    await assignWaitingConversations(c.env, agent.id);
-  }
   return c.json({ ok: true });
 });
 
@@ -958,16 +934,6 @@ async function findAgentMessageByClientId(
     )
     .bind(conversationId, clientMessageId, agentId)
     .first<MessageRow>();
-}
-
-function scheduleAgentPush(c: Context<Env>, conversationIds: string[]): void {
-  for (const conversationId of conversationIds) {
-    c.executionCtx.waitUntil(
-      sendAgentPushForConversation(c.env, conversationId).catch((error) => {
-        console.warn('Agent push dispatch failed.', error);
-      }),
-    );
-  }
 }
 
 async function sha256(value: string): Promise<string> {

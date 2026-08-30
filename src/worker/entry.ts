@@ -15,6 +15,8 @@ import { sendAgentPushForConversation } from './agent-push';
 import { agentPushApi } from './agent-push-api';
 import { purgeExpiredConversations } from './conversation-retention';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
+import { siteSettingsApi } from './site-settings-api';
+import { rejectUnassignedConversationStart } from './no-agent-start';
 import {
   isRemovedProtocolPath,
   removedProtocolResponse,
@@ -88,13 +90,22 @@ app.use('*', async (c, next) => {
 
 app.route('/', integrationApi);
 
-// Visitor writes notify only the assigned seat. Delivery runs after the chat
-// response and never blocks or changes the result of the message transaction.
+// Visitor writes notify only the assigned seat. A fresh consultation that has no
+// eligible seat is removed before the response leaves the Worker and becomes a
+// configured NO_AGENT_AVAILABLE response instead of entering a waiting queue.
 app.use('/client/v1/*', async (c, next) => {
   await next();
   if (c.req.method !== 'POST' || !c.res.ok) return;
 
   const pathname = new URL(c.req.url).pathname;
+  if (
+    CLIENT_CONVERSATION_CREATE_PATH.test(pathname) &&
+    (c.res.status === 200 || c.res.status === 201)
+  ) {
+    c.res = await rejectUnassignedConversationStart(c.req.raw, c.env, c.res);
+    if (!c.res.ok) return;
+  }
+
   let conversationId: string | null = null;
   const messageMatch = pathname.match(CLIENT_MESSAGE_PATH);
   if (messageMatch?.[1] && c.res.status === 201) {
@@ -153,6 +164,7 @@ app.use('/api/agent/*', async (c, next) => {
 
 app.route('/', adminQuotaApi);
 app.route('/', adminConfigApi);
+app.route('/', siteSettingsApi);
 app.route('/', mediaApi);
 app.route('/', agentAvatarApi);
 app.route('/', agentAutoReplyApi);
@@ -176,7 +188,19 @@ export default {
       return removedProtocolResponse();
     }
 
-    const response = await app.fetch(request, env, ctx);
+    let response = await app.fetch(request, env, ctx);
+    if (
+      request.method === 'POST' &&
+      response.ok &&
+      CLIENT_CONVERSATION_CREATE_PATH.test(pathname) &&
+      (response.status === 200 || response.status === 201)
+    ) {
+      response = await rejectUnassignedConversationStart(
+        request,
+        env,
+        response,
+      );
+    }
     if (
       response.status !== 404 ||
       isProtocolNamespacePath(pathname) ||

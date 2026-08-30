@@ -9,20 +9,6 @@ export type AgentAssignmentResult = AgentAssignment & {
 };
 
 const ROUTING_TIME_ZONE = 'America/Los_Angeles';
-const MAX_WAITING_ASSIGNMENTS = 10;
-const WAITING_SCAN_BATCH_SIZE = 50;
-
-type AssignmentOptions = {
-  returnExisting?: boolean;
-};
-
-export type WaitingConversationAssignment = {
-  conversationId: string;
-  assignment: AgentAssignmentResult & {
-    newlyAssigned: true;
-    assignedAt: string;
-  };
-};
 
 export function routingBusinessDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -80,7 +66,6 @@ function assignmentResult(
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
-  options: AssignmentOptions = {},
 ): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -199,11 +184,7 @@ export async function assignConversationAgent(
     )
     .bind(conversationId, now, businessDate)
     .first<AgentAssignment>();
-  if (!assignment) {
-    return options.returnExisting === false
-      ? null
-      : assignedAgent(db, conversationId);
-  }
+  if (!assignment) return assignedAgent(db, conversationId);
 
   return assignmentResult(assignment, {
     newlyAssigned: true,
@@ -231,66 +212,4 @@ async function assignedAgent(
     { id: assignment.id, name: assignment.name },
     { newlyAssigned: false, assignedAt: assignment.assigned_at },
   );
-}
-
-/**
- * Scan waiting rows in stable creation order and let the canonical assignment
- * statement decide every eligibility and round-robin outcome. Keyset pages let
- * recovery move past any number of blocked head rows without copying routing
- * predicates into a second query.
- */
-export async function recoverWaitingConversationAssignments(
-  db: D1Database,
-  requestedLimit = MAX_WAITING_ASSIGNMENTS,
-): Promise<WaitingConversationAssignment[]> {
-  const limit = Math.max(
-    1,
-    Math.min(MAX_WAITING_ASSIGNMENTS, Math.trunc(requestedLimit)),
-  );
-  const recovered: WaitingConversationAssignment[] = [];
-  let cursor: { createdAt: string; id: string } | null = null;
-
-  while (recovered.length < limit) {
-    const page: D1Result<{ id: string; created_at: string }> = await db
-      .prepare(
-        `SELECT id, created_at
-         FROM conversations
-         WHERE assigned_agent IS NULL
-           AND status IN ('open', 'pending')
-           AND expires_at > CURRENT_TIMESTAMP
-           AND (
-             ?1 IS NULL
-             OR created_at > ?1
-             OR (created_at = ?1 AND id > ?2)
-           )
-         ORDER BY created_at ASC, id ASC
-         LIMIT ?3`,
-      )
-      .bind(
-        cursor?.createdAt ?? null,
-        cursor?.id ?? '',
-        WAITING_SCAN_BATCH_SIZE,
-      )
-      .all<{ id: string; created_at: string }>();
-    const rows: Array<{ id: string; created_at: string }> = page.results ?? [];
-    if (rows.length === 0) break;
-
-    for (const row of rows) {
-      cursor = { createdAt: row.created_at, id: row.id };
-      const assignment = await assignConversationAgent(db, row.id, {
-        returnExisting: false,
-      });
-      if (!assignment?.newlyAssigned || !assignment.assignedAt) continue;
-
-      recovered.push({
-        conversationId: row.id,
-        assignment: assignment as WaitingConversationAssignment['assignment'],
-      });
-      if (recovered.length >= limit) break;
-    }
-
-    if (rows.length < WAITING_SCAN_BATCH_SIZE) break;
-  }
-
-  return recovered;
 }

@@ -278,7 +278,7 @@ test('0035 marks every pre-existing conversation resolved without retroactive gr
       id, site_id, visitor_id, status, product_id, section_id,
       product_title, expires_at, last_message_at, created_at, updated_at
     ) VALUES (
-      'legacy-waiting', 'default', 'legacy-visitor', 'open', 'product-1', 'west',
+      'legacy-closed', 'default', 'legacy-visitor', 'closed', 'product-1', 'west',
       'Product 1', datetime('now', '+1 day'), CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     );
@@ -290,14 +290,14 @@ test('0035 marks every pre-existing conversation resolved without retroactive gr
     database,
     `SELECT outcome, agent_id, message_id
      FROM conversation_automation_receipts
-     WHERE conversation_id = 'legacy-waiting'
+     WHERE conversation_id = 'legacy-closed'
        AND automation_key = 'initial_greeting'`,
   );
   assert.equal(automation.outcome, 'skipped');
   assert.equal(automation.agent_id, null);
   assert.equal(automation.message_id, null);
   assert.equal(
-    count(database, 'messages', "conversation_id = 'legacy-waiting'"),
+    count(database, 'messages', "conversation_id = 'legacy-closed'"),
     0,
   );
 

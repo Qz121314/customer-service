@@ -11,6 +11,7 @@ import {
   passesBurstLimit,
   requestSourceHash,
 } from './abuse-control';
+import { rejectUnassignedConversationStart } from './no-agent-start.ts';
 
 type ClientBindings = {
   DB: D1Database;
@@ -621,6 +622,30 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
 
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
+  if (!assignment) {
+    const unassignedConversation = await ownedConversation(
+      c.env.DB,
+      conversationId,
+      site.id,
+      visitorId,
+    );
+    if (!unassignedConversation) {
+      throw new Error('Conversation persistence failed');
+    }
+    return rejectUnassignedConversationStart(
+      c.req.raw,
+      c.env,
+      c.json({
+        conversation: await conversationDetail(
+          c.env.DB,
+          unassignedConversation,
+          30,
+          null,
+        ),
+      }),
+    );
+  }
+
   let conversation: ConversationRow | null = null;
 
   if (assignment?.newlyAssigned && assignment.assignedAt) {

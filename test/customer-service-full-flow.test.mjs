@@ -340,16 +340,7 @@ test('admin can save multiple whole-section routing rules in one request', async
         last_seen_at = CURRENT_TIMESTAMP,
         traffic_quota_used = traffic_quota_total
     WHERE id = '${created.id}';
-    INSERT INTO visitors (id, site_id, token_hash)
-    VALUES ('quota-waiting-visitor', 'default', 'quota-waiting-token');
-    INSERT INTO conversations (
-      id, site_id, visitor_id, status, product_id, section_id, expires_at
-    ) VALUES (
-      'quota-waiting-conversation', 'default', 'quota-waiting-visitor',
-      'open', 'product-west', 'west', datetime('now', '+1 day')
-    );
   `);
-  const retryRooms = fakeRooms();
   const restoredQuotaResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
@@ -365,22 +356,13 @@ test('admin can save multiple whole-section routing rules in one request', async
     },
     {
       DB: d1(database),
-      CONVERSATION_ROOMS: retryRooms.namespace,
+      CONVERSATION_ROOMS: fakeRooms().namespace,
       ADMIN_PASSWORD: adminPassword,
     },
-    { waitUntil() {}, passThroughOnException() {} },
   );
   const restoredQuota = await json(restoredQuotaResponse);
   assert.equal(restoredQuota.quotaApplied, true);
-  assert.equal(restoredQuota.assignedWaitingCount, 1);
-  const assignedConversation = database
-    .prepare(
-      `SELECT assigned_agent, status
-       FROM conversations WHERE id = 'quota-waiting-conversation'`,
-    )
-    .get();
-  assert.equal(assignedConversation.assigned_agent, created.id);
-  assert.equal(assignedConversation.status, 'pending');
+  assert.equal(Object.hasOwn(restoredQuota, 'assignedWaitingCount'), false);
   const restoredAgentQuota = database
     .prepare(
       `SELECT traffic_quota_total AS total, traffic_quota_used AS used
@@ -388,7 +370,7 @@ test('admin can save multiple whole-section routing rules in one request', async
     )
     .get(created.id);
   assert.equal(restoredAgentQuota.total, 151);
-  assert.equal(restoredAgentQuota.used, 151);
+  assert.equal(restoredAgentQuota.used, 150);
   database.close();
 });
 
@@ -1069,10 +1051,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     CONVERSATION_ROOMS: rooms.namespace,
     ADMIN_PASSWORD: adminPassword,
   };
-  const executionCtx = {
-    waitUntil() {},
-    passThroughOnException() {},
-  };
 
   database.exec(`
   INSERT INTO product_catalog (
@@ -1214,10 +1192,8 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
 
   const westOne = await createConversation('west');
   const westTwo = await createConversation('west');
-  const westThree = await createConversation('west');
   const westOneId = westOne.conversation.id;
   const westTwoId = westTwo.conversation.id;
-  const westThreeId = westThree.conversation.id;
   assert.equal(
     database
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
@@ -1229,13 +1205,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(westTwoId).assigned_agent,
     agentA,
-  );
-  assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get(westThreeId).assigned_agent,
-    null,
-    'fresh traffic must wait when every matching seat has exhausted new-traffic quota',
   );
   assert.deepEqual(
     database
@@ -1272,17 +1241,19 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       }),
     },
     env,
-    executionCtx,
   );
   const toppedUp = await json(topUpResponse);
   assert.equal(toppedUp.quotaApplied, true);
-  assert.equal(toppedUp.assignedWaitingCount, 1);
+  assert.equal(Object.hasOwn(toppedUp, 'assignedWaitingCount'), false);
+
+  const westThree = await createConversation('west');
+  const westThreeId = westThree.conversation.id;
   assert.equal(
     database
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(westThreeId).assigned_agent,
     agentA,
-    'adding one unit must immediately admit one waiting fresh conversation',
+    'adding one unit must restore eligibility for the next fresh consultation',
   );
   assert.deepEqual(
     database
@@ -1514,7 +1485,8 @@ test('admin permanently deletes an agent while preserving historical records', a
   );
   const deleted = await deleteResponse.json();
   assert.equal(deleteResponse.status, 200);
-  assert.equal(deleted.reassignedConversationCount, 1);
+  assert.equal(deleted.reassignedConversationCount, 0);
+  assert.equal(deleted.closedConversationCount, 1);
   assert.equal(
     database
       .prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?')
@@ -1552,7 +1524,7 @@ test('admin permanently deletes an agent while preserving historical records', a
        FROM conversations WHERE id = 'delete-active-conversation'`,
     )
     .get();
-  assert.equal(active.status, 'open');
+  assert.equal(active.status, 'closed');
   assert.equal(active.assigned_agent, null);
   assert.equal(active.cta_affinity_agent_id, null);
 
