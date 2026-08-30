@@ -241,10 +241,7 @@ test('assigned consultation remains successful and keeps its creation quota', as
     env,
   );
   const checked = await rejectUnassignedConversationStart(
-    new Request(
-      'https://customer-service.test/client/v1/conversations',
-      init,
-    ),
+    new Request('https://customer-service.test/client/v1/conversations', init),
     env,
     response,
   );
