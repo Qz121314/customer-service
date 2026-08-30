@@ -52,13 +52,6 @@ jobs:
           test/legacy-routing-removal.test.mjs
           README.md
 
-      - name: Inspect stale waiting test expectation
-        shell: bash
-        run: |
-          if test -f test/agent-quota.test.mjs; then
-            sed -n '330,380p' test/agent-quota.test.mjs
-          fi
-
       - name: Assert waiting implementation is gone
         shell: bash
         run: |
@@ -76,8 +69,42 @@ jobs:
           mv scripts/apply-remove-waiting-followup.mjs /tmp/apply-remove-waiting-followup.mjs
           mv scripts/apply-remove-waiting-final-fixes.mjs /tmp/apply-remove-waiting-final-fixes.mjs
 
-      - name: Verify repository
-        run: pnpm verify
+      - name: Snapshot before preflight
+        shell: bash
+        run: |
+          echo '--- files before preflight ---'
+          find test -maxdepth 1 -type f -print | sort
+          echo '--- status before preflight ---'
+          git status --short --untracked-files=all
+
+      - name: Run preflight
+        run: pnpm preflight
+
+      - name: Snapshot after preflight
+        shell: bash
+        run: |
+          echo '--- files after preflight ---'
+          find test -maxdepth 1 -type f -print | sort
+          echo '--- status after preflight ---'
+          git status --short --untracked-files=all
+
+      - name: Run local migrations
+        run: pnpm db:migrate:local
+
+      - name: Snapshot after migrations
+        shell: bash
+        run: |
+          echo '--- files after migrations ---'
+          find test -maxdepth 1 -type f -print | sort
+          echo '--- status after migrations ---'
+          git status --short --untracked-files=all
+          if test -f test/agent-quota.test.mjs; then
+            echo '--- stale test excerpt ---'
+            sed -n '330,380p' test/agent-quota.test.mjs
+          fi
+
+      - name: Run test suite
+        run: pnpm test
 
       - name: Commit applied change
         shell: bash
