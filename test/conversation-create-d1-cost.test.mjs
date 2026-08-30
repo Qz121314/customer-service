@@ -102,7 +102,7 @@ test('assigned conversation start reuses the assignment lifecycle snapshot', () 
   assert.doesNotMatch(assignedBranch, /broadcastClientConversationEvent\(/u);
 });
 
-test('normal routing assignment keeps strict round robin in one atomic statement', () => {
+test('normal routing assignment keeps product round robin in one atomic statement', () => {
   const route = section(
     routingSource,
     'export async function assignConversationAgent(',
@@ -110,10 +110,12 @@ test('normal routing assignment keeps strict round robin in one atomic statement
   );
 
   assert.match(route, /WITH context AS/u);
-  assert.match(route, /FROM matching m/u);
-  assert.match(route, /JOIN agents a ON a\.id = m\.agent_id/u);
-  assert.match(route, /a\.round_robin_seq ASC/u);
+  assert.match(route, /cursor AS/u);
+  assert.match(route, /routing_round_robin_cursors/u);
+  assert.match(route, /rr\.last_agent_id/u);
+  assert.match(route, /a\.id > rr\.last_agent_id/u);
   assert.match(route, /RETURNING assigned_agent AS id/u);
+  assert.doesNotMatch(route, /round_robin_seq/u);
   assert.doesNotMatch(route, /const conversation = await db/u);
   assert.equal((route.match(/\.prepare\(/gu) ?? []).length, 1);
 });
