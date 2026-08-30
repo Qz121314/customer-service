@@ -196,7 +196,7 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
     .run();
   return c.json({
     ok: true,
-    ...(await loadAgentInbox(c.env.DB, { ...agent, status: nextStatus })),
+    ...(await loadAgentInbox(c.env.DB, { ...agent, status: agent.status === 'busy' ? 'busy' : 'online' })),
   });
 });
 
