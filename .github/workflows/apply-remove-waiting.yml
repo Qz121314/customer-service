@@ -46,7 +46,6 @@ jobs:
           src/dashboard/admin-entry.tsx
           test/product-agent-routing.test.mjs
           test/no-waiting-mode.test.mjs
-          migrations/0049_remove_waiting_conversations.sql
           README.md
 
       - name: Assert waiting implementation is gone
