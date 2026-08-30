@@ -711,6 +711,12 @@
   font-weight: 720;
 }
 
+.agent-editor-field > span > small {
+  color: #98a2b3;
+  font-size: inherit;
+  font-weight: 600;
+}
+
 .agent-editor-field input,
 .agent-editor-number-field input,
 .traffic-quota-presets input {

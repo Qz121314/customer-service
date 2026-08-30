@@ -129,7 +129,9 @@ export function AgentEditorModal({
                   </label>
 
                   <label className="agent-editor-field">
-                    <span>客服标记</span>
+                    <span>
+                      客服标记 <small>仅管理员可见</small>
+                    </span>
                     <input
                       value={draft.adminLabel}
                       maxLength={10}

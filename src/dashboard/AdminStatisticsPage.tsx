@@ -1,5 +1,9 @@
 import { useMemo, type CSSProperties } from 'react';
-import type { ProductCatalogItem, TrafficOverviewStats } from './api';
+import type {
+  AgentAccount,
+  ProductCatalogItem,
+  TrafficOverviewStats,
+} from './api';
 
 type TrafficRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
 
@@ -22,6 +26,7 @@ const DISTRIBUTION_COLORS = [
 ];
 
 export function AdminStatisticsPage({
+  agents,
   products,
   range,
   stats,
@@ -30,6 +35,7 @@ export function AdminStatisticsPage({
   onClearError,
   onRangeChange,
 }: {
+  agents: Array<Pick<AgentAccount, 'id' | 'adminLabel'>>;
   products: ProductCatalogItem[];
   range: TrafficRange;
   stats: TrafficOverviewStats | null;
@@ -38,6 +44,10 @@ export function AdminStatisticsPage({
   onClearError: () => void;
   onRangeChange: (range: TrafficRange) => void;
 }) {
+  const agentMarkerMap = useMemo(
+    () => new Map(agents.map((agent) => [agent.id, agent.adminLabel])),
+    [agents],
+  );
   const productMap = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
     [products],
@@ -129,17 +139,23 @@ export function AdminStatisticsPage({
             emptyLabel="暂无客服接待"
             total={total}
             busy={busy}
-            rows={agentRows.map((row, index) => ({
-              key: row.agentId ?? '__pending__',
-              name: row.agentName || '待接待',
-              detail: row.agentId ? '首次接待客服' : '尚未分配客服',
-              count: row.count,
-              color: row.agentId
-                ? DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length]
-                : '#d89547',
-              marker: row.agentId ? initials(row.agentName) : '待',
-              pending: row.agentId === null,
-            }))}
+            rows={agentRows.map((row, index) => {
+              const agentMarker = row.agentId
+                ? agentMarkerMap.get(row.agentId) || '未标记'
+                : '待接待';
+              return {
+                key: row.agentId ?? '__pending__',
+                name: agentMarker,
+                detail: row.agentId ? '首次接待客服' : '尚未分配客服',
+                count: row.count,
+                color: row.agentId
+                  ? DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length]
+                  : '#d89547',
+                marker: row.agentId ? initials(agentMarker) : '待',
+                emphasized: Boolean(row.agentId),
+                pending: row.agentId === null,
+              };
+            })}
           />
 
           <DistributionCard
@@ -202,6 +218,7 @@ function DistributionCard({
     color: string;
     marker: string;
     pending?: boolean;
+    emphasized?: boolean;
     imageUrl?: string | null;
   }>;
 }) {
@@ -236,7 +253,12 @@ function DistributionCard({
                   </span>
                 )}
                 <div className="traffic-row-copy">
-                  <strong title={row.name}>{row.name}</strong>
+                  <strong
+                    className={row.emphasized ? 'traffic-agent-marker' : ''}
+                    title={row.name}
+                  >
+                    {row.name}
+                  </strong>
                   <small>{row.detail}</small>
                   <div className="traffic-row-meter">
                     <i

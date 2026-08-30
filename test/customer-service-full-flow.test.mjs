@@ -455,6 +455,20 @@ test('admin can save and update a private agent marker', async () => {
     '2号',
   );
 
+  const loginResponse = await agentApi.request(
+    '/api/agent/auth/login',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'numbered-agent', password: 'pass' }),
+    },
+    env,
+  );
+  const login = await json(loginResponse);
+  assert.equal(login.agent.name, 'Numbered Agent');
+  assert.equal(login.agent.username, 'numbered-agent');
+  assert.ok(!Object.hasOwn(login.agent, 'adminLabel'));
+
   const invalidResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {

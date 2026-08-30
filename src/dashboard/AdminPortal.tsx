@@ -654,6 +654,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
         {section === 'statistics' && (
           <AdminStatisticsPage
+            agents={agents}
             products={products}
             range={trafficRange}
             stats={trafficStats}

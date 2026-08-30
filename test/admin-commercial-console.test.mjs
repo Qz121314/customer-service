@@ -6,6 +6,8 @@ import { URL } from 'node:url';
 const read = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 const admin = read('../src/dashboard/AdminPortal.tsx');
+const agentApi = read('../src/worker/agent-api.ts');
+const clientApi = read('../src/worker/client-api.ts');
 
 test('admin primary navigation keeps management pages focused and agent workspace separate', () => {
   assert.match(admin, /type AdminView = 'agents' \| 'statistics'/u);
@@ -43,4 +45,10 @@ test('agent search and status filtering stay client-side on already loaded data'
   assert.match(admin, /agentIsLimited/u);
   assert.match(admin, /return dailyFull \|\| trafficExhausted/u);
   assert.doesNotMatch(admin, /getAgents\([^)]/u);
+});
+
+test('private agent markers stay out of agent and visitor APIs', () => {
+  for (const source of [agentApi, clientApi]) {
+    assert.doesNotMatch(source, /adminLabel|admin_label/u);
+  }
 });

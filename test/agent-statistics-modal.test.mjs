@@ -34,6 +34,9 @@ test('admin traffic overview stays focused while seat history opens from the acc
   assert.ok(portal.includes('<AdminStatisticsPage'));
   assert.ok(statistics.includes('会话总数'));
   assert.ok(statistics.includes('客服接待分布'));
+  assert.ok(statistics.includes('agent.adminLabel'));
+  assert.ok(statistics.includes("|| '未标记'"));
+  assert.ok(!statistics.includes('name: row.agentName'));
   assert.ok(statistics.includes('产品会话分布'));
   assert.ok(statistics.includes('待接待'));
   assert.ok(!statistics.includes('产品质量'));

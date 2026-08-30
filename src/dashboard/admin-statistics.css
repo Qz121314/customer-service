@@ -394,6 +394,16 @@
   font-weight: 750;
 }
 
+.traffic-row-copy > .traffic-agent-marker {
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 7px;
+  border: 1px solid #ffb4b4;
+  border-radius: 999px;
+  background: #ffeded;
+  color: #d92d20;
+}
+
 .traffic-row-copy > small {
   color: #969ba5;
   font-size: 8px;
