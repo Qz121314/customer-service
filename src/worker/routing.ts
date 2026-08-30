@@ -8,13 +8,13 @@ export type AgentAssignmentResult = AgentAssignment & {
   assignedAt: string | null;
 };
 
-const ROUTING_TIME_ZONE = "America/Los_Angeles";
+const ROUTING_TIME_ZONE = 'America/Los_Angeles';
 export function routingBusinessDate(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: ROUTING_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(now);
   const values = Object.fromEntries(
     parts.map((part) => [part.type, part.value]),
