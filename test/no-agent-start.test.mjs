@@ -33,7 +33,7 @@ let rejectUnassignedConversationStart;
 try {
   ({ clientApi } = await import('../src/worker/client-api.ts'));
   ({ rejectUnassignedConversationStart } = await import(
-    '../src/worker/no-agent-start.ts'
+    '../src/worker/no-agent-start.ts',
   ));
 } finally {
   for (const shimPath of shims) unlinkSync(shimPath);
