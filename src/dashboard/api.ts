@@ -194,9 +194,14 @@ export type AgentInbox = {
   availability: AgentAvailability;
 };
 
-type AdminBootstrapPayload = {
+export type SiteSettings = {
+  noAgentMessage: string;
+};
+
+export type AdminBootstrapPayload = {
   agents: AgentAccount[];
   products: ProductCatalogItem[];
+  settings: SiteSettings;
 };
 
 type AgentBootstrapPayload = AgentSessionState & {
@@ -235,6 +240,7 @@ const errorMessages: Record<string, string> = {
   INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
   INVALID_MEDIA_UPLOAD_ID: '图片上传标识无效，请重新选择图片',
   MEDIA_UPLOAD_ID_CONFLICT: '图片上传标识冲突，请重新选择图片',
+  INVALID_NO_AGENT_MESSAGE: '无人可接提示不能为空，且最多 500 个字符',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -313,6 +319,20 @@ export async function getAgentQuotaLedger(
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
   const response = await getAdminBootstrap();
   return response.products;
+}
+
+export async function getAdminConfiguration(): Promise<AdminBootstrapPayload> {
+  return getAdminBootstrap();
+}
+
+export async function updateSiteSettings(
+  noAgentMessage: string,
+): Promise<SiteSettings> {
+  const response = await request<{ settings: SiteSettings }>('/api/admin/settings', {
+    method: 'PATCH',
+    body: JSON.stringify({ noAgentMessage }),
+  });
+  return response.settings;
 }
 
 export async function getTrafficOverviewStats(

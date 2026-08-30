@@ -3,8 +3,6 @@ import { hashAgentPassword } from './agent-password';
 import { broadcastClientConversationEvent } from './client-api';
 import { assignConversationAgent } from './routing';
 import { calendarMonthPeriod } from '../shared/calendar-month';
-import { sendAgentPushForConversation } from './agent-push';
-import { assignWaitingConversations } from './waiting-assignment';
 
 type Bindings = {
   DB: D1Database;
@@ -64,6 +62,10 @@ type QuotaAdjustmentRow = {
   created_at: string;
 };
 
+type SiteSettingsRow = {
+  no_agent_message: string;
+};
+
 type AgentRoutingScope =
   | { type: 'none' }
   | { type: 'section'; sectionIds: string[] }
@@ -77,11 +79,33 @@ export const adminConfigApi = new Hono<Env>();
 
 adminConfigApi.get('/api/admin/bootstrap', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const [agents, products] = await Promise.all([
+  const [agents, products, settings] = await Promise.all([
     loadAgents(c.env.DB),
     loadProducts(c.env.DB),
+    loadSiteSettings(c.env.DB),
   ]);
-  return c.json({ agents, products });
+  return c.json({ agents, products, settings });
+});
+
+adminConfigApi.patch('/api/admin/settings', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const body = await readJson<{ noAgentMessage?: string }>(c.req.raw);
+  const noAgentMessage = body?.noAgentMessage?.trim() ?? '';
+  if (!noAgentMessage || noAgentMessage.length > 500) {
+    return c.json({ error: 'INVALID_NO_AGENT_MESSAGE' }, 400);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE sites
+     SET no_agent_message = ?1, updated_at = CURRENT_TIMESTAMP
+     WHERE id = 'default'`,
+  )
+    .bind(noAgentMessage)
+    .run();
+  return c.json({
+    ok: true,
+    settings: { noAgentMessage },
+  });
 });
 
 adminConfigApi.get('/api/admin/agents', async (c) => {
@@ -581,33 +605,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       );
     }
   }
-  const quotaWasBlocking =
-    current.traffic_quota_enabled === 1 &&
-    current.traffic_quota_used >= current.traffic_quota_total;
-  const quotaEligibilityRestored =
-    quotaWasBlocking && (quotaApplied || trafficQuotaEnabled === 0);
-  const enabledEligibilityRestored = current.is_enabled === 0 && enabled === 1;
-  let assignedWaitingCount = 0;
-  if (
-    enabled === 1 &&
-    current.status === 'online' &&
-    (enabledEligibilityRestored || quotaEligibilityRestored)
-  ) {
-    const assignedConversationIds = await assignWaitingConversations(
-      c.env,
-      id,
-      10,
-    );
-    assignedWaitingCount = assignedConversationIds.length;
-    for (const conversationId of assignedConversationIds) {
-      c.executionCtx.waitUntil(
-        sendAgentPushForConversation(c.env, conversationId).catch((error) => {
-          console.warn('Agent push dispatch failed after quota top-up.', error);
-        }),
-      );
-    }
-  }
-  return c.json({ ok: true, quotaApplied, assignedWaitingCount });
+  return c.json({ ok: true, quotaApplied });
 });
 
 adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
@@ -672,11 +670,23 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
     if (conversationsToReassign.length) {
       await disconnectAgentRealtime(c.env, id, conversationsToReassign);
       for (const conversationId of conversationsToReassign) {
-        await assignConversationAgent(c.env.DB, conversationId);
+        const assignment = await assignConversationAgent(
+          c.env.DB,
+          conversationId,
+        );
+        if (!assignment) {
+          await c.env.DB.prepare(
+            `UPDATE conversations
+             SET status = 'closed', updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND assigned_agent IS NULL`,
+          )
+            .bind(conversationId)
+            .run();
+        }
         await broadcastClientConversationEvent(
           c.env,
           conversationId,
-          'conversation.assigned',
+          assignment ? 'conversation.assigned' : 'conversation.closed',
         );
       }
     }
@@ -793,6 +803,19 @@ async function loadProducts(db: D1Database) {
     categoryName: product.category_name,
     isEnabled: product.is_enabled === 1,
   }));
+}
+
+async function loadSiteSettings(db: D1Database) {
+  const settings = await db
+    .prepare(
+      `SELECT no_agent_message
+       FROM sites
+       WHERE id = 'default'
+       LIMIT 1`,
+    )
+    .first<SiteSettingsRow>();
+  if (!settings) throw new Error('Default site is missing');
+  return { noAgentMessage: settings.no_agent_message };
 }
 
 async function assignedActiveConversationIds(

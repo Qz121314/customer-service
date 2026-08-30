@@ -10,10 +10,10 @@ import {
   createAgent,
   deleteAgent,
   getAdminSession,
+  getAdminConfiguration,
   getTrafficOverviewStats,
   getAgentQuotaLedger,
-  getAgents,
-  getProductCatalog,
+  updateSiteSettings,
   updateAgent,
 } from './api';
 import {
@@ -34,7 +34,7 @@ import { UiIcon } from './icons';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
-import { Button } from './ui';
+import { Button, Textarea } from './ui';
 
 type AdminView = 'agents' | 'statistics';
 type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
@@ -90,6 +90,9 @@ export function AdminPortal() {
 function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agents, setAgents] = useState<AgentAccount[]>([]);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
+  const [noAgentMessage, setNoAgentMessage] = useState('');
+  const [noAgentMessageDraft, setNoAgentMessageDraft] = useState('');
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [section, setSection] = useState<AdminView>('agents');
   const [agentSearch, setAgentSearch] = useState('');
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
@@ -120,12 +123,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   );
 
   const refresh = useCallback(async () => {
-    const [nextAgents, nextProducts] = await Promise.all([
-      getAgents(),
-      getProductCatalog(),
-    ]);
-    setAgents(nextAgents);
-    setProducts(nextProducts);
+    const configuration = await getAdminConfiguration();
+    setAgents(configuration.agents);
+    setProducts(configuration.products);
+    setNoAgentMessage(configuration.settings.noAgentMessage);
+    setNoAgentMessageDraft(configuration.settings.noAgentMessage);
   }, []);
 
   useEffect(() => {
@@ -297,6 +299,23 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
+  async function saveSiteSettings(event: FormEvent) {
+    event.preventDefault();
+    const messageValue = noAgentMessageDraft.trim();
+    if (!messageValue || messageValue.length > 500 || settingsSaving) return;
+    setSettingsSaving(true);
+    setError('');
+    try {
+      const settings = await updateSiteSettings(messageValue);
+      setNoAgentMessage(settings.noAgentMessage);
+      setNoAgentMessageDraft(settings.noAgentMessage);
+    } catch (reason) {
+      setError(message(reason, '保存无人可接提示失败'));
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
   async function removeAgent(agent: Pick<AgentAccount, 'id' | 'name'>) {
     if (deletingAgentId) return;
     const confirmed = window.confirm(
@@ -425,6 +444,39 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 <span>已覆盖产品</span>
               </div>
             </section>
+
+            <form
+              className="admin-routing-settings"
+              onSubmit={(event) => void saveSiteSettings(event)}
+            >
+              <div className="admin-routing-settings-copy">
+                <strong>无人可接提示</strong>
+                <span>
+                  当当前产品没有符合资格的在线客服时，前端弹窗直接展示这段文字。可填写营业时间或其他联系说明。
+                </span>
+              </div>
+              <Textarea
+                value={noAgentMessageDraft}
+                maxLength={500}
+                rows={3}
+                disabled={settingsSaving}
+                aria-label="无人可接提示"
+                onChange={(event) => setNoAgentMessageDraft(event.target.value)}
+              />
+              <div className="admin-routing-settings-actions">
+                <small>{noAgentMessageDraft.length} / 500</small>
+                <Button
+                  type="submit"
+                  disabled={
+                    settingsSaving ||
+                    !noAgentMessageDraft.trim() ||
+                    noAgentMessageDraft.trim() === noAgentMessage
+                  }
+                >
+                  {settingsSaving ? '保存中…' : '保存提示'}
+                </Button>
+              </div>
+            </form>
 
             <section className="admin-table-card">
               <div className="admin-table-title">

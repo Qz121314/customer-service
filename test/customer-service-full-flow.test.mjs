@@ -372,15 +372,15 @@ test('admin can save multiple whole-section routing rules in one request', async
   );
   const restoredQuota = await json(restoredQuotaResponse);
   assert.equal(restoredQuota.quotaApplied, true);
-  assert.equal(restoredQuota.assignedWaitingCount, 1);
+  assert.equal(restoredQuota.assignedWaitingCount, undefined);
   const assignedConversation = database
     .prepare(
       `SELECT assigned_agent, status
        FROM conversations WHERE id = 'quota-waiting-conversation'`,
     )
     .get();
-  assert.equal(assignedConversation.assigned_agent, created.id);
-  assert.equal(assignedConversation.status, 'pending');
+  assert.equal(assignedConversation.assigned_agent, null);
+  assert.equal(assignedConversation.status, 'open');
   const restoredAgentQuota = database
     .prepare(
       `SELECT traffic_quota_total AS total, traffic_quota_used AS used
@@ -388,7 +388,60 @@ test('admin can save multiple whole-section routing rules in one request', async
     )
     .get(created.id);
   assert.equal(restoredAgentQuota.total, 151);
-  assert.equal(restoredAgentQuota.used, 151);
+  assert.equal(restoredAgentQuota.used, 150);
+  database.close();
+});
+
+test('admin can configure the no-agent message returned by bootstrap', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const adminPassword = 'admin-password';
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: fakeRooms().namespace,
+    ADMIN_PASSWORD: adminPassword,
+  };
+  const headers = {
+    cookie: adminCookie(adminPassword),
+    'content-type': 'application/json',
+  };
+
+  const updateResponse = await adminConfigApi.request(
+    '/api/admin/settings',
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        noAgentMessage: '  营业时间：每天 10:00–20:00  ',
+      }),
+    },
+    env,
+  );
+  const updated = await json(updateResponse);
+  assert.equal(updateResponse.status, 200);
+  assert.equal(updated.settings.noAgentMessage, '营业时间：每天 10:00–20:00');
+
+  const bootstrapResponse = await adminConfigApi.request(
+    '/api/admin/bootstrap',
+    { headers },
+    env,
+  );
+  const bootstrap = await json(bootstrapResponse);
+  assert.equal(
+    bootstrap.settings.noAgentMessage,
+    '营业时间：每天 10:00–20:00',
+  );
+
+  const invalidResponse = await adminConfigApi.request(
+    '/api/admin/settings',
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ noAgentMessage: '   ' }),
+    },
+    env,
+  );
+  assert.equal(invalidResponse.status, 400);
   database.close();
 });
 
@@ -1190,10 +1243,12 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       },
       env,
     );
-    return json(response);
+    return { status: response.status, body: await json(response) };
   }
 
-  const east = await createConversation('east');
+  const eastResult = await createConversation('east');
+  const east = eastResult.body;
+  assert.equal(eastResult.status, 201);
   const eastId = east.conversation.id;
   assert.equal(
     database
@@ -1212,12 +1267,17 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     Object.assign(Object.create(null), { total: 1, used: 1 }),
   );
 
-  const westOne = await createConversation('west');
-  const westTwo = await createConversation('west');
-  const westThree = await createConversation('west');
+  const westOneResult = await createConversation('west');
+  const westTwoResult = await createConversation('west');
+  const unavailableWest = await createConversation('west');
+  const westOne = westOneResult.body;
+  const westTwo = westTwoResult.body;
   const westOneId = westOne.conversation.id;
   const westTwoId = westTwo.conversation.id;
-  const westThreeId = westThree.conversation.id;
+  assert.equal(westOneResult.status, 201);
+  assert.equal(westTwoResult.status, 201);
+  assert.equal(unavailableWest.status, 409);
+  assert.equal(unavailableWest.body.error.code, 'NO_AGENT_AVAILABLE');
   assert.equal(
     database
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
@@ -1231,11 +1291,9 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
     agentA,
   );
   assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get(westThreeId).assigned_agent,
-    null,
-    'fresh traffic must wait when every matching seat has exhausted new-traffic quota',
+    database.prepare('SELECT COUNT(*) AS count FROM conversations').get().count,
+    3,
+    'an unavailable CTA must not persist a waiting conversation',
   );
   assert.deepEqual(
     database
@@ -1276,13 +1334,16 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
   );
   const toppedUp = await json(topUpResponse);
   assert.equal(toppedUp.quotaApplied, true);
-  assert.equal(toppedUp.assignedWaitingCount, 1);
+  assert.equal(toppedUp.assignedWaitingCount, undefined);
+  const westThreeResult = await createConversation('west');
+  assert.equal(westThreeResult.status, 201);
+  const westThreeId = westThreeResult.body.conversation.id;
   assert.equal(
     database
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(westThreeId).assigned_agent,
     agentA,
-    'adding one unit must immediately admit one waiting fresh conversation',
+    'adding one unit must admit the next fresh conversation without recovery priority',
   );
   assert.deepEqual(
     database

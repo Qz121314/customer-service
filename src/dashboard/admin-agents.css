@@ -71,6 +71,46 @@
     0 10px 34px rgb(16 24 40 / 2.5%);
 }
 
+.admin-agent-layout .admin-routing-settings {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.65fr) minmax(320px, 1.35fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #dee2e8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(16 24 40 / 3%);
+}
+
+.admin-routing-settings-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-routing-settings-copy strong {
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.admin-routing-settings-copy span,
+.admin-routing-settings-actions small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.admin-routing-settings [data-ui='textarea'] {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.admin-routing-settings-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
 .admin-agent-layout .admin-table-title {
   background: linear-gradient(180deg, #fff 0%, #fcfcfd 100%);
 }
@@ -243,6 +283,16 @@
 }
 
 @media (max-width: 900px) {
+  .admin-agent-layout .admin-routing-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-routing-settings-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
   .admin-agent-layout .admin-table-wrap {
     overflow: visible;
     background: #f6f7f9;

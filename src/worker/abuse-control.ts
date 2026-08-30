@@ -207,6 +207,56 @@ export async function consumeConversationCreationQuota(
   };
 }
 
+/**
+ * Roll back a CTA start that could not obtain an eligible agent. The
+ * conversation, its handoff rows and the visitor/source creation counters are
+ * released in one D1 batch so an unavailable attempt never becomes a waiting
+ * conversation and never consumes the 24-hour creation limits.
+ */
+export async function releaseUnassignedConversationStart(
+  db: D1Database,
+  input: {
+    siteId: string;
+    conversationId: string;
+    visitorId: string;
+    sourceHash: string;
+    idempotencyKey: string;
+    now?: Date;
+  },
+): Promise<void> {
+  const nowIso = (input.now ?? new Date()).toISOString();
+  const visitorKey = `visitor:${input.visitorId}`;
+  const sourceKey = `source:${input.sourceHash}`;
+
+  await db.batch([
+    db
+      .prepare(
+        `DELETE FROM conversations
+         WHERE id = ?1
+           AND site_id = ?2
+           AND assigned_agent IS NULL`,
+      )
+      .bind(input.conversationId, input.siteId),
+    db
+      .prepare(
+        `DELETE FROM conversation_creation_quota_receipts
+         WHERE site_id = ?1
+           AND reuse_key = ?2`,
+      )
+      .bind(input.siteId, input.idempotencyKey),
+    db
+      .prepare(
+        `UPDATE conversation_creation_limits
+         SET accepted_count = MAX(accepted_count - 1, 0),
+             updated_at = ?1
+         WHERE changes() = 1
+           AND site_id = ?2
+           AND subject_key IN (?3, ?4)`,
+      )
+      .bind(nowIso, input.siteId, visitorKey, sourceKey),
+  ]);
+}
+
 function subjectBlocked(
   row: SubjectLimitRow | undefined,
   limit: number,

@@ -250,6 +250,62 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
   database.close();
 });
 
+test('CTA returns the configured message without persisting or charging when no agent is eligible', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  database.exec(`
+    UPDATE agents SET status = 'offline' WHERE id = 'cta-agent';
+    UPDATE sites
+    SET no_agent_message = '营业时间：周一至周五 09:00–18:00'
+    WHERE id = 'default';
+  `);
+
+  const response = await startConversation(
+    database,
+    rooms,
+    '22222222-2222-4222-8222-222222222222',
+  );
+  const value = await response.json();
+
+  assert.equal(response.status, 409);
+  assert.deepEqual(value, {
+    error: {
+      code: 'NO_AGENT_AVAILABLE',
+      message: '营业时间：周一至周五 09:00–18:00',
+    },
+  });
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    0,
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COUNT(*) AS count FROM conversation_creation_quota_receipts',
+      'count',
+    ),
+    0,
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COALESCE(SUM(accepted_count), 0) AS count FROM conversation_creation_limits',
+      'count',
+    ),
+    0,
+  );
+  assert.equal(
+    scalar(
+      database,
+      "SELECT traffic_quota_used FROM agents WHERE id = 'cta-agent'",
+      'traffic_quota_used',
+    ),
+    0,
+  );
+  assert.deepEqual(rooms.events, []);
+  database.close();
+});
+
 test('same visitor and product reuse one assigned conversation for two hours', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
