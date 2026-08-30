@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AgentAccount,
   AgentQuotaAdjustment,
@@ -18,7 +18,7 @@ import {
   getNoAgentMessage,
   updateAgent,
   updateNoAgentMessage,
-} from './api';
+} from "./api";
 import {
   LoadState,
   AgentDraft,
@@ -31,36 +31,36 @@ import {
   relativeTime,
   initials,
   message,
-} from './dashboard-runtime';
-import { AdminLogin, AdminSetup, Startup } from './dashboard-ui';
-import { UiIcon } from './icons';
-import { AdminStatisticsPage } from './AdminStatisticsPage';
-import { AgentEditorModal } from './AgentEditorModal';
-import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
-import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
-import { Button } from './ui';
+} from "./dashboard-runtime";
+import { AdminLogin, AdminSetup, Startup } from "./dashboard-ui";
+import { UiIcon } from "./icons";
+import { AdminStatisticsPage } from "./AdminStatisticsPage";
+import { AgentEditorModal } from "./AgentEditorModal";
+import { AdminAgentStatisticsModal } from "./AdminAgentStatisticsModal";
+import { NoAgentMessageSettingsPanel } from "./NoAgentMessageSettings";
+import { Button } from "./ui";
 
-type AdminView = 'agents' | 'statistics' | 'settings';
-type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
-type TrafficRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
+type AdminView = "agents" | "statistics" | "settings";
+type AgentFilter = "all" | "online" | "limited" | "disabled";
+type TrafficRange = "today" | "yesterday" | "7d" | "30d" | "90d";
 
 export function AdminPortal() {
-  const [state, setState] = useState<LoadState>('loading');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [state, setState] = useState<LoadState>("loading");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     getAdminSession()
       .then((session) => {
-        if (!session.configured) setState('not-configured');
-        else setState(session.authenticated ? 'authenticated' : 'signed-out');
+        if (!session.configured) setState("not-configured");
+        else setState(session.authenticated ? "authenticated" : "signed-out");
       })
-      .catch(() => setState('signed-out'));
+      .catch(() => setState("signed-out"));
   }, []);
 
-  if (state === 'loading') return <Startup label="正在加载管理中心…" />;
-  if (state === 'not-configured') return <AdminSetup />;
-  if (state === 'signed-out') {
+  if (state === "loading") return <Startup label="正在加载管理中心…" />;
+  if (state === "not-configured") return <AdminSetup />;
+  if (state === "signed-out") {
     return (
       <AdminLogin
         password={password}
@@ -68,13 +68,13 @@ export function AdminPortal() {
         onChange={setPassword}
         onSubmit={async (event) => {
           event.preventDefault();
-          setError('');
+          setError("");
           try {
             await adminLogin(password);
-            setPassword('');
-            setState('authenticated');
+            setPassword("");
+            setState("authenticated");
           } catch (reason) {
-            setError(message(reason, '登录失败'));
+            setError(message(reason, "登录失败"));
           }
         }}
       />
@@ -85,7 +85,7 @@ export function AdminPortal() {
     <AdminCenter
       onLogout={async () => {
         await adminLogout();
-        setState('signed-out');
+        setState("signed-out");
       }}
     />
   );
@@ -96,17 +96,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [noAgentMessage, setNoAgentMessage] =
     useState<NoAgentMessageSettings | null>(null);
-  const [section, setSection] = useState<AdminView>('agents');
-  const [agentSearch, setAgentSearch] = useState('');
-  const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
+  const [section, setSection] = useState<AdminView>("agents");
+  const [agentSearch, setAgentSearch] = useState("");
+  const [agentFilter, setAgentFilter] = useState<AgentFilter>("all");
   const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
   const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
-  const [error, setError] = useState('');
-  const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
+  const [error, setError] = useState("");
+  const [trafficRange, setTrafficRange] = useState<TrafficRange>("today");
   const [trafficStats, setTrafficStats] = useState<TrafficOverviewStats | null>(
     null,
   );
@@ -114,13 +114,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     null,
   );
   const [statsBusy, setStatsBusy] = useState(false);
-  const [statsError, setStatsError] = useState('');
+  const [statsError, setStatsError] = useState("");
   const [quotaAdjustments, setQuotaAdjustments] = useState<
     AgentQuotaAdjustment[]
   >([]);
   const [quotaLedger, setQuotaLedger] = useState<AgentQuotaLedger | null>(null);
   const [quotaHistoryBusy, setQuotaHistoryBusy] = useState(false);
-  const [quotaHistoryError, setQuotaHistoryError] = useState('');
+  const [quotaHistoryError, setQuotaHistoryError] = useState("");
   const trafficPeriod = useMemo(
     () => trafficRangePeriod(trafficRange),
     [trafficRange],
@@ -139,21 +139,21 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
   useEffect(() => {
     refresh()
-      .catch((reason) => setError(message(reason, '无法加载配置')))
+      .catch((reason) => setError(message(reason, "无法加载配置")))
       .finally(() => setBusy(false));
   }, [refresh]);
 
   useEffect(() => {
-    if (section !== 'statistics') return;
+    if (section !== "statistics") return;
     let active = true;
-    setStatsError('');
+    setStatsError("");
     setStatsBusy(true);
     getTrafficOverviewStats(trafficPeriod.from, trafficPeriod.to)
       .then((result) => {
         if (active) setTrafficStats(result);
       })
       .catch((reason) => {
-        if (active) setStatsError(message(reason, '无法加载流量统计'));
+        if (active) setStatsError(message(reason, "无法加载流量统计"));
       })
       .finally(() => {
         if (active) setStatsBusy(false);
@@ -166,14 +166,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   useEffect(() => {
     if (!editorOpen || saving) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setEditorOpen(false);
+      if (event.key === "Escape") setEditorOpen(false);
     };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
   }, [editorOpen, saving]);
 
   const onlineCount = agents.filter(
-    (agent) => agent.isEnabled && agent.status === 'online',
+    (agent) => agent.isEnabled && agent.status === "online",
   ).length;
   const enabledCount = agents.filter((agent) => agent.isEnabled).length;
   const disabledCount = agents.length - enabledCount;
@@ -191,16 +191,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return agents.filter((agent) => {
       const matchesSearch =
         !keyword ||
-        `${agent.name} ${agent.username ?? ''} ${agent.adminLabel}`
+        `${agent.name} ${agent.username ?? ""} ${agent.adminLabel}`
           .toLocaleLowerCase()
           .includes(keyword);
       if (!matchesSearch) return false;
 
-      if (agentFilter === 'online') {
-        return agent.isEnabled && agent.status === 'online';
+      if (agentFilter === "online") {
+        return agent.isEnabled && agent.status === "online";
       }
-      if (agentFilter === 'limited') return agentIsLimited(agent);
-      if (agentFilter === 'disabled') return !agent.isEnabled;
+      if (agentFilter === "limited") return agentIsLimited(agent);
+      if (agentFilter === "disabled") return !agent.isEnabled;
       return true;
     });
   }, [agentFilter, agentSearch, agents]);
@@ -209,7 +209,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     setQuotaAdjustments([]);
     setQuotaLedger(null);
     setQuotaHistoryBusy(false);
-    setQuotaHistoryError('');
+    setQuotaHistoryError("");
   }
 
   function createNewAgent() {
@@ -219,7 +219,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     });
     resetQuotaLedgerState();
     setEditorOpen(true);
-    setError('');
+    setError("");
   }
 
   function editAgent(agent: AgentAccount) {
@@ -227,8 +227,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       id: agent.id,
       name: agent.name,
       adminLabel: agent.adminLabel,
-      username: agent.username ?? '',
-      password: '',
+      username: agent.username ?? "",
+      password: "",
       routingScope: agent.routingScope,
       dailyConversationLimit: agent.dailyConversationLimit,
       trafficQuotaEnabled: agent.trafficQuotaEnabled,
@@ -240,19 +240,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     });
     resetQuotaLedgerState();
     setEditorOpen(true);
-    setError('');
+    setError("");
   }
 
   async function loadQuotaLedger() {
     if (!draft.id || quotaHistoryBusy) return;
     setQuotaHistoryBusy(true);
-    setQuotaHistoryError('');
+    setQuotaHistoryError("");
     try {
       const result = await getAgentQuotaLedger(draft.id);
       setQuotaAdjustments(result.adjustments);
       setQuotaLedger(result.ledger);
     } catch (reason) {
-      setQuotaHistoryError(message(reason, '无法核对咨询额度账本'));
+      setQuotaHistoryError(message(reason, "无法核对咨询额度账本"));
     } finally {
       setQuotaHistoryBusy(false);
     }
@@ -262,11 +262,11 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     event.preventDefault();
     if (!draft.name.trim() || !draft.username.trim()) return;
     if (!draft.id && draft.password.length < 4) {
-      setError('新客服必须设置至少 4 个字符的登录密码。');
+      setError("新客服必须设置至少 4 个字符的登录密码。");
       return;
     }
     setSaving(true);
-    setError('');
+    setError("");
     try {
       if (draft.id) {
         await updateAgent(draft.id, {
@@ -300,7 +300,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       resetQuotaLedgerState();
       await refresh();
     } catch (reason) {
-      setError(message(reason, '保存客服失败'));
+      setError(message(reason, "保存客服失败"));
     } finally {
       setSaving(false);
     }
@@ -308,19 +308,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
   async function saveNoAgentMessage(settings: NoAgentMessageSettings) {
     setSettingsSaving(true);
-    setError('');
+    setError("");
     try {
       const nextSettings = await updateNoAgentMessage(settings);
       setNoAgentMessage(nextSettings);
     } catch (reason) {
-      setError(message(reason, '保存无客服提示语失败'));
+      setError(message(reason, "保存无客服提示语失败"));
       throw reason;
     } finally {
       setSettingsSaving(false);
     }
   }
 
-  async function removeAgent(agent: Pick<AgentAccount, 'id' | 'name'>) {
+  async function removeAgent(agent: Pick<AgentAccount, "id" | "name">) {
     if (deletingAgentId) return;
     const confirmed = window.confirm(
       `确定永久删除客服「${agent.name}」？\n\n删除后该账号将立即无法登录，当前未结束会话会释放并重新分配；历史聊天与统计记录会保留。`,
@@ -328,7 +328,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     if (!confirmed) return;
 
     setDeletingAgentId(agent.id);
-    setError('');
+    setError("");
     try {
       await deleteAgent(agent.id);
       if (statisticsAgent?.id === agent.id) setStatisticsAgent(null);
@@ -339,7 +339,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       }
       await refresh();
     } catch (reason) {
-      setError(message(reason, '删除客服失败'));
+      setError(message(reason, "删除客服失败"));
     } finally {
       setDeletingAgentId(null);
     }
@@ -347,17 +347,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
   const editingAgentId = draft.id;
   const sectionTitle =
-    section === 'agents'
-      ? '客服坐席'
-      : section === 'settings'
-        ? '访客体验'
-        : '流量统计';
+    section === "agents"
+      ? "客服坐席"
+      : section === "settings"
+        ? "访客体验"
+        : "流量统计";
   const sectionHint =
-    section === 'agents'
-      ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
-      : section === 'settings'
-        ? '配置产品无客服可用时返回给访客的提示语。'
-        : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
+    section === "agents"
+      ? "管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。"
+      : section === "settings"
+        ? "配置产品无客服可用时返回给访客的提示语。"
+        : "按自然月查看产品带来的首次有效咨询与流量转化分布。";
 
   return (
     <div className="admin-console">
@@ -372,9 +372,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <nav className="admin-nav" aria-label="客服管理导航">
           <button
             type="button"
-            className={section === 'agents' ? 'active' : ''}
-            aria-current={section === 'agents' ? 'page' : undefined}
-            onClick={() => setSection('agents')}
+            className={section === "agents" ? "active" : ""}
+            aria-current={section === "agents" ? "page" : undefined}
+            onClick={() => setSection("agents")}
           >
             <span className="admin-nav-label">
               <UiIcon name="agents" />
@@ -384,9 +384,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
           <button
             type="button"
-            className={section === 'settings' ? 'active' : ''}
-            aria-current={section === 'settings' ? 'page' : undefined}
-            onClick={() => setSection('settings')}
+            className={section === "settings" ? "active" : ""}
+            aria-current={section === "settings" ? "page" : undefined}
+            onClick={() => setSection("settings")}
           >
             <span className="admin-nav-label">
               <UiIcon name="settings" />
@@ -395,9 +395,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </button>
           <button
             type="button"
-            className={section === 'statistics' ? 'active' : ''}
-            aria-current={section === 'statistics' ? 'page' : undefined}
-            onClick={() => setSection('statistics')}
+            className={section === "statistics" ? "active" : ""}
+            aria-current={section === "statistics" ? "page" : undefined}
+            onClick={() => setSection("statistics")}
           >
             <span className="admin-nav-label">
               <UiIcon name="statistics" />
@@ -428,7 +428,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             <h1>{sectionTitle}</h1>
             <p>{sectionHint}</p>
           </div>
-          {section === 'agents' && (
+          {section === "agents" && (
             <Button type="button" onClick={createNewAgent}>
               <UiIcon name="plus" />
               新增客服
@@ -440,20 +440,20 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           <button
             type="button"
             className="notice error"
-            onClick={() => setError('')}
+            onClick={() => setError("")}
           >
             {error}
           </button>
         )}
 
-        {section === 'settings' && noAgentMessage ? (
+        {section === "settings" && noAgentMessage ? (
           <NoAgentMessageSettingsPanel
             settings={noAgentMessage}
             saving={settingsSaving}
             onSave={saveNoAgentMessage}
           />
         ) : null}
-        {section === 'agents' && (
+        {section === "agents" && (
           <div className="admin-agent-layout">
             <section className="admin-overview-strip" aria-label="客服概览">
               <div>
@@ -501,16 +501,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 <div className="admin-agent-filters" aria-label="客服状态筛选">
                   {(
                     [
-                      ['all', '全部', agents.length],
-                      ['online', '在线', onlineCount],
-                      ['limited', '额度不足', limitedCount],
-                      ['disabled', '停用', disabledCount],
+                      ["all", "全部", agents.length],
+                      ["online", "在线", onlineCount],
+                      ["limited", "额度不足", limitedCount],
+                      ["disabled", "停用", disabledCount],
                     ] as const
                   ).map(([value, label, count]) => (
                     <button
                       type="button"
                       key={value}
-                      className={agentFilter === value ? 'active' : ''}
+                      className={agentFilter === value ? "active" : ""}
                       aria-pressed={agentFilter === value}
                       onClick={() => setAgentFilter(value)}
                     >
@@ -539,8 +539,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                     type="button"
                     variant="secondary"
                     onClick={() => {
-                      setAgentSearch('');
-                      setAgentFilter('all');
+                      setAgentSearch("");
+                      setAgentFilter("all");
                     }}
                   >
                     清除筛选
@@ -576,9 +576,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                             key={agent.id}
                             className={
                               !agent.isEnabled
-                                ? 'is-disabled'
+                                ? "is-disabled"
                                 : agentIsLimited(agent)
-                                  ? 'is-limited'
+                                  ? "is-limited"
                                   : undefined
                             }
                           >
@@ -597,10 +597,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                     ) : null}
                                   </div>
                                   <small>
-                                    @{agent.username || '未设置账号'} ·{' '}
+                                    @{agent.username || "未设置账号"} ·{" "}
                                     {agent.lastSeenAt
                                       ? `最后在线 ${relativeTime(agent.lastSeenAt)}`
-                                      : '从未登录'}
+                                      : "从未登录"}
                                   </small>
                                 </div>
                               </div>
@@ -619,7 +619,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                               >
                                 {agent.isEnabled
                                   ? statusLabel(agent.status)
-                                  : '已停用'}
+                                  : "已停用"}
                               </span>
                             </td>
                             <td>
@@ -627,16 +627,16 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                 <strong>
                                   {agent.todayConversationCount}
                                   <span>
-                                    {' '}
-                                    / {agent.dailyConversationLimit || '∞'} 今日
+                                    {" "}
+                                    / {agent.dailyConversationLimit || "∞"} 今日
                                   </span>
                                 </strong>
-                                <small className={dailyFull ? 'is-full' : ''}>
+                                <small className={dailyFull ? "is-full" : ""}>
                                   {dailyFull
-                                    ? '已达每日接待上限，暂停新分流'
+                                    ? "已达每日接待上限，暂停新分流"
                                     : agent.dailyConversationLimit > 0
                                       ? `今日剩余 ${dailyRemaining}`
-                                      : '每日不限'}
+                                      : "每日不限"}
                                 </small>
                               </div>
                             </td>
@@ -647,19 +647,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                     <strong>
                                       {agent.trafficQuotaRemaining}
                                       <span>
-                                        {' '}
+                                        {" "}
                                         / {agent.trafficQuotaTotal} 剩余
                                       </span>
                                     </strong>
                                     <small
                                       className={
                                         agent.trafficQuotaRemaining === 0
-                                          ? 'is-full'
-                                          : ''
+                                          ? "is-full"
+                                          : ""
                                       }
                                     >
                                       {agent.trafficQuotaRemaining === 0
-                                        ? '额度已用完'
+                                        ? "额度已用完"
                                         : `已用 ${agent.trafficQuotaUsed}`}
                                     </small>
                                   </>
@@ -700,7 +700,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           </div>
         )}
 
-        {section === 'statistics' && (
+        {section === "statistics" && (
           <AdminStatisticsPage
             agents={agents}
             products={products}
@@ -708,7 +708,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
             stats={trafficStats}
             busy={statsBusy}
             error={statsError}
-            onClearError={() => setStatsError('')}
+            onClearError={() => setStatsError("")}
             onRangeChange={(range) => {
               setStatsBusy(true);
               setTrafficRange(range);
@@ -767,11 +767,11 @@ function agentIsLimited(agent: AgentAccount): boolean {
 }
 
 function currentBusinessDate(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: CHAT_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).formatToParts(new Date());
   const values = Object.fromEntries(
     parts.map((part) => [part.type, part.value]),
@@ -790,11 +790,11 @@ function trafficRangePeriod(range: TrafficRange): {
   to: string;
 } {
   const today = currentBusinessDate();
-  if (range === 'yesterday') {
+  if (range === "yesterday") {
     const yesterday = shiftBusinessDate(today, -1);
     return { from: yesterday, to: yesterday };
   }
   const days =
-    range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 1;
+    range === "7d" ? 7 : range === "30d" ? 30 : range === "90d" ? 90 : 1;
   return { from: shiftBusinessDate(today, -(days - 1)), to: today };
 }
