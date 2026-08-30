@@ -1,21 +1,21 @@
-import { Hono, type Context } from "hono";
-import { cors } from "hono/cors";
-import { conversationExpiresAt } from "./conversation-retention";
-import { assignConversationAgent, routingBusinessDate } from "./routing";
+import { Hono, type Context } from 'hono';
+import { cors } from 'hono/cors';
+import { conversationExpiresAt } from './conversation-retention';
+import { assignConversationAgent, routingBusinessDate } from './routing';
 import {
   DEFAULT_NO_AGENT_MESSAGE,
   normalizeNoAgentMessageFormat,
   type NoAgentMessageFormat,
-} from "./no-agent-message";
+} from './no-agent-message';
 import {
   broadcastAssignments,
   type AssignmentVisitorMessage,
-} from "./assignment-broadcast";
+} from './assignment-broadcast';
 import {
   consumeConversationCreationQuota,
   passesBurstLimit,
   requestSourceHash,
-} from "./abuse-control";
+} from './abuse-control';
 
 type ClientBindings = {
   DB: D1Database;
@@ -24,8 +24,8 @@ type ClientBindings = {
 };
 
 type ClientEnv = { Bindings: ClientBindings };
-type ConversationStatus = "open" | "pending" | "closed";
-type SenderType = "visitor" | "agent" | "system";
+type ConversationStatus = 'open' | 'pending' | 'closed';
+type SenderType = 'visitor' | 'agent' | 'system';
 
 type SiteRow = {
   id: string;
@@ -112,26 +112,26 @@ const CONVERSATION_REUSE_HOURS = 2;
 export const clientApi = new Hono<ClientEnv>();
 
 clientApi.use(
-  "/client/v1/*",
+  '/client/v1/*',
   cors({
-    origin: "*",
-    allowHeaders: ["Content-Type"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    origin: '*',
+    allowHeaders: ['Content-Type'],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
     maxAge: 86400,
   }),
 );
 
-clientApi.get("/client/v1/conversations", async (c) => {
-  const visitorId = normalizeVisitorId(c.req.query("visitorId"));
+clientApi.get('/client/v1/conversations', async (c) => {
+  const visitorId = normalizeVisitorId(c.req.query('visitorId'));
   if (!visitorId)
-    return error(c, 400, "INVALID_VISITOR_ID", "Visitor ID is invalid.");
+    return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
 
   const site = await findSite(
     c.env.DB,
-    normalizeProjectId(c.req.query("projectId")),
+    normalizeProjectId(c.req.query('projectId')),
   );
   if (!site)
-    return error(c, 404, "PROJECT_NOT_FOUND", "Project was not found.");
+    return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
   const result = await c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
@@ -157,16 +157,16 @@ clientApi.get("/client/v1/conversations", async (c) => {
   });
 });
 
-clientApi.get("/client/v1/conversations/:id", async (c) => {
-  const identity = await resolveIdentity(c.env.DB, c.req.param("id"), {
-    visitorId: c.req.query("visitorId"),
-    projectId: c.req.query("projectId"),
+clientApi.get('/client/v1/conversations/:id', async (c) => {
+  const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
+    visitorId: c.req.query('visitorId'),
+    projectId: c.req.query('projectId'),
   });
   if (!identity.ok)
     return error(c, identity.status, identity.code, identity.message);
 
-  const before = c.req.query("before")?.trim() || null;
-  const limit = clampLimit(c.req.query("limit"));
+  const before = c.req.query('before')?.trim() || null;
+  const limit = clampLimit(c.req.query('limit'));
   return c.json({
     conversation: await conversationDetail(
       c.env.DB,
@@ -177,27 +177,27 @@ clientApi.get("/client/v1/conversations/:id", async (c) => {
   });
 });
 
-clientApi.get("/client/v1/conversations/:id/realtime", async (c) => {
-  const identity = await resolveIdentity(c.env.DB, c.req.param("id"), {
-    visitorId: c.req.query("visitorId"),
-    projectId: c.req.query("projectId"),
+clientApi.get('/client/v1/conversations/:id/realtime', async (c) => {
+  const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
+    visitorId: c.req.query('visitorId'),
+    projectId: c.req.query('projectId'),
   });
   if (!identity.ok)
     return error(c, identity.status, identity.code, identity.message);
-  if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
-    return error(c, 426, "WEBSOCKET_REQUIRED", "WebSocket upgrade required.");
+  if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
+    return error(c, 426, 'WEBSOCKET_REQUIRED', 'WebSocket upgrade required.');
   }
 
   const requestUrl = new URL(c.req.url);
   const headers = new Headers(c.req.raw.headers);
-  headers.set("X-CS-Participant-Role", "visitor");
-  headers.set("X-CS-Participant-ID", identity.conversation.visitor_id);
+  headers.set('X-CS-Participant-Role', 'visitor');
+  headers.set('X-CS-Participant-ID', identity.conversation.visitor_id);
   return room(c.env, identity.conversation.id).fetch(
     new Request(requestUrl, { ...c.req.raw, headers }),
   );
 });
 
-clientApi.post("/client/v1/conversations", async (c) => {
+clientApi.post('/client/v1/conversations', async (c) => {
   const body = await readJson<{
     visitorId?: string;
     projectId?: string | null;
@@ -213,39 +213,39 @@ clientApi.post("/client/v1/conversations", async (c) => {
   const messageFieldPresent = body?.message !== undefined;
   const clientMessageFieldPresent = body?.clientMessageId !== undefined;
   const initialMessage =
-    typeof body?.message === "string" ? body.message.trim() : null;
+    typeof body?.message === 'string' ? body.message.trim() : null;
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
   const hasInitialMessage = Boolean(initialMessage);
 
   if (!visitorId)
-    return error(c, 400, "INVALID_VISITOR_ID", "Visitor ID is invalid.");
+    return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   if (!sourceHandoffId) {
     return error(
       c,
       400,
-      "INVALID_SOURCE_HANDOFF_ID",
-      "Source handoff ID is required and must be a UUID v4.",
+      'INVALID_SOURCE_HANDOFF_ID',
+      'Source handoff ID is required and must be a UUID v4.',
     );
   }
   if (messageFieldPresent || clientMessageFieldPresent) {
     if (!hasInitialMessage || !validMessage(initialMessage ?? undefined)) {
-      return error(c, 400, "INVALID_MESSAGE", "Message is invalid.");
+      return error(c, 400, 'INVALID_MESSAGE', 'Message is invalid.');
     }
     if (!clientMessageId) {
       return error(
         c,
         400,
-        "INVALID_CLIENT_MESSAGE_ID",
-        "Client message ID is invalid.",
+        'INVALID_CLIENT_MESSAGE_ID',
+        'Client message ID is invalid.',
       );
     }
   }
   if (!product)
-    return error(c, 400, "INVALID_PRODUCT", "Product context is invalid.");
+    return error(c, 400, 'INVALID_PRODUCT', 'Product context is invalid.');
 
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
-    return error(c, 404, "PROJECT_NOT_FOUND", "Project was not found.");
+    return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
   const reuseKey = await conversationReuseKey(site.id, visitorId, product.id);
 
@@ -355,8 +355,8 @@ clientApi.post("/client/v1/conversations", async (c) => {
       return error(
         c,
         409,
-        "SOURCE_HANDOFF_ALREADY_USED",
-        "Source handoff ID was already used.",
+        'SOURCE_HANDOFF_ALREADY_USED',
+        'Source handoff ID was already used.',
       );
     }
     const conversation = await ownedConversation(
@@ -381,11 +381,11 @@ clientApi.post("/client/v1/conversations", async (c) => {
     replay?.reuse_last_message_at &&
     replay.reuse_expires_at &&
     isAfterReuseBoundary(replay.reuse_last_message_at) &&
-    new Date(toIso(replay.reuse_expires_at) ?? "").getTime() > Date.now();
+    new Date(toIso(replay.reuse_expires_at) ?? '').getTime() > Date.now();
   const reuseIsActive =
     reuseIsFresh &&
     Boolean(replay?.reuse_assigned_agent) &&
-    (replay?.reuse_status === "open" || replay?.reuse_status === "pending");
+    (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
   const affinityAgentId =
     reuseIsFresh && !reuseIsActive
       ? (replay?.reuse_assigned_agent ?? null)
@@ -413,8 +413,8 @@ clientApi.post("/client/v1/conversations", async (c) => {
         return error(
           c,
           409,
-          "SOURCE_HANDOFF_ALREADY_USED",
-          "Source handoff ID was already used.",
+          'SOURCE_HANDOFF_ALREADY_USED',
+          'Source handoff ID was already used.',
         );
       }
       if (handoffOwner.conversationId !== conversation.id) {
@@ -456,12 +456,12 @@ clientApi.post("/client/v1/conversations", async (c) => {
       `conversation:${site.id}:${sourceHash}`,
     ))
   ) {
-    c.header("Retry-After", "60");
+    c.header('Retry-After', '60');
     return error(
       c,
       429,
-      "CONVERSATION_RATE_LIMITED",
-      "Please wait before starting another conversation.",
+      'CONVERSATION_RATE_LIMITED',
+      'Please wait before starting another conversation.',
     );
   }
   const quotaNow = new Date();
@@ -476,8 +476,8 @@ clientApi.post("/client/v1/conversations", async (c) => {
     ).toISOString(),
   });
   if (!creationQuota.allowed) {
-    c.header("Retry-After", String(creationQuota.retryAfterSeconds));
-    return error(c, 429, creationQuota.code, "Conversation limit reached.");
+    c.header('Retry-After', String(creationQuota.retryAfterSeconds));
+    return error(c, 429, creationQuota.code, 'Conversation limit reached.');
   }
 
   await rememberProductRoutingContext(c.env.DB, site.id, product);
@@ -547,8 +547,8 @@ clientApi.post("/client/v1/conversations", async (c) => {
         return error(
           c,
           409,
-          "SOURCE_HANDOFF_ALREADY_USED",
-          "Source handoff ID was already used.",
+          'SOURCE_HANDOFF_ALREADY_USED',
+          'Source handoff ID was already used.',
         );
       }
       if (handoffOwner) {
@@ -560,7 +560,7 @@ clientApi.post("/client/v1/conversations", async (c) => {
         );
       }
     }
-    if (!conversation) throw new Error("Conversation start claim failed");
+    if (!conversation) throw new Error('Conversation start claim failed');
 
     const handoffOwner = await rememberSourceHandoff(
       c.env.DB,
@@ -572,8 +572,8 @@ clientApi.post("/client/v1/conversations", async (c) => {
       return error(
         c,
         409,
-        "SOURCE_HANDOFF_ALREADY_USED",
-        "Source handoff ID was already used.",
+        'SOURCE_HANDOFF_ALREADY_USED',
+        'Source handoff ID was already used.',
       );
     }
     if (handoffOwner.conversationId !== conversation.id) {
@@ -584,7 +584,7 @@ clientApi.post("/client/v1/conversations", async (c) => {
         visitorId,
       );
     }
-    if (!conversation) throw new Error("Conversation replay failed");
+    if (!conversation) throw new Error('Conversation replay failed');
 
     conversation = await continueReusedConversationStart(c.env, {
       conversation,
@@ -611,8 +611,8 @@ clientApi.post("/client/v1/conversations", async (c) => {
     return error(
       c,
       409,
-      "SOURCE_HANDOFF_ALREADY_USED",
-      "Source handoff ID was already used.",
+      'SOURCE_HANDOFF_ALREADY_USED',
+      'Source handoff ID was already used.',
     );
   }
 
@@ -620,7 +620,7 @@ clientApi.post("/client/v1/conversations", async (c) => {
   if (hasInitialMessage && clientMessageId && initialMessage) {
     const persisted = await persistClientMessage(c.env.DB, {
       conversationId,
-      senderType: "visitor",
+      senderType: 'visitor',
       senderId: visitor.id,
       body: initialMessage,
       clientMessageId,
@@ -652,13 +652,13 @@ clientApi.post("/client/v1/conversations", async (c) => {
     conversation = snapshots.find((item) => item.id === conversationId) ?? null;
   } else if (createdMessage) {
     await broadcastRoom(c.env, conversationId, {
-      type: "message",
+      type: 'message',
       message: adminMessage(createdMessage),
     });
     conversation = await broadcastClientConversationEvent(
       c.env,
       conversationId,
-      "message.created",
+      'message.created',
       { message: clientMessage(createdMessage) },
     );
   } else {
@@ -670,7 +670,7 @@ clientApi.post("/client/v1/conversations", async (c) => {
     );
   }
 
-  if (!conversation) throw new Error("Conversation persistence failed");
+  if (!conversation) throw new Error('Conversation persistence failed');
   return c.json(
     {
       conversation: await conversationDetail(c.env.DB, conversation, 30, null),
@@ -679,7 +679,7 @@ clientApi.post("/client/v1/conversations", async (c) => {
   );
 });
 
-clientApi.post("/client/v1/conversations/:id/messages", async (c) => {
+clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   const body = await readJson<{
     visitorId?: string;
     projectId?: string | null;
@@ -690,24 +690,24 @@ clientApi.post("/client/v1/conversations/:id/messages", async (c) => {
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
   const messageBody = body?.body?.trim();
   if (!visitorId)
-    return error(c, 400, "INVALID_VISITOR_ID", "Visitor ID is invalid.");
+    return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   if (!clientMessageId) {
     return error(
       c,
       400,
-      "INVALID_CLIENT_MESSAGE_ID",
-      "Client message ID is invalid.",
+      'INVALID_CLIENT_MESSAGE_ID',
+      'Client message ID is invalid.',
     );
   }
   if (!validMessage(messageBody))
-    return error(c, 400, "INVALID_MESSAGE", "Message is invalid.");
+    return error(c, 400, 'INVALID_MESSAGE', 'Message is invalid.');
 
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
-    return error(c, 404, "PROJECT_NOT_FOUND", "Project was not found.");
+    return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
   const conversation = await ownedConversationForMessageWrite(
     c.env.DB,
-    c.req.param("id"),
+    c.req.param('id'),
     site.id,
     visitorId,
   );
@@ -715,16 +715,16 @@ clientApi.post("/client/v1/conversations/:id/messages", async (c) => {
     return error(
       c,
       404,
-      "CONVERSATION_NOT_FOUND",
-      "Conversation was not found.",
+      'CONVERSATION_NOT_FOUND',
+      'Conversation was not found.',
     );
-  if (conversation.status === "closed") {
-    return error(c, 409, "CONVERSATION_CLOSED", "Conversation is closed.");
+  if (conversation.status === 'closed') {
+    return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
   }
 
   const persistedMessage = await persistClientMessage(c.env.DB, {
     conversationId: conversation.id,
-    senderType: "visitor",
+    senderType: 'visitor',
     senderId: conversation.visitor_id,
     body: messageBody!,
     clientMessageId,
@@ -747,13 +747,13 @@ clientApi.post("/client/v1/conversations/:id/messages", async (c) => {
     );
   } else {
     await broadcastRoom(c.env, conversation.id, {
-      type: "message",
+      type: 'message',
       message: adminMessage(createdMessage),
     });
     await broadcastClientConversationEvent(
       c.env,
       conversation.id,
-      "message.created",
+      'message.created',
       { message: clientMessage(createdMessage) },
     );
   }
@@ -761,7 +761,7 @@ clientApi.post("/client/v1/conversations/:id/messages", async (c) => {
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
 
-clientApi.post("/client/v1/conversations/:id/read", async (c) => {
+clientApi.post('/client/v1/conversations/:id/read', async (c) => {
   const body = await readJson<{
     visitorId?: string;
     projectId?: string | null;
@@ -769,13 +769,13 @@ clientApi.post("/client/v1/conversations/:id/read", async (c) => {
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
   if (!visitorId)
-    return error(c, 400, "INVALID_VISITOR_ID", "Visitor ID is invalid.");
+    return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
-    return error(c, 404, "PROJECT_NOT_FOUND", "Project was not found.");
+    return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
   const conversation = await ownedConversation(
     c.env.DB,
-    c.req.param("id"),
+    c.req.param('id'),
     site.id,
     visitorId,
   );
@@ -783,8 +783,8 @@ clientApi.post("/client/v1/conversations/:id/read", async (c) => {
     return error(
       c,
       404,
-      "CONVERSATION_NOT_FOUND",
-      "Conversation was not found.",
+      'CONVERSATION_NOT_FOUND',
+      'Conversation was not found.',
     );
 
   const requestedLastMessageId = normalizeId(body?.lastMessageId, 200);
@@ -834,12 +834,12 @@ clientApi.post("/client/v1/conversations/:id/read", async (c) => {
   if (readResult?.meta.changes) {
     await Promise.all([
       broadcastRoom(c.env, conversation.id, {
-        type: "message.read",
-        reader: "visitor",
+        type: 'message.read',
+        reader: 'visitor',
         lastMessageId: boundary?.id ?? null,
       }),
-      broadcastClientConversationEvent(c.env, conversation.id, "message.read", {
-        reader: "visitor",
+      broadcastClientConversationEvent(c.env, conversation.id, 'message.read', {
+        reader: 'visitor',
         lastMessageId: boundary?.id ?? null,
       }),
     ]);
@@ -847,18 +847,18 @@ clientApi.post("/client/v1/conversations/:id/read", async (c) => {
   return c.json({ ok: true });
 });
 
-clientApi.get("/client/v1/realtime", async (c) => {
-  const visitorId = normalizeVisitorId(c.req.query("visitorId"));
+clientApi.get('/client/v1/realtime', async (c) => {
+  const visitorId = normalizeVisitorId(c.req.query('visitorId'));
   if (!visitorId)
-    return error(c, 400, "INVALID_VISITOR_ID", "Visitor ID is invalid.");
+    return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   const site = await findSite(
     c.env.DB,
-    normalizeProjectId(c.req.query("projectId")),
+    normalizeProjectId(c.req.query('projectId')),
   );
   if (!site)
-    return error(c, 404, "PROJECT_NOT_FOUND", "Project was not found.");
-  if (c.req.header("Upgrade")?.toLowerCase() !== "websocket") {
-    return error(c, 426, "WEBSOCKET_REQUIRED", "WebSocket upgrade required.");
+    return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
+  if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
+    return error(c, 426, 'WEBSOCKET_REQUIRED', 'WebSocket upgrade required.');
   }
   return visitorRoom(c.env, site.id, visitorId).fetch(c.req.raw);
 });
@@ -867,14 +867,14 @@ export async function broadcastClientConversationEvent(
   env: ClientBindings,
   conversationId: string,
   type:
-    | "message.created"
-    | "message.read"
-    | "conversation.assigned"
-    | "conversation.closed",
+    | 'message.created'
+    | 'message.read'
+    | 'conversation.assigned'
+    | 'conversation.closed',
   details: {
     message?: Record<string, unknown>;
     media?: Record<string, unknown>;
-    reader?: "agent" | "visitor";
+    reader?: 'agent' | 'visitor';
     lastMessageId?: string | null;
   } = {},
   options: {
@@ -926,7 +926,7 @@ export async function broadcastClientConversationEvent(
       : null;
   const includeOverview =
     options.includeOverview ??
-    (type === "conversation.assigned" || type === "conversation.closed");
+    (type === 'conversation.assigned' || type === 'conversation.closed');
   const [overview, previousOverview] = await Promise.all([
     conversation.assigned_agent && includeOverview
       ? loadAgentOverview(env.DB, conversation.assigned_agent)
@@ -939,7 +939,7 @@ export async function broadcastClientConversationEvent(
   if (conversation.assigned_agent) {
     inboxUpdates.push(
       broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {
-        type: "conversation.changed",
+        type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
         ...(overview ? { overview } : {}),
@@ -949,7 +949,7 @@ export async function broadcastClientConversationEvent(
   if (previousAgentId) {
     inboxUpdates.push(
       broadcastRoom(env, agentInboxRoom(previousAgentId), {
-        type: "conversation.changed",
+        type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
         ...(previousOverview ? { overview: previousOverview } : {}),
@@ -1030,11 +1030,11 @@ function agentConversationSummary(
 
 function normalizeProjectId(value?: string | null): string {
   const trimmed = value?.trim();
-  return trimmed && trimmed.length <= 200 ? trimmed : "default";
+  return trimmed && trimmed.length <= 200 ? trimmed : 'default';
 }
 
 function normalizeVisitorId(value?: string | null): string | null {
-  const visitorId = value?.trim().toUpperCase() ?? "";
+  const visitorId = value?.trim().toUpperCase() ?? '';
   if (!/^[A-Z0-9]{6}$/u.test(visitorId)) return null;
   const letters = [...visitorId].filter((char) => /[A-Z]/u.test(char)).length;
   const digits = [...visitorId].filter((char) => /[0-9]/u.test(char)).length;
@@ -1042,13 +1042,13 @@ function normalizeVisitorId(value?: string | null): string | null {
 }
 
 function normalizeId(value: unknown, maxLength: number): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
   const trimmed = value.trim();
   return trimmed && trimmed.length <= maxLength ? trimmed : null;
 }
 
 function normalizeHandoffId(value: unknown): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
     normalized,
@@ -1063,19 +1063,19 @@ function normalizeProduct(value?: ProductInput): NormalizedProduct | null {
   const sectionName =
     value?.sectionName === null ||
     value?.sectionName === undefined ||
-    value.sectionName === ""
+    value.sectionName === ''
       ? null
       : normalizeId(value.sectionName, 120);
   const categoryId =
     value?.categoryId === null ||
     value?.categoryId === undefined ||
-    value.categoryId === ""
+    value.categoryId === ''
       ? null
       : normalizeId(value.categoryId, 100);
   const categoryName =
     value?.categoryName === null ||
     value?.categoryName === undefined ||
-    value.categoryName === ""
+    value.categoryName === ''
       ? null
       : normalizeId(value.categoryName, 120);
   const title = normalizeId(value?.title, 300);
@@ -1209,11 +1209,11 @@ async function discardUnassignedConversation(
 function noAgentResponse(c: Context<ClientEnv>, site: SiteRow) {
   const message = site.no_agent_message?.trim() || DEFAULT_NO_AGENT_MESSAGE;
   const format =
-    normalizeNoAgentMessageFormat(site.no_agent_message_format) ?? "plain";
+    normalizeNoAgentMessageFormat(site.no_agent_message_format) ?? 'plain';
   return c.json(
     {
       error: {
-        code: "NO_AGENT_AVAILABLE",
+        code: 'NO_AGENT_AVAILABLE',
         message,
         format,
       },
@@ -1246,7 +1246,7 @@ async function ensureVisitor(
     .all<VisitorRow>();
 
   const visitor = result.results?.[0];
-  if (!visitor) throw new Error("Visitor persistence failed");
+  if (!visitor) throw new Error('Visitor persistence failed');
   return visitor;
 }
 
@@ -1268,8 +1268,8 @@ async function resolveIdentity(
     return {
       ok: false,
       status: 400,
-      code: "INVALID_VISITOR_ID",
-      message: "Visitor ID is invalid.",
+      code: 'INVALID_VISITOR_ID',
+      message: 'Visitor ID is invalid.',
     };
   }
   const site = await findSite(db, normalizeProjectId(input.projectId));
@@ -1277,8 +1277,8 @@ async function resolveIdentity(
     return {
       ok: false,
       status: 404,
-      code: "PROJECT_NOT_FOUND",
-      message: "Project was not found.",
+      code: 'PROJECT_NOT_FOUND',
+      message: 'Project was not found.',
     };
   }
   const conversation = await ownedConversation(
@@ -1291,8 +1291,8 @@ async function resolveIdentity(
     return {
       ok: false,
       status: 404,
-      code: "CONVERSATION_NOT_FOUND",
-      message: "Conversation was not found.",
+      code: 'CONVERSATION_NOT_FOUND',
+      message: 'Conversation was not found.',
     };
   }
   return { ok: true, site, visitorId, conversation };
@@ -1305,7 +1305,7 @@ async function ownedConversationForMessageWrite(
   visitorId: string,
 ): Promise<Pick<
   ConversationRow,
-  "id" | "visitor_id" | "status" | "assigned_agent"
+  'id' | 'visitor_id' | 'status' | 'assigned_agent'
 > | null> {
   return db
     .prepare(
@@ -1318,7 +1318,7 @@ async function ownedConversationForMessageWrite(
     )
     .bind(conversationId, siteId, visitorId)
     .first<
-      Pick<ConversationRow, "id" | "visitor_id" | "status" | "assigned_agent">
+      Pick<ConversationRow, 'id' | 'visitor_id' | 'status' | 'assigned_agent'>
     >();
 }
 
@@ -1348,7 +1348,7 @@ async function ownedConversation(
 }
 
 function isAfterReuseBoundary(value: string): boolean {
-  const timestamp = new Date(toIso(value) ?? "").getTime();
+  const timestamp = new Date(toIso(value) ?? '').getTime();
   return (
     Number.isFinite(timestamp) &&
     timestamp > Date.now() - CONVERSATION_REUSE_HOURS * 60 * 60 * 1000
@@ -1361,14 +1361,14 @@ async function conversationReuseKey(
   productId: string,
 ): Promise<string> {
   const digest = await crypto.subtle.digest(
-    "SHA-256",
+    'SHA-256',
     new TextEncoder().encode(
       `cta-reuse-v1\n${siteId}\n${visitorId}\n${productId}`,
     ),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
 async function nextConversationReuseKey(
@@ -1376,14 +1376,14 @@ async function nextConversationReuseKey(
   previousConversationId: string,
 ): Promise<string> {
   const digest = await crypto.subtle.digest(
-    "SHA-256",
+    'SHA-256',
     new TextEncoder().encode(
       `cta-reuse-next-v1\n${reuseKey}\n${previousConversationId}`,
     ),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
 type SourceHandoffOwner = {
@@ -1438,7 +1438,7 @@ async function rememberSourceHandoff(
     .run();
 
   const owner = await sourceHandoffOwner(db, siteId, sourceHandoffId);
-  if (!owner) throw new Error("Source handoff persistence failed");
+  if (!owner) throw new Error('Source handoff persistence failed');
   return owner;
 }
 
@@ -1485,7 +1485,7 @@ async function continueReusedConversationStart(
   if (input.initialMessage && input.clientMessageId) {
     const persisted = await persistClientMessage(env.DB, {
       conversationId: conversation.id,
-      senderType: "visitor",
+      senderType: 'visitor',
       senderId: conversation.visitor_id,
       body: input.initialMessage,
       clientMessageId: input.clientMessageId,
@@ -1510,14 +1510,14 @@ async function continueReusedConversationStart(
       snapshots.find((item) => item.id === conversation.id) ?? conversation;
   } else if (createdMessage) {
     await broadcastRoom(env, conversation.id, {
-      type: "message",
+      type: 'message',
       message: adminMessage(createdMessage),
     });
     conversation =
       (await broadcastClientConversationEvent(
         env,
         conversation.id,
-        "message.created",
+        'message.created',
         { message: clientMessage(createdMessage) },
       )) ?? conversation;
   }
@@ -1540,9 +1540,9 @@ function conversationSummary(conversation: ConversationRow) {
       conversation.assigned_agent && conversation.agent_avatar_version
         ? `/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}?v=${encodeURIComponent(conversation.agent_avatar_version)}`
         : null,
-    productId: conversation.product_id ?? "",
-    sectionId: conversation.section_id ?? "",
-    productTitle: conversation.product_title ?? conversation.subject ?? "",
+    productId: conversation.product_id ?? '',
+    sectionId: conversation.section_id ?? '',
+    productTitle: conversation.product_title ?? conversation.subject ?? '',
     productCoverUrl: conversation.product_cover_url,
     lastMessage: conversation.last_message,
     lastMessageAt: toIso(conversation.last_message_at),
@@ -1667,7 +1667,7 @@ async function persistClientMessage(
       )
       .bind(input.conversationId, input.clientMessageId)
       .first<MessageRow>();
-    if (!existing) throw new Error("Message persistence conflict");
+    if (!existing) throw new Error('Message persistence conflict');
     return { message: existing, duplicate: true };
   }
 
@@ -1688,13 +1688,13 @@ async function persistClientMessage(
 function assignmentVisitorMessage(
   message: MessageRow,
 ): AssignmentVisitorMessage {
-  if (message.sender_type !== "visitor" || !message.sender_id) {
-    throw new Error("Assignment visitor message invariant failed");
+  if (message.sender_type !== 'visitor' || !message.sender_id) {
+    throw new Error('Assignment visitor message invariant failed');
   }
   return {
     id: message.id,
     conversation_id: message.conversation_id,
-    sender_type: "visitor",
+    sender_type: 'visitor',
     sender_id: message.sender_id,
     body: message.body,
     client_message_id: message.client_message_id,
@@ -1706,16 +1706,16 @@ function assignmentVisitorMessage(
 
 function clientMessage(message: MessageRow) {
   const delivery =
-    message.sender_type === "visitor"
+    message.sender_type === 'visitor'
       ? message.read_by_agent_at
-        ? "read"
-        : "sent"
+        ? 'read'
+        : 'sent'
       : message.read_by_visitor_at
-        ? "read"
-        : "sent";
+        ? 'read'
+        : 'sent';
   return {
     id: message.id,
-    direction: message.sender_type === "agent" ? "agent" : "customer",
+    direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
     sentAt: toIso(message.created_at)!,
     delivery,
@@ -1738,13 +1738,13 @@ function adminMessage(message: MessageRow) {
 
 function publicStatus(
   status: ConversationStatus,
-): "waiting" | "active" | "closed" {
-  if (status === "closed") return "closed";
-  return status === "pending" ? "active" : "waiting";
+): 'waiting' | 'active' | 'closed' {
+  if (status === 'closed') return 'closed';
+  return status === 'pending' ? 'active' : 'waiting';
 }
 
 function clampLimit(raw?: string): number {
-  const value = Number.parseInt(raw ?? "30", 10);
+  const value = Number.parseInt(raw ?? '30', 10);
   if (!Number.isFinite(value)) return 30;
   return Math.min(50, Math.max(1, value));
 }
@@ -1779,9 +1779,9 @@ async function broadcastRoom(
   name: string,
   payload: unknown,
 ): Promise<void> {
-  await room(env, name).fetch("https://conversation-room/broadcast", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+  await room(env, name).fetch('https://conversation-room/broadcast', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 }
@@ -1789,7 +1789,7 @@ async function broadcastRoom(
 function toIso(value: string | null): string | null {
   if (!value) return null;
   if (/^\d{4}-\d{2}-\d{2}T/u.test(value)) return value;
-  return `${value.replace(" ", "T")}Z`;
+  return `${value.replace(' ', 'T')}Z`;
 }
 
 function addHours(value: string, hours: number): string {
@@ -1800,12 +1800,12 @@ function addHours(value: string, hours: number): string {
 
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
-    "SHA-256",
+    'SHA-256',
     new TextEncoder().encode(value),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
