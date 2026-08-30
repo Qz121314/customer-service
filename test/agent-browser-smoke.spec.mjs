@@ -39,18 +39,23 @@ function conversationData({ visitorId, sourceHandoffId, clientMessageId }) {
   };
 }
 
-async function requestConversation(page, identifiers) {
+async function requestConversation(page, identifiers, sourceIp) {
   return page.request.post(url('/client/v1/conversations'), {
+    headers: sourceIp ? { 'CF-Connecting-IP': sourceIp } : undefined,
     data: conversationData(identifiers),
   });
 }
 
 async function seedAgent(page) {
-  const noAgentResponse = await requestConversation(page, {
-    visitorId: primeVisitorId,
-    sourceHandoffId: primeSourceHandoffId,
-    clientMessageId: `ui-smoke-prime-${smokeRunId}`,
-  });
+  const noAgentResponse = await requestConversation(
+    page,
+    {
+      visitorId: primeVisitorId,
+      sourceHandoffId: primeSourceHandoffId,
+      clientMessageId: `ui-smoke-prime-${smokeRunId}`,
+    },
+    '198.51.100.10',
+  );
   expect([200, 503]).toContain(noAgentResponse.status());
 
   const adminLogin = await page.request.post(url('/api/auth/login'), {
@@ -76,15 +81,14 @@ async function seedAgent(page) {
 }
 
 async function createConversation(page) {
-  const conversation = await requestConversation(page, {
-    visitorId,
-    sourceHandoffId,
-    clientMessageId: 'ui-smoke-message-1',
-  });
-  console.log(
-    'SMOKE_CONVERSATION',
-    conversation.status(),
-    await conversation.text(),
+  const conversation = await requestConversation(
+    page,
+    {
+      visitorId,
+      sourceHandoffId,
+      clientMessageId: `ui-smoke-message-${smokeRunId}`,
+    },
+    '198.51.100.11',
   );
   expect(conversation.ok()).toBeTruthy();
 }
