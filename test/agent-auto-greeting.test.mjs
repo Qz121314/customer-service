@@ -278,7 +278,7 @@ test('0035 marks every pre-existing conversation resolved without retroactive gr
       id, site_id, visitor_id, status, product_id, section_id,
       product_title, expires_at, last_message_at, created_at, updated_at
     ) VALUES (
-      'legacy-waiting', 'default', 'legacy-visitor', 'open', 'product-1', 'west',
+      'legacy-closed', 'default', 'legacy-visitor', 'closed', 'product-1', 'west',
       'Product 1', datetime('now', '+1 day'), CURRENT_TIMESTAMP,
       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     );
