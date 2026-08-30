@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
--- Store the administrator-authored no-agent response per product/site. The raw
+-- Store the administrator-authored no-agent response per site. The raw
 -- Markdown is retained so the visitor client can render it with its own safe
 -- Markdown policy.
 ALTER TABLE sites
