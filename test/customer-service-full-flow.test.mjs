@@ -1301,12 +1301,12 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .prepare(
         `SELECT id, assigned_agent
          FROM conversations
-         WHERE id IN (?, ?, ?)
+         WHERE id IN (?, ?)
          ORDER BY id`,
       )
       .all(westOneId, westTwoId)
       .map((row) => row.assigned_agent),
-    [agentA, agentA, agentA],
+    [agentA, agentA],
     'disabling a seat must preserve its existing active conversations',
   );
   assert.deepEqual(
@@ -1329,14 +1329,14 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .prepare(
         `SELECT agent_id, COUNT(*) AS count
          FROM agent_traffic_receipts
-         WHERE conversation_id IN (?, ?, ?, ?)
+         WHERE conversation_id IN (?, ?, ?)
          GROUP BY agent_id
          ORDER BY agent_id`,
       )
       .all(eastId, westOneId, westTwoId)
       .map((row) => ({ agentId: row.agent_id, count: row.count })),
     [
-      { agentId: agentA, count: 3 },
+      { agentId: agentA, count: 2 },
       { agentId: agentB, count: 1 },
     ].sort((left, right) => left.agentId.localeCompare(right.agentId)),
     'immutable first-reception receipts must remain the billing source of truth after disable',
