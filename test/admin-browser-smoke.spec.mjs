@@ -131,6 +131,63 @@ test('admin mobile viewport keeps monitoring and utilities touch-friendly', asyn
     }
   }
 
+  await page.getByRole('button', { name: /访客体验/u }).click();
+  await expect(
+    page.getByRole('heading', { name: '无客服提示语' }),
+  ).toBeVisible();
+  const mobileSettingsGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const root = browser.document.scrollingElement;
+    const card = browser.document.querySelector('.no-agent-settings-card');
+    const textarea = card?.querySelector('textarea');
+    const formatButtons = card?.querySelectorAll(
+      '.no-agent-format-switch button',
+    );
+    const actions = card?.querySelector('.no-agent-settings-actions');
+    const saveButton = actions?.querySelector('.primary-button');
+    if (
+      !root ||
+      !(card instanceof browser.HTMLElement) ||
+      !(textarea instanceof browser.HTMLElement) ||
+      !formatButtons ||
+      !(actions instanceof browser.HTMLElement) ||
+      !(saveButton instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    return {
+      rootClientWidth: root.clientWidth,
+      rootScrollWidth: root.scrollWidth,
+      cardWidth: card.getBoundingClientRect().width,
+      viewportWidth: browser.innerWidth,
+      textareaFontSize: Number.parseFloat(
+        browser.getComputedStyle(textarea).fontSize,
+      ),
+      textareaHeight: textarea.getBoundingClientRect().height,
+      formatButtonHeights: [...formatButtons].map(
+        (button) => button.getBoundingClientRect().height,
+      ),
+      saveButtonHeight: saveButton.getBoundingClientRect().height,
+      actionsPosition: browser.getComputedStyle(actions).position,
+    };
+  });
+  expect(mobileSettingsGeometry).not.toBeNull();
+  if (mobileSettingsGeometry) {
+    expect(mobileSettingsGeometry.rootScrollWidth).toBeLessThanOrEqual(
+      mobileSettingsGeometry.rootClientWidth + 1,
+    );
+    expect(mobileSettingsGeometry.cardWidth).toBeLessThanOrEqual(
+      mobileSettingsGeometry.viewportWidth + 1,
+    );
+    expect(mobileSettingsGeometry.textareaFontSize).toBeGreaterThanOrEqual(16);
+    expect(mobileSettingsGeometry.textareaHeight).toBeLessThanOrEqual(460);
+    for (const height of mobileSettingsGeometry.formatButtonHeights) {
+      expect(height).toBeGreaterThanOrEqual(44);
+    }
+    expect(mobileSettingsGeometry.saveButtonHeight).toBeGreaterThanOrEqual(48);
+    expect(mobileSettingsGeometry.actionsPosition).toBe('sticky');
+  }
+
   await page.getByRole('button', { name: /流量统计/u }).click();
   await expect(page.getByText('会话流量分布', { exact: true })).toBeVisible();
   const statisticsGeometry = await page.evaluate(() => {
@@ -344,6 +401,54 @@ test('admin traffic statistics owns one desktop viewport', async ({ page }) => {
     violations,
     `ADMIN_VIEWPORT_GEOMETRY ${JSON.stringify(geometry)}`,
   ).toEqual([]);
+
+  await page.getByRole('button', { name: /访客体验/u }).click();
+  await expect(
+    page.getByRole('heading', { name: '无客服提示语' }),
+  ).toBeVisible();
+  const desktopSettingsGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const root = browser.document.scrollingElement;
+    const content = browser.document.querySelector('.admin-content');
+    const card = browser.document.querySelector('.no-agent-settings-card');
+    const textarea = card?.querySelector('textarea');
+    const actions = card?.querySelector('.no-agent-settings-actions');
+    if (
+      !root ||
+      !(content instanceof browser.HTMLElement) ||
+      !(card instanceof browser.HTMLElement) ||
+      !(textarea instanceof browser.HTMLElement) ||
+      !(actions instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    const contentRect = content.getBoundingClientRect();
+    const cardRect = card.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    return {
+      rootScrollWidth: root.scrollWidth,
+      rootClientWidth: root.clientWidth,
+      contentOverflowY: browser.getComputedStyle(content).overflowY,
+      contentBottom: contentRect.bottom,
+      cardRight: cardRect.right,
+      cardWidth: cardRect.width,
+      textareaHeight: textarea.getBoundingClientRect().height,
+      actionsBottom: actionsRect.bottom,
+    };
+  });
+  expect(desktopSettingsGeometry).not.toBeNull();
+  if (desktopSettingsGeometry) {
+    expect(desktopSettingsGeometry.rootScrollWidth).toBeLessThanOrEqual(
+      desktopSettingsGeometry.rootClientWidth + 1,
+    );
+    expect(desktopSettingsGeometry.contentOverflowY).toBe('auto');
+    expect(desktopSettingsGeometry.cardWidth).toBeLessThanOrEqual(760);
+    expect(desktopSettingsGeometry.cardRight).toBeLessThanOrEqual(1440);
+    expect(desktopSettingsGeometry.textareaHeight).toBeLessThanOrEqual(220);
+    expect(desktopSettingsGeometry.actionsBottom).toBeLessThanOrEqual(
+      desktopSettingsGeometry.contentBottom + 1,
+    );
+  }
 
   await page.getByRole('button', { name: /客服账号/u }).click();
   const agentRow = page
