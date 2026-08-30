@@ -464,9 +464,11 @@ test('admin can save and update a private agent marker', async () => {
   database.close();
 });
 
-async function json(response) {
+async function json(response, { allowError = false } = {}) {
   const value = await response.json();
-  assert.ok(response.ok, `${response.status}: ${JSON.stringify(value)}`);
+  if (!allowError) {
+    assert.ok(response.ok, `${response.status}: ${JSON.stringify(value)}`);
+  }
   return value;
 }
 
@@ -1171,7 +1173,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       },
       env,
     );
-    const payload = await json(response);
+    const payload = await json(response, { allowError: true });
     return response.ok ? payload : { response, ...payload };
   }
 
@@ -1613,11 +1615,14 @@ test('admin can configure the no-agent response as plain text or Markdown', asyn
     format: 'markdown',
   });
   assert.deepEqual(
-    database
-      .prepare(
-        'SELECT no_agent_message, no_agent_message_format FROM sites WHERE id = ?',
-      )
-      .get('default'),
+    Object.assign(
+      {},
+      database
+        .prepare(
+          'SELECT no_agent_message, no_agent_message_format FROM sites WHERE id = ?',
+        )
+        .get('default'),
+    ),
     {
       no_agent_message: '**暂时没有客服**\\n\\n请稍后再试。',
       no_agent_message_format: 'markdown',
