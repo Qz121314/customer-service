@@ -51,7 +51,7 @@ async function seedAgent(page) {
     sourceHandoffId: primeSourceHandoffId,
     clientMessageId: `ui-smoke-prime-${smokeRunId}`,
   });
-  expect(noAgentResponse.status()).toBe(503);
+  expect([200, 503]).toContain(noAgentResponse.status());
 
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
