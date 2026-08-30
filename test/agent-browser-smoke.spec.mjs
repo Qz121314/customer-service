@@ -11,11 +11,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-function conversationData({
-  visitorId,
-  sourceHandoffId,
-  clientMessageId,
-}) {
+function conversationData({ visitorId, sourceHandoffId, clientMessageId }) {
   return {
     visitorId,
     sourceHandoffId,
