@@ -113,6 +113,7 @@ async function createDatabase({ quotaEnabled = true, quotaTotal = 2 } = {}) {
   database.exec(
     await read('../migrations/0042_simple_round_robin_routing.sql'),
   );
+  database.exec(await read('../migrations/0048_product_round_robin.sql'));
   database
     .prepare(
       `INSERT INTO agents (
