@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
-const smokeRunId = randomUUID();
+const smokeRunId = randomUUID().replaceAll('-', '');
 const agentUsername = `ui-smoke-agent-${smokeRunId}`;
 const agentPassword = 'ui-smoke-pass';
 const productId = `ui-smoke-product-${smokeRunId}`;
