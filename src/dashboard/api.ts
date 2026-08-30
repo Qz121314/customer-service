@@ -3,7 +3,7 @@ export type AdminSessionState = {
   configured: boolean;
 };
 
-export type NoAgentMessageFormat = "plain" | "markdown";
+export type NoAgentMessageFormat = 'plain' | 'markdown';
 
 export type NoAgentMessageSettings = {
   message: string;
@@ -23,17 +23,17 @@ export type ProductCatalogItem = {
 };
 
 export type AgentRoutingScope =
-  | { type: "none" }
-  | { type: "section"; sectionIds: string[] }
-  | { type: "category"; sectionId: string; categoryIds: string[] }
-  | { type: "product"; productIds: string[] };
+  | { type: 'none' }
+  | { type: 'section'; sectionIds: string[] }
+  | { type: 'category'; sectionId: string; categoryIds: string[] }
+  | { type: 'product'; productIds: string[] };
 
 export type AgentAccount = {
   id: string;
   name: string;
   adminLabel: string;
   username: string | null;
-  status: "online" | "busy" | "offline";
+  status: 'online' | 'busy' | 'offline';
   isEnabled: boolean;
   dailyConversationLimit: number;
   todayConversationCount: number;
@@ -51,10 +51,10 @@ export type AgentIdentity = {
   id: string;
   name: string;
   username: string;
-  status: "online" | "busy" | "offline";
+  status: 'online' | 'busy' | 'offline';
 };
 
-export type AgentAvailability = "online" | "busy";
+export type AgentAvailability = 'online' | 'busy';
 
 export type AgentSessionState = {
   authenticated: boolean;
@@ -143,7 +143,7 @@ export type Conversation = {
   id: string;
   site_id: string;
   visitor_id: string;
-  status: "open" | "pending" | "closed";
+  status: 'open' | 'pending' | 'closed';
   subject: string | null;
   product_id: string | null;
   section_id: string | null;
@@ -165,7 +165,7 @@ export type Conversation = {
 export type Message = {
   id: string;
   conversation_id: string;
-  sender_type: "visitor" | "agent" | "system";
+  sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
   client_message_id: string | null;
@@ -179,20 +179,20 @@ export type ConversationDetail = {
   messages: Message[];
   media: ConversationMediaItem[];
   readState?: Array<
-    Pick<Message, "id" | "read_by_visitor_at" | "read_by_agent_at">
+    Pick<Message, 'id' | 'read_by_visitor_at' | 'read_by_agent_at'>
   >;
 };
 
 export type ConversationMediaItem = {
   messageId: string;
   id: string;
-  kind: "image";
+  kind: 'image';
   mimeType: string;
   byteSize: number;
   width: number | null;
   height: number | null;
   originalName: string | null;
-  status: "ready";
+  status: 'ready';
 };
 
 export type AgentInbox = {
@@ -215,50 +215,50 @@ let adminBootstrapRequest: Promise<AdminBootstrapPayload> | null = null;
 let agentBootstrapInbox: AgentInbox | null = null;
 
 const errorMessages: Record<string, string> = {
-  INVALID_CREDENTIALS: "账号或密码错误",
-  AUTH_RATE_LIMITED: "登录尝试过于频繁，请稍后再试",
-  UNAUTHORIZED: "登录已失效，请重新登录",
-  ADMIN_NOT_CONFIGURED: "管理员密码尚未配置",
-  NOT_FOUND: "请求的内容不存在",
-  INVALID_MESSAGE: "消息内容无效",
-  INVALID_NO_AGENT_MESSAGE: "无客服提示语无效，请输入内容并选择格式",
-  INVALID_STATUS: "会话状态无效",
-  INVALID_AGENT: "客服账号信息不完整",
-  INVALID_AGENT_LABEL: "客服标记最多 10 个字符",
-  INVALID_PASSWORD: "密码至少 4 个字符",
-  PASSWORD_REQUIRED: "请先为客服设置登录密码",
-  USERNAME_EXISTS: "登录账号已存在",
-  INVALID_GROUP: "客服分组名称无效",
-  INVALID_ROUTING_RULES: "分流规则无效，请重新选择分区或分类",
-  INVALID_ROUTING_SCOPE: "负责范围无效，请重新选择分区、分类或产品",
-  INVALID_TRAFFIC_QUOTA: "额度数量无效，单次最多追加 100 万次",
-  INVALID_QUOTA_REQUEST: "额度追加请求无效，请重新打开编辑窗口",
-  QUOTA_REQUEST_CONFLICT: "同一额度请求不能使用不同数量",
-  QUOTA_TOP_UP_FAILED: "额度追加失败，请重试",
-  INVALID_MONTH: "月份格式无效",
-  AGENT_CREATE_FAILED: "创建客服失败，请重新提交",
-  AGENT_DELETE_FAILED: "删除客服失败，请稍后重试",
-  CONVERSATION_CLOSED: "会话已关闭",
-  INVALID_AGENT_STATUS: "坐席接待状态无效",
-  MESSAGE_ID_CONFLICT: "消息标识冲突，请重新编辑后发送",
-  INVALID_MESSAGE_CURSOR: "会话同步位置无效，请重新加载会话",
-  INVALID_MEDIA_UPLOAD_ID: "图片上传标识无效，请重新选择图片",
-  MEDIA_UPLOAD_ID_CONFLICT: "图片上传标识冲突，请重新选择图片",
+  INVALID_CREDENTIALS: '账号或密码错误',
+  AUTH_RATE_LIMITED: '登录尝试过于频繁，请稍后再试',
+  UNAUTHORIZED: '登录已失效，请重新登录',
+  ADMIN_NOT_CONFIGURED: '管理员密码尚未配置',
+  NOT_FOUND: '请求的内容不存在',
+  INVALID_MESSAGE: '消息内容无效',
+  INVALID_NO_AGENT_MESSAGE: '无客服提示语无效，请输入内容并选择格式',
+  INVALID_STATUS: '会话状态无效',
+  INVALID_AGENT: '客服账号信息不完整',
+  INVALID_AGENT_LABEL: '客服标记最多 10 个字符',
+  INVALID_PASSWORD: '密码至少 4 个字符',
+  PASSWORD_REQUIRED: '请先为客服设置登录密码',
+  USERNAME_EXISTS: '登录账号已存在',
+  INVALID_GROUP: '客服分组名称无效',
+  INVALID_ROUTING_RULES: '分流规则无效，请重新选择分区或分类',
+  INVALID_ROUTING_SCOPE: '负责范围无效，请重新选择分区、分类或产品',
+  INVALID_TRAFFIC_QUOTA: '额度数量无效，单次最多追加 100 万次',
+  INVALID_QUOTA_REQUEST: '额度追加请求无效，请重新打开编辑窗口',
+  QUOTA_REQUEST_CONFLICT: '同一额度请求不能使用不同数量',
+  QUOTA_TOP_UP_FAILED: '额度追加失败，请重试',
+  INVALID_MONTH: '月份格式无效',
+  AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
+  AGENT_DELETE_FAILED: '删除客服失败，请稍后重试',
+  CONVERSATION_CLOSED: '会话已关闭',
+  INVALID_AGENT_STATUS: '坐席接待状态无效',
+  MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',
+  INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
+  INVALID_MEDIA_UPLOAD_ID: '图片上传标识无效，请重新选择图片',
+  MEDIA_UPLOAD_ID_CONFLICT: '图片上传标识冲突，请重新选择图片',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
-  return request("/api/auth/session");
+  return request('/api/auth/session');
 }
 
 export async function adminLogin(password: string): Promise<void> {
-  await request("/api/auth/login", {
-    method: "POST",
+  await request('/api/auth/login', {
+    method: 'POST',
     body: JSON.stringify({ password }),
   });
 }
 
 export async function adminLogout(): Promise<void> {
-  await request("/api/auth/logout", { method: "POST" });
+  await request('/api/auth/logout', { method: 'POST' });
 }
 
 export async function getNoAgentMessage(): Promise<NoAgentMessageSettings> {
@@ -270,9 +270,9 @@ export async function updateNoAgentMessage(
   settings: NoAgentMessageSettings,
 ): Promise<NoAgentMessageSettings> {
   const response = await request<{ noAgentMessage: NoAgentMessageSettings }>(
-    "/api/admin/no-agent-message",
+    '/api/admin/no-agent-message',
     {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify(settings),
     },
   );
@@ -296,8 +296,8 @@ export async function createAgent(input: {
   trafficQuotaRequestId: string;
   isEnabled: boolean;
 }): Promise<void> {
-  await request("/api/admin/agents", {
-    method: "POST",
+  await request('/api/admin/agents', {
+    method: 'POST',
     body: JSON.stringify(input),
   });
 }
@@ -318,7 +318,7 @@ export async function updateAgent(
   },
 ): Promise<void> {
   await request(`/api/admin/agents/${encodeURIComponent(id)}`, {
-    method: "PATCH",
+    method: 'PATCH',
     body: JSON.stringify(input),
   });
 }
@@ -327,7 +327,7 @@ export async function deleteAgent(
   id: string,
 ): Promise<{ reassignedConversationCount: number }> {
   return request(`/api/admin/agents/${encodeURIComponent(id)}`, {
-    method: "DELETE",
+    method: 'DELETE',
   });
 }
 
@@ -367,7 +367,7 @@ export async function getAgentSelfMonthlyStats(
 }
 
 export async function getAgentSession(): Promise<AgentSessionState> {
-  const response = await request<AgentBootstrapPayload>("/api/agent/bootstrap");
+  const response = await request<AgentBootstrapPayload>('/api/agent/bootstrap');
   agentBootstrapInbox = response.authenticated ? response.inbox : null;
   return {
     authenticated: response.authenticated,
@@ -381,9 +381,9 @@ export async function agentLogin(
 ): Promise<AgentIdentity> {
   agentBootstrapInbox = null;
   const response = await request<{ agent: AgentIdentity }>(
-    "/api/agent/auth/login",
+    '/api/agent/auth/login',
     {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({ username, password }),
     },
   );
@@ -392,16 +392,16 @@ export async function agentLogin(
 
 export async function agentLogout(): Promise<void> {
   agentBootstrapInbox = null;
-  await request("/api/agent/auth/logout", { method: "POST" });
+  await request('/api/agent/auth/logout', { method: 'POST' });
 }
 
 export async function updateAgentNickname(
   nickname: string,
 ): Promise<AgentIdentity> {
   const response = await request<{ agent: AgentIdentity }>(
-    "/api/agent/profile",
+    '/api/agent/profile',
     {
-      method: "PATCH",
+      method: 'PATCH',
       body: JSON.stringify({ nickname }),
     },
   );
@@ -409,26 +409,26 @@ export async function updateAgentNickname(
 }
 
 export async function heartbeat(): Promise<AgentInbox> {
-  return request<AgentInbox>("/api/agent/auth/heartbeat", { method: "POST" });
+  return request<AgentInbox>('/api/agent/auth/heartbeat', { method: 'POST' });
 }
 
 export async function setAgentAvailability(
   status: AgentAvailability,
 ): Promise<AgentInbox> {
-  return request<AgentInbox>("/api/agent/auth/status", {
-    method: "POST",
+  return request<AgentInbox>('/api/agent/auth/status', {
+    method: 'POST',
     body: JSON.stringify({ status }),
   });
 }
 
 export async function getOverview(): Promise<Overview> {
-  return request("/api/agent/overview");
+  return request('/api/agent/overview');
 }
 
 export async function getConversations(
-  status?: Conversation["status"],
+  status?: Conversation['status'],
 ): Promise<Conversation[]> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
   const response = await request<{ conversations: Conversation[] }>(
     `/api/agent/conversations${query}`,
   );
@@ -441,7 +441,7 @@ export async function getAgentInbox(): Promise<AgentInbox> {
     agentBootstrapInbox = null;
     return inbox;
   }
-  return request<AgentInbox>("/api/agent/conversations");
+  return request<AgentInbox>('/api/agent/conversations');
 }
 
 export async function getConversation(
@@ -450,7 +450,7 @@ export async function getConversation(
 ): Promise<ConversationDetail> {
   const query = after
     ? `?afterId=${encodeURIComponent(after.id)}&afterCreatedAt=${encodeURIComponent(after.createdAt)}`
-    : "";
+    : '';
   return request(
     `/api/agent/conversations/${encodeURIComponent(id)}/messages${query}`,
   );
@@ -461,7 +461,7 @@ export async function markConversationRead(
   lastMessageId: string | null = null,
 ): Promise<void> {
   await request(`/api/agent/conversations/${encodeURIComponent(id)}/read`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({ lastMessageId }),
   });
 }
@@ -474,7 +474,7 @@ export async function sendMessage(
   const response = await request<{ message: Message }>(
     `/api/agent/conversations/${encodeURIComponent(id)}/messages`,
     {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({ body, clientMessageId }),
     },
   );
@@ -483,16 +483,16 @@ export async function sendMessage(
 
 export async function setConversationStatus(
   id: string,
-  status: Conversation["status"],
+  status: Conversation['status'],
 ): Promise<void> {
   await request(`/api/agent/conversations/${encodeURIComponent(id)}/status`, {
-    method: "POST",
+    method: 'POST',
     body: JSON.stringify({ status }),
   });
 }
 
 export function openAgentInboxSocket(): WebSocket {
-  return openSocket("/api/agent/realtime/inbox", true);
+  return openSocket('/api/agent/realtime/inbox', true);
 }
 
 export function openConversationSocket(id: string): WebSocket {
@@ -522,7 +522,7 @@ function secureRandomUnit(): number {
 
 async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
   if (adminBootstrapRequest) return adminBootstrapRequest;
-  const requestPromise = request<AdminBootstrapPayload>("/api/admin/bootstrap");
+  const requestPromise = request<AdminBootstrapPayload>('/api/admin/bootstrap');
   adminBootstrapRequest = requestPromise;
   requestPromise.finally(() => {
     if (adminBootstrapRequest === requestPromise) adminBootstrapRequest = null;
@@ -532,7 +532,7 @@ async function getAdminBootstrap(): Promise<AdminBootstrapPayload> {
 
 function openSocket(path: string, keepAlive = false): WebSocket {
   const url = new URL(path, window.location.origin);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   const socket = new WebSocket(url);
   if (!keepAlive) return socket;
 
@@ -544,17 +544,17 @@ function openSocket(path: string, keepAlive = false): WebSocket {
   const ping = () => {
     if (socket.readyState !== WebSocket.OPEN) return;
     try {
-      socket.send("ping");
+      socket.send('ping');
     } catch {
       socket.close();
     }
   };
-  socket.addEventListener("open", () => {
+  socket.addEventListener('open', () => {
     ping();
     stop();
     timer = window.setInterval(ping, 60_000);
   });
-  socket.addEventListener("close", stop);
+  socket.addEventListener('close', stop);
   return socket;
 }
 
@@ -565,7 +565,7 @@ async function request<T = { ok: boolean }>(
   const response = await fetch(path, {
     ...init,
     headers: {
-      ...(init?.body ? { "content-type": "application/json" } : {}),
+      ...(init?.body ? { 'content-type': 'application/json' } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -573,7 +573,7 @@ async function request<T = { ok: boolean }>(
     error?: string;
   };
   if (!response.ok) {
-    const code = body.error ?? "REQUEST_FAILED";
+    const code = body.error ?? 'REQUEST_FAILED';
     throw new Error(errorMessages[code] ?? code);
   }
   return body;
