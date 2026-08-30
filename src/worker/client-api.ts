@@ -629,7 +629,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       visitorId,
     );
-    if (!unassignedConversation) throw new Error('Conversation persistence failed');
+    if (!unassignedConversation) {
+      throw new Error('Conversation persistence failed');
+    }
     return rejectUnassignedConversationStart(
       c.req.raw,
       c.env,
