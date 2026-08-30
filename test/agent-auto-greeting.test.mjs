@@ -297,7 +297,7 @@ test('0035 marks every pre-existing conversation resolved without retroactive gr
   assert.equal(automation.agent_id, null);
   assert.equal(automation.message_id, null);
   assert.equal(
-    count(database, 'messages', "conversation_id = 'legacy-waiting'"),
+    count(database, 'messages', "conversation_id = 'legacy-closed'"),
     0,
   );
 
