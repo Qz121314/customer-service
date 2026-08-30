@@ -1639,7 +1639,7 @@ test('visitor APIs never expose an unassigned legacy conversation as waiting', a
     DB: d1(database),
     CONVERSATION_ROOMS: rooms.namespace,
   };
-  const visitorId = 'NOWAIT1';
+  const visitorId = 'NWT001';
   const visitorRowId = 'visitor-no-wait';
   const conversationId = 'conversation-no-wait';
   const sourceHandoffId = '00000000-0000-4000-8000-000000009999';
