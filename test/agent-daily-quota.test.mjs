@@ -152,11 +152,11 @@ function addConversation(database, id) {
          id, site_id, product_id, section_id, category_id,
          status, expires_at, created_at
        ) VALUES (
-         ?, 'default', ?, 'west', 'support', 'open',
+         ?, 'default', 'product-west', 'west', 'support', 'open',
          '2099-01-01T00:00:00.000Z', CURRENT_TIMESTAMP
        )`,
     )
-    .run(id, `product-${id}`);
+    .run(id);
 }
 
 async function assign(database, id) {
