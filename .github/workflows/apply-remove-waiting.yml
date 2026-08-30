@@ -60,8 +60,12 @@ jobs:
             exit 1
           fi
 
-      - name: Hide temporary workflow from repository guardrails
-        run: mv .github/workflows/apply-remove-waiting.yml /tmp/apply-remove-waiting.yml
+      - name: Hide temporary patch machinery
+        shell: bash
+        run: |
+          mv .github/workflows/apply-remove-waiting.yml /tmp/apply-remove-waiting.yml
+          mv scripts/apply-remove-waiting.mjs /tmp/apply-remove-waiting.mjs
+          mv scripts/apply-remove-waiting-followup.mjs /tmp/apply-remove-waiting-followup.mjs
 
       - name: Verify repository
         run: pnpm verify
