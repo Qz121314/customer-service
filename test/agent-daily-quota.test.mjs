@@ -12,8 +12,7 @@ const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 const roundRobinMigration = '../migrations/0042_simple_round_robin_routing.sql';
 const dailyLimitMigration =
   '../migrations/0044_daily_reception_limit_guard.sql';
-const productRoundRobinMigration =
-  '../migrations/0048_product_round_robin.sql';
+const productRoundRobinMigration = '../migrations/0048_product_round_robin.sql';
 
 function d1(database) {
   return {
