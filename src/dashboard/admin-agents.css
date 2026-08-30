@@ -526,6 +526,33 @@
   min-width: 102px;
 }
 
+.admin-agent-name-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-agent-name-line > strong {
+  min-width: 0;
+}
+
+.admin-agent-label {
+  max-width: 108px;
+  overflow: hidden;
+  padding: 2px 6px;
+  flex: 0 1 auto;
+  border: 1px solid #ffb4b4;
+  border-radius: 999px;
+  background: #ffeded;
+  color: #d92d20;
+  font-size: 9px;
+  font-weight: 720;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-agent-actions .table-action {
   min-width: 48px;
   min-height: 32px;
@@ -682,6 +709,12 @@
   color: #59616d;
   font-size: 0.7rem;
   font-weight: 720;
+}
+
+.agent-editor-field > span > small {
+  color: #98a2b3;
+  font-size: inherit;
+  font-weight: 600;
 }
 
 .agent-editor-field input,

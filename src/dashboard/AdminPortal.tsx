@@ -182,7 +182,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     return agents.filter((agent) => {
       const matchesSearch =
         !keyword ||
-        `${agent.name} ${agent.username ?? ''}`
+        `${agent.name} ${agent.username ?? ''} ${agent.adminLabel}`
           .toLocaleLowerCase()
           .includes(keyword);
       if (!matchesSearch) return false;
@@ -217,6 +217,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     setDraft({
       id: agent.id,
       name: agent.name,
+      adminLabel: agent.adminLabel,
       username: agent.username ?? '',
       password: '',
       routingScope: agent.routingScope,
@@ -261,6 +262,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       if (draft.id) {
         await updateAgent(draft.id, {
           name: draft.name,
+          adminLabel: draft.adminLabel,
           username: draft.username,
           password: draft.password || undefined,
           routingScope: draft.routingScope,
@@ -273,6 +275,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       } else {
         await createAgent({
           name: draft.name,
+          adminLabel: draft.adminLabel,
           username: draft.username,
           password: draft.password,
           routingScope: draft.routingScope,
@@ -443,8 +446,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                     type="search"
                     value={agentSearch}
                     onChange={(event) => setAgentSearch(event.target.value)}
-                    placeholder="姓名或登录账号"
-                    aria-label="搜索客服姓名或登录账号"
+                    placeholder="姓名、账号或标签"
+                    aria-label="搜索客服姓名、登录账号或标签"
                   />
                 </label>
                 <div className="admin-agent-filters" aria-label="客服状态筛选">
@@ -537,7 +540,14 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                                   {initials(agent.name)}
                                 </span>
                                 <div className="admin-agent-identity">
-                                  <strong>{agent.name}</strong>
+                                  <div className="admin-agent-name-line">
+                                    <strong>{agent.name}</strong>
+                                    {agent.adminLabel ? (
+                                      <span className="admin-agent-label">
+                                        {agent.adminLabel}
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <small>
                                     @{agent.username || '未设置账号'} ·{' '}
                                     {agent.lastSeenAt
@@ -644,6 +654,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
         {section === 'statistics' && (
           <AdminStatisticsPage
+            agents={agents}
             products={products}
             range={trafficRange}
             stats={trafficStats}

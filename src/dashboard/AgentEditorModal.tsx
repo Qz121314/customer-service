@@ -128,6 +128,24 @@ export function AgentEditorModal({
                     />
                   </label>
 
+                  <label className="agent-editor-field">
+                    <span>
+                      客服标记 <small>仅管理员可见</small>
+                    </span>
+                    <input
+                      value={draft.adminLabel}
+                      maxLength={10}
+                      autoComplete="off"
+                      placeholder="例如 1号、2号"
+                      onChange={(event) =>
+                        onDraftChange({
+                          ...draft,
+                          adminLabel: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+
                   <div className="agent-editor-status-row">
                     <strong>启用账号</strong>
                     <label className="switch-control" aria-label="启用客服账号">

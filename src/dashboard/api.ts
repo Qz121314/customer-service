@@ -24,6 +24,7 @@ export type AgentRoutingScope =
 export type AgentAccount = {
   id: string;
   name: string;
+  adminLabel: string;
   username: string | null;
   status: 'online' | 'busy' | 'offline';
   isEnabled: boolean;
@@ -214,6 +215,7 @@ const errorMessages: Record<string, string> = {
   INVALID_MESSAGE: '消息内容无效',
   INVALID_STATUS: '会话状态无效',
   INVALID_AGENT: '客服账号信息不完整',
+  INVALID_AGENT_LABEL: '客服标记最多 10 个字符',
   INVALID_PASSWORD: '密码至少 4 个字符',
   PASSWORD_REQUIRED: '请先为客服设置登录密码',
   USERNAME_EXISTS: '登录账号已存在',
@@ -257,6 +259,7 @@ export async function getAgents(): Promise<AgentAccount[]> {
 
 export async function createAgent(input: {
   name: string;
+  adminLabel: string;
   username: string;
   password: string;
   routingScope: AgentRoutingScope;
@@ -276,6 +279,7 @@ export async function updateAgent(
   id: string,
   input: {
     name: string;
+    adminLabel: string;
     username: string;
     password?: string;
     routingScope: AgentRoutingScope;

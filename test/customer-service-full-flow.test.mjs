@@ -392,6 +392,97 @@ test('admin can save multiple whole-section routing rules in one request', async
   database.close();
 });
 
+test('admin can save and update a private agent marker', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const adminPassword = 'admin-password';
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: fakeRooms().namespace,
+    ADMIN_PASSWORD: adminPassword,
+  };
+  const headers = {
+    cookie: adminCookie(adminPassword),
+    'content-type': 'application/json',
+  };
+
+  const createResponse = await adminConfigApi.request(
+    '/api/admin/agents',
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'Numbered Agent',
+        adminLabel: ' 1号 ',
+        username: 'numbered-agent',
+        password: 'pass',
+        routingScope: { type: 'none' },
+        dailyConversationLimit: 0,
+        trafficQuotaEnabled: false,
+        trafficQuotaTopUp: 0,
+        isEnabled: true,
+      }),
+    },
+    env,
+  );
+  const created = await json(createResponse);
+
+  const bootstrapResponse = await adminConfigApi.request(
+    '/api/admin/bootstrap',
+    { headers },
+    env,
+  );
+  const bootstrap = await json(bootstrapResponse);
+  assert.equal(
+    bootstrap.agents.find((agent) => agent.id === created.id).adminLabel,
+    '1号',
+  );
+
+  const updateResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ adminLabel: '2号' }),
+    },
+    env,
+  );
+  assert.equal(updateResponse.status, 200);
+  assert.equal(
+    database
+      .prepare('SELECT admin_label FROM agents WHERE id = ?')
+      .get(created.id).admin_label,
+    '2号',
+  );
+
+  const loginResponse = await agentApi.request(
+    '/api/agent/auth/login',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'numbered-agent', password: 'pass' }),
+    },
+    env,
+  );
+  const login = await json(loginResponse);
+  assert.equal(login.agent.name, 'Numbered Agent');
+  assert.equal(login.agent.username, 'numbered-agent');
+  assert.ok(!Object.hasOwn(login.agent, 'adminLabel'));
+
+  const invalidResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ adminLabel: '12345678901' }),
+    },
+    env,
+  );
+  assert.equal(invalidResponse.status, 400);
+  assert.equal((await invalidResponse.json()).error, 'INVALID_AGENT_LABEL');
+  database.close();
+});
+
 async function json(response) {
   const value = await response.json();
   assert.ok(response.ok, `${response.status}: ${JSON.stringify(value)}`);

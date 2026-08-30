@@ -17,6 +17,7 @@ type Env = { Bindings: Bindings };
 type AgentRow = {
   id: string;
   name: string;
+  admin_label: string;
   username: string | null;
   status: 'online' | 'busy' | 'offline';
   is_enabled: number;
@@ -198,6 +199,7 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const body = await readJson<{
     name?: string;
+    adminLabel?: unknown;
     username?: string;
     password?: string;
     routingScope?: unknown;
@@ -209,10 +211,14 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   }>(c.req.raw);
 
   const name = normalizeName(body?.name);
+  const adminLabel = normalizeAdminLabel(body?.adminLabel);
   const username = normalizeUsername(body?.username);
   const password = normalizePassword(body?.password);
   if (!name || !username || !password) {
     return c.json({ error: 'INVALID_AGENT' }, 400);
+  }
+  if (adminLabel === null) {
+    return c.json({ error: 'INVALID_AGENT_LABEL' }, 400);
   }
   if (await usernameExists(c.env.DB, username)) {
     return c.json({ error: 'USERNAME_EXISTS' }, 409);
@@ -245,15 +251,16 @@ adminConfigApi.post('/api/admin/agents', async (c) => {
   const statements: D1PreparedStatement[] = [
     c.env.DB.prepare(
       `INSERT INTO agents (
-         id, site_id, name, username, password_hash, password_salt,
+         id, site_id, name, admin_label, username, password_hash, password_salt,
          password_iterations, status, is_enabled, daily_conversation_limit,
          traffic_quota_enabled, traffic_quota_total
        ) VALUES (
-         ?1, 'default', ?2, ?3, ?4, ?5, ?6, 'offline', ?7, ?8, ?9, ?10
+         ?1, 'default', ?2, ?3, ?4, ?5, ?6, ?7, 'offline', ?8, ?9, ?10, ?11
        )`,
     ).bind(
       id,
       name,
+      adminLabel,
       username,
       credentials.hash,
       credentials.salt,
@@ -324,7 +331,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
   if (id === 'admin') return c.json({ error: 'NOT_FOUND' }, 404);
 
   const current = await c.env.DB.prepare(
-    `SELECT id, name, username, status, is_enabled,
+    `SELECT id, name, admin_label, username, status, is_enabled,
        daily_conversation_limit, last_login_at, last_seen_at, password_hash,
        password_salt, password_iterations, traffic_quota_enabled,
        traffic_quota_total, traffic_quota_used
@@ -336,6 +343,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   const body = await readJson<{
     name?: string;
+    adminLabel?: unknown;
     username?: string;
     password?: string;
     routingScope?: unknown;
@@ -349,11 +357,18 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
 
   const name =
     body.name === undefined ? current.name : normalizeName(body.name);
+  const adminLabel =
+    body.adminLabel === undefined
+      ? current.admin_label
+      : normalizeAdminLabel(body.adminLabel);
   const username =
     body.username === undefined
       ? current.username
       : normalizeUsername(body.username);
   if (!name || !username) return c.json({ error: 'INVALID_AGENT' }, 400);
+  if (adminLabel === null) {
+    return c.json({ error: 'INVALID_AGENT_LABEL' }, 400);
+  }
   if (await usernameExists(c.env.DB, username, id)) {
     return c.json({ error: 'USERNAME_EXISTS' }, 409);
   }
@@ -449,8 +464,9 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
            is_enabled = ?6,
            daily_conversation_limit = ?7,
            traffic_quota_enabled = ?8,
+           admin_label = ?9,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?9 AND site_id = 'default'`,
+       WHERE id = ?10 AND site_id = 'default'`,
     ).bind(
       name,
       username,
@@ -460,6 +476,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       enabled,
       dailyLimit,
       trafficQuotaEnabled,
+      adminLabel,
       id,
     ),
   ];
@@ -684,7 +701,7 @@ async function loadAgents(db: D1Database) {
   const [agentsResult, assignmentsResult, todayResult] = await Promise.all([
     db
       .prepare(
-        `SELECT id, name, username, status, is_enabled,
+        `SELECT id, name, admin_label, username, status, is_enabled,
            daily_conversation_limit, last_login_at, last_seen_at, password_hash,
            password_salt, password_iterations, traffic_quota_enabled,
            traffic_quota_total, traffic_quota_used
@@ -729,6 +746,7 @@ async function loadAgents(db: D1Database) {
     return {
       id: agent.id,
       name: agent.name,
+      adminLabel: agent.admin_label,
       username: agent.username,
       status: agent.status,
       isEnabled: agent.is_enabled === 1,
@@ -1100,6 +1118,13 @@ async function usernameExists(
 function normalizeName(value?: string): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed && trimmed.length <= 80 ? trimmed : null;
+}
+
+function normalizeAdminLabel(value: unknown): string | null {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length <= 10 ? trimmed : null;
 }
 
 function normalizeUsername(value?: string | null): string | null {
