@@ -33,6 +33,7 @@ jobs:
         run: |
           node scripts/apply-remove-waiting.mjs
           node scripts/apply-remove-waiting-followup.mjs
+          node scripts/apply-remove-waiting-final-fixes.mjs
 
       - name: Format changed sources
         run: >-
@@ -51,6 +52,13 @@ jobs:
           test/legacy-routing-removal.test.mjs
           README.md
 
+      - name: Inspect stale waiting test expectation
+        shell: bash
+        run: |
+          if test -f test/agent-quota.test.mjs; then
+            sed -n '330,380p' test/agent-quota.test.mjs
+          fi
+
       - name: Assert waiting implementation is gone
         shell: bash
         run: |
@@ -66,6 +74,7 @@ jobs:
           mv .github/workflows/apply-remove-waiting.yml /tmp/apply-remove-waiting.yml
           mv scripts/apply-remove-waiting.mjs /tmp/apply-remove-waiting.mjs
           mv scripts/apply-remove-waiting-followup.mjs /tmp/apply-remove-waiting-followup.mjs
+          mv scripts/apply-remove-waiting-final-fixes.mjs /tmp/apply-remove-waiting-final-fixes.mjs
 
       - name: Verify repository
         run: pnpm verify
