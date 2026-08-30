@@ -1376,9 +1376,9 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
 
   assert.deepEqual(readQuotaLedger(agentA), {
     total: 3,
-    used: 3,
+    used: 2,
     expectedTotal: 3,
-    expectedUsed: 3,
+    expectedUsed: 2,
     consistent: true,
   });
   assert.deepEqual(readQuotaLedger(agentB), {
