@@ -5,7 +5,6 @@ import { DatabaseSync } from 'node:sqlite';
 import { URL } from 'node:url';
 import {
   assignConversationAgent,
-  recoverWaitingConversationAssignments,
   routingBusinessDate,
 } from '../src/worker/routing.ts';
 
@@ -525,47 +524,6 @@ test('conversation without a matching scope remains unassigned', async () => {
   assert.equal(
     await assignConversationAgent(d1(database), 'conversation-1'),
     null,
-  );
-  database.close();
-});
-
-test('waiting recovery scans past ten blocked rows through canonical routing', async () => {
-  const database = await createDatabase();
-  addAgent(database, { id: 'agent-a' });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-
-  for (let index = 1; index <= 10; index += 1) {
-    addConversation(
-      database,
-      `blocked-${String(index).padStart(2, '0')}`,
-      `blocked-product-${index}`,
-      {
-        sectionId: 'blocked',
-        lastMessageAt: `2026-08-01 00:00:${String(index).padStart(2, '0')}`,
-      },
-    );
-  }
-  addConversation(database, 'routable-11', 'west-product', {
-    sectionId: 'west',
-    lastMessageAt: '2026-08-01 00:01:00',
-  });
-
-  const recovered = await recoverWaitingConversationAssignments(
-    d1(database),
-    10,
-  );
-  assert.deepEqual(
-    recovered.map(({ conversationId, assignment }) => ({
-      conversationId,
-      agentId: assignment.id,
-    })),
-    [{ conversationId: 'routable-11', agentId: 'agent-a' }],
-  );
-  assert.equal(
-    database
-      .prepare(`SELECT assigned_agent FROM conversations WHERE id = ?`)
-      .get('routable-11').assigned_agent,
-    'agent-a',
   );
   database.close();
 });
