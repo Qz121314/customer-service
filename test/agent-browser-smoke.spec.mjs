@@ -12,6 +12,26 @@ function url(path) {
 }
 
 async function seedConversationAndAgent(page) {
+  const adminLogin = await page.request.post(url('/api/auth/login'), {
+    data: { password: adminPassword },
+  });
+  expect(adminLogin.ok()).toBeTruthy();
+
+  const createAgent = await page.request.post(url('/api/admin/agents'), {
+    data: {
+      name: 'UI Smoke Agent',
+      username: agentUsername,
+      password: agentPassword,
+      routingScope: { type: 'product', productIds: [productId] },
+      dailyConversationLimit: 0,
+      trafficQuotaEnabled: false,
+      trafficQuotaTopUp: 0,
+      trafficQuotaRequestId: '',
+      isEnabled: true,
+    },
+  });
+  expect(createAgent.ok()).toBeTruthy();
+
   const conversation = await page.request.post(
     url('/client/v1/conversations'),
     {
@@ -34,26 +54,6 @@ async function seedConversationAndAgent(page) {
     },
   );
   expect(conversation.ok()).toBeTruthy();
-
-  const adminLogin = await page.request.post(url('/api/auth/login'), {
-    data: { password: adminPassword },
-  });
-  expect(adminLogin.ok()).toBeTruthy();
-
-  const createAgent = await page.request.post(url('/api/admin/agents'), {
-    data: {
-      name: 'UI Smoke Agent',
-      username: agentUsername,
-      password: agentPassword,
-      routingScope: { type: 'product', productIds: [productId] },
-      dailyConversationLimit: 0,
-      trafficQuotaEnabled: false,
-      trafficQuotaTopUp: 0,
-      trafficQuotaRequestId: '',
-      isEnabled: true,
-    },
-  });
-  expect(createAgent.ok()).toBeTruthy();
 }
 
 async function loginAgent(page) {
