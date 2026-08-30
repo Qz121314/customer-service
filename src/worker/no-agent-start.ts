@@ -18,6 +18,7 @@ type ConversationStartPayload = {
 type UnassignedStartRow = {
   site_id: string;
   visitor_id: string;
+  external_id: string;
   start_reuse_key: string | null;
   no_agent_message: string | null;
 };
@@ -42,8 +43,10 @@ export async function rejectUnassignedConversationStart(
   }
 
   const row = await env.DB.prepare(
-    `SELECT c.site_id, c.visitor_id, c.start_reuse_key, s.no_agent_message
+    `SELECT c.site_id, c.visitor_id, v.external_id, c.start_reuse_key,
+            s.no_agent_message
      FROM conversations c
+     JOIN visitors v ON v.id = c.visitor_id
      JOIN sites s ON s.id = c.site_id
      WHERE c.id = ?1
        AND c.assigned_agent IS NULL
@@ -63,8 +66,8 @@ export async function rejectUnassignedConversationStart(
     return response;
   }
 
-  const sourceHash = await requestSourceHash(request, row.visitor_id);
-  const visitorLimitKey = `visitor:${row.visitor_id}`;
+  const sourceHash = await requestSourceHash(request, row.external_id);
+  const visitorLimitKey = `visitor:${row.external_id}`;
   const sourceLimitKey = `source:${sourceHash}`;
   const now = new Date().toISOString();
   const results = await env.DB.batch([
