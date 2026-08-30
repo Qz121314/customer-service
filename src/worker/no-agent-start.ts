@@ -37,10 +37,7 @@ export async function rejectUnassignedConversationStart(
 
   const payload = await responsePayload(response);
   const conversationId = normalizeConversationId(payload?.conversation?.id);
-  if (
-    !conversationId ||
-    payload?.conversation?.status !== 'waiting'
-  ) {
+  if (!conversationId || payload?.conversation?.status !== 'waiting') {
     return response;
   }
 
