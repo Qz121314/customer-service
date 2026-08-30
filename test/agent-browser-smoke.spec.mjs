@@ -1,11 +1,17 @@
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
-const agentUsername = 'ui-smoke-agent';
+const smokeRunId = randomUUID();
+const agentUsername = `ui-smoke-agent-${smokeRunId}`;
 const agentPassword = 'ui-smoke-pass';
-const productId = 'ui-smoke-product';
+const productId = `ui-smoke-product-${smokeRunId}`;
+const primeVisitorId = `UIT000-${smokeRunId}`;
+const visitorId = `UIT001-${smokeRunId}`;
+const primeSourceHandoffId = randomUUID();
+const sourceHandoffId = randomUUID();
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
@@ -38,9 +44,9 @@ async function requestConversation(page, identifiers) {
 
 async function seedAgent(page) {
   const noAgentResponse = await requestConversation(page, {
-    visitorId: 'UIT000',
-    sourceHandoffId: '00000000-0000-4000-8000-000000000001',
-    clientMessageId: 'ui-smoke-prime',
+    visitorId: primeVisitorId,
+    sourceHandoffId: primeSourceHandoffId,
+    clientMessageId: `ui-smoke-prime-${smokeRunId}`,
   });
   expect(noAgentResponse.status()).toBe(503);
 
@@ -68,8 +74,8 @@ async function seedAgent(page) {
 
 async function createConversation(page) {
   const conversation = await requestConversation(page, {
-    visitorId: 'UIT001',
-    sourceHandoffId: '11111111-1111-4111-8111-111111111111',
+    visitorId,
+    sourceHandoffId,
     clientMessageId: 'ui-smoke-message-1',
   });
   expect(conversation.ok()).toBeTruthy();
