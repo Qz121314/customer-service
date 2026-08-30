@@ -59,6 +59,7 @@ async function seedConversationAndAgent(page) {
     },
   );
   expect(conversation.ok()).toBeTruthy();
+  await page.context().clearCookies();
 }
 
 async function loginAgent(page) {
