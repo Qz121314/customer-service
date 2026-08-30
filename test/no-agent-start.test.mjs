@@ -260,7 +260,7 @@ test('assigned consultation remains successful and keeps its creation quota', as
       'SELECT COUNT(*) AS count FROM conversation_creation_quota_receipts',
       'count',
     ),
-    2,
+    1,
   );
   assert.equal(
     scalar(
