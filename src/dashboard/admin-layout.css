@@ -85,6 +85,12 @@
     flex: 0 0 auto;
   }
 
+  .admin-content:has(.no-agent-settings-card) {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
   .admin-agent-layout {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
