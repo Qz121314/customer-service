@@ -1630,3 +1630,89 @@ test('admin can configure the no-agent response as plain text or Markdown', asyn
   );
   database.close();
 });
+
+
+test('visitor APIs never expose an unassigned legacy conversation as waiting', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const rooms = fakeRooms();
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+  const visitorId = 'NOWAIT1';
+  const visitorRowId = 'visitor-no-wait';
+  const conversationId = 'conversation-no-wait';
+  const sourceHandoffId = '00000000-0000-4000-8000-000000009999';
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  database
+    .prepare(
+      `INSERT INTO visitors (
+         id, site_id, token_hash, external_id, expires_at
+       ) VALUES (?, 'default', ?, ?, ?)`,
+    )
+    .run(visitorRowId, 'token-no-wait', visitorId, expiresAt);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, product_id, section_id,
+         section_name, product_title, product_href, source_handoff_id,
+         expires_at
+       ) VALUES (?, 'default', ?, 'open', 'product-no-wait', 'west',
+         'West', 'No-wait product', '/products/no-wait', ?, ?)`,
+    )
+    .run(conversationId, visitorRowId, sourceHandoffId, expiresAt);
+  database
+    .prepare(
+      `INSERT INTO messages (
+         id, conversation_id, sender_type, sender_id, body, client_message_id
+       ) VALUES (
+         'message-no-wait', ?, 'visitor', ?, 'legacy message', 'legacy-replay'
+       )`,
+    )
+    .run(conversationId, visitorRowId);
+
+  const listResponse = await clientApi.request(
+    `/client/v1/conversations?visitorId=${encodeURIComponent(visitorId)}`,
+    undefined,
+    env,
+  );
+  assert.equal(listResponse.status, 200);
+  assert.deepEqual((await json(listResponse)).conversations, []);
+
+  const replayResponse = await clientApi.request(
+    '/client/v1/conversations',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId,
+        sourceHandoffId: '00000000-0000-4000-8000-000000008888',
+        clientMessageId: 'legacy-replay',
+        message: 'legacy message',
+        product: {
+          id: 'product-no-wait',
+          sectionId: 'west',
+          sectionName: 'West',
+          categoryId: null,
+          categoryName: null,
+          title: 'No-wait product',
+          href: '/products/no-wait',
+          coverUrl: null,
+        },
+      }),
+    },
+    env,
+  );
+  assert.equal(replayResponse.status, 503);
+  assert.deepEqual(await json(replayResponse, { allowError: true }), {
+    error: {
+      code: 'NO_AGENT_AVAILABLE',
+      message: '当前暂无可用客服，请稍后再试。',
+      format: 'plain',
+    },
+  });
+
+  database.close();
+});

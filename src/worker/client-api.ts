@@ -146,6 +146,7 @@ clientApi.get('/client/v1/conversations', async (c) => {
      WHERE c.site_id = ?1
        AND v.external_id = ?2
        AND c.expires_at > CURRENT_TIMESTAMP
+       AND c.assigned_agent IS NOT NULL
      ORDER BY c.last_message_at DESC, c.id DESC
      LIMIT 100`,
   )
@@ -339,6 +340,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
       visitorId,
     );
     if (conversation) {
+      if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
+        return noAgentResponse(c, site);
+      }
       return c.json({
         conversation: await conversationDetail(
           c.env.DB,
@@ -435,6 +439,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
         );
       }
       if (conversation) {
+        if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
+          return noAgentResponse(c, site);
+        }
         conversation = await continueReusedConversationStart(c.env, {
           conversation,
           siteId: site.id,
@@ -442,6 +449,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
           initialMessage,
           clientMessageId,
         });
+        if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
+          return noAgentResponse(c, site);
+        }
         return c.json({
           conversation: await conversationDetail(
             c.env.DB,
@@ -602,6 +612,9 @@ clientApi.post('/client/v1/conversations', async (c) => {
       initialMessage,
       clientMessageId,
     });
+    if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
+      return noAgentResponse(c, site);
+    }
     return c.json({
       conversation: await conversationDetail(c.env.DB, conversation, 30, null),
     });
