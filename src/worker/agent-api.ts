@@ -1,10 +1,10 @@
-import { Hono, type Context } from 'hono';
-import { deleteCookie, setCookie } from 'hono/cookie';
-import { routingBusinessDate } from './routing';
-import { broadcastClientConversationEvent } from './client-api';
-import { verifyAgentPassword } from './agent-password';
-import { calendarMonthPeriod } from '../shared/calendar-month';
-import { listConversationMedia } from './media-api';
+import { Hono, type Context } from "hono";
+import { deleteCookie, setCookie } from "hono/cookie";
+import { routingBusinessDate } from "./routing";
+import { broadcastClientConversationEvent } from "./client-api";
+import { verifyAgentPassword } from "./agent-password";
+import { calendarMonthPeriod } from "../shared/calendar-month";
+import { listConversationMedia } from "./media-api";
 
 type Bindings = {
   DB: D1Database;
@@ -12,14 +12,14 @@ type Bindings = {
 };
 
 type Env = { Bindings: Bindings };
-type ConversationStatus = 'open' | 'pending' | 'closed';
-type AgentAvailability = 'online' | 'busy';
+type ConversationStatus = "open" | "pending" | "closed";
+type AgentAvailability = "online" | "busy";
 
 type AgentSession = {
   id: string;
   name: string;
   username: string;
-  status: 'online' | 'busy' | 'offline';
+  status: "online" | "busy" | "offline";
   is_enabled: number;
 };
 
@@ -32,7 +32,7 @@ type AgentCredentialRow = AgentSession & {
 type MessageRow = {
   id: string;
   conversation_id: string;
-  sender_type: 'visitor' | 'agent' | 'system';
+  sender_type: "visitor" | "agent" | "system";
   sender_id: string | null;
   body: string;
   client_message_id: string | null;
@@ -43,7 +43,7 @@ type MessageRow = {
 
 type MessageReadState = Pick<
   MessageRow,
-  'id' | 'read_by_visitor_at' | 'read_by_agent_at'
+  "id" | "read_by_visitor_at" | "read_by_agent_at"
 >;
 
 type ReadBoundary = {
@@ -51,25 +51,25 @@ type ReadBoundary = {
   created_at: string;
 };
 
-const COOKIE = 'cs_agent_session';
+const COOKIE = "cs_agent_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const MESSAGE_LIMIT = 8000;
 const CLOSED_INBOX_PREVIEW_LIMIT = 40;
 
 export const agentApi = new Hono<Env>();
 
-agentApi.get('/api/agent/auth/session', async (c) => {
+agentApi.get("/api/agent/auth/session", async (c) => {
   const agent = await authenticateAgent(c);
   return c.json({ authenticated: Boolean(agent), agent: agent ?? null });
 });
 
-agentApi.patch('/api/agent/profile', async (c) => {
+agentApi.patch("/api/agent/profile", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const body = await readJson<{ nickname?: string }>(c.req.raw);
-  const nickname = body?.nickname?.trim() ?? '';
+  const nickname = body?.nickname?.trim() ?? "";
   if (!nickname || nickname.length > 40) {
-    return c.json({ error: 'INVALID_AGENT_NICKNAME' }, 400);
+    return c.json({ error: "INVALID_AGENT_NICKNAME" }, 400);
   }
 
   const updated = await c.env.DB.prepare(
@@ -84,14 +84,14 @@ agentApi.patch('/api/agent/profile', async (c) => {
   return c.json({ ok: true, agent: updated });
 });
 
-agentApi.post('/api/agent/auth/login', async (c) => {
+agentApi.post("/api/agent/auth/login", async (c) => {
   const body = await readJson<{ username?: string; password?: string }>(
     c.req.raw,
   );
-  const username = body?.username?.trim() ?? '';
-  const password = body?.password ?? '';
+  const username = body?.username?.trim() ?? "";
+  const password = body?.password ?? "";
   if (!username || !password)
-    return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
+    return c.json({ error: "INVALID_CREDENTIALS" }, 401);
 
   const agent = await c.env.DB.prepare(
     `SELECT id, name, username, status, is_enabled,
@@ -113,7 +113,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
       agent.password_iterations,
     ))
   ) {
-    return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
+    return c.json({ error: "INVALID_CREDENTIALS" }, 401);
   }
 
   const token = randomToken();
@@ -141,9 +141,9 @@ agentApi.post('/api/agent/auth/login', async (c) => {
 
   setCookie(c, COOKIE, token, {
     httpOnly: true,
-    secure: new URL(c.req.url).protocol === 'https:',
-    sameSite: 'Lax',
-    path: '/',
+    secure: new URL(c.req.url).protocol === "https:",
+    sameSite: "Lax",
+    path: "/",
     maxAge: SESSION_TTL_SECONDS,
   });
   return c.json({
@@ -152,16 +152,16 @@ agentApi.post('/api/agent/auth/login', async (c) => {
       id: agent.id,
       name: agent.name,
       username: agent.username,
-      status: 'online',
+      status: "online",
     },
   });
 });
 
-agentApi.post('/api/agent/auth/logout', async (c) => {
-  const token = cookieValue(c.req.header('Cookie'), COOKIE);
+agentApi.post("/api/agent/auth/logout", async (c) => {
+  const token = cookieValue(c.req.header("Cookie"), COOKIE);
   const agent = token ? await authenticateAgentToken(c.env.DB, token) : null;
   if (token) {
-    await c.env.DB.prepare('DELETE FROM agent_sessions WHERE token_hash = ?1')
+    await c.env.DB.prepare("DELETE FROM agent_sessions WHERE token_hash = ?1")
       .bind(await sha256(token))
       .run();
   }
@@ -174,11 +174,11 @@ agentApi.post('/api/agent/auth/logout', async (c) => {
       .bind(agent.id)
       .run();
   }
-  deleteCookie(c, COOKIE, { path: '/' });
+  deleteCookie(c, COOKIE, { path: "/" });
   return c.json({ ok: true });
 });
 
-agentApi.post('/api/agent/auth/heartbeat', async (c) => {
+agentApi.post("/api/agent/auth/heartbeat", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   await c.env.DB.prepare(
@@ -196,16 +196,19 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
     .run();
   return c.json({
     ok: true,
-    ...(await loadAgentInbox(c.env.DB, { ...agent, status: agent.status === 'busy' ? 'busy' : 'online' })),
+    ...(await loadAgentInbox(c.env.DB, {
+      ...agent,
+      status: agent.status === "busy" ? "busy" : "online",
+    })),
   });
 });
 
-agentApi.post('/api/agent/auth/status', async (c) => {
+agentApi.post("/api/agent/auth/status", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const body = await readJson<{ status?: AgentAvailability }>(c.req.raw);
-  if (body?.status !== 'online' && body?.status !== 'busy') {
-    return c.json({ error: 'INVALID_AGENT_STATUS' }, 400);
+  if (body?.status !== "online" && body?.status !== "busy") {
+    return c.json({ error: "INVALID_AGENT_STATUS" }, 400);
   }
 
   await c.env.DB.prepare(
@@ -223,7 +226,7 @@ agentApi.post('/api/agent/auth/status', async (c) => {
   });
 });
 
-agentApi.get('/api/agent/overview', async (c) => {
+agentApi.get("/api/agent/overview", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   return c.json(await loadAgentOverview(c.env.DB, agent.id));
@@ -306,11 +309,11 @@ async function loadAgentInbox(
   };
 
   const filtered =
-    requestedStatus === 'open' ||
-    requestedStatus === 'pending' ||
-    requestedStatus === 'closed';
+    requestedStatus === "open" ||
+    requestedStatus === "pending" ||
+    requestedStatus === "closed";
   if (filtered) {
-    const shouldBoundClosed = requestedStatus === 'closed';
+    const shouldBoundClosed = requestedStatus === "closed";
     const statement = db.prepare(
       `SELECT c.id, c.site_id, c.visitor_id, c.status, c.subject,
          c.product_id, c.section_id, c.section_name, c.category_id,
@@ -339,7 +342,7 @@ async function loadAgentInbox(
     return {
       conversations: result.results ?? [],
       overview,
-      availability: agent.status === 'busy' ? 'busy' : 'online',
+      availability: agent.status === "busy" ? "busy" : "online",
     };
   }
 
@@ -386,7 +389,7 @@ async function loadAgentInbox(
   };
   let closedLoaded = 0;
   for (const conversation of conversations) {
-    if (conversation.status === 'closed') closedLoaded += 1;
+    if (conversation.status === "closed") closedLoaded += 1;
     delete conversation.__overview_open;
     delete conversation.__overview_pending;
     delete conversation.__overview_closed;
@@ -399,7 +402,7 @@ async function loadAgentInbox(
       total: counts.open + counts.pending + counts.closed,
       ...quotaOverview,
     },
-    availability: agent.status === 'busy' ? 'busy' : 'online',
+    availability: agent.status === "busy" ? "busy" : "online",
     history: {
       closedLoaded,
       closedHasMore: counts.closed > closedLoaded,
@@ -407,11 +410,11 @@ async function loadAgentInbox(
   };
 }
 
-agentApi.get('/api/agent/stats', async (c) => {
+agentApi.get("/api/agent/stats", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const month = normalizeMonth(c.req.query('month'));
-  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  const month = normalizeMonth(c.req.query("month"));
+  if (!month) return c.json({ error: "INVALID_MONTH" }, 400);
   const period = calendarMonthPeriod(month);
 
   const businessDate = routingBusinessDate();
@@ -473,24 +476,24 @@ agentApi.get('/api/agent/stats', async (c) => {
   });
 });
 
-agentApi.get('/api/agent/conversations', async (c) => {
+agentApi.get("/api/agent/conversations", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  return c.json(await loadAgentInbox(c.env.DB, agent, c.req.query('status')));
+  return c.json(await loadAgentInbox(c.env.DB, agent, c.req.query("status")));
 });
 
-agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
+agentApi.get("/api/agent/conversations/:id/messages", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const afterIdValue = c.req.query('afterId');
-  const afterCreatedAtValue = c.req.query('afterCreatedAt');
+  const afterIdValue = c.req.query("afterId");
+  const afterCreatedAtValue = c.req.query("afterCreatedAt");
   const afterId = normalizeMessageId(afterIdValue);
   const afterCreatedAt = normalizeCursorDateTime(afterCreatedAtValue);
   if (
     (afterIdValue !== undefined || afterCreatedAtValue !== undefined) &&
     (!afterId || !afterCreatedAt)
   ) {
-    return c.json({ error: 'INVALID_MESSAGE_CURSOR' }, 400);
+    return c.json({ error: "INVALID_MESSAGE_CURSOR" }, 400);
   }
   const after =
     afterId && afterCreatedAt
@@ -498,10 +501,10 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
       : null;
   const conversation = await assignedConversation(
     c.env.DB,
-    c.req.param('id'),
+    c.req.param("id"),
     agent.id,
   );
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+  if (!conversation) return c.json({ error: "NOT_FOUND" }, 404);
   const readStateRequest = after
     ? c.env.DB.prepare(
         `SELECT m.id,
@@ -567,7 +570,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
          ORDER BY m.created_at ASC, m.id ASC
          LIMIT 500`,
       )
-        .bind(c.req.param('id'))
+        .bind(c.req.param("id"))
         .all<MessageReadState>()
     : Promise.resolve({ results: [] as MessageReadState[] });
   const [messages, media, readState] = await Promise.all([
@@ -616,9 +619,9 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
      ORDER BY m.created_at ASC, m.id ASC
      LIMIT 500`,
     )
-      .bind(c.req.param('id'), after?.createdAt ?? null, after?.id ?? null)
+      .bind(c.req.param("id"), after?.createdAt ?? null, after?.id ?? null)
       .all<MessageRow>(),
-    listConversationMedia(c.env.DB, c.req.param('id'), after),
+    listConversationMedia(c.env.DB, c.req.param("id"), after),
     readStateRequest,
   ]);
   return c.json({
@@ -629,10 +632,10 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   });
 });
 
-agentApi.post('/api/agent/conversations/:id/read', async (c) => {
+agentApi.post("/api/agent/conversations/:id/read", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const body = await readJson<{ lastMessageId?: string | null }>(c.req.raw);
   const requestedLastMessageId = normalizeMessageId(body?.lastMessageId);
   const [conversation, boundary] = await Promise.all([
@@ -658,7 +661,7 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
   ]);
 
   if (!conversation) {
-    return c.json({ error: 'NOT_FOUND' }, 404);
+    return c.json({ error: "NOT_FOUND" }, 404);
   }
 
   const readResult = boundary
@@ -696,12 +699,12 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
   if (readResult?.meta.changes) {
     await Promise.all([
       broadcastConversationRoom(c.env, id, {
-        type: 'message.read',
-        reader: 'agent',
+        type: "message.read",
+        reader: "agent",
         lastMessageId: boundary?.id ?? null,
       }),
-      broadcastClientConversationEvent(c.env, id, 'message.read', {
-        reader: 'agent',
+      broadcastClientConversationEvent(c.env, id, "message.read", {
+        reader: "agent",
         lastMessageId: boundary?.id ?? null,
       }),
     ]);
@@ -709,30 +712,30 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
   return c.json({ ok: true });
 });
 
-agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
+agentApi.post("/api/agent/conversations/:id/messages", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const conversation = await assignedConversationForMessageWrite(
     c.env.DB,
     id,
     agent.id,
   );
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+  if (!conversation) return c.json({ error: "NOT_FOUND" }, 404);
 
   const body = await readJson<{ body?: string; clientMessageId?: string }>(
     c.req.raw,
   );
-  const text = body?.body?.trim() ?? '';
+  const text = body?.body?.trim() ?? "";
   const clientMessageId = normalizeMessageId(body?.clientMessageId);
   if (
     !text ||
     text.length > MESSAGE_LIMIT ||
     (body?.clientMessageId !== undefined && !clientMessageId)
   )
-    return c.json({ error: 'INVALID_MESSAGE' }, 400);
+    return c.json({ error: "INVALID_MESSAGE" }, 400);
 
-  if (conversation.status === 'closed') {
+  if (conversation.status === "closed") {
     const existing = clientMessageId
       ? await findAgentMessageByClientId(
           c.env.DB,
@@ -742,7 +745,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
         )
       : null;
     if (existing) return c.json({ message: existing, duplicate: true });
-    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
+    return c.json({ error: "CONVERSATION_CLOSED" }, 409);
   }
 
   const messageId = crypto.randomUUID();
@@ -763,7 +766,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
       clientMessageId,
     );
     if (existing) return c.json({ message: existing, duplicate: true });
-    return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
+    return c.json({ error: "MESSAGE_ID_CONFLICT" }, 409);
   }
 
   await c.env.DB.prepare(
@@ -782,7 +785,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
   const message: MessageRow = {
     id: messageId,
     conversation_id: id,
-    sender_type: 'agent',
+    sender_type: "agent",
     sender_id: agent.id,
     body: text,
     client_message_id: clientMessageId,
@@ -790,24 +793,24 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     read_by_agent_at: null,
     created_at: now,
   };
-  await broadcastConversationRoom(c.env, id, { type: 'message', message });
+  await broadcastConversationRoom(c.env, id, { type: "message", message });
   await broadcastClientConversationEvent(
     c.env,
     id,
-    'message.created',
+    "message.created",
     { message: clientRealtimeMessage(message) },
-    { includeOverview: conversation.status === 'open' },
+    { includeOverview: conversation.status === "open" },
   );
   return c.json({ message }, 201);
 });
 
-agentApi.post('/api/agent/conversations/:id/status', async (c) => {
+agentApi.post("/api/agent/conversations/:id/status", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const body = await readJson<{ status?: ConversationStatus }>(c.req.raw);
-  if (!body || !['open', 'pending', 'closed'].includes(body.status ?? '')) {
-    return c.json({ error: 'INVALID_STATUS' }, 400);
+  if (!body || !["open", "pending", "closed"].includes(body.status ?? "")) {
+    return c.json({ error: "INVALID_STATUS" }, 400);
   }
   const result = await c.env.DB.prepare(
     `UPDATE conversations
@@ -817,20 +820,20 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
   )
     .bind(body.status, id, agent.id)
     .run();
-  if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
+  if (!result.meta.changes) return c.json({ error: "NOT_FOUND" }, 404);
   await broadcastConversationRoom(c.env, id, {
-    type: 'conversation.status',
+    type: "conversation.status",
     status: body.status,
   });
   await broadcastClientConversationEvent(
     c.env,
     id,
-    body.status === 'closed' ? 'conversation.closed' : 'conversation.assigned',
+    body.status === "closed" ? "conversation.closed" : "conversation.assigned",
   );
   return c.json({ ok: true });
 });
 
-agentApi.get('/api/agent/realtime/inbox', async (c) => {
+agentApi.get("/api/agent/realtime/inbox", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   return room(c.env, agentInboxRoom(agent.id)).fetch(
@@ -838,16 +841,16 @@ agentApi.get('/api/agent/realtime/inbox', async (c) => {
   );
 });
 
-agentApi.get('/api/agent/realtime/:id', async (c) => {
+agentApi.get("/api/agent/realtime/:id", async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
   const conversation = await assignedConversation(
     c.env.DB,
-    c.req.param('id'),
+    c.req.param("id"),
     agent.id,
   );
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  return room(c.env, c.req.param('id')).fetch(
+  if (!conversation) return c.json({ error: "NOT_FOUND" }, 404);
+  return room(c.env, c.req.param("id")).fetch(
     authenticatedRealtimeRequest(c.req.raw, agent.id),
   );
 });
@@ -855,7 +858,7 @@ agentApi.get('/api/agent/realtime/:id', async (c) => {
 async function authenticateAgent(
   c: Context<Env>,
 ): Promise<AgentSession | null> {
-  const token = cookieValue(c.req.header('Cookie'), COOKIE);
+  const token = cookieValue(c.req.header("Cookie"), COOKIE);
   if (!token) return null;
   return authenticateAgentToken(c.env.DB, token);
 }
@@ -936,7 +939,7 @@ async function findAgentMessageByClientId(
 
 async function sha256(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
-    'SHA-256',
+    "SHA-256",
     new TextEncoder().encode(value),
   );
   return toHex(new Uint8Array(digest));
@@ -950,8 +953,8 @@ function randomToken(): string {
 function cookieValue(header: string | undefined, name: string): string | null {
   const prefix = `${name}=`;
   return (
-    (header ?? '')
-      .split(';')
+    (header ?? "")
+      .split(";")
       .map((part) => part.trim())
       .find((part) => part.startsWith(prefix))
       ?.slice(prefix.length) ?? null
@@ -959,12 +962,12 @@ function cookieValue(header: string | undefined, name: string): string | null {
 }
 
 function normalizeMessageId(value?: string | null): string | null {
-  const trimmed = value?.trim() ?? '';
+  const trimmed = value?.trim() ?? "";
   return trimmed && trimmed.length <= 200 ? trimmed : null;
 }
 
 function normalizeCursorDateTime(value?: string | null): string | null {
-  const text = value?.trim() ?? '';
+  const text = value?.trim() ?? "";
   if (!text || text.length > 40 || !Number.isFinite(Date.parse(text))) {
     return null;
   }
@@ -972,7 +975,7 @@ function normalizeCursorDateTime(value?: string | null): string | null {
 }
 
 function normalizeMonth(value?: string): string | null {
-  const month = value?.trim() ?? '';
+  const month = value?.trim() ?? "";
   return /^\d{4}-(0[1-9]|1[0-2])$/u.test(month) ? month : null;
 }
 
@@ -986,18 +989,18 @@ function retentionCutoffBusinessDate(now = new Date()): string {
 function clientRealtimeMessage(message: MessageRow) {
   const sentAt = /^\d{4}-\d{2}-\d{2}T/u.test(message.created_at)
     ? message.created_at
-    : `${message.created_at.replace(' ', 'T')}Z`;
+    : `${message.created_at.replace(" ", "T")}Z`;
   return {
     id: message.id,
-    direction: message.sender_type === 'agent' ? 'agent' : 'customer',
+    direction: message.sender_type === "agent" ? "agent" : "customer",
     body: message.body,
     sentAt,
     delivery:
-      message.sender_type === 'agent' && message.read_by_visitor_at
-        ? 'read'
-        : message.sender_type === 'visitor' && message.read_by_agent_at
-          ? 'read'
-          : 'sent',
+      message.sender_type === "agent" && message.read_by_visitor_at
+        ? "read"
+        : message.sender_type === "visitor" && message.read_by_agent_at
+          ? "read"
+          : "sent",
     attachments: [],
   };
 }
@@ -1008,9 +1011,9 @@ function authenticatedRealtimeRequest(
 ): Request {
   const url = new URL(request.url);
   const headers = new Headers(request.headers);
-  headers.set('X-CS-Agent-ID', agentId);
-  headers.set('X-CS-Participant-Role', 'agent');
-  headers.set('X-CS-Participant-ID', agentId);
+  headers.set("X-CS-Agent-ID", agentId);
+  headers.set("X-CS-Participant-Role", "agent");
+  headers.set("X-CS-Participant-ID", agentId);
   return new Request(url, { ...request, headers });
 }
 
@@ -1027,15 +1030,15 @@ async function broadcastConversationRoom(
   id: string,
   payload: unknown,
 ): Promise<void> {
-  await room(env, id).fetch('https://conversation-room/broadcast', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  await room(env, id).fetch("https://conversation-room/broadcast", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
 
 function unauthorized(c: Context<Env>) {
-  return c.json({ error: 'UNAUTHORIZED' }, 401);
+  return c.json({ error: "UNAUTHORIZED" }, 401);
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
@@ -1047,7 +1050,7 @@ async function readJson<T>(request: Request): Promise<T | null> {
 }
 
 function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join(
-    '',
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
   );
 }
