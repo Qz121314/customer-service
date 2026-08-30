@@ -9,6 +9,7 @@ import {
 import {
   consumeConversationCreationQuota,
   passesBurstLimit,
+  releaseUnassignedConversationStart,
   requestSourceHash,
 } from './abuse-control';
 
@@ -25,6 +26,7 @@ type SenderType = 'visitor' | 'agent' | 'system';
 type SiteRow = {
   id: string;
   name: string;
+  no_agent_message: string;
 };
 
 type VisitorRow = {
@@ -332,6 +334,14 @@ clientApi.post('/client/v1/conversations', async (c) => {
       visitorId,
     );
     if (conversation) {
+      if (!conversation.assigned_agent) {
+        return error(
+          c,
+          409,
+          'NO_AGENT_AVAILABLE',
+          site.no_agent_message,
+        );
+      }
       return c.json({
         conversation: await conversationDetail(
           c.env.DB,
@@ -359,6 +369,14 @@ clientApi.post('/client/v1/conversations', async (c) => {
       visitorId,
     );
     if (conversation) {
+      if (!conversation.assigned_agent) {
+        return error(
+          c,
+          409,
+          'NO_AGENT_AVAILABLE',
+          site.no_agent_message,
+        );
+      }
       return c.json({
         conversation: await conversationDetail(
           c.env.DB,
@@ -425,6 +443,14 @@ clientApi.post('/client/v1/conversations', async (c) => {
           initialMessage,
           clientMessageId,
         });
+        if (!conversation.assigned_agent) {
+          return error(
+            c,
+            409,
+            'NO_AGENT_AVAILABLE',
+            site.no_agent_message,
+          );
+        }
         return c.json({
           conversation: await conversationDetail(
             c.env.DB,
@@ -585,6 +611,14 @@ clientApi.post('/client/v1/conversations', async (c) => {
       initialMessage,
       clientMessageId,
     });
+    if (!conversation.assigned_agent) {
+      return error(
+        c,
+        409,
+        'NO_AGENT_AVAILABLE',
+        site.no_agent_message,
+      );
+    }
     return c.json({
       conversation: await conversationDetail(c.env.DB, conversation, 30, null),
     });
@@ -623,32 +657,37 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
   let conversation: ConversationRow | null = null;
 
-  if (assignment?.newlyAssigned && assignment.assignedAt) {
-    const snapshots = await broadcastAssignments(
-      c.env,
-      assignment.id,
-      [conversationId],
-      assignment.assignedAt,
-      createdMessage ? [assignmentVisitorMessage(createdMessage)] : [],
-    );
-    conversation = snapshots.find((item) => item.id === conversationId) ?? null;
-  } else if (createdMessage) {
-    await broadcastRoom(c.env, conversationId, {
-      type: 'message',
-      message: adminMessage(createdMessage),
-    });
-    conversation = await broadcastClientConversationEvent(
-      c.env,
-      conversationId,
-      'message.created',
-      { message: clientMessage(createdMessage) },
-    );
+  if (assignment) {
+    if (assignment.newlyAssigned && assignment.assignedAt) {
+      const snapshots = await broadcastAssignments(
+        c.env,
+        assignment.id,
+        [conversationId],
+        assignment.assignedAt,
+        createdMessage ? [assignmentVisitorMessage(createdMessage)] : [],
+      );
+      conversation = snapshots.find((item) => item.id === conversationId) ?? null;
+    } else {
+      conversation = await ownedConversation(
+        c.env.DB,
+        conversationId,
+        site.id,
+        visitorId,
+      );
+    }
   } else {
-    conversation = await ownedConversation(
-      c.env.DB,
+    await releaseUnassignedConversationStart(c.env.DB, {
+      siteId: site.id,
       conversationId,
-      site.id,
       visitorId,
+      sourceHash,
+      idempotencyKey: startClaimKey,
+    });
+    return error(
+      c,
+      409,
+      'NO_AGENT_AVAILABLE',
+      site.no_agent_message,
     );
   }
 
@@ -1103,7 +1142,7 @@ async function findSite(
 ): Promise<SiteRow | null> {
   return db
     .prepare(
-      `SELECT id, name FROM sites
+      `SELECT id, name, no_agent_message FROM sites
      WHERE (id = ?1 OR public_key = ?1) AND is_enabled = 1
      LIMIT 1`,
     )

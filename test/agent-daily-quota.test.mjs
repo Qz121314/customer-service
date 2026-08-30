@@ -195,7 +195,7 @@ test('business date follows Los Angeles', () => {
   );
 });
 
-test('daily cap skips capped seats and leaves overflow waiting', async () => {
+test('daily cap skips capped seats and returns no candidate at full capacity', async () => {
   const database = await createDatabase([
     { id: 'agent-a', name: 'Agent A', limit: 1 },
     { id: 'agent-b', name: 'Agent B', limit: 2 },
