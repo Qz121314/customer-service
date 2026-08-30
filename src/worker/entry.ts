@@ -188,7 +188,19 @@ export default {
       return removedProtocolResponse();
     }
 
-    const response = await app.fetch(request, env, ctx);
+    let response = await app.fetch(request, env, ctx);
+    if (
+      request.method === 'POST' &&
+      response.ok &&
+      CLIENT_CONVERSATION_CREATE_PATH.test(pathname) &&
+      (response.status === 200 || response.status === 201)
+    ) {
+      response = await rejectUnassignedConversationStart(
+        request,
+        env,
+        response,
+      );
+    }
     if (
       response.status !== 404 ||
       isProtocolNamespacePath(pathname) ||
