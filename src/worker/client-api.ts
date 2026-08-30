@@ -641,7 +641,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     return noAgentResponse(c, site);
   }
 
-  if (assignment.newlyAssigned && assignment.assignedAt) {
+  if (assignment?.newlyAssigned && assignment.assignedAt) {
     const snapshots = await broadcastAssignments(
       c.env,
       assignment.id,
