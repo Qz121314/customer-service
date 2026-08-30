@@ -22,5 +22,7 @@ export async function loadNoAgentMessage(
     )
     .bind(siteId)
     .first<{ no_agent_message: string | null }>();
-  return normalizeNoAgentMessage(row?.no_agent_message) ?? DEFAULT_NO_AGENT_MESSAGE;
+  return (
+    normalizeNoAgentMessage(row?.no_agent_message) ?? DEFAULT_NO_AGENT_MESSAGE
+  );
 }
