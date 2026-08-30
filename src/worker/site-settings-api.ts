@@ -1,9 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { verifyAdminSession } from './core';
-import {
-  loadNoAgentMessage,
-  normalizeNoAgentMessage,
-} from './site-settings';
+import { loadNoAgentMessage, normalizeNoAgentMessage } from './site-settings';
 
 type Bindings = {
   DB: D1Database;
