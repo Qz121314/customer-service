@@ -10,6 +10,19 @@ export type AgentAssignmentResult = AgentAssignment & {
 
 const ROUTING_TIME_ZONE = 'America/Los_Angeles';
 const MAX_WAITING_ASSIGNMENTS = 10;
+const WAITING_SCAN_BATCH_SIZE = 50;
+
+type AssignmentOptions = {
+  returnExisting?: boolean;
+};
+
+export type WaitingConversationAssignment = {
+  conversationId: string;
+  assignment: AgentAssignmentResult & {
+    newlyAssigned: true;
+    assignedAt: string;
+  };
+};
 
 export function routingBusinessDate(now = new Date()): string {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -67,6 +80,7 @@ function assignmentResult(
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
+  options: AssignmentOptions = {},
 ): Promise<AgentAssignmentResult | null> {
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -135,7 +149,9 @@ export async function assignConversationAgent(
          WHERE a.is_enabled = 1
            AND a.status = 'online'
            AND a.username IS NOT NULL
+           AND a.username <> ''
            AND a.password_hash IS NOT NULL
+           AND a.password_hash <> ''
            AND (
              ctx.already_received = 1
              OR a.daily_conversation_limit <= 0
@@ -183,7 +199,11 @@ export async function assignConversationAgent(
     )
     .bind(conversationId, now, businessDate)
     .first<AgentAssignment>();
-  if (!assignment) return assignedAgent(db, conversationId);
+  if (!assignment) {
+    return options.returnExisting === false
+      ? null
+      : assignedAgent(db, conversationId);
+  }
 
   return assignmentResult(assignment, {
     newlyAssigned: true,
@@ -214,103 +234,63 @@ async function assignedAgent(
 }
 
 /**
- * Return only waiting conversations that currently have at least one eligible
- * receiver. This prevents old unroutable rows from blocking newer routable
- * traffic while preserving the same scope, status, daily-limit and paid-quota
- * eligibility gates used by the canonical assignment path.
+ * Scan waiting rows in stable creation order and let the canonical assignment
+ * statement decide every eligibility and round-robin outcome. Keyset pages let
+ * recovery move past any number of blocked head rows without copying routing
+ * predicates into a second query.
  */
-export async function findRoutableWaitingConversationIds(
+export async function recoverWaitingConversationAssignments(
   db: D1Database,
   requestedLimit = MAX_WAITING_ASSIGNMENTS,
-): Promise<string[]> {
+): Promise<WaitingConversationAssignment[]> {
   const limit = Math.max(
     1,
     Math.min(MAX_WAITING_ASSIGNMENTS, Math.trunc(requestedLimit)),
   );
-  const businessDate = routingBusinessDate();
-  const result = await db
-    .prepare(
-      `WITH waiting_context AS (
-         SELECT
-           c.id,
-           c.site_id,
-           c.product_id,
-           COALESCE(c.section_id, p.section_id) AS section_id,
-           COALESCE(c.category_id, p.category_id) AS category_id,
-           c.last_message_at,
-           EXISTS (
-             SELECT 1
-             FROM agent_traffic_receipts receipt
-             WHERE receipt.conversation_id = c.id
-           ) AS already_received
-         FROM conversations c
-         LEFT JOIN product_catalog p
-           ON p.site_id = c.site_id
-          AND p.id = c.product_id
-         WHERE c.assigned_agent IS NULL
-           AND c.status IN ('open', 'pending')
-           AND c.expires_at > CURRENT_TIMESTAMP
-       ),
-       routable AS (
-         SELECT ctx.id, ctx.last_message_at
-         FROM waiting_context ctx
-         WHERE EXISTS (
-           SELECT 1
-           FROM agent_routing_scopes ars
-           JOIN agents a
-             ON a.id = ars.agent_id
-            AND a.site_id = ars.site_id
-           WHERE ars.site_id = ctx.site_id
-             AND ars.is_enabled = 1
-             AND a.is_enabled = 1
-             AND a.status = 'online'
-             AND a.username IS NOT NULL
-             AND a.password_hash IS NOT NULL
-             AND (
-               (
-                 COALESCE(ctx.product_id, '') <> ''
-                 AND ars.scope_type = 'product'
-                 AND ars.product_id = ctx.product_id
-               )
-               OR (
-                 COALESCE(ctx.section_id, '') <> ''
-                 AND ars.scope_type = 'section'
-                 AND ars.section_id = ctx.section_id
-               )
-               OR (
-                 COALESCE(ctx.section_id, '') <> ''
-                 AND COALESCE(ctx.category_id, '') <> ''
-                 AND ars.scope_type = 'category'
-                 AND ars.section_id = ctx.section_id
-                 AND ars.category_id = ctx.category_id
-               )
-             )
-             AND (
-               ctx.already_received = 1
-               OR a.daily_conversation_limit <= 0
-               OR COALESCE((
-                 SELECT daily.conversation_count
-                 FROM agent_daily_stats daily
-                 WHERE daily.site_id = a.site_id
-                   AND daily.agent_id = a.id
-                   AND daily.business_date = ?1
-                 LIMIT 1
-               ), 0) < a.daily_conversation_limit
-             )
-             AND (
-               ctx.already_received = 1
-               OR a.traffic_quota_enabled = 0
-               OR a.traffic_quota_used < a.traffic_quota_total
-             )
-         )
-       )
-       SELECT id
-       FROM routable
-       ORDER BY last_message_at ASC, id ASC
-       LIMIT ?2`,
-    )
-    .bind(businessDate, limit)
-    .all<{ id: string }>();
+  const recovered: WaitingConversationAssignment[] = [];
+  let cursor: { createdAt: string; id: string } | null = null;
 
-  return (result.results ?? []).map((row) => row.id);
+  while (recovered.length < limit) {
+    const page: D1Result<{ id: string; created_at: string }> = await db
+      .prepare(
+        `SELECT id, created_at
+         FROM conversations
+         WHERE assigned_agent IS NULL
+           AND status IN ('open', 'pending')
+           AND expires_at > CURRENT_TIMESTAMP
+           AND (
+             ?1 IS NULL
+             OR created_at > ?1
+             OR (created_at = ?1 AND id > ?2)
+           )
+         ORDER BY created_at ASC, id ASC
+         LIMIT ?3`,
+      )
+      .bind(
+        cursor?.createdAt ?? null,
+        cursor?.id ?? '',
+        WAITING_SCAN_BATCH_SIZE,
+      )
+      .all<{ id: string; created_at: string }>();
+    const rows: Array<{ id: string; created_at: string }> = page.results ?? [];
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      cursor = { createdAt: row.created_at, id: row.id };
+      const assignment = await assignConversationAgent(db, row.id, {
+        returnExisting: false,
+      });
+      if (!assignment?.newlyAssigned || !assignment.assignedAt) continue;
+
+      recovered.push({
+        conversationId: row.id,
+        assignment: assignment as WaitingConversationAssignment['assignment'],
+      });
+      if (recovered.length >= limit) break;
+    }
+
+    if (rows.length < WAITING_SCAN_BATCH_SIZE) break;
+  }
+
+  return recovered;
 }

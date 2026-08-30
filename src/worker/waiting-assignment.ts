@@ -1,8 +1,5 @@
 import { broadcastAssignments } from './assignment-broadcast';
-import {
-  assignConversationAgent,
-  findRoutableWaitingConversationIds,
-} from './routing';
+import { recoverWaitingConversationAssignments } from './routing';
 
 type WaitingAssignmentEnv = {
   DB: D1Database;
@@ -15,10 +12,9 @@ const MAX_RECOVERY_ASSIGNMENTS = 10;
  * Recover conversations that could not be assigned when they were created.
  *
  * Agent presence is only a convenient recovery trigger here; the triggering
- * agent never receives preferential treatment. Discovery is delegated to the
- * canonical routing module and returns only rows that currently have at least
- * one eligible receiver, so permanently blocked head rows cannot starve newer
- * routable conversations.
+ * agent never receives preferential treatment. The canonical routing module
+ * scans beyond blocked head rows and owns every eligibility and round-robin
+ * decision.
  */
 export async function assignWaitingConversations(
   env: WaitingAssignmentEnv,
@@ -29,13 +25,10 @@ export async function assignWaitingConversations(
     1,
     Math.min(MAX_RECOVERY_ASSIGNMENTS, Math.trunc(requestedLimit)),
   );
-  const waiting = await findRoutableWaitingConversationIds(env.DB, limit);
+  const recovered = await recoverWaitingConversationAssignments(env.DB, limit);
 
   const assignedConversationIds: string[] = [];
-  for (const conversationId of waiting) {
-    const assignment = await assignConversationAgent(env.DB, conversationId);
-    if (!assignment?.newlyAssigned || !assignment.assignedAt) continue;
-
+  for (const { conversationId, assignment } of recovered) {
     await broadcastAssignments(
       env,
       assignment.id,

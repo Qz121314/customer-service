@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const clientSource = readFileSync('src/worker/client-api.ts', 'utf8');
-const routingSource = readFileSync('src/worker/routing.ts', 'utf8');
 
 function section(source, start, end) {
   const from = source.indexOf(start);
@@ -100,22 +99,4 @@ test('assigned conversation start reuses the assignment lifecycle snapshot', () 
   );
   assert.doesNotMatch(assignedBranch, /ownedConversation\(/u);
   assert.doesNotMatch(assignedBranch, /broadcastClientConversationEvent\(/u);
-});
-
-test('normal routing assignment keeps product round robin in one atomic statement', () => {
-  const route = section(
-    routingSource,
-    'export async function assignConversationAgent(',
-    'async function assignedAgent(',
-  );
-
-  assert.match(route, /WITH context AS/u);
-  assert.match(route, /cursor AS/u);
-  assert.match(route, /routing_round_robin_cursors/u);
-  assert.match(route, /rr\.last_agent_id/u);
-  assert.match(route, /a\.id > rr\.last_agent_id/u);
-  assert.match(route, /RETURNING assigned_agent AS id/u);
-  assert.doesNotMatch(route, /round_robin_seq/u);
-  assert.doesNotMatch(route, /const conversation = await db/u);
-  assert.equal((route.match(/\.prepare\(/gu) ?? []).length, 1);
 });

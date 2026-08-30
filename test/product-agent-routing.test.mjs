@@ -5,7 +5,8 @@ import { DatabaseSync } from 'node:sqlite';
 import { URL } from 'node:url';
 import {
   assignConversationAgent,
-  findRoutableWaitingConversationIds,
+  recoverWaitingConversationAssignments,
+  routingBusinessDate,
 } from '../src/worker/routing.ts';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
@@ -117,6 +118,8 @@ function addAgent(
     quotaTotal = 0,
     quotaUsed = 0,
     lastAssignedAt = null,
+    usernameConfigured = true,
+    passwordConfigured = true,
   },
 ) {
   database
@@ -131,8 +134,8 @@ function addAgent(
     .run(
       id,
       id,
-      id,
-      `hash-${id}`,
+      usernameConfigured ? id : null,
+      passwordConfigured ? `hash-${id}` : null,
       status,
       enabled ? 1 : 0,
       dailyConversationLimit,
@@ -182,18 +185,18 @@ async function assigned(database, id) {
   return (await assignConversationAgent(d1(database), id))?.id ?? null;
 }
 
-test('one product uses circular round robin', async () => {
+test('one product uses strict circular round robin', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
     addScope(database, id, { type: 'section', sectionId: 'west' });
   }
-  for (let index = 1; index <= 4; index += 1) {
+  for (let index = 1; index <= 6; index += 1) {
     addConversation(database, `conversation-${index}`, 'product-west');
   }
 
   const assignedAgents = [];
-  for (let index = 1; index <= 4; index += 1) {
+  for (let index = 1; index <= 6; index += 1) {
     assignedAgents.push(await assigned(database, `conversation-${index}`));
   }
 
@@ -202,6 +205,8 @@ test('one product uses circular round robin', async () => {
     'agent-b',
     'agent-c',
     'agent-a',
+    'agent-b',
+    'agent-c',
   ]);
   database.close();
 });
@@ -245,7 +250,8 @@ test('products keep independent round robin cursors', async () => {
          FROM routing_round_robin_cursors
          ORDER BY product_id`,
       )
-      .all(),
+      .all()
+      .map((row) => ({ ...row })),
     [
       { product_id: 'east-product', last_agent_id: 'agent-a' },
       { product_id: 'west-product', last_agent_id: 'agent-a' },
@@ -254,19 +260,111 @@ test('products keep independent round robin cursors', async () => {
   database.close();
 });
 
-test('only online seats receive automatic traffic', async () => {
+test('only seats with complete base eligibility receive automatic traffic', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-offline', status: 'offline' });
   addAgent(database, { id: 'agent-busy', status: 'busy' });
   addAgent(database, { id: 'agent-online', status: 'online' });
+  addAgent(database, {
+    id: 'agent-no-username',
+    usernameConfigured: false,
+  });
+  addAgent(database, {
+    id: 'agent-no-password',
+    passwordConfigured: false,
+  });
   addScope(database, 'agent-offline', { type: 'section', sectionId: 'west' });
   addScope(database, 'agent-busy', { type: 'section', sectionId: 'west' });
   addScope(database, 'agent-online', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-no-username', {
+    type: 'section',
+    sectionId: 'west',
+  });
+  addScope(database, 'agent-no-password', {
+    type: 'section',
+    sectionId: 'west',
+  });
   addConversation(database, 'conversation-1', 'product-a');
   addConversation(database, 'conversation-2', 'product-a');
 
   assert.equal(await assigned(database, 'conversation-1'), 'agent-online');
   assert.equal(await assigned(database, 'conversation-2'), 'agent-online');
+  database.close();
+});
+
+for (const unavailableStatus of ['busy', 'offline']) {
+  test(`${unavailableStatus} is only an eligibility gate and rejoins naturally`, async () => {
+    const database = await createDatabase();
+    for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+      addAgent(database, { id });
+      addScope(database, id, { type: 'section', sectionId: 'west' });
+    }
+
+    addConversation(database, 'conversation-1', 'product-west');
+    assert.equal(await assigned(database, 'conversation-1'), 'agent-a');
+    database
+      .prepare('UPDATE agents SET status = ? WHERE id = ?')
+      .run(unavailableStatus, 'agent-b');
+    addConversation(database, 'conversation-2', 'product-west');
+    assert.equal(await assigned(database, 'conversation-2'), 'agent-c');
+
+    database.exec(`UPDATE agents SET status = 'online' WHERE id = 'agent-b'`);
+    addConversation(database, 'conversation-3', 'product-west');
+    addConversation(database, 'conversation-4', 'product-west');
+    assert.equal(await assigned(database, 'conversation-3'), 'agent-a');
+    assert.equal(await assigned(database, 'conversation-4'), 'agent-b');
+    database.close();
+  });
+}
+
+test('an enabled seat rejoins its prior ring without priority', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+    addAgent(database, { id });
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+
+  addConversation(database, 'conversation-1', 'product-west');
+  assert.equal(await assigned(database, 'conversation-1'), 'agent-a');
+  database.exec(`UPDATE agents SET is_enabled = 0 WHERE id = 'agent-b'`);
+  addConversation(database, 'conversation-2', 'product-west');
+  assert.equal(await assigned(database, 'conversation-2'), 'agent-c');
+
+  database.exec(`UPDATE agents SET is_enabled = 1 WHERE id = 'agent-b'`);
+  addConversation(database, 'conversation-3', 'product-west');
+  addConversation(database, 'conversation-4', 'product-west');
+  assert.equal(await assigned(database, 'conversation-3'), 'agent-a');
+  assert.equal(await assigned(database, 'conversation-4'), 'agent-b');
+  database.close();
+});
+
+test('a daily-cap reset only restores normal ring eligibility', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+    addAgent(database, { id });
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+
+  addConversation(database, 'conversation-1', 'product-west');
+  assert.equal(await assigned(database, 'conversation-1'), 'agent-a');
+  database.exec(
+    `UPDATE agents SET daily_conversation_limit = 1 WHERE id = 'agent-b'`,
+  );
+  database
+    .prepare(
+      `INSERT INTO agent_daily_stats (
+         site_id, agent_id, business_date, conversation_count
+       ) VALUES ('default', 'agent-b', ?, 1)`,
+    )
+    .run(routingBusinessDate());
+  addConversation(database, 'conversation-2', 'product-west');
+  assert.equal(await assigned(database, 'conversation-2'), 'agent-c');
+
+  database.exec(`DELETE FROM agent_daily_stats WHERE agent_id = 'agent-b'`);
+  addConversation(database, 'conversation-3', 'product-west');
+  addConversation(database, 'conversation-4', 'product-west');
+  assert.equal(await assigned(database, 'conversation-3'), 'agent-a');
+  assert.equal(await assigned(database, 'conversation-4'), 'agent-b');
   database.close();
 });
 
@@ -316,6 +414,27 @@ test('affinity falls back when its seat is offline', async () => {
   `);
 
   assert.equal(await assigned(database, 'protected-conversation'), 'agent-b');
+  database.close();
+});
+
+test('eligible CTA affinity takes precedence over the product cursor', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+    addAgent(database, { id });
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+  addConversation(database, 'conversation-1', 'product-west');
+  assert.equal(await assigned(database, 'conversation-1'), 'agent-a');
+
+  addConversation(database, 'protected-conversation', 'product-west');
+  database.exec(`
+    UPDATE conversations
+    SET cta_affinity_agent_id = 'agent-c',
+        cta_affinity_expires_at = datetime('now', '+2 hours')
+    WHERE id = 'protected-conversation';
+  `);
+
+  assert.equal(await assigned(database, 'protected-conversation'), 'agent-c');
   database.close();
 });
 
@@ -410,7 +529,7 @@ test('conversation without a matching scope remains unassigned', async () => {
   database.close();
 });
 
-test('waiting discovery skips blocked head rows', async () => {
+test('waiting recovery scans past ten blocked rows through canonical routing', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-a' });
   addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
@@ -431,9 +550,22 @@ test('waiting discovery skips blocked head rows', async () => {
     lastMessageAt: '2026-08-01 00:01:00',
   });
 
-  assert.deepEqual(await findRoutableWaitingConversationIds(d1(database), 10), [
-    'routable-11',
-  ]);
-  assert.equal(await assigned(database, 'routable-11'), 'agent-a');
+  const recovered = await recoverWaitingConversationAssignments(
+    d1(database),
+    10,
+  );
+  assert.deepEqual(
+    recovered.map(({ conversationId, assignment }) => ({
+      conversationId,
+      agentId: assignment.id,
+    })),
+    [{ conversationId: 'routable-11', agentId: 'agent-a' }],
+  );
+  assert.equal(
+    database
+      .prepare(`SELECT assigned_agent FROM conversations WHERE id = ?`)
+      .get('routable-11').assigned_agent,
+    'agent-a',
+  );
   database.close();
 });
