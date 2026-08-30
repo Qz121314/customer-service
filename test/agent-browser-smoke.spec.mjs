@@ -66,6 +66,8 @@ async function loginAgent(page) {
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
   await createConversation(page);
+  const inboxResponse = await page.request.get(url('/api/agent/conversations'));
+  console.log('SMOKE_AGENT_INBOX', await inboxResponse.text());
   await page.reload();
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(
