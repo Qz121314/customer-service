@@ -11,7 +11,43 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
+function conversationData({
+  visitorId,
+  sourceHandoffId,
+  clientMessageId,
+}) {
+  return {
+    visitorId,
+    sourceHandoffId,
+    clientMessageId,
+    message: '你好，这是 UI smoke 会话',
+    product: {
+      id: productId,
+      sectionId: 'ui-smoke-section',
+      sectionName: 'Smoke Section',
+      categoryId: 'ui-smoke-category',
+      categoryName: 'Smoke Category',
+      title: 'UI Smoke Product',
+      href: 'https://example.com/ui-smoke-product',
+      coverUrl: null,
+    },
+  };
+}
+
+async function requestConversation(page, identifiers) {
+  return page.request.post(url('/client/v1/conversations'), {
+    data: conversationData(identifiers),
+  });
+}
+
 async function seedAgent(page) {
+  const noAgentResponse = await requestConversation(page, {
+    visitorId: 'UIT000',
+    sourceHandoffId: '00000000-0000-4000-8000-000000000001',
+    clientMessageId: 'ui-smoke-prime',
+  });
+  expect(noAgentResponse.status()).toBe(503);
+
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -22,7 +58,7 @@ async function seedAgent(page) {
       name: 'UI Smoke Agent',
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'none' },
+      routingScope: { type: 'product', productIds: [productId] },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,
@@ -35,27 +71,11 @@ async function seedAgent(page) {
 }
 
 async function createConversation(page) {
-  const conversation = await page.request.post(
-    url('/client/v1/conversations'),
-    {
-      data: {
-        visitorId: 'UIT001',
-        sourceHandoffId: '11111111-1111-4111-8111-111111111111',
-        clientMessageId: 'ui-smoke-message-1',
-        message: '你好，这是 UI smoke 会话',
-        product: {
-          id: productId,
-          sectionId: 'ui-smoke-section',
-          sectionName: 'Smoke Section',
-          categoryId: 'ui-smoke-category',
-          categoryName: 'Smoke Category',
-          title: 'UI Smoke Product',
-          href: 'https://example.com/ui-smoke-product',
-          coverUrl: null,
-        },
-      },
-    },
-  );
+  const conversation = await requestConversation(page, {
+    visitorId: 'UIT001',
+    sourceHandoffId: '11111111-1111-4111-8111-111111111111',
+    clientMessageId: 'ui-smoke-message-1',
+  });
   expect(conversation.ok()).toBeTruthy();
 }
 
@@ -66,8 +86,6 @@ async function loginAgent(page) {
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
   await createConversation(page);
-  const inboxResponse = await page.request.get(url('/api/agent/conversations'));
-  console.log('SMOKE_AGENT_INBOX', await inboxResponse.text());
   await page.reload();
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(
