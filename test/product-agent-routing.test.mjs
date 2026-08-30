@@ -3,7 +3,10 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { URL } from 'node:url';
-import { assignConversationAgent } from '../src/worker/routing.ts';
+import {
+  assignConversationAgent,
+  findRoutableWaitingConversationIds,
+} from '../src/worker/routing.ts';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -18,6 +21,9 @@ function d1(database) {
         },
         async first() {
           return database.prepare(sql).get(...bindings) ?? null;
+        },
+        async all() {
+          return { results: database.prepare(sql).all(...bindings) };
         },
         async run() {
           const result = database.prepare(sql).run(...bindings);
@@ -77,6 +83,7 @@ async function createDatabase() {
       cta_affinity_expires_at TEXT,
       status TEXT NOT NULL,
       expires_at TEXT,
+      last_message_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       created_at TEXT NOT NULL,
       updated_at TEXT
     );
@@ -95,6 +102,7 @@ async function createDatabase() {
   database.exec(
     await read('../migrations/0042_simple_round_robin_routing.sql'),
   );
+  database.exec(await read('../migrations/0048_product_round_robin.sql'));
   return database;
 }
 
@@ -153,38 +161,94 @@ function addConversation(
   database,
   id,
   productId,
-  { sectionId = 'west', categoryId = 'escorts' } = {},
+  {
+    sectionId = 'west',
+    categoryId = 'escorts',
+    lastMessageAt = '2026-08-01 00:00:00',
+  } = {},
 ) {
   database
     .prepare(
       `INSERT INTO conversations (
          id, site_id, product_id, section_id, category_id,
-         assigned_agent, status, expires_at, created_at
+         assigned_agent, status, expires_at, last_message_at, created_at
        ) VALUES (?, 'default', ?, ?, ?, NULL, 'open',
-         '2099-01-01T00:00:00.000Z', CURRENT_TIMESTAMP)`,
+         '2099-01-01T00:00:00.000Z', ?, CURRENT_TIMESTAMP)`,
     )
-    .run(id, productId, sectionId, categoryId);
+    .run(id, productId, sectionId, categoryId, lastMessageAt);
 }
 
-test('matching seats receive fresh conversations in deterministic round robin', async () => {
+async function assigned(database, id) {
+  return (await assignConversationAgent(d1(database), id))?.id ?? null;
+}
+
+test('one product receives traffic in deterministic circular round robin', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
     addScope(database, id, { type: 'section', sectionId: 'west' });
   }
   for (let index = 1; index <= 4; index += 1) {
-    addConversation(database, `conversation-${index}`, `product-${index}`);
+    addConversation(database, `conversation-${index}`, 'product-west');
   }
 
-  const db = d1(database);
-  const assigned = [];
+  const assignedAgents = [];
   for (let index = 1; index <= 4; index += 1) {
-    assigned.push(
-      (await assignConversationAgent(db, `conversation-${index}`))?.id,
-    );
+    assignedAgents.push(await assigned(database, `conversation-${index}`));
   }
 
-  assert.deepEqual(assigned, ['agent-a', 'agent-b', 'agent-c', 'agent-a']);
+  assert.deepEqual(assignedAgents, [
+    'agent-a',
+    'agent-b',
+    'agent-c',
+    'agent-a',
+  ]);
+  database.close();
+});
+
+test('overlapping scopes keep independent product round robin cursors', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) addAgent(database, { id });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'east' });
+  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
+  addScope(database, 'agent-c', { type: 'section', sectionId: 'east' });
+
+  const steps = [
+    ['west-1', 'west-product', 'west'],
+    ['east-1', 'east-product', 'east'],
+    ['west-2', 'west-product', 'west'],
+    ['east-2', 'east-product', 'east'],
+    ['west-3', 'west-product', 'west'],
+    ['east-3', 'east-product', 'east'],
+  ];
+  const assignedAgents = [];
+  for (const [id, productId, sectionId] of steps) {
+    addConversation(database, id, productId, { sectionId });
+    assignedAgents.push(await assigned(database, id));
+  }
+
+  assert.deepEqual(assignedAgents, [
+    'agent-a',
+    'agent-a',
+    'agent-b',
+    'agent-c',
+    'agent-a',
+    'agent-a',
+  ]);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT product_id, last_agent_id
+         FROM routing_round_robin_cursors
+         ORDER BY product_id`,
+      )
+      .all(),
+    [
+      { product_id: 'east-product', last_agent_id: 'agent-a' },
+      { product_id: 'west-product', last_agent_id: 'agent-a' },
+    ],
+  );
   database.close();
 });
 
@@ -197,17 +261,41 @@ test('only online seats receive automatic traffic', async () => {
   addScope(database, 'agent-busy', { type: 'section', sectionId: 'west' });
   addScope(database, 'agent-online', { type: 'section', sectionId: 'west' });
   addConversation(database, 'conversation-1', 'product-a');
-  addConversation(database, 'conversation-2', 'product-b');
+  addConversation(database, 'conversation-2', 'product-a');
 
-  const db = d1(database);
-  assert.equal(
-    (await assignConversationAgent(db, 'conversation-1'))?.id,
-    'agent-online',
-  );
-  assert.equal(
-    (await assignConversationAgent(db, 'conversation-2'))?.id,
-    'agent-online',
-  );
+  assert.equal(await assigned(database, 'conversation-1'), 'agent-online');
+  assert.equal(await assigned(database, 'conversation-2'), 'agent-online');
+  database.close();
+});
+
+test('restored quota rejoins the ring without catch-up priority', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c']) {
+    addAgent(database, { id });
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+
+  addConversation(database, 'conversation-1', 'product-west');
+  assert.equal(await assigned(database, 'conversation-1'), 'agent-a');
+  database.exec(`
+    UPDATE agents
+    SET traffic_quota_enabled = 1,
+        traffic_quota_total = 0,
+        traffic_quota_used = 0
+    WHERE id = 'agent-b';
+  `);
+  addConversation(database, 'conversation-2', 'product-west');
+  assert.equal(await assigned(database, 'conversation-2'), 'agent-c');
+
+  database.exec(`
+    UPDATE agents
+    SET traffic_quota_total = 1
+    WHERE id = 'agent-b';
+  `);
+  addConversation(database, 'conversation-3', 'product-west');
+  addConversation(database, 'conversation-4', 'product-west');
+  assert.equal(await assigned(database, 'conversation-3'), 'agent-a');
+  assert.equal(await assigned(database, 'conversation-4'), 'agent-b');
   database.close();
 });
 
@@ -225,11 +313,7 @@ test('active two-hour affinity falls back when its seat is not online', async ()
     WHERE id = 'protected-conversation';
   `);
 
-  const assignment = await assignConversationAgent(
-    d1(database),
-    'protected-conversation',
-  );
-  assert.equal(assignment?.id, 'agent-b');
+  assert.equal(await assigned(database, 'protected-conversation'), 'agent-b');
   database.close();
 });
 
@@ -259,13 +343,9 @@ test('disabled or quota-exhausted affinity falls back without waiting', async ()
     WHERE id = 'exhausted-affinity';
   `);
 
-  const db = d1(database);
+  assert.equal(await assigned(database, 'disabled-affinity'), 'available-agent');
   assert.equal(
-    (await assignConversationAgent(db, 'disabled-affinity'))?.id,
-    'available-agent',
-  );
-  assert.equal(
-    (await assignConversationAgent(db, 'exhausted-affinity'))?.id,
+    await assigned(database, 'exhausted-affinity'),
     'available-agent',
   );
   database.close();
@@ -294,19 +374,12 @@ test('section, category and product scopes remain authoritative', async () => {
   });
   addConversation(database, 'product-conversation', 'special-product');
 
-  const db = d1(database);
+  assert.equal(await assigned(database, 'section-conversation'), 'section-agent');
   assert.equal(
-    (await assignConversationAgent(db, 'section-conversation'))?.id,
-    'section-agent',
-  );
-  assert.equal(
-    (await assignConversationAgent(db, 'category-conversation'))?.id,
+    await assigned(database, 'category-conversation'),
     'category-agent',
   );
-  assert.equal(
-    (await assignConversationAgent(db, 'product-conversation'))?.id,
-    'product-agent',
-  );
+  assert.equal(await assigned(database, 'product-conversation'), 'product-agent');
   database.close();
 });
 
@@ -319,9 +392,30 @@ test('conversation without a matching scope remains unassigned', async () => {
   });
   addConversation(database, 'conversation-1', 'product-without-scope');
 
-  assert.equal(
-    await assignConversationAgent(d1(database), 'conversation-1'),
-    null,
+  assert.equal(await assignConversationAgent(d1(database), 'conversation-1'), null);
+  database.close();
+});
+
+test('waiting discovery skips blocked head rows and returns routable traffic', async () => {
+  const database = await createDatabase();
+  addAgent(database, { id: 'agent-a' });
+  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
+
+  for (let index = 1; index <= 10; index += 1) {
+    addConversation(database, `blocked-${String(index).padStart(2, '0')}`, `blocked-product-${index}`, {
+      sectionId: 'blocked',
+      lastMessageAt: `2026-08-01 00:00:${String(index).padStart(2, '0')}`,
+    });
+  }
+  addConversation(database, 'routable-11', 'west-product', {
+    sectionId: 'west',
+    lastMessageAt: '2026-08-01 00:01:00',
+  });
+
+  assert.deepEqual(
+    await findRoutableWaitingConversationIds(d1(database), 10),
+    ['routable-11'],
   );
+  assert.equal(await assigned(database, 'routable-11'), 'agent-a');
   database.close();
 });
