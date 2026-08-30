@@ -11,7 +11,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-async function seedConversationAndAgent(page) {
+async function seedAgent(page) {
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -31,12 +31,10 @@ async function seedConversationAndAgent(page) {
     },
   });
   expect(createAgent.ok()).toBeTruthy();
+  await page.context().clearCookies();
+}
 
-  const agentLogin = await page.request.post(url('/api/agent/auth/login'), {
-    data: { username: agentUsername, password: agentPassword },
-  });
-  expect(agentLogin.ok()).toBeTruthy();
-
+async function createConversation(page) {
   const conversation = await page.request.post(
     url('/client/v1/conversations'),
     {
@@ -59,7 +57,6 @@ async function seedConversationAndAgent(page) {
     },
   );
   expect(conversation.ok()).toBeTruthy();
-  await page.context().clearCookies();
 }
 
 async function loginAgent(page) {
@@ -68,6 +65,7 @@ async function loginAgent(page) {
   await page.getByLabel('登录密码').fill(agentPassword);
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
+  await createConversation(page);
   await expect(
     page.getByRole('button', { name: /UI Smoke Product/u }),
   ).toBeVisible();
@@ -159,7 +157,7 @@ async function mobileComposerGeometry(page) {
 test('agent desktop and mobile interaction surfaces remain usable', async ({
   page,
 }) => {
-  await seedConversationAndAgent(page);
+  await seedAgent(page);
   await loginAgent(page);
 
   const serviceWorker = await page.evaluate(async () => {
