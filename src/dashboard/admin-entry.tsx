@@ -16,6 +16,7 @@ async function loadAdminStyles() {
   await import('./admin-layout.css');
   await import('./commercial-polish.css');
   await import('./admin-design-system.css');
+  await import('./no-agent-message.css');
 }
 
 export async function bootstrap() {

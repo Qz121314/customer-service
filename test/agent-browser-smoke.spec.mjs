@@ -1,39 +1,62 @@
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
-const agentUsername = 'ui-smoke-agent';
+const smokeRunId = randomUUID().replaceAll('-', '');
+const agentUsername = `ui-smoke-agent-${smokeRunId.slice(0, 16)}`;
 const agentPassword = 'ui-smoke-pass';
-const productId = 'ui-smoke-product';
+const productId = `ui-smoke-product-${smokeRunId}`;
+const smokeVisitorDigits = String(
+  Number.parseInt(smokeRunId.slice(0, 8), 16) % 1000,
+).padStart(3, '0');
+const primeVisitorId = `UIT${smokeVisitorDigits}`;
+const visitorId = `UIV${smokeVisitorDigits}`;
+const primeSourceHandoffId = randomUUID();
+const sourceHandoffId = randomUUID();
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-async function seedConversationAndAgent(page) {
-  const conversation = await page.request.post(
-    url('/client/v1/conversations'),
-    {
-      data: {
-        visitorId: 'UIT001',
-        sourceHandoffId: '11111111-1111-4111-8111-111111111111',
-        clientMessageId: 'ui-smoke-message-1',
-        message: '你好，这是 UI smoke 会话',
-        product: {
-          id: productId,
-          sectionId: 'ui-smoke-section',
-          sectionName: 'Smoke Section',
-          categoryId: 'ui-smoke-category',
-          categoryName: 'Smoke Category',
-          title: 'UI Smoke Product',
-          href: 'https://example.com/ui-smoke-product',
-          coverUrl: null,
-        },
-      },
+function conversationData({ visitorId, sourceHandoffId, clientMessageId }) {
+  return {
+    visitorId,
+    sourceHandoffId,
+    clientMessageId,
+    message: '你好，这是 UI smoke 会话',
+    product: {
+      id: productId,
+      sectionId: 'ui-smoke-section',
+      sectionName: 'Smoke Section',
+      categoryId: 'ui-smoke-category',
+      categoryName: 'Smoke Category',
+      title: 'UI Smoke Product',
+      href: 'https://example.com/ui-smoke-product',
+      coverUrl: null,
     },
+  };
+}
+
+async function requestConversation(page, identifiers, sourceIp) {
+  return page.request.post(url('/client/v1/conversations'), {
+    headers: sourceIp ? { 'CF-Connecting-IP': sourceIp } : undefined,
+    data: conversationData(identifiers),
+  });
+}
+
+async function seedAgent(page) {
+  const noAgentResponse = await requestConversation(
+    page,
+    {
+      visitorId: primeVisitorId,
+      sourceHandoffId: primeSourceHandoffId,
+      clientMessageId: `ui-smoke-prime-${smokeRunId}`,
+    },
+    '198.51.100.10',
   );
-  expect(conversation.ok()).toBeTruthy();
+  expect([200, 503]).toContain(noAgentResponse.status());
 
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
@@ -54,6 +77,20 @@ async function seedConversationAndAgent(page) {
     },
   });
   expect(createAgent.ok()).toBeTruthy();
+  await page.context().clearCookies();
+}
+
+async function createConversation(page) {
+  const conversation = await requestConversation(
+    page,
+    {
+      visitorId,
+      sourceHandoffId,
+      clientMessageId: `ui-smoke-message-${smokeRunId}`,
+    },
+    '198.51.100.11',
+  );
+  expect(conversation.ok()).toBeTruthy();
 }
 
 async function loginAgent(page) {
@@ -61,6 +98,9 @@ async function loginAgent(page) {
   await page.getByLabel('客服账号').fill(agentUsername);
   await page.getByLabel('登录密码').fill(agentPassword);
   await page.getByRole('button', { name: '进入工作台' }).click();
+  await expect(page.getByText('我的会话')).toBeVisible();
+  await createConversation(page);
+  await page.reload();
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(
     page.getByRole('button', { name: /UI Smoke Product/u }),
@@ -153,7 +193,7 @@ async function mobileComposerGeometry(page) {
 test('agent desktop and mobile interaction surfaces remain usable', async ({
   page,
 }) => {
-  await seedConversationAndAgent(page);
+  await seedAgent(page);
   await loginAgent(page);
 
   const serviceWorker = await page.evaluate(async () => {

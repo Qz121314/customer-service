@@ -3,6 +3,11 @@ import { cors } from 'hono/cors';
 import { conversationExpiresAt } from './conversation-retention';
 import { assignConversationAgent, routingBusinessDate } from './routing';
 import {
+  DEFAULT_NO_AGENT_MESSAGE,
+  normalizeNoAgentMessageFormat,
+  type NoAgentMessageFormat,
+} from './no-agent-message';
+import {
   broadcastAssignments,
   type AssignmentVisitorMessage,
 } from './assignment-broadcast';
@@ -25,6 +30,8 @@ type SenderType = 'visitor' | 'agent' | 'system';
 type SiteRow = {
   id: string;
   name: string;
+  no_agent_message: string | null;
+  no_agent_message_format: NoAgentMessageFormat | null;
 };
 
 type VisitorRow = {
@@ -377,6 +384,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     new Date(toIso(replay.reuse_expires_at) ?? '').getTime() > Date.now();
   const reuseIsActive =
     reuseIsFresh &&
+    Boolean(replay?.reuse_assigned_agent) &&
     (replay?.reuse_status === 'open' || replay?.reuse_status === 'pending');
   const affinityAgentId =
     reuseIsFresh && !reuseIsActive
@@ -622,6 +630,16 @@ clientApi.post('/client/v1/conversations', async (c) => {
 
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
   let conversation: ConversationRow | null = null;
+
+  if (!assignment) {
+    await discardUnassignedConversation(c.env.DB, {
+      siteId: site.id,
+      conversationId,
+      reuseKey: startClaimKey,
+      sourceHandoffId,
+    });
+    return noAgentResponse(c, site);
+  }
 
   if (assignment?.newlyAssigned && assignment.assignedAt) {
     const snapshots = await broadcastAssignments(
@@ -1103,7 +1121,8 @@ async function findSite(
 ): Promise<SiteRow | null> {
   return db
     .prepare(
-      `SELECT id, name FROM sites
+      `SELECT id, name, no_agent_message, no_agent_message_format
+     FROM sites
      WHERE (id = ?1 OR public_key = ?1) AND is_enabled = 1
      LIMIT 1`,
     )
@@ -1154,6 +1173,53 @@ async function rememberProductRoutingContext(
       product.categoryName,
     )
     .run();
+}
+
+async function discardUnassignedConversation(
+  db: D1Database,
+  input: {
+    siteId: string;
+    conversationId: string;
+    reuseKey: string;
+    sourceHandoffId: string;
+  },
+): Promise<void> {
+  await db.batch([
+    db
+      .prepare(
+        `DELETE FROM conversations
+         WHERE id = ?1 AND site_id = ?2 AND assigned_agent IS NULL`,
+      )
+      .bind(input.conversationId, input.siteId),
+    db
+      .prepare(
+        `DELETE FROM conversation_creation_quota_receipts
+         WHERE site_id = ?1 AND reuse_key = ?2`,
+      )
+      .bind(input.siteId, input.reuseKey),
+    db
+      .prepare(
+        `DELETE FROM conversation_source_handoffs
+         WHERE site_id = ?1 AND source_handoff_id = ?2`,
+      )
+      .bind(input.siteId, input.sourceHandoffId),
+  ]);
+}
+
+function noAgentResponse(c: Context<ClientEnv>, site: SiteRow) {
+  const message = site.no_agent_message?.trim() || DEFAULT_NO_AGENT_MESSAGE;
+  const format =
+    normalizeNoAgentMessageFormat(site.no_agent_message_format) ?? 'plain';
+  return c.json(
+    {
+      error: {
+        code: 'NO_AGENT_AVAILABLE',
+        message,
+        format,
+      },
+    },
+    503,
+  );
 }
 
 async function ensureVisitor(
@@ -1752,7 +1818,7 @@ async function readJson<T>(request: Request): Promise<T | null> {
 
 function error(
   c: Context<ClientEnv>,
-  status: 400 | 401 | 404 | 409 | 426 | 429,
+  status: 400 | 401 | 404 | 409 | 426 | 429 | 503,
   code: string,
   message: string,
 ) {

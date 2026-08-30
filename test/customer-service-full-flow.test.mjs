@@ -340,16 +340,7 @@ test('admin can save multiple whole-section routing rules in one request', async
         last_seen_at = CURRENT_TIMESTAMP,
         traffic_quota_used = traffic_quota_total
     WHERE id = '${created.id}';
-    INSERT INTO visitors (id, site_id, token_hash)
-    VALUES ('quota-waiting-visitor', 'default', 'quota-waiting-token');
-    INSERT INTO conversations (
-      id, site_id, visitor_id, status, product_id, section_id, expires_at
-    ) VALUES (
-      'quota-waiting-conversation', 'default', 'quota-waiting-visitor',
-      'open', 'product-west', 'west', datetime('now', '+1 day')
-    );
   `);
-  const retryRooms = fakeRooms();
   const restoredQuotaResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
@@ -365,22 +356,12 @@ test('admin can save multiple whole-section routing rules in one request', async
     },
     {
       DB: d1(database),
-      CONVERSATION_ROOMS: retryRooms.namespace,
+      CONVERSATION_ROOMS: fakeRooms().namespace,
       ADMIN_PASSWORD: adminPassword,
     },
-    { waitUntil() {}, passThroughOnException() {} },
   );
   const restoredQuota = await json(restoredQuotaResponse);
   assert.equal(restoredQuota.quotaApplied, true);
-  assert.equal(restoredQuota.assignedWaitingCount, 1);
-  const assignedConversation = database
-    .prepare(
-      `SELECT assigned_agent, status
-       FROM conversations WHERE id = 'quota-waiting-conversation'`,
-    )
-    .get();
-  assert.equal(assignedConversation.assigned_agent, created.id);
-  assert.equal(assignedConversation.status, 'pending');
   const restoredAgentQuota = database
     .prepare(
       `SELECT traffic_quota_total AS total, traffic_quota_used AS used
@@ -388,7 +369,7 @@ test('admin can save multiple whole-section routing rules in one request', async
     )
     .get(created.id);
   assert.equal(restoredAgentQuota.total, 151);
-  assert.equal(restoredAgentQuota.used, 151);
+  assert.equal(restoredAgentQuota.used, 150);
   database.close();
 });
 
@@ -483,9 +464,11 @@ test('admin can save and update a private agent marker', async () => {
   database.close();
 });
 
-async function json(response) {
+async function json(response, { allowError = false } = {}) {
   const value = await response.json();
-  assert.ok(response.ok, `${response.status}: ${JSON.stringify(value)}`);
+  if (!allowError) {
+    assert.ok(response.ok, `${response.status}: ${JSON.stringify(value)}`);
+  }
   return value;
 }
 
@@ -1190,7 +1173,8 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       },
       env,
     );
-    return json(response);
+    const payload = await json(response, { allowError: true });
+    return response.ok ? payload : { response, ...payload };
   }
 
   const east = await createConversation('east');
@@ -1217,7 +1201,6 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
   const westThree = await createConversation('west');
   const westOneId = westOne.conversation.id;
   const westTwoId = westTwo.conversation.id;
-  const westThreeId = westThree.conversation.id;
   assert.equal(
     database
       .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
@@ -1230,12 +1213,20 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .get(westTwoId).assigned_agent,
     agentA,
   );
+  assert.equal(westThree.response.status, 503);
+  assert.equal(westThree.error.code, 'NO_AGENT_AVAILABLE');
   assert.equal(
     database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get(westThreeId).assigned_agent,
-    null,
-    'fresh traffic must wait when every matching seat has exhausted new-traffic quota',
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM conversations
+         WHERE visitor_id IN (
+           SELECT id FROM visitors WHERE external_id = ?
+         )`,
+      )
+      .get('QTA004').count,
+    0,
+    'fresh traffic must not create a waiting conversation when no seat is eligible',
   );
   assert.deepEqual(
     database
@@ -1276,13 +1267,10 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
   );
   const toppedUp = await json(topUpResponse);
   assert.equal(toppedUp.quotaApplied, true);
-  assert.equal(toppedUp.assignedWaitingCount, 1);
   assert.equal(
-    database
-      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
-      .get(westThreeId).assigned_agent,
-    agentA,
-    'adding one unit must immediately admit one waiting fresh conversation',
+    Object.hasOwn(toppedUp, 'assignedWaitingCount'),
+    false,
+    'quota changes must not recover a waiting queue',
   );
   assert.deepEqual(
     database
@@ -1292,7 +1280,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
          FROM agents WHERE id = ?`,
       )
       .get(agentA),
-    Object.assign(Object.create(null), { total: 3, used: 3 }),
+    Object.assign(Object.create(null), { total: 3, used: 2 }),
   );
 
   const disableResponse = await adminConfigApi.request(
@@ -1313,12 +1301,12 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .prepare(
         `SELECT id, assigned_agent
          FROM conversations
-         WHERE id IN (?, ?, ?)
+         WHERE id IN (?, ?)
          ORDER BY id`,
       )
-      .all(westOneId, westTwoId, westThreeId)
+      .all(westOneId, westTwoId)
       .map((row) => row.assigned_agent),
-    [agentA, agentA, agentA],
+    [agentA, agentA],
     'disabling a seat must preserve its existing active conversations',
   );
   assert.deepEqual(
@@ -1341,14 +1329,14 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .prepare(
         `SELECT agent_id, COUNT(*) AS count
          FROM agent_traffic_receipts
-         WHERE conversation_id IN (?, ?, ?, ?)
+         WHERE conversation_id IN (?, ?, ?)
          GROUP BY agent_id
          ORDER BY agent_id`,
       )
-      .all(eastId, westOneId, westTwoId, westThreeId)
+      .all(eastId, westOneId, westTwoId)
       .map((row) => ({ agentId: row.agent_id, count: row.count })),
     [
-      { agentId: agentA, count: 3 },
+      { agentId: agentA, count: 2 },
       { agentId: agentB, count: 1 },
     ].sort((left, right) => left.agentId.localeCompare(right.agentId)),
     'immutable first-reception receipts must remain the billing source of truth after disable',
@@ -1388,9 +1376,9 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
 
   assert.deepEqual(readQuotaLedger(agentA), {
     total: 3,
-    used: 3,
+    used: 2,
     expectedTotal: 3,
-    expectedUsed: 3,
+    expectedUsed: 2,
     consistent: true,
   });
   assert.deepEqual(readQuotaLedger(agentB), {
@@ -1583,4 +1571,62 @@ test('admin permanently deletes an agent while preserving historical records', a
       .get(agentId).conversation_count,
     3,
   );
+});
+
+test('admin can configure the no-agent response as plain text or Markdown', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: fakeRooms().namespace,
+    ADMIN_PASSWORD: 'admin-password',
+  };
+  const headers = {
+    cookie: adminCookie('admin-password'),
+    'content-type': 'application/json',
+  };
+
+  const initial = await json(
+    await adminConfigApi.request(
+      '/api/admin/no-agent-message',
+      { headers },
+      env,
+    ),
+  );
+  assert.equal(initial.noAgentMessage.format, 'plain');
+  assert.equal(initial.noAgentMessage.message.length > 0, true);
+
+  const saved = await json(
+    await adminConfigApi.request(
+      '/api/admin/no-agent-message',
+      {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          message: '  **暂时没有客服**\\n\\n请稍后再试。  ',
+          format: 'markdown',
+        }),
+      },
+      env,
+    ),
+  );
+  assert.deepEqual(saved.noAgentMessage, {
+    message: '**暂时没有客服**\\n\\n请稍后再试。',
+    format: 'markdown',
+  });
+  assert.deepEqual(
+    Object.assign(
+      {},
+      database
+        .prepare(
+          'SELECT no_agent_message, no_agent_message_format FROM sites WHERE id = ?',
+        )
+        .get('default'),
+    ),
+    {
+      no_agent_message: '**暂时没有客服**\\n\\n请稍后再试。',
+      no_agent_message_format: 'markdown',
+    },
+  );
+  database.close();
 });

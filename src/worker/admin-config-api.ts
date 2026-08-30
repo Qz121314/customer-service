@@ -3,8 +3,12 @@ import { hashAgentPassword } from './agent-password';
 import { broadcastClientConversationEvent } from './client-api';
 import { assignConversationAgent } from './routing';
 import { calendarMonthPeriod } from '../shared/calendar-month';
-import { sendAgentPushForConversation } from './agent-push';
-import { assignWaitingConversations } from './waiting-assignment';
+import {
+  DEFAULT_NO_AGENT_MESSAGE,
+  normalizeNoAgentMessage,
+  normalizeNoAgentMessageFormat,
+  type NoAgentMessageFormat,
+} from './no-agent-message';
 
 type Bindings = {
   DB: D1Database;
@@ -13,6 +17,11 @@ type Bindings = {
 };
 
 type Env = { Bindings: Bindings };
+
+type NoAgentMessageSettings = {
+  message: string;
+  format: NoAgentMessageFormat;
+};
 
 type AgentRow = {
   id: string;
@@ -77,11 +86,42 @@ export const adminConfigApi = new Hono<Env>();
 
 adminConfigApi.get('/api/admin/bootstrap', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const [agents, products] = await Promise.all([
+  const [agents, products, noAgentMessage] = await Promise.all([
     loadAgents(c.env.DB),
     loadProducts(c.env.DB),
+    loadNoAgentMessage(c.env.DB),
   ]);
-  return c.json({ agents, products });
+  return c.json({ agents, products, noAgentMessage });
+});
+
+adminConfigApi.get('/api/admin/no-agent-message', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  return c.json({ noAgentMessage: await loadNoAgentMessage(c.env.DB) });
+});
+
+adminConfigApi.put('/api/admin/no-agent-message', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const body = await readJson<{ message?: unknown; format?: unknown }>(
+    c.req.raw,
+  );
+  const message = normalizeNoAgentMessage(body?.message);
+  const format = normalizeNoAgentMessageFormat(body?.format);
+  if (!message || !format) {
+    return c.json({ error: 'INVALID_NO_AGENT_MESSAGE' }, 400);
+  }
+  await c.env.DB.prepare(
+    `UPDATE sites
+     SET no_agent_message = ?1,
+         no_agent_message_format = ?2,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = 'default'`,
+  )
+    .bind(message, format)
+    .run();
+  return c.json({
+    ok: true,
+    noAgentMessage: { message, format },
+  });
 });
 
 adminConfigApi.get('/api/admin/agents', async (c) => {
@@ -581,33 +621,7 @@ adminConfigApi.patch('/api/admin/agents/:id', async (c) => {
       );
     }
   }
-  const quotaWasBlocking =
-    current.traffic_quota_enabled === 1 &&
-    current.traffic_quota_used >= current.traffic_quota_total;
-  const quotaEligibilityRestored =
-    quotaWasBlocking && (quotaApplied || trafficQuotaEnabled === 0);
-  const enabledEligibilityRestored = current.is_enabled === 0 && enabled === 1;
-  let assignedWaitingCount = 0;
-  if (
-    enabled === 1 &&
-    current.status === 'online' &&
-    (enabledEligibilityRestored || quotaEligibilityRestored)
-  ) {
-    const assignedConversationIds = await assignWaitingConversations(
-      c.env,
-      id,
-      10,
-    );
-    assignedWaitingCount = assignedConversationIds.length;
-    for (const conversationId of assignedConversationIds) {
-      c.executionCtx.waitUntil(
-        sendAgentPushForConversation(c.env, conversationId).catch((error) => {
-          console.warn('Agent push dispatch failed after quota top-up.', error);
-        }),
-      );
-    }
-  }
-  return c.json({ ok: true, quotaApplied, assignedWaitingCount });
+  return c.json({ ok: true, quotaApplied });
 });
 
 adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
@@ -695,6 +709,27 @@ adminConfigApi.get('/api/admin/products', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   return c.json({ products: await loadProducts(c.env.DB) });
 });
+
+async function loadNoAgentMessage(
+  db: D1Database,
+): Promise<NoAgentMessageSettings> {
+  const row = await db
+    .prepare(
+      `SELECT no_agent_message, no_agent_message_format
+       FROM sites
+       WHERE id = 'default'
+       LIMIT 1`,
+    )
+    .first<{
+      no_agent_message: string | null;
+      no_agent_message_format: NoAgentMessageFormat | null;
+    }>();
+  return {
+    message: row?.no_agent_message?.trim() || DEFAULT_NO_AGENT_MESSAGE,
+    format:
+      normalizeNoAgentMessageFormat(row?.no_agent_message_format) ?? 'plain',
+  };
+}
 
 async function loadAgents(db: D1Database) {
   const businessDate = reportingBusinessDate();
