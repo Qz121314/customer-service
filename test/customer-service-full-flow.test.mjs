@@ -1631,7 +1631,6 @@ test('admin can configure the no-agent response as plain text or Markdown', asyn
   database.close();
 });
 
-
 test('visitor APIs never expose an unassigned legacy conversation as waiting', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
