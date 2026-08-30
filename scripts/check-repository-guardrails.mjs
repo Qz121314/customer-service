@@ -34,6 +34,26 @@ const [
 const packageJson = JSON.parse(packageText);
 const scripts = packageJson.scripts ?? {};
 const componentConfig = JSON.parse(componentConfigText);
+const dashboardTsxFiles = dashboardFiles.filter((name) => name.endsWith('.tsx'));
+const dashboardCssFiles = dashboardFiles.filter((name) =>
+  name.endsWith('.css'),
+);
+const [dashboardIconSource, dashboardSources, dashboardStyles] =
+  await Promise.all([
+    readFile('src/dashboard/icons.tsx', 'utf8'),
+    Promise.all(
+      dashboardTsxFiles.map(async (name) => ({
+        name,
+        source: await readFile(`src/dashboard/${name}`, 'utf8'),
+      })),
+    ),
+    Promise.all(
+      dashboardCssFiles.map(async (name) => ({
+        name,
+        source: await readFile(`src/dashboard/${name}`, 'utf8'),
+      })),
+    ),
+  ]);
 
 for (const scriptName of [
   'guardrails',
@@ -172,7 +192,7 @@ assert.match(
 );
 assert.match(
   developmentStandards,
-  /业务、API 和 UI 契约测试禁止把 `src\/`/u,
+  /业务、API 和 UI 契约测试禁止把 `src\//u,
   'development standards must reject source-string business contracts',
 );
 
@@ -204,13 +224,38 @@ assert.equal(componentConfig.tailwind?.cssVariables, true);
 assert.match(viteConfig, /tailwindcss from '@tailwindcss\/vite'/u);
 assert.match(dashboardMain, /import '\.\/ui-system\.css'/u);
 
-const dashboardCssFiles = dashboardFiles.filter((name) =>
-  name.endsWith('.css'),
-);
 assert.ok(
   dashboardCssFiles.length <= 22,
   `Dashboard CSS ownership regressed to ${dashboardCssFiles.length} files`,
 );
+
+assert.match(dashboardIconSource, /export type UiIconName/u);
+assert.match(dashboardIconSource, /from 'lucide-react'/u);
+assert.match(dashboardIconSource, /Record<UiIconName, LucideIcon>/u);
+assert.match(dashboardIconSource, /settings: Settings/u);
+assert.match(dashboardIconSource, /strokeWidth=\{1\.9\}/u);
+assert.match(dashboardIconSource, /aria-hidden="true"/u);
+assert.match(dashboardIconSource, /focusable="false"/u);
+assert.doesNotMatch(dashboardIconSource, /<svg\b|<path\b|<circle\b/u);
+
+const functionalIconCharacters = />\s*[×＋✓‹]\s*</u;
+for (const { name, source } of dashboardSources) {
+  if (name !== 'icons.tsx') {
+    assert.doesNotMatch(source, /<svg\b/u, `${name} contains a local SVG`);
+  }
+  assert.doesNotMatch(
+    source,
+    functionalIconCharacters,
+    `${name} contains a character action icon`,
+  );
+}
+for (const { name, source } of dashboardStyles) {
+  assert.doesNotMatch(
+    source,
+    /data:image\/svg\+xml|content:\s*['"][↗➤‹＋✓×]['"]/u,
+    `${name} contains an embedded or character action icon`,
+  );
+}
 
 const executableTests = testFiles.filter((name) => name.endsWith('.test.mjs'));
 assert.ok(
