@@ -8,8 +8,11 @@ const smokeRunId = randomUUID().replaceAll('-', '');
 const agentUsername = `ui-smoke-agent-${smokeRunId}`;
 const agentPassword = 'ui-smoke-pass';
 const productId = `ui-smoke-product-${smokeRunId}`;
-const primeVisitorId = `UIT000-${smokeRunId}`;
-const visitorId = `UIT001-${smokeRunId}`;
+const smokeVisitorDigits = String(
+  Number.parseInt(smokeRunId.slice(0, 8), 16) % 1000,
+).padStart(3, '0');
+const primeVisitorId = `UIT${smokeVisitorDigits}`;
+const visitorId = `UIV${smokeVisitorDigits}`;
 const primeSourceHandoffId = randomUUID();
 const sourceHandoffId = randomUUID();
 
