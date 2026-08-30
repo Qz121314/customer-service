@@ -5,7 +5,7 @@ const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 const smokeRunId = randomUUID().replaceAll('-', '');
-const agentUsername = `ui-smoke-agent-${smokeRunId}`;
+const agentUsername = `ui-smoke-agent-${smokeRunId.slice(0, 16)}`;
 const agentPassword = 'ui-smoke-pass';
 const productId = `ui-smoke-product-${smokeRunId}`;
 const smokeVisitorDigits = String(
@@ -71,11 +71,6 @@ async function seedAgent(page) {
       isEnabled: true,
     },
   });
-  console.log(
-    'SMOKE_CREATE_AGENT',
-    createAgent.status(),
-    await createAgent.text(),
-  );
   expect(createAgent.ok()).toBeTruthy();
   await page.context().clearCookies();
 }
