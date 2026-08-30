@@ -182,7 +182,7 @@ async function assigned(database, id) {
   return (await assignConversationAgent(d1(database), id))?.id ?? null;
 }
 
-test('one product receives traffic in deterministic circular round robin', async () => {
+test('one product uses circular round robin', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
@@ -206,7 +206,7 @@ test('one product receives traffic in deterministic circular round robin', async
   database.close();
 });
 
-test('overlapping scopes keep independent product round robin cursors', async () => {
+test('products keep independent round robin cursors', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
@@ -301,7 +301,7 @@ test('restored quota rejoins the ring without catch-up priority', async () => {
   database.close();
 });
 
-test('active two-hour affinity falls back when its seat is not online', async () => {
+test('affinity falls back when its seat is offline', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-a', status: 'offline' });
   addAgent(database, { id: 'agent-b' });
@@ -319,7 +319,7 @@ test('active two-hour affinity falls back when its seat is not online', async ()
   database.close();
 });
 
-test('disabled or quota-exhausted affinity falls back without waiting', async () => {
+test('disabled or exhausted affinity falls back', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'disabled-agent', enabled: false });
   addAgent(database, {
@@ -410,7 +410,7 @@ test('conversation without a matching scope remains unassigned', async () => {
   database.close();
 });
 
-test('waiting discovery skips blocked head rows and returns routable traffic', async () => {
+test('waiting discovery skips blocked head rows', async () => {
   const database = await createDatabase();
   addAgent(database, { id: 'agent-a' });
   addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
