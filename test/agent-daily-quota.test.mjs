@@ -124,8 +124,8 @@ async function createDatabase(agents) {
       .prepare(
         `INSERT INTO agents (
            id, site_id, name, username, password_hash,
-           status, is_enabled, daily_conversation_limit
-         ) VALUES (?, 'default', ?, ?, 'hash', 'online', 1, ?)`,
+           status, is_enabled, daily_conversation_limit, last_seen_at
+         ) VALUES (?, 'default', ?, ?, 'hash', 'online', 1, ?, CURRENT_TIMESTAMP)`,
       )
       .run(agent.id, agent.name, agent.id, agent.limit);
     database
