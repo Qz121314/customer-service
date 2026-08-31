@@ -361,11 +361,8 @@ function clientRealtimeMessage(message: AssignmentMessage) {
   };
 }
 
-function publicStatus(
-  status: ConversationStatus,
-): 'waiting' | 'active' | 'closed' {
-  if (status === 'closed') return 'closed';
-  return status === 'pending' ? 'active' : 'waiting';
+function publicStatus(status: ConversationStatus): 'active' | 'closed' {
+  return status === 'closed' ? 'closed' : 'active';
 }
 
 function toIso(value: string | null): string | null {
