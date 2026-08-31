@@ -6,7 +6,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('final routing schema removes stale seat cursors and tracks products', async () => {
+test('final routing schema removes stale seat cursors and uses one site cursor', async () => {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     CREATE TABLE agents (
@@ -44,6 +44,7 @@ test('final routing schema removes stale seat cursors and tracks products', asyn
     await read('../migrations/0045_remove_stale_agent_routing_fields.sql'),
   );
   database.exec(await read('../migrations/0048_product_round_robin.sql'));
+  database.exec(await read('../migrations/0051_site_global_round_robin.sql'));
 
   const columns = database
     .prepare('PRAGMA table_info(agents)')
@@ -60,6 +61,12 @@ test('final routing schema removes stale seat cursors and tracks products', asyn
       .map((row) => row.name),
   );
   assert.equal(tables.has('routing_round_robin_cursors'), true);
+
+  const cursorColumns = database
+    .prepare('PRAGMA table_info(routing_round_robin_cursors)')
+    .all()
+    .map((row) => row.name);
+  assert.deepEqual(cursorColumns, ['site_id', 'last_agent_id', 'updated_at']);
 
   database.exec(`
     INSERT INTO agents (id, site_id)
@@ -81,7 +88,7 @@ test('final routing schema removes stale seat cursors and tracks products', asyn
     .prepare(
       `SELECT last_agent_id, updated_at
        FROM routing_round_robin_cursors
-       WHERE site_id = 'default' AND product_id = 'product-a'`,
+       WHERE site_id = 'default'`,
     )
     .get();
   assert.equal(cursor.last_agent_id, 'agent-a');
