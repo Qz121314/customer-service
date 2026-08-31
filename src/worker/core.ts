@@ -195,8 +195,7 @@ export class ConversationRoom extends DurableObject<Bindings> {
   private async touchAgent(agentId: string): Promise<void> {
     await this.env.DB.prepare(
       `UPDATE agents
-       SET status = CASE WHEN status = 'busy' THEN 'busy' ELSE 'online' END,
-           last_seen_at = CURRENT_TIMESTAMP,
+       SET last_seen_at = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?1
          AND (
