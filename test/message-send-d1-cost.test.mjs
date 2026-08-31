@@ -81,6 +81,7 @@ test('visitor text sends keep duplicate reads off the normal write path', () => 
     ownership,
     /SELECT c\.id, c\.visitor_id, c\.status, c\.assigned_agent/u,
   );
+  assert.match(ownership, /AND c\.assigned_agent IS NOT NULL/u);
   assert.doesNotMatch(ownership, /last_message/u);
   assert.doesNotMatch(ownership, /LEFT JOIN agents/u);
   assert.doesNotMatch(
@@ -127,10 +128,9 @@ test('realtime overview scans run only when assignment or status counts can chan
     broadcaster,
     /previousAgentId[\s\S]*loadAgentOverview\(env\.DB, previousAgentId\)/u,
   );
-  assert.match(
-    clientRoute,
-    /if \(assignment\?\.newlyAssigned && assignment\.assignedAt\)[\s\S]*broadcastAssignments\([\s\S]*\} else \{[\s\S]*broadcastClientConversationEvent\(/u,
-  );
+  assert.doesNotMatch(clientRoute, /assignConversationAgent\(/u);
+  assert.doesNotMatch(clientRoute, /broadcastAssignments\(/u);
+  assert.match(clientRoute, /broadcastClientConversationEvent\(/u);
   assert.doesNotMatch(clientRoute, /includeOverview:\s*true/u);
   assert.match(assignmentBroadcaster, /loadAgentOverview\(env\.DB, agentId\)/u);
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);

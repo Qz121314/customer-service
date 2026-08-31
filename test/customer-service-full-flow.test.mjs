@@ -1698,7 +1698,7 @@ test('admin can configure the no-agent response as plain text or Markdown', asyn
   database.close();
 });
 
-test('visitor APIs never expose an unassigned legacy conversation as waiting', async () => {
+test('visitor APIs hide and never recover an unassigned legacy conversation', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   const rooms = fakeRooms();
@@ -1756,27 +1756,51 @@ test('visitor APIs never expose an unassigned legacy conversation as waiting', a
   assert.equal(listResponse.status, 200);
   assert.deepEqual((await json(listResponse)).conversations, []);
 
-  const replayResponse = await clientApi.request(
-    '/client/v1/conversations',
+  const detailResponse = await clientApi.request(
+    `/client/v1/conversations/${conversationId}?visitorId=${encodeURIComponent(visitorId)}`,
+    undefined,
+    env,
+  );
+  assert.equal(detailResponse.status, 404);
+
+  const messageResponse = await clientApi.request(
+    `/client/v1/conversations/${conversationId}/messages`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
-        sourceHandoffId: '00000000-0000-4000-8000-000000008888',
-        clientMessageId: 'legacy-replay',
-        message: 'legacy message',
-        product: {
-          id: 'product-no-wait',
-          sectionId: 'west',
-          sectionName: 'West',
-          categoryId: null,
-          categoryName: null,
-          title: 'No-wait product',
-          href: '/products/no-wait',
-          coverUrl: null,
-        },
+        clientMessageId: 'must-not-recover',
+        body: 'must not be persisted',
       }),
+    },
+    env,
+  );
+  assert.equal(messageResponse.status, 404);
+
+  const replayBody = {
+    visitorId,
+    sourceHandoffId: '00000000-0000-4000-8000-000000008888',
+    clientMessageId: 'legacy-replay',
+    message: 'legacy message',
+    product: {
+      id: 'product-no-wait',
+      sectionId: 'west',
+      sectionName: 'West',
+      categoryId: null,
+      categoryName: null,
+      title: 'No-wait product',
+      href: '/products/no-wait',
+      coverUrl: null,
+    },
+  };
+
+  const replayResponse = await clientApi.request(
+    '/client/v1/conversations',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(replayBody),
     },
     env,
   );
@@ -1788,6 +1812,73 @@ test('visitor APIs never expose an unassigned legacy conversation as waiting', a
       format: 'plain',
     },
   });
+
+  database.exec(`
+    UPDATE agents
+    SET is_enabled = 1,
+        status = 'online',
+        username = 'legacy-recovery-agent',
+        password_hash = 'legacy-recovery-hash'
+    WHERE id = 'admin';
+
+    INSERT INTO agent_routing_scopes (
+      site_id, agent_id, scope_type, section_id,
+      category_id, product_id, is_enabled
+    ) VALUES (
+      'default', 'admin', 'section', 'west', '', '', 1
+    );
+  `);
+
+  const retryAfterAgentRecovery = await clientApi.request(
+    '/client/v1/conversations',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(replayBody),
+    },
+    env,
+  );
+  assert.equal(retryAfterAgentRecovery.status, 503);
+  assert.equal(
+    database
+      .prepare(`SELECT assigned_agent FROM conversations WHERE id = ?`)
+      .get(conversationId).assigned_agent,
+    null,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?`,
+      )
+      .get(conversationId).count,
+    1,
+  );
+
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, product_id,
+         section_id, section_name, product_title, product_href, expires_at
+       ) VALUES (
+         'assigned-open-conversation', 'default', ?, 'open', 'admin',
+         'product-no-wait', 'west', 'West', 'No-wait product',
+         '/products/no-wait', ?
+       )`,
+    )
+    .run(visitorRowId, expiresAt);
+
+  const assignedListResponse = await clientApi.request(
+    `/client/v1/conversations?visitorId=${encodeURIComponent(visitorId)}`,
+    undefined,
+    env,
+  );
+  assert.equal(assignedListResponse.status, 200);
+  assert.deepEqual(
+    (await json(assignedListResponse)).conversations.map(
+      (conversation) => conversation.status,
+    ),
+    ['active'],
+  );
 
   database.close();
 });

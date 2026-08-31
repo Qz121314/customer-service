@@ -65,12 +65,14 @@ The message endpoint remains independently idempotent through `clientMessageId`.
 
 ## First reception and quota
 
-A CTA click by itself does not consume a seat quota while the conversation is waiting.
+A CTA start consumes a seat quota only when its first agent assignment succeeds.
+If no eligible agent exists, the temporary creation is discarded and the API
+returns `503 NO_AGENT_AVAILABLE` with the administrator-authored message.
 
-The first successful agent assignment is the existing billing boundary:
+The successful assignment is the existing billing boundary:
 
 ```text
-unassigned conversation
+new consultation claim
 → eligible agent selected
 → immutable agent_traffic_receipts row
 → daily reception count +1

@@ -486,12 +486,13 @@ clientApi.post('/client/v1/conversations', async (c) => {
         if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
           return noAgentResponse(c, site);
         }
-        conversation = await continueReusedConversationStart(c.env, {
+        conversation = await continueConversationStart(c.env, {
           conversation,
           siteId: site.id,
           visitorId,
           initialMessage,
           clientMessageId,
+          assignmentPolicy: 'preserve',
         });
         if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
           return noAgentResponse(c, site);
@@ -646,12 +647,13 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
     if (!conversation) throw new Error('Conversation replay failed');
 
-    conversation = await continueReusedConversationStart(c.env, {
+    conversation = await continueConversationStart(c.env, {
       conversation,
       siteId: site.id,
       visitorId,
       initialMessage,
       clientMessageId,
+      assignmentPolicy: 'complete-new-claim',
     });
     if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
       return noAgentResponse(c, site);
@@ -814,29 +816,16 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   }
   const createdMessage = persistedMessage.message;
 
-  const assignment = !conversation.assigned_agent
-    ? await assignConversationAgent(c.env.DB, conversation.id)
-    : null;
-  if (assignment?.newlyAssigned && assignment.assignedAt) {
-    await broadcastAssignments(
-      c.env,
-      assignment.id,
-      [conversation.id],
-      assignment.assignedAt,
-      [assignmentVisitorMessage(createdMessage)],
-    );
-  } else {
-    await broadcastRoomSafely(c.env, conversation.id, {
-      type: 'message',
-      message: adminMessage(createdMessage),
-    });
-    await broadcastClientConversationEvent(
-      c.env,
-      conversation.id,
-      'message.created',
-      { message: clientMessage(createdMessage) },
-    );
-  }
+  await broadcastRoomSafely(c.env, conversation.id, {
+    type: 'message',
+    message: adminMessage(createdMessage),
+  });
+  await broadcastClientConversationEvent(
+    c.env,
+    conversation.id,
+    'message.created',
+    { message: clientMessage(createdMessage) },
+  );
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
@@ -869,7 +858,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
       'Visitor access token is invalid.',
     );
   }
-  const conversation = await ownedConversation(
+  const conversation = await ownedAssignedConversation(
     c.env.DB,
     c.req.param('id'),
     site.id,
@@ -1426,7 +1415,7 @@ async function resolveIdentity(
         : 'Conversation was not found.',
     };
   }
-  const conversation = await ownedConversation(
+  const conversation = await ownedAssignedConversation(
     db,
     conversationId,
     site.id,
@@ -1491,6 +1480,7 @@ async function ownedConversationForMessageWrite(
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
          AND c.expires_at > CURRENT_TIMESTAMP
+         AND c.assigned_agent IS NOT NULL
        LIMIT 1`,
     )
     .bind(conversationId, siteId, visitorId)
@@ -1522,6 +1512,21 @@ async function ownedConversation(
     )
     .bind(conversationId, siteId, visitorId)
     .first<ConversationRow>();
+}
+
+async function ownedAssignedConversation(
+  db: D1Database,
+  conversationId: string,
+  siteId: string,
+  visitorId: string,
+): Promise<ConversationRow | null> {
+  const conversation = await ownedConversation(
+    db,
+    conversationId,
+    siteId,
+    visitorId,
+  );
+  return conversation?.assigned_agent ? conversation : null;
 }
 
 async function reusableConversationIsAvailable(
@@ -1667,7 +1672,7 @@ async function ownedConversationByReuseKey(
     .first<ConversationRow>();
 }
 
-async function continueReusedConversationStart(
+async function continueConversationStart(
   env: ClientBindings,
   input: {
     conversation: ConversationRow;
@@ -1675,10 +1680,15 @@ async function continueReusedConversationStart(
     visitorId: string;
     initialMessage: string | null;
     clientMessageId: string | null;
+    assignmentPolicy: 'preserve' | 'complete-new-claim';
   },
 ): Promise<ConversationRow> {
   let conversation = input.conversation;
   let createdMessage: MessageRow | null = null;
+
+  if (input.assignmentPolicy === 'preserve' && !conversation.assigned_agent) {
+    return conversation;
+  }
 
   if (input.initialMessage && input.clientMessageId) {
     const persisted = await persistClientMessage(env.DB, {
@@ -1693,9 +1703,11 @@ async function continueReusedConversationStart(
     }
   }
 
-  const assignment = !conversation.assigned_agent
-    ? await assignConversationAgent(env.DB, conversation.id)
-    : null;
+  const assignment =
+    input.assignmentPolicy === 'complete-new-claim' &&
+    !conversation.assigned_agent
+      ? await assignConversationAgent(env.DB, conversation.id)
+      : null;
   if (assignment?.newlyAssigned && assignment.assignedAt) {
     const snapshots = await broadcastAssignments(
       env,
@@ -1934,11 +1946,9 @@ function adminMessage(message: MessageRow) {
   };
 }
 
-function publicStatus(
-  status: ConversationStatus,
-): 'waiting' | 'active' | 'closed' {
+function publicStatus(status: ConversationStatus): 'active' | 'closed' {
   if (status === 'closed') return 'closed';
-  return status === 'pending' ? 'active' : 'waiting';
+  return 'active';
 }
 
 function clampLimit(raw?: string): number {
