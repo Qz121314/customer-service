@@ -95,3 +95,54 @@ test('final routing schema removes stale seat cursors and uses one site cursor',
   assert.equal(cursor.updated_at, '2026-08-27T10:00:00.000Z');
   database.close();
 });
+
+test('site-global cursor migration keeps each site latest successful receiver', async () => {
+  const database = new DatabaseSync(':memory:');
+  database.exec(`
+    CREATE TABLE conversations (
+      id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      assigned_agent TEXT,
+      assigned_at TEXT
+    );
+    CREATE TABLE routing_round_robin_cursors (
+      site_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      last_agent_id TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (site_id, product_id)
+    );
+    INSERT INTO routing_round_robin_cursors (
+      site_id, product_id, last_agent_id, updated_at
+    ) VALUES
+      ('default', 'product-a', 'agent-a', '2026-08-27T10:00:00.000Z'),
+      ('default', 'product-b', 'agent-c', '2026-08-27T12:00:00.000Z'),
+      ('secondary', 'product-x', 'agent-z', '2026-08-27T11:00:00.000Z');
+  `);
+
+  database.exec(await read('../migrations/0051_site_global_round_robin.sql'));
+
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT site_id, last_agent_id, updated_at
+         FROM routing_round_robin_cursors
+         ORDER BY site_id`,
+      )
+      .all()
+      .map((row) => ({ ...row })),
+    [
+      {
+        site_id: 'default',
+        last_agent_id: 'agent-c',
+        updated_at: '2026-08-27T12:00:00.000Z',
+      },
+      {
+        site_id: 'secondary',
+        last_agent_id: 'agent-z',
+        updated_at: '2026-08-27T11:00:00.000Z',
+      },
+    ],
+  );
+  database.close();
+});
