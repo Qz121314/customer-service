@@ -172,7 +172,8 @@ clientApi.get('/client/v1/conversations', async (c) => {
 clientApi.get('/client/v1/conversations/:id', async (c) => {
   const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
     visitorId: c.req.query('visitorId'),
-    visitorToken: c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
+    visitorToken:
+      c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
     projectId: c.req.query('projectId'),
   });
   if (!identity.ok)
@@ -193,7 +194,8 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
 clientApi.get('/client/v1/conversations/:id/realtime', async (c) => {
   const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
     visitorId: c.req.query('visitorId'),
-    visitorToken: c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
+    visitorToken:
+      c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
     projectId: c.req.query('projectId'),
   });
   if (!identity.ok)
@@ -265,11 +267,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
-  const product = await findEnabledProduct(
-    c.env.DB,
-    site.id,
-    productInput.id,
-  );
+  const product = await findEnabledProduct(c.env.DB, site.id, productInput.id);
   if (!product) {
     return error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
   }
@@ -1420,9 +1418,7 @@ async function resolveIdentity(
     return {
       ok: false,
       status: accessToken ? 401 : 404,
-      code: accessToken
-        ? 'INVALID_VISITOR_TOKEN'
-        : 'CONVERSATION_NOT_FOUND',
+      code: accessToken ? 'INVALID_VISITOR_TOKEN' : 'CONVERSATION_NOT_FOUND',
       message: accessToken
         ? 'Visitor access token is invalid.'
         : 'Conversation was not found.',
