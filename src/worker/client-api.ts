@@ -453,12 +453,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       visitorId,
     );
-    if (
-      conversation &&
-      !(await reusableConversationIsAvailable(c.env.DB, conversation))
-    ) {
-      return noAgentResponse(c, site);
-    }
     if (conversation) {
       const handoffOwner = await rememberSourceHandoff(
         c.env.DB,
@@ -494,9 +488,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
           clientMessageId,
           assignmentPolicy: 'preserve',
         });
-        if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
-          return noAgentResponse(c, site);
-        }
         return c.json({
           conversation: await conversationDetail(
             c.env.DB,
