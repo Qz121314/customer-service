@@ -40,11 +40,14 @@ test('visitor media ownership folds project validation into the normal D1 read',
     mediaApi,
     /AND \(s\.id = \?2 OR s\.public_key = \?2\) AND s\.is_enabled = 1/u,
   );
-  assert.match(
+  assert.doesNotMatch(
     mediaApi,
     /if \(!conversation\) \{\s*const site = await findSite/u,
   );
-  assert.match(mediaApi, /if \(!media\) \{\s*const site = await findSite/u);
+  assert.doesNotMatch(
+    mediaApi,
+    /if \(!media\) \{\s*const site = await findSite/u,
+  );
 });
 
 test('media completion keeps R2 verification while skipping stable overview scans', () => {

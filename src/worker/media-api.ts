@@ -18,6 +18,11 @@ import {
   type MediaRow,
 } from './media-types';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
+import {
+  normalizeVisitorId,
+  normalizeVisitorToken,
+  resolveVisitor,
+} from './client-api';
 
 type Env = { Bindings: MediaBindings };
 
@@ -33,7 +38,7 @@ mediaApi.use(
   '/client/v1/*',
   cors({
     origin: '*',
-    allowHeaders: ['Content-Type'],
+    allowHeaders: ['Content-Type', 'X-CS-Visitor-Token'],
     allowMethods: ['GET', 'POST', 'PUT', 'OPTIONS'],
     maxAge: 86400,
   }),
@@ -42,6 +47,7 @@ mediaApi.use(
 mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
   const body = await readJson<{
     visitorId?: string;
+    visitorToken?: string;
     projectId?: string;
     mimeType?: string;
     byteSize?: number;
@@ -51,14 +57,26 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     clientUploadId?: string;
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
-  if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+  );
+  if (!visitorId && !visitorToken)
+    return clientError(c, 400, 'INVALID_VISITOR_ID');
   const media = normalizeMediaInput(body);
   if (!media) return clientError(c, 400, 'INVALID_MEDIA');
   const clientUploadId = normalizeText(body?.clientUploadId, 160);
   if (body?.clientUploadId !== undefined && !clientUploadId) {
     return clientError(c, 400, 'INVALID_MEDIA_UPLOAD_ID');
   }
-  const sourceHash = await requestSourceHash(c.req.raw, visitorId);
+  const projectId = normalizeProjectId(body?.projectId);
+  const site = await findSite(c.env.DB, projectId);
+  if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) return clientError(c, 401, 'INVALID_VISITOR_TOKEN');
+  const sourceHash = await requestSourceHash(c.req.raw, visitor.external_id);
   if (
     !(await passesBurstLimit(
       c.env.MEDIA_BURST_LIMITER,
@@ -68,16 +86,13 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     c.header('Retry-After', '60');
     return clientError(c, 429, 'MEDIA_RATE_LIMITED');
   }
-  const projectId = normalizeProjectId(body?.projectId);
   const conversation = await ownedVisitorConversation(
     c.env.DB,
     c.req.param('id'),
     projectId,
-    visitorId,
+    visitor.external_id,
   );
   if (!conversation) {
-    const site = await findSite(c.env.DB, projectId);
-    if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
     return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
   }
   if (conversation.status === 'closed')
@@ -96,7 +111,8 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
     return clientError(c, 429, 'MEDIA_RESERVATION_LIMIT_REACHED');
   const { row, reused } = reservation.value;
   const proxy = new URL(`/client/v1/media/${row.id}/content`, c.req.url);
-  proxy.searchParams.set('visitorId', visitorId);
+  proxy.searchParams.set('visitorId', visitor.external_id);
+  if (visitorToken) proxy.searchParams.set('visitorToken', visitorToken);
   proxy.searchParams.set('projectId', projectId);
   return c.json(
     await mediaReservationResponse(c.env, row, proxy.toString()),
@@ -106,19 +122,26 @@ mediaApi.post('/client/v1/conversations/:id/media/init', async (c) => {
 
 mediaApi.get('/client/v1/conversations/:id/media', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
-  if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
+  const visitorToken = normalizeVisitorToken(
+    c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
+  );
+  if (!visitorId && !visitorToken)
+    return clientError(c, 400, 'INVALID_VISITOR_ID');
   const projectId = normalizeProjectId(c.req.query('projectId'));
+  const site = await findSite(c.env.DB, projectId);
+  if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) return clientError(c, 401, 'INVALID_VISITOR_TOKEN');
   const conversation = await ownedVisitorConversation(
     c.env.DB,
     c.req.param('id'),
     projectId,
-    visitorId,
+    visitor.external_id,
   );
-  if (!conversation) {
-    const site = await findSite(c.env.DB, projectId);
-    if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
-    return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
-  }
+  if (!conversation) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
   return c.json({
     items: await listConversationMedia(c.env.DB, conversation.id),
   });
@@ -133,9 +156,11 @@ mediaApi.put('/client/v1/media/:id/content', async (c) => {
 });
 
 mediaApi.post('/client/v1/media/:id/complete', async (c) => {
-  const body = await readJson<{ visitorId?: string; projectId?: string }>(
-    c.req.raw,
-  );
+  const body = await readJson<{
+    visitorId?: string;
+    visitorToken?: string;
+    projectId?: string;
+  }>(c.req.raw);
   const media = await authorizedVisitorMedia(c, false, body ?? undefined);
   if (!media.ok) return clientError(c, media.status, media.code);
   const result = await completeMedia(c.env, media.value);
@@ -277,17 +302,36 @@ export async function listConversationMedia(
 async function authorizedVisitorMedia(
   c: Context<Env>,
   readyOnly: boolean,
-  body?: { visitorId?: string; projectId?: string },
+  body?: {
+    visitorId?: string;
+    visitorToken?: string;
+    projectId?: string;
+  },
 ): Promise<
-  { ok: true; value: MediaRow } | { ok: false; status: 400 | 404; code: string }
+  | { ok: true; value: MediaRow }
+  | { ok: false; status: 400 | 401 | 404; code: string }
 > {
   const visitorId = normalizeVisitorId(
     body?.visitorId ?? c.req.query('visitorId'),
   );
-  if (!visitorId) return { ok: false, status: 400, code: 'INVALID_VISITOR_ID' };
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ??
+      c.req.query('visitorToken') ??
+      c.req.header('X-CS-Visitor-Token'),
+  );
+  if (!visitorId && !visitorToken)
+    return { ok: false, status: 400, code: 'INVALID_VISITOR_ID' };
   const projectId = normalizeProjectId(
     body?.projectId ?? c.req.query('projectId'),
   );
+  const site = await findSite(c.env.DB, projectId);
+  if (!site) return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND' };
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor)
+    return { ok: false, status: 401, code: 'INVALID_VISITOR_TOKEN' };
   const media = await c.env.DB.prepare(
     `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
@@ -303,11 +347,9 @@ async function authorizedVisitorMedia(
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
   )
-    .bind(c.req.param('id'), projectId, visitorId)
+    .bind(c.req.param('id'), projectId, visitor.external_id)
     .first<MediaRow>();
   if (!media) {
-    const site = await findSite(c.env.DB, projectId);
-    if (!site) return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND' };
     return { ok: false, status: 404, code: 'MEDIA_NOT_FOUND' };
   }
   if (readyOnly && media.status !== 'ready')
@@ -394,14 +436,6 @@ async function assignedConversation(
     .first<{ id: string; status: 'open' | 'pending' | 'closed' }>();
 }
 
-function normalizeVisitorId(value?: string | null): string | null {
-  const visitorId = value?.trim().toUpperCase() ?? '';
-  if (!/^[A-Z0-9]{6}$/u.test(visitorId)) return null;
-  const letters = [...visitorId].filter((char) => /[A-Z]/u.test(char)).length;
-  const digits = [...visitorId].filter((char) => /[0-9]/u.test(char)).length;
-  return letters === 3 && digits === 3 ? visitorId : null;
-}
-
 function normalizeProjectId(value?: string | null): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length <= 200 ? trimmed : 'default';
@@ -409,7 +443,7 @@ function normalizeProjectId(value?: string | null): string {
 
 function clientError(
   c: Context<Env>,
-  status: 400 | 404 | 409 | 429,
+  status: 400 | 401 | 404 | 409 | 429,
   code: string,
 ) {
   return c.json({ error: { code, message: code } }, status);

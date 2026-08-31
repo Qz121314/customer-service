@@ -1,7 +1,5 @@
 import { Hono, type Context } from 'hono';
 import { hashAgentPassword } from './agent-password';
-import { broadcastClientConversationEvent } from './client-api';
-import { assignConversationAgent } from './routing';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import {
   DEFAULT_NO_AGENT_MESSAGE,
@@ -639,37 +637,24 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
   if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
 
   try {
-    await c.env.DB.prepare(
-      `UPDATE agents
-       SET is_enabled = 0,
-           status = 'offline',
-           last_seen_at = NULL,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1 AND site_id = 'default'`,
-    )
-      .bind(id)
-      .run();
-
-    const conversationsToReassign = await assignedActiveConversationIds(
+    const activeConversationIds = await assignedActiveConversationIds(
       c.env.DB,
       id,
     );
+    if (activeConversationIds.length) {
+      return c.json(
+        {
+          error: 'AGENT_HAS_ACTIVE_CONVERSATIONS',
+          activeConversationCount: activeConversationIds.length,
+        },
+        409,
+      );
+    }
 
     await c.env.DB.batch([
       c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
         id,
       ),
-      c.env.DB.prepare(
-        `UPDATE conversations
-         SET assigned_agent = NULL,
-             assigned_at = NULL,
-             assigned_business_date = NULL,
-             status = 'open',
-             updated_at = CURRENT_TIMESTAMP
-         WHERE assigned_agent = ?1
-           AND status IN ('open', 'pending')
-           AND expires_at > CURRENT_TIMESTAMP`,
-      ).bind(id),
       c.env.DB.prepare(
         `UPDATE conversations
          SET cta_affinity_agent_id = NULL,
@@ -683,21 +668,9 @@ adminConfigApi.delete('/api/admin/agents/:id', async (c) => {
       ).bind(id),
     ]);
 
-    if (conversationsToReassign.length) {
-      await disconnectAgentRealtime(c.env, id, conversationsToReassign);
-      for (const conversationId of conversationsToReassign) {
-        await assignConversationAgent(c.env.DB, conversationId);
-        await broadcastClientConversationEvent(
-          c.env,
-          conversationId,
-          'conversation.assigned',
-        );
-      }
-    }
-
     return c.json({
       ok: true,
-      reassignedConversationCount: conversationsToReassign.length,
+      reassignedConversationCount: 0,
     });
   } catch (error) {
     console.error('agent.delete.failed', { agentId: id, error });
@@ -840,31 +813,12 @@ async function assignedActiveConversationIds(
        FROM conversations
        WHERE assigned_agent = ?1
          AND status IN ('open', 'pending')
-         AND expires_at > CURRENT_TIMESTAMP
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
        ORDER BY last_message_at ASC, id ASC`,
     )
     .bind(agentId)
     .all<{ id: string }>();
   return (result.results ?? []).map((conversation) => conversation.id);
-}
-
-async function disconnectAgentRealtime(
-  env: Bindings,
-  agentId: string,
-  conversationIds: string[],
-): Promise<void> {
-  const roomIds = [`agent-inbox:${agentId}`, ...conversationIds];
-  await Promise.all(
-    roomIds.map((roomId) =>
-      env.CONVERSATION_ROOMS.get(
-        env.CONVERSATION_ROOMS.idFromName(roomId),
-      ).fetch('https://conversation-room/disconnect-agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId }),
-      }),
-    ),
-  );
 }
 
 async function currentRoutingScope(

@@ -38,7 +38,7 @@ test('CTA conversation start does not require a synthetic visitor message', () =
   const optionalMessageValidation = section(
     route,
     'if (messageFieldPresent || clientMessageFieldPresent)',
-    'if (!product)',
+    'if (!productInput)',
   );
 
   assert.match(
@@ -55,31 +55,6 @@ test('CTA conversation start does not require a synthetic visitor message', () =
     route,
     /if \(hasInitialMessage && clientMessageId && initialMessage\)/u,
   );
-});
-
-test('visitor upsert keeps returning visitors to one D1 statement', () => {
-  const helper = section(
-    clientSource,
-    'async function ensureVisitor(',
-    'async function resolveIdentity(',
-  );
-
-  assert.match(helper, /ON CONFLICT\(site_id, external_id\) DO UPDATE SET/u);
-  assert.match(helper, /RETURNING id, site_id, external_id, expires_at/u);
-  assert.doesNotMatch(helper, /SELECT id, site_id, external_id/u);
-  assert.equal((helper.match(/\.prepare\(/gu) ?? []).length, 1);
-});
-
-test('stable product routing context avoids unnecessary writes', () => {
-  const helper = section(
-    clientSource,
-    'async function rememberProductRoutingContext(',
-    'async function ensureVisitor(',
-  );
-
-  assert.match(helper, /WHERE title IS NOT excluded\.title/u);
-  assert.match(helper, /category_name IS NOT excluded\.category_name/u);
-  assert.match(helper, /OR is_enabled <> 1/u);
 });
 
 test('assigned conversation start reuses the assignment lifecycle snapshot', () => {

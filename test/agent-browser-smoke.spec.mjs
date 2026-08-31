@@ -47,6 +47,18 @@ async function requestConversation(page, identifiers, sourceIp) {
 }
 
 async function seedAgent(page) {
+  const syncProduct = await page.request.post(url('/integration/v1/verify'), {
+    headers: {
+      authorization: 'Bearer ui-smoke-integration-token',
+    },
+    data: {
+      productCatalog: {
+        products: [conversationData({}).product],
+      },
+    },
+  });
+  expect(syncProduct.ok()).toBeTruthy();
+
   const noAgentResponse = await requestConversation(
     page,
     {

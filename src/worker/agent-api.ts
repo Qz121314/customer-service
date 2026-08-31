@@ -160,19 +160,26 @@ agentApi.post('/api/agent/auth/login', async (c) => {
 agentApi.post('/api/agent/auth/logout', async (c) => {
   const token = cookieValue(c.req.header('Cookie'), COOKIE);
   const agent = token ? await authenticateAgentToken(c.env.DB, token) : null;
-  if (token) {
-    await c.env.DB.prepare('DELETE FROM agent_sessions WHERE token_hash = ?1')
-      .bind(await sha256(token))
-      .run();
-  }
   if (agent) {
-    await c.env.DB.prepare(
-      `UPDATE agents
-       SET status = 'offline', last_seen_at = NULL, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1`,
-    )
-      .bind(agent.id)
-      .run();
+    const activeConversationIds = await activeConversationIdsForAgent(
+      c.env.DB,
+      agent.id,
+    );
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
+        agent.id,
+      ),
+      c.env.DB.prepare(
+        `UPDATE agents
+         SET status = 'offline', last_seen_at = NULL, updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?1`,
+      ).bind(agent.id),
+    ]);
+    try {
+      await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
+    } catch (error) {
+      console.warn('agent realtime disconnect failed during logout', error);
+    }
   }
   deleteCookie(c, COOKIE, { path: '/' });
   return c.json({ ok: true });
@@ -697,7 +704,7 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
     : null;
 
   if (readResult?.meta.changes) {
-    await Promise.all([
+    await Promise.allSettled([
       broadcastConversationRoom(c.env, id, {
         type: 'message.read',
         reader: 'agent',
@@ -793,14 +800,16 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     read_by_agent_at: null,
     created_at: now,
   };
-  await broadcastConversationRoom(c.env, id, { type: 'message', message });
-  await broadcastClientConversationEvent(
-    c.env,
-    id,
-    'message.created',
-    { message: clientRealtimeMessage(message) },
-    { includeOverview: conversation.status === 'open' },
-  );
+  await Promise.allSettled([
+    broadcastConversationRoom(c.env, id, { type: 'message', message }),
+    broadcastClientConversationEvent(
+      c.env,
+      id,
+      'message.created',
+      { message: clientRealtimeMessage(message) },
+      { includeOverview: conversation.status === 'open' },
+    ),
+  ]);
   return c.json({ message }, 201);
 });
 
@@ -821,15 +830,19 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
     .bind(body.status, id, agent.id)
     .run();
   if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-  await broadcastConversationRoom(c.env, id, {
-    type: 'conversation.status',
-    status: body.status,
-  });
-  await broadcastClientConversationEvent(
-    c.env,
-    id,
-    body.status === 'closed' ? 'conversation.closed' : 'conversation.assigned',
-  );
+  await Promise.allSettled([
+    broadcastConversationRoom(c.env, id, {
+      type: 'conversation.status',
+      status: body.status,
+    }),
+    broadcastClientConversationEvent(
+      c.env,
+      id,
+      body.status === 'closed'
+        ? 'conversation.closed'
+        : 'conversation.assigned',
+    ),
+  ]);
   return c.json({ ok: true });
 });
 
@@ -914,6 +927,40 @@ async function assignedConversation(
     )
     .bind(id, agentId)
     .first<Record<string, unknown> & { status: ConversationStatus }>();
+}
+
+async function activeConversationIdsForAgent(
+  db: D1Database,
+  agentId: string,
+): Promise<string[]> {
+  const result = await db
+    .prepare(
+      `SELECT id
+       FROM conversations
+       WHERE assigned_agent = ?1
+         AND status IN ('open', 'pending')
+         AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
+    )
+    .bind(agentId)
+    .all<{ id: string }>();
+  return (result.results ?? []).map((conversation) => conversation.id);
+}
+
+async function disconnectAgentRealtime(
+  env: Bindings,
+  agentId: string,
+  conversationIds: string[],
+): Promise<void> {
+  const roomIds = [`agent-inbox:${agentId}`, ...conversationIds];
+  await Promise.all(
+    roomIds.map((roomId) =>
+      room(env, roomId).fetch('https://conversation-room/disconnect-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId }),
+      }),
+    ),
+  );
 }
 
 async function findAgentMessageByClientId(

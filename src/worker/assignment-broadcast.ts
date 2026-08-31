@@ -106,7 +106,7 @@ export async function broadcastAssignments(
   const visitorMessagesByConversation = new Map(
     visitorMessages.map((message) => [message.conversation_id, message]),
   );
-  await Promise.all(
+  const deliveries = await Promise.allSettled(
     snapshots.map((conversation) =>
       broadcastAssignment(
         env,
@@ -117,6 +117,11 @@ export async function broadcastAssignments(
       ),
     ),
   );
+  for (const delivery of deliveries) {
+    if (delivery.status === 'rejected') {
+      console.warn('conversation assignment broadcast failed', delivery.reason);
+    }
+  }
   return snapshots;
 }
 

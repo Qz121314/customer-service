@@ -1,6 +1,11 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { getVisitorPushPublicKey } from './visitor-push';
+import {
+  normalizeVisitorId,
+  normalizeVisitorToken,
+  resolveVisitor,
+} from './client-api';
 
 type Bindings = {
   DB: D1Database;
@@ -24,7 +29,7 @@ pushApi.use(
   '/client/v1/push/*',
   cors({
     origin: '*',
-    allowHeaders: ['Content-Type'],
+    allowHeaders: ['Content-Type', 'X-CS-Visitor-Token'],
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     maxAge: 86400,
   }),
@@ -48,17 +53,22 @@ pushApi.get('/client/v1/push/config', async (c) => {
 pushApi.post('/client/v1/push/subscriptions', async (c) => {
   const body = await readJson<{
     visitorId?: string;
+    visitorToken?: string;
     projectId?: string | null;
     conversationId?: string;
     subscription?: PushSubscriptionInput;
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+  );
   const conversationId = normalizeId(body?.conversationId, 200);
   const endpoint = normalizePushEndpoint(body?.subscription?.endpoint);
   const expirationTime = normalizeExpirationTime(
     body?.subscription?.expirationTime,
   );
-  if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
+  if (!visitorId && !visitorToken)
+    return clientError(c, 400, 'INVALID_VISITOR_ID');
   if (!conversationId) return clientError(c, 400, 'INVALID_CONVERSATION_ID');
   if (!endpoint || expirationTime === undefined) {
     return clientError(c, 400, 'INVALID_PUSH_SUBSCRIPTION');
@@ -66,9 +76,10 @@ pushApi.post('/client/v1/push/subscriptions', async (c) => {
 
   const identity = await resolveConversationIdentity(c.env.DB, conversationId, {
     visitorId,
+    visitorToken,
     projectId: normalizeProjectId(body?.projectId),
   });
-  if (!identity) return clientError(c, 404, 'CONVERSATION_NOT_FOUND');
+  if (!identity) return clientError(c, 401, 'INVALID_VISITOR_TOKEN');
 
   await c.env.DB.prepare(
     `INSERT INTO visitor_push_subscriptions
@@ -89,22 +100,32 @@ pushApi.post('/client/v1/push/subscriptions', async (c) => {
 pushApi.post('/client/v1/push/subscriptions/remove', async (c) => {
   const body = await readJson<{
     visitorId?: string;
+    visitorToken?: string;
     projectId?: string | null;
     endpoint?: string;
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+  );
   const endpoint = normalizePushEndpoint(body?.endpoint);
-  if (!visitorId) return clientError(c, 400, 'INVALID_VISITOR_ID');
+  if (!visitorId && !visitorToken)
+    return clientError(c, 400, 'INVALID_VISITOR_ID');
   if (!endpoint) return clientError(c, 400, 'INVALID_PUSH_SUBSCRIPTION');
 
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site) return clientError(c, 404, 'PROJECT_NOT_FOUND');
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) return clientError(c, 401, 'INVALID_VISITOR_TOKEN');
 
   await c.env.DB.prepare(
     `DELETE FROM visitor_push_subscriptions
      WHERE endpoint = ?1 AND site_id = ?2 AND visitor_external_id = ?3`,
   )
-    .bind(endpoint, site.id, visitorId)
+    .bind(endpoint, site.id, visitor.external_id)
     .run();
   return c.json({ ok: true });
 });
@@ -112,8 +133,19 @@ pushApi.post('/client/v1/push/subscriptions/remove', async (c) => {
 async function resolveConversationIdentity(
   db: D1Database,
   conversationId: string,
-  input: { visitorId: string; projectId: string },
+  input: {
+    visitorId: string | null;
+    visitorToken: string | null;
+    projectId: string;
+  },
 ): Promise<IdentityRow | null> {
+  const site = await findSite(db, input.projectId);
+  if (!site) return null;
+  const visitor = await resolveVisitor(db, site.id, {
+    externalId: input.visitorId,
+    accessToken: input.visitorToken,
+  });
+  if (!visitor) return null;
   return db
     .prepare(
       `SELECT c.site_id, v.external_id
@@ -128,7 +160,7 @@ async function resolveConversationIdentity(
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
-    .bind(conversationId, input.projectId, input.visitorId)
+    .bind(conversationId, input.projectId, visitor.external_id)
     .first<IdentityRow>();
 }
 
@@ -145,14 +177,6 @@ async function findSite(db: D1Database, projectId: string) {
 function normalizeProjectId(value?: string | null): string {
   const trimmed = value?.trim();
   return trimmed && trimmed.length <= 200 ? trimmed : 'default';
-}
-
-function normalizeVisitorId(value?: string | null): string | null {
-  const visitorId = value?.trim().toUpperCase() ?? '';
-  if (!/^[A-Z0-9]{6}$/u.test(visitorId)) return null;
-  const letters = [...visitorId].filter((char) => /[A-Z]/u.test(char)).length;
-  const digits = [...visitorId].filter((char) => /[0-9]/u.test(char)).length;
-  return letters === 3 && digits === 3 ? visitorId : null;
 }
 
 function normalizeId(value: unknown, maxLength: number): string | null {
@@ -186,7 +210,7 @@ function normalizeExpirationTime(value: unknown): number | null | undefined {
   return Math.floor(value);
 }
 
-function clientError(c: Context<Env>, status: 400 | 404, code: string) {
+function clientError(c: Context<Env>, status: 400 | 401 | 404, code: string) {
   return c.json({ error: { code, message: code } }, status);
 }
 

@@ -39,6 +39,7 @@ type VisitorRow = {
   site_id: string;
   external_id: string;
   expires_at: string | null;
+  access_token_hash: string | null;
 };
 
 type ConversationRow = {
@@ -85,13 +86,6 @@ type ReadBoundary = {
 
 type ProductInput = {
   id?: string;
-  sectionId?: string;
-  sectionName?: string | null;
-  categoryId?: string | null;
-  categoryName?: string | null;
-  title?: string;
-  href?: string;
-  coverUrl?: string | null;
 };
 
 type NormalizedProduct = {
@@ -115,7 +109,7 @@ clientApi.use(
   '/client/v1/*',
   cors({
     origin: '*',
-    allowHeaders: ['Content-Type'],
+    allowHeaders: ['Content-Type', 'X-CS-Visitor-Token'],
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     maxAge: 86400,
   }),
@@ -123,7 +117,10 @@ clientApi.use(
 
 clientApi.get('/client/v1/conversations', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
-  if (!visitorId)
+  const visitorToken = normalizeVisitorToken(
+    c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
+  );
+  if (!visitorId && !visitorToken)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
 
   const site = await findSite(
@@ -132,6 +129,20 @@ clientApi.get('/client/v1/conversations', async (c) => {
   );
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
+
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) {
+    if (!visitorToken) return c.json({ conversations: [] });
+    return error(
+      c,
+      401,
+      'INVALID_VISITOR_TOKEN',
+      'Visitor access token is invalid.',
+    );
+  }
 
   const result = await c.env.DB.prepare(
     `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
@@ -144,13 +155,13 @@ clientApi.get('/client/v1/conversations', async (c) => {
      JOIN visitors v ON v.id = c.visitor_id
      LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
      WHERE c.site_id = ?1
-       AND v.external_id = ?2
+       AND v.id = ?2
        AND c.expires_at > CURRENT_TIMESTAMP
        AND c.assigned_agent IS NOT NULL
      ORDER BY c.last_message_at DESC, c.id DESC
      LIMIT 100`,
   )
-    .bind(site.id, visitorId)
+    .bind(site.id, visitor.id)
     .all<ConversationRow>();
 
   return c.json({
@@ -161,6 +172,8 @@ clientApi.get('/client/v1/conversations', async (c) => {
 clientApi.get('/client/v1/conversations/:id', async (c) => {
   const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
     visitorId: c.req.query('visitorId'),
+    visitorToken:
+      c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
     projectId: c.req.query('projectId'),
   });
   if (!identity.ok)
@@ -181,6 +194,8 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
 clientApi.get('/client/v1/conversations/:id/realtime', async (c) => {
   const identity = await resolveIdentity(c.env.DB, c.req.param('id'), {
     visitorId: c.req.query('visitorId'),
+    visitorToken:
+      c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
     projectId: c.req.query('projectId'),
   });
   if (!identity.ok)
@@ -201,6 +216,7 @@ clientApi.get('/client/v1/conversations/:id/realtime', async (c) => {
 clientApi.post('/client/v1/conversations', async (c) => {
   const body = await readJson<{
     visitorId?: string;
+    visitorToken?: string;
     projectId?: string | null;
     sourceHandoffId?: string;
     clientMessageId?: string;
@@ -209,8 +225,11 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }>(c.req.raw);
 
   const visitorId = normalizeVisitorId(body?.visitorId);
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+  );
   const sourceHandoffId = normalizeHandoffId(body?.sourceHandoffId);
-  const product = normalizeProduct(body?.product);
+  const productInput = normalizeProduct(body?.product);
   const messageFieldPresent = body?.message !== undefined;
   const clientMessageFieldPresent = body?.clientMessageId !== undefined;
   const initialMessage =
@@ -241,14 +260,39 @@ clientApi.post('/client/v1/conversations', async (c) => {
       );
     }
   }
-  if (!product)
+  if (!productInput)
     return error(c, 400, 'INVALID_PRODUCT', 'Product context is invalid.');
 
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
-  const reuseKey = await conversationReuseKey(site.id, visitorId, product.id);
+  const product = await findEnabledProduct(c.env.DB, site.id, productInput.id);
+  if (!product) {
+    return error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
+  }
+
+  const visitorResult = await ensureVisitor(
+    c.env.DB,
+    site.id,
+    visitorId,
+    visitorToken,
+  );
+  if (!visitorResult) {
+    return error(
+      c,
+      401,
+      'INVALID_VISITOR_TOKEN',
+      'Visitor access token is invalid.',
+    );
+  }
+  const visitor = visitorResult.visitor;
+  const issuedVisitorToken = visitorResult.accessToken;
+  const reuseKey = await conversationReuseKey(
+    site.id,
+    visitor.external_id,
+    product.id,
+  );
 
   // A source handoff still has permanent retry idempotency. A separate reuse
   // match coalesces fresh CTA starts for the same visitor + product for two
@@ -337,7 +381,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       c.env.DB,
       replay.message_conversation_id,
       site.id,
-      visitorId,
+      visitor.external_id,
     );
     if (conversation) {
       if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
@@ -367,7 +411,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       c.env.DB,
       replay.handoff_conversation_id,
       site.id,
-      visitorId,
+      visitor.external_id,
     );
     if (conversation) {
       if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
@@ -499,9 +543,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
     return error(c, 429, creationQuota.code, 'Conversation limit reached.');
   }
 
-  await rememberProductRoutingContext(c.env.DB, site.id, product);
-
-  const visitor = await ensureVisitor(c.env.DB, site.id, visitorId);
   const conversationId = crypto.randomUUID();
   const now = new Date().toISOString();
   const businessDate = routingBusinessDate(new Date(now));
@@ -553,7 +594,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     let conversation = await ownedConversationByReuseKey(
       c.env.DB,
       site.id,
-      visitorId,
+      visitor.external_id,
       startClaimKey,
     );
     if (!conversation) {
@@ -673,7 +714,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     );
     conversation = snapshots.find((item) => item.id === conversationId) ?? null;
   } else if (createdMessage) {
-    await broadcastRoom(c.env, conversationId, {
+    await broadcastRoomSafely(c.env, conversationId, {
       type: 'message',
       message: adminMessage(createdMessage),
     });
@@ -695,6 +736,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   if (!conversation) throw new Error('Conversation persistence failed');
   return c.json(
     {
+      ...(issuedVisitorToken ? { visitorToken: issuedVisitorToken } : {}),
       conversation: await conversationDetail(c.env.DB, conversation, 30, null),
     },
     201,
@@ -704,14 +746,18 @@ clientApi.post('/client/v1/conversations', async (c) => {
 clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   const body = await readJson<{
     visitorId?: string;
+    visitorToken?: string;
     projectId?: string | null;
     clientMessageId?: string;
     body?: string;
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+  );
   const clientMessageId = normalizeId(body?.clientMessageId, 160);
   const messageBody = body?.body?.trim();
-  if (!visitorId)
+  if (!visitorId && !visitorToken)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   if (!clientMessageId) {
     return error(
@@ -727,11 +773,23 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) {
+    return error(
+      c,
+      401,
+      'INVALID_VISITOR_TOKEN',
+      'Visitor access token is invalid.',
+    );
+  }
   const conversation = await ownedConversationForMessageWrite(
     c.env.DB,
     c.req.param('id'),
     site.id,
-    visitorId,
+    visitor.external_id,
   );
   if (!conversation)
     return error(
@@ -768,7 +826,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
       [assignmentVisitorMessage(createdMessage)],
     );
   } else {
-    await broadcastRoom(c.env, conversation.id, {
+    await broadcastRoomSafely(c.env, conversation.id, {
       type: 'message',
       message: adminMessage(createdMessage),
     });
@@ -786,20 +844,36 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
 clientApi.post('/client/v1/conversations/:id/read', async (c) => {
   const body = await readJson<{
     visitorId?: string;
+    visitorToken?: string;
     projectId?: string | null;
     lastMessageId?: string | null;
   }>(c.req.raw);
   const visitorId = normalizeVisitorId(body?.visitorId);
-  if (!visitorId)
+  const visitorToken = normalizeVisitorToken(
+    body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+  );
+  if (!visitorId && !visitorToken)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) {
+    return error(
+      c,
+      401,
+      'INVALID_VISITOR_TOKEN',
+      'Visitor access token is invalid.',
+    );
+  }
   const conversation = await ownedConversation(
     c.env.DB,
     c.req.param('id'),
     site.id,
-    visitorId,
+    visitor.external_id,
   );
   if (!conversation)
     return error(
@@ -855,7 +929,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
 
   if (readResult?.meta.changes) {
     await Promise.all([
-      broadcastRoom(c.env, conversation.id, {
+      broadcastRoomSafely(c.env, conversation.id, {
         type: 'message.read',
         reader: 'visitor',
         lastMessageId: boundary?.id ?? null,
@@ -871,7 +945,10 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
 
 clientApi.get('/client/v1/realtime', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
-  if (!visitorId)
+  const visitorToken = normalizeVisitorToken(
+    c.req.query('visitorToken') ?? c.req.header('X-CS-Visitor-Token'),
+  );
+  if (!visitorId && !visitorToken)
     return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
   const site = await findSite(
     c.env.DB,
@@ -879,10 +956,22 @@ clientApi.get('/client/v1/realtime', async (c) => {
   );
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
+  const visitor = await resolveVisitor(c.env.DB, site.id, {
+    externalId: visitorId,
+    accessToken: visitorToken,
+  });
+  if (!visitor) {
+    return error(
+      c,
+      401,
+      'INVALID_VISITOR_TOKEN',
+      'Visitor access token is invalid.',
+    );
+  }
   if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
     return error(c, 426, 'WEBSOCKET_REQUIRED', 'WebSocket upgrade required.');
   }
-  return visitorRoom(c.env, site.id, visitorId).fetch(c.req.raw);
+  return visitorRoom(c.env, site.id, visitor.external_id).fetch(c.req.raw);
 });
 
 export async function broadcastClientConversationEvent(
@@ -928,7 +1017,7 @@ export async function broadcastClientConversationEvent(
   if (!conversation) return null;
 
   if (conversation.external_id) {
-    await broadcastVisitorEvent(
+    await broadcastVisitorEventSafely(
       env,
       conversation.site_id,
       conversation.external_id,
@@ -960,7 +1049,7 @@ export async function broadcastClientConversationEvent(
   const inboxUpdates: Promise<void>[] = [];
   if (conversation.assigned_agent) {
     inboxUpdates.push(
-      broadcastRoom(env, agentInboxRoom(conversation.assigned_agent), {
+      broadcastRoomSafely(env, agentInboxRoom(conversation.assigned_agent), {
         type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
@@ -970,7 +1059,7 @@ export async function broadcastClientConversationEvent(
   }
   if (previousAgentId) {
     inboxUpdates.push(
-      broadcastRoom(env, agentInboxRoom(previousAgentId), {
+      broadcastRoomSafely(env, agentInboxRoom(previousAgentId), {
         type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
@@ -1055,12 +1144,21 @@ function normalizeProjectId(value?: string | null): string {
   return trimmed && trimmed.length <= 200 ? trimmed : 'default';
 }
 
-function normalizeVisitorId(value?: string | null): string | null {
+export function normalizeVisitorId(value?: string | null): string | null {
   const visitorId = value?.trim().toUpperCase() ?? '';
   if (!/^[A-Z0-9]{6}$/u.test(visitorId)) return null;
   const letters = [...visitorId].filter((char) => /[A-Z]/u.test(char)).length;
   const digits = [...visitorId].filter((char) => /[0-9]/u.test(char)).length;
   return letters === 3 && digits === 3 ? visitorId : null;
+}
+
+export function normalizeVisitorToken(value?: string | null): string | null {
+  const token = value?.trim() ?? '';
+  return token.length >= 32 && token.length <= 200 ? token : null;
+}
+
+function randomVisitorToken(): string {
+  return `${crypto.randomUUID()}${crypto.randomUUID()}`;
 }
 
 function normalizeId(value: unknown, maxLength: number): string | null {
@@ -1081,56 +1179,18 @@ function normalizeHandoffId(value: unknown): string | null {
 
 function normalizeProduct(value?: ProductInput): NormalizedProduct | null {
   const id = normalizeId(value?.id, 100);
-  const sectionId = normalizeId(value?.sectionId, 100);
-  const sectionName =
-    value?.sectionName === null ||
-    value?.sectionName === undefined ||
-    value.sectionName === ''
-      ? null
-      : normalizeId(value.sectionName, 120);
-  const categoryId =
-    value?.categoryId === null ||
-    value?.categoryId === undefined ||
-    value.categoryId === ''
-      ? null
-      : normalizeId(value.categoryId, 100);
-  const categoryName =
-    value?.categoryName === null ||
-    value?.categoryName === undefined ||
-    value.categoryName === ''
-      ? null
-      : normalizeId(value.categoryName, 120);
-  const title = normalizeId(value?.title, 300);
-  const href = normalizeId(value?.href, 1000);
-  const coverUrl =
-    value?.coverUrl === null || value?.coverUrl === undefined
-      ? null
-      : normalizeId(value.coverUrl, 2000);
-
-  if (
-    !id ||
-    !sectionId ||
-    !title ||
-    !href ||
-    (value?.sectionName && !sectionName) ||
-    (value?.categoryId && !categoryId) ||
-    (value?.categoryName && !categoryName) ||
-    Boolean(categoryId) !== Boolean(categoryName) ||
-    (value?.coverUrl && !coverUrl)
-  ) {
-    return null;
-  }
-
-  return {
-    id,
-    sectionId,
-    sectionName,
-    categoryId,
-    categoryName,
-    title,
-    href,
-    coverUrl,
-  };
+  return id
+    ? {
+        id,
+        sectionId: '',
+        sectionName: null,
+        categoryId: null,
+        categoryName: null,
+        title: '',
+        href: '',
+        coverUrl: null,
+      }
+    : null;
 }
 
 function validMessage(value?: string): value is string {
@@ -1152,49 +1212,44 @@ async function findSite(
     .first<SiteRow>();
 }
 
-async function rememberProductRoutingContext(
+async function findEnabledProduct(
   db: D1Database,
   siteId: string,
-  product: NormalizedProduct,
-): Promise<void> {
-  await db
+  productId: string,
+): Promise<NormalizedProduct | null> {
+  const row = await db
     .prepare(
-      `INSERT INTO product_catalog (
-         site_id, id, title, href, cover_url,
-         section_id, section_name, category_id, category_name,
-         is_enabled, updated_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 1, CURRENT_TIMESTAMP)
-       ON CONFLICT(site_id, id) DO UPDATE SET
-         title = excluded.title,
-         href = excluded.href,
-         cover_url = excluded.cover_url,
-         section_id = excluded.section_id,
-         section_name = excluded.section_name,
-         category_id = excluded.category_id,
-         category_name = excluded.category_name,
-         is_enabled = 1,
-         updated_at = CURRENT_TIMESTAMP
-       WHERE title IS NOT excluded.title
-          OR href IS NOT excluded.href
-          OR cover_url IS NOT excluded.cover_url
-          OR section_id IS NOT excluded.section_id
-          OR section_name IS NOT excluded.section_name
-          OR category_id IS NOT excluded.category_id
-          OR category_name IS NOT excluded.category_name
-          OR is_enabled <> 1`,
+      `SELECT id, title, href, cover_url,
+         section_id, section_name, category_id, category_name, is_enabled
+       FROM product_catalog
+       WHERE site_id = ?1 AND id = ?2 AND is_enabled = 1
+       LIMIT 1`,
     )
-    .bind(
-      siteId,
-      product.id,
-      product.title,
-      product.href,
-      product.coverUrl,
-      product.sectionId,
-      product.sectionName,
-      product.categoryId,
-      product.categoryName,
-    )
-    .run();
+    .bind(siteId, productId)
+    .first<{
+      id: string;
+      title: string;
+      href: string | null;
+      cover_url: string | null;
+      section_id: string | null;
+      section_name: string | null;
+      category_id: string | null;
+      category_name: string | null;
+      is_enabled: number;
+    }>();
+  if (!row || row.is_enabled !== 1 || !row.section_id || !row.title) {
+    return null;
+  }
+  return {
+    id: row.id,
+    title: row.title,
+    href: row.href ?? '',
+    coverUrl: row.cover_url,
+    sectionId: row.section_id,
+    sectionName: row.section_name,
+    categoryId: row.category_id,
+    categoryName: row.category_name,
+  };
 }
 
 async function discardUnassignedConversation(
@@ -1248,34 +1303,85 @@ async function ensureVisitor(
   db: D1Database,
   siteId: string,
   externalId: string,
-): Promise<VisitorRow> {
+  accessToken: string | null = null,
+): Promise<{ visitor: VisitorRow; accessToken: string | null } | null> {
+  const existing = await db
+    .prepare(
+      `SELECT id, site_id, external_id, expires_at, access_token_hash
+       FROM visitors
+       WHERE site_id = ?1 AND external_id = ?2
+       LIMIT 1`,
+    )
+    .bind(siteId, externalId)
+    .first<VisitorRow>();
+  if (existing) {
+    let tokenHash = existing.access_token_hash;
+    let issuedToken = accessToken;
+    if (accessToken) {
+      tokenHash = await sha256(accessToken);
+      if (
+        existing.access_token_hash &&
+        existing.access_token_hash !== tokenHash
+      ) {
+        return null;
+      }
+    } else if (!existing.access_token_hash) {
+      issuedToken = randomVisitorToken();
+      tokenHash = await sha256(issuedToken);
+    }
+    if (!existing.access_token_hash && tokenHash) {
+      await db
+        .prepare(
+          `UPDATE visitors
+           SET access_token_hash = ?1
+           WHERE id = ?2 AND access_token_hash IS NULL`,
+        )
+        .bind(tokenHash, existing.id)
+        .run();
+    }
+    await db
+      .prepare(
+        `UPDATE visitors
+         SET last_seen_at = CURRENT_TIMESTAMP, expires_at = ?1
+         WHERE id = ?2`,
+      )
+      .bind(conversationExpiresAt(new Date()), existing.id)
+      .run();
+    return {
+      visitor: { ...existing, access_token_hash: tokenHash },
+      accessToken: issuedToken,
+    };
+  }
+
   const id = crypto.randomUUID();
-  const tokenHash = await sha256(
-    `client-v1:${siteId}:${externalId}:${crypto.randomUUID()}`,
-  );
+  const issuedToken = accessToken ?? randomVisitorToken();
+  const tokenHash = await sha256(issuedToken);
   const expiresAt = conversationExpiresAt(new Date());
   const result = await db
     .prepare(
       `INSERT INTO visitors (
-       id, site_id, token_hash, display_name, external_id, expires_at
-     ) VALUES (?1, ?2, ?3, ?4, ?4, ?5)
-     ON CONFLICT(site_id, external_id) DO UPDATE SET
-       last_seen_at = CURRENT_TIMESTAMP,
-       expires_at = excluded.expires_at
-     RETURNING id, site_id, external_id, expires_at`,
+       id, site_id, token_hash, access_token_hash,
+       display_name, external_id, expires_at
+     ) VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6)
+     ON CONFLICT(site_id, external_id) DO NOTHING
+     RETURNING id, site_id, external_id, expires_at, access_token_hash`,
     )
-    .bind(id, siteId, tokenHash, externalId, expiresAt)
+    .bind(id, siteId, tokenHash, tokenHash, externalId, expiresAt)
     .all<VisitorRow>();
 
   const visitor = result.results?.[0];
-  if (!visitor) throw new Error('Visitor persistence failed');
-  return visitor;
+  if (visitor) return { visitor, accessToken: issuedToken };
+  return ensureVisitor(db, siteId, externalId, accessToken);
 }
 
 async function resolveIdentity(
   db: D1Database,
   conversationId: string,
-  input: { visitorId?: string | null; projectId?: string | null },
+  input: {
+    visitorId?: string | null;
+    visitorToken?: string | null;
+    projectId?: string | null;
+  },
 ): Promise<
   | {
       ok: true;
@@ -1283,10 +1389,11 @@ async function resolveIdentity(
       visitorId: string;
       conversation: ConversationRow;
     }
-  | { ok: false; status: 400 | 404; code: string; message: string }
+  | { ok: false; status: 400 | 401 | 404; code: string; message: string }
 > {
   const visitorId = normalizeVisitorId(input.visitorId);
-  if (!visitorId) {
+  const accessToken = normalizeVisitorToken(input.visitorToken);
+  if (!visitorId && !accessToken) {
     return {
       ok: false,
       status: 400,
@@ -1303,11 +1410,25 @@ async function resolveIdentity(
       message: 'Project was not found.',
     };
   }
+  const visitor = await resolveVisitor(db, site.id, {
+    externalId: visitorId,
+    accessToken,
+  });
+  if (!visitor) {
+    return {
+      ok: false,
+      status: accessToken ? 401 : 404,
+      code: accessToken ? 'INVALID_VISITOR_TOKEN' : 'CONVERSATION_NOT_FOUND',
+      message: accessToken
+        ? 'Visitor access token is invalid.'
+        : 'Conversation was not found.',
+    };
+  }
   const conversation = await ownedConversation(
     db,
     conversationId,
     site.id,
-    visitorId,
+    visitor.external_id,
   );
   if (!conversation) {
     return {
@@ -1317,7 +1438,39 @@ async function resolveIdentity(
       message: 'Conversation was not found.',
     };
   }
-  return { ok: true, site, visitorId, conversation };
+  return { ok: true, site, visitorId: visitor.external_id, conversation };
+}
+
+export async function resolveVisitor(
+  db: D1Database,
+  siteId: string,
+  input: { externalId: string | null; accessToken: string | null },
+): Promise<VisitorRow | null> {
+  if (input.accessToken) {
+    const tokenHash = await sha256(input.accessToken);
+    const visitor = await db
+      .prepare(
+        `SELECT id, site_id, external_id, expires_at, access_token_hash
+         FROM visitors
+         WHERE site_id = ?1
+           AND access_token_hash = ?2
+           AND (?3 IS NULL OR external_id = ?3)
+         LIMIT 1`,
+      )
+      .bind(siteId, tokenHash, input.externalId)
+      .first<VisitorRow>();
+    return visitor ?? null;
+  }
+  if (!input.externalId) return null;
+  return db
+    .prepare(
+      `SELECT id, site_id, external_id, expires_at, access_token_hash
+       FROM visitors
+       WHERE site_id = ?1 AND external_id = ?2
+       LIMIT 1`,
+    )
+    .bind(siteId, input.externalId)
+    .first<VisitorRow>();
 }
 
 async function ownedConversationForMessageWrite(
@@ -1552,7 +1705,7 @@ async function continueReusedConversationStart(
     conversation =
       snapshots.find((item) => item.id === conversation.id) ?? conversation;
   } else if (createdMessage) {
-    await broadcastRoom(env, conversation.id, {
+    await broadcastRoomSafely(env, conversation.id, {
       type: 'message',
       message: adminMessage(createdMessage),
     });
@@ -1817,6 +1970,19 @@ async function broadcastVisitorEvent(
   await broadcastRoom(env, `client:${siteId}:${visitorId}`, payload);
 }
 
+async function broadcastVisitorEventSafely(
+  env: ClientBindings,
+  siteId: string,
+  visitorId: string,
+  payload: unknown,
+): Promise<void> {
+  try {
+    await broadcastVisitorEvent(env, siteId, visitorId, payload);
+  } catch (error) {
+    console.warn('visitor conversation broadcast failed', error);
+  }
+}
+
 async function broadcastRoom(
   env: ClientBindings,
   name: string,
@@ -1827,6 +1993,18 @@ async function broadcastRoom(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+async function broadcastRoomSafely(
+  env: ClientBindings,
+  name: string,
+  payload: unknown,
+): Promise<void> {
+  try {
+    await broadcastRoom(env, name, payload);
+  } catch (error) {
+    console.warn('conversation room broadcast failed', error);
+  }
 }
 
 function toIso(value: string | null): string | null {

@@ -101,7 +101,7 @@ function d1(database) {
   };
 }
 
-function fakeRooms() {
+function fakeRooms({ failName = null } = {}) {
   const events = [];
   return {
     events,
@@ -112,6 +112,7 @@ function fakeRooms() {
       get(name) {
         return {
           async fetch(_input, init) {
+            if (name === failName) throw new Error('room unavailable');
             events.push({
               name,
               payload: JSON.parse(String(init?.body ?? '{}')),
@@ -142,6 +143,14 @@ function setup({ greetingEnabled, greetingText = null }) {
     )
     .run(greetingEnabled ? 1 : 0, greetingText);
   database.exec(`
+    INSERT INTO product_catalog (
+      site_id, id, title, href, cover_url,
+      section_id, section_name, category_id, category_name, is_enabled
+    ) VALUES (
+      'default', 'product-1', 'Product 1',
+      '/sections/west/products/product-1/', NULL,
+      'west', 'West', 'category-1', 'Category 1', 1
+    );
     INSERT INTO agent_routing_scopes (
       site_id, agent_id, scope_type, section_id, category_id, product_id, is_enabled
     ) VALUES ('default', 'cta-agent', 'section', 'west', '', '', 1);
@@ -155,6 +164,24 @@ async function startConversation(
   sourceHandoffId,
   overrides = {},
 ) {
+  const selectedProduct = overrides.product ?? product;
+  database
+    .prepare(
+      `INSERT OR IGNORE INTO product_catalog (
+         site_id, id, title, href, cover_url,
+         section_id, section_name, category_id, category_name, is_enabled
+       ) VALUES ('default', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    )
+    .run(
+      selectedProduct.id,
+      selectedProduct.title,
+      selectedProduct.href,
+      selectedProduct.coverUrl,
+      selectedProduct.sectionId,
+      selectedProduct.sectionName,
+      selectedProduct.categoryId,
+      selectedProduct.categoryName,
+    );
   return clientApi.request(
     '/client/v1/conversations',
     {
@@ -162,8 +189,11 @@ async function startConversation(
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId: overrides.visitorId ?? 'ABC123',
+        ...(overrides.visitorToken
+          ? { visitorToken: overrides.visitorToken }
+          : {}),
         sourceHandoffId,
-        product: overrides.product ?? product,
+        product: selectedProduct,
       }),
     },
     {
@@ -172,6 +202,76 @@ async function startConversation(
     },
   );
 }
+
+test('visitor product fields cannot override the Site-synchronized catalog', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const response = await startConversation(
+    database,
+    rooms,
+    '12121212-1212-4121-8121-121212121212',
+    {
+      product: {
+        ...product,
+        sectionId: 'east',
+        sectionName: 'East',
+        title: 'Forged Product',
+        href: '/forged',
+      },
+    },
+  );
+  const value = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(value.conversation.productTitle, 'Product 1');
+  assert.equal(value.conversation.sectionId, 'west');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT section_id FROM product_catalog
+       WHERE site_id = 'default' AND id = 'product-1'`,
+      'section_id',
+    ),
+    'west',
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count FROM conversations
+       WHERE product_id = 'product-1'`,
+      'count',
+    ),
+    1,
+  );
+  database.close();
+});
+
+test('disabled products cannot start a visitor conversation', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  database
+    .prepare(
+      `UPDATE product_catalog
+       SET is_enabled = 0
+       WHERE site_id = 'default' AND id = 'product-1'`,
+    )
+    .run();
+
+  const response = await startConversation(
+    database,
+    rooms,
+    '13131313-1313-4131-8131-131313131313',
+  );
+  const value = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(value.error.code, 'PRODUCT_NOT_FOUND');
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    0,
+  );
+  database.close();
+});
 
 function scalar(database, sql, column, ...bindings) {
   return database.prepare(sql).get(...bindings)[column];
@@ -199,6 +299,8 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
   const value = await response.json();
 
   assert.equal(response.status, 201);
+  assert.equal(typeof value.visitorToken, 'string');
+  assert.ok(value.visitorToken.length >= 32);
   assert.equal(value.conversation.status, 'active');
   assert.equal(value.conversation.agentName, 'CTA Agent');
   assert.deepEqual(value.conversation.messages, []);
@@ -248,6 +350,120 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
     ),
   );
 
+  database.close();
+});
+
+test('visitor access token can replace the short visitor id for reads', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const response = await startConversation(
+    database,
+    rooms,
+    '15151515-1515-4515-8515-151515151515',
+  );
+  const value = await response.json();
+  const token = value.visitorToken;
+
+  const listResponse = await clientApi.request(
+    `/client/v1/conversations?visitorToken=${encodeURIComponent(token)}`,
+    undefined,
+    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+  );
+  const detailResponse = await clientApi.request(
+    `/client/v1/conversations/${encodeURIComponent(value.conversation.id)}?visitorToken=${encodeURIComponent(token)}`,
+    undefined,
+    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+  );
+  const invalidResponse = await clientApi.request(
+    `/client/v1/conversations/${encodeURIComponent(value.conversation.id)}?visitorId=ABC123&visitorToken=${encodeURIComponent(`${token}x`)}`,
+    undefined,
+    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+  );
+
+  assert.equal(listResponse.status, 200);
+  assert.equal((await listResponse.json()).conversations.length, 1);
+  assert.equal(detailResponse.status, 200);
+  assert.equal(
+    (await detailResponse.json()).conversation.id,
+    value.conversation.id,
+  );
+  assert.equal(invalidResponse.status, 401);
+  assert.equal(
+    (await invalidResponse.json()).error.code,
+    'INVALID_VISITOR_TOKEN',
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT access_token_hash IS NOT NULL AS present
+       FROM visitors WHERE external_id = 'ABC123'`,
+      'present',
+    ),
+    1,
+  );
+  database.close();
+});
+
+test('concurrent CTA starts coalesce into one conversation and one quota receipt', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const responses = await Promise.all([
+    startConversation(database, rooms, '16161616-1616-4616-8616-161616161616'),
+    startConversation(database, rooms, '17171717-1717-4717-8717-171717171717'),
+  ]);
+  const values = await Promise.all(
+    responses.map((response) => response.json()),
+  );
+
+  assert.deepEqual(
+    responses.map((response) => response.status).sort(),
+    [200, 201],
+  );
+  assert.equal(new Set(values.map((value) => value.conversation.id)).size, 1);
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    1,
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COUNT(*) AS count FROM conversation_creation_quota_receipts',
+      'count',
+    ),
+    1,
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COUNT(*) AS count FROM conversation_source_handoffs',
+      'count',
+    ),
+    2,
+  );
+  database.close();
+});
+
+test('assignment delivery failure does not turn a committed CTA into an error', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms({ failName: 'agent-inbox:cta-agent' });
+  const response = await startConversation(
+    database,
+    rooms,
+    '18181818-1818-4818-8818-181818181818',
+  );
+  const value = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(value.conversation.agentName, 'CTA Agent');
+  assert.equal(
+    scalar(
+      database,
+      `SELECT assigned_agent FROM conversations WHERE id = ?`,
+      'assigned_agent',
+      value.conversation.id,
+    ),
+    'cta-agent',
+  );
   database.close();
 });
 

@@ -87,6 +87,7 @@ jobs:
           set -euo pipefail
           pnpm exec wrangler dev --local --port 8787 \
             --var ADMIN_PASSWORD:ui-smoke-admin-password \
+            --var INTEGRATION_VERIFY_TOKEN:ui-smoke-integration-token \
             --var ENVIRONMENT:ui-smoke \
             --var APP_VERSION:ui-smoke \
             > /tmp/ui-smoke-agent-worker.log 2>&1 &
