@@ -132,8 +132,6 @@ export async function assignConversationAgent(
          CROSS JOIN cursor rr
          WHERE a.is_enabled = 1
            AND a.status = 'online'
-           AND a.last_seen_at IS NOT NULL
-           AND datetime(a.last_seen_at) > datetime('now', '-2 minutes')
            AND a.username IS NOT NULL
            AND a.username <> ''
            AND a.password_hash IS NOT NULL

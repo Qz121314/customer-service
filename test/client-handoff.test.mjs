@@ -261,6 +261,11 @@ test('same visitor and product reuse one assigned conversation for two hours', a
     '33333333-3333-4333-8333-333333333333',
   );
   const firstValue = await first.json();
+  database.exec(`
+    UPDATE agents
+    SET last_seen_at = datetime('now', '-30 days')
+    WHERE id = 'cta-agent';
+  `);
   const repeated = await startConversation(
     database,
     rooms,

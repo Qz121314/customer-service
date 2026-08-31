@@ -93,6 +93,9 @@ Site / 产品页
 
 其中：
 
+- `status = online` 是唯一的在线业务判断；
+- `last_seen_at` 只用于后台展示最后活动时间、调试、日志和运维分析，不参与新会话分流或已有会话复用资格；
+- heartbeat 新鲜度、WebSocket 连接、标签页可见性和浏览器活动均不参与分流；
 - `dailyConversationLimit = 0` 表示每日不限；
 - 购买额度限制未启用时，不检查总额度；
 - 每日接待上限和购买额度是两个独立门槛，普通新流量必须同时通过；
@@ -123,7 +126,9 @@ A. 网络重试 / 幂等重放
 
 B. CTA 两小时活动会话复用
    同一 site + visitor + product 存在两小时内仍活动的 open / pending 会话
-   → 直接复用原会话和原客服，不重新判断在线、忙碌、额度或轮询
+   → 原客服 is_enabled = 1 且 status = online 时直接复用
+   → 不检查 last_seen_at、heartbeat、WebSocket 或浏览器活动
+   → 原客服 busy / offline / disabled 时返回当前无可用客服，不自动转给其他客服
 
 C. 新会话候选筛选
    没有可直接复用的活动会话
@@ -298,11 +303,13 @@ last_message_at 仍在两小时窗口内
 
 - 不创建新会话；
 - 保留原 `assigned_agent`；
+- 原客服必须仍为 `is_enabled = 1 AND status = 'online'`；
+- 不检查原客服的 `last_seen_at` 新鲜度、heartbeat 或 WebSocket 状态；
 - 不重新轮询；
 - 不重复消耗访客创建限制；
 - 不重复消耗每日接待次数；
 - 不重复消耗购买额度；
-- 原客服当前切换 busy / offline / disabled 不会导致这条已有会话被自动转给别人。
+- 原客服当前切换 busy / offline / disabled 不会导致这条已有会话被自动转给别人；重复 CTA 会返回当前无可用客服，原会话归属保持不变。
 
 #### 情况 B：两小时内最近会话已经关闭
 
