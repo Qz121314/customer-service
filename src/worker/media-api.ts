@@ -160,9 +160,7 @@ mediaApi.post('/client/v1/media/:id/complete', async (c) => {
     visitorId?: string;
     visitorToken?: string;
     projectId?: string;
-  }>(
-    c.req.raw,
-  );
+  }>(c.req.raw);
   const media = await authorizedVisitorMedia(c, false, body ?? undefined);
   if (!media.ok) return clientError(c, media.status, media.code);
   const result = await completeMedia(c.env, media.value);
