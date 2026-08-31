@@ -291,26 +291,21 @@ test('only seats with complete base eligibility receive automatic traffic', asyn
   database.close();
 });
 
-test('stale online seats are excluded when their heartbeat has expired', async () => {
+test('online seats remain eligible regardless of last activity time', async () => {
   const database = await createDatabase();
-  addAgent(database, { id: 'stale-online' });
-  addAgent(database, { id: 'fresh-online' });
-  addScope(database, 'stale-online', {
-    type: 'section',
-    sectionId: 'west',
-  });
-  addScope(database, 'fresh-online', {
+  addAgent(database, { id: 'online-agent' });
+  addScope(database, 'online-agent', {
     type: 'section',
     sectionId: 'west',
   });
   database.exec(`
     UPDATE agents
-    SET last_seen_at = datetime('now', '-3 minutes')
-    WHERE id = 'stale-online';
+    SET last_seen_at = datetime('now', '-30 days')
+    WHERE id = 'online-agent';
   `);
   addConversation(database, 'conversation-1', 'product-a');
 
-  assert.equal(await assigned(database, 'conversation-1'), 'fresh-online');
+  assert.equal(await assigned(database, 'conversation-1'), 'online-agent');
   database.close();
 });
 

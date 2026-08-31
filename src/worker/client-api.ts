@@ -1383,8 +1383,6 @@ async function reusableConversationIsAvailable(
          AND site_id = ?2
          AND is_enabled = 1
          AND status = 'online'
-         AND last_seen_at IS NOT NULL
-         AND datetime(last_seen_at) > datetime('now', '-2 minutes')
        LIMIT 1`,
     )
     .bind(conversation.assigned_agent, conversation.site_id)
