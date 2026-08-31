@@ -148,7 +148,7 @@ function addConversation(database, id) {
     .run(id, `product-${id}`);
 }
 
-test('seat quota is consumed once and exhausted seats stop receiving traffic', async () => {
+test('seat quota is consumed once and historical unassigned traffic stays inert', async () => {
   const database = await createDatabase();
   addConversation(database, 'conversation-1');
   addConversation(database, 'conversation-2');
@@ -171,14 +171,15 @@ test('seat quota is consumed once and exhausted seats stop receiving traffic', a
     WHERE id = 'conversation-1';
   `);
   assert.equal(
-    (await assignConversationAgent(d1(database), 'conversation-1'))?.id,
-    'agent-a',
+    await assignConversationAgent(d1(database), 'conversation-1'),
+    null,
+    'an already-received conversation must not be recovered',
   );
   assert.equal(
     database.prepare(`SELECT traffic_quota_used FROM agents`).get()
       .traffic_quota_used,
     1,
-    'recovering the same conversation must not consume quota twice',
+    'an inert historical conversation must not consume quota twice',
   );
 
   assert.equal(
@@ -219,7 +220,7 @@ test('seat quota is consumed once and exhausted seats stop receiving traffic', a
   );
 });
 
-test('already-counted traffic recovers after daily and paid quota are exhausted', async () => {
+test('already-counted traffic never recovers after becoming unassigned', async () => {
   const database = await createDatabase({ quotaTotal: 1 });
   database.exec(`UPDATE agents SET daily_conversation_limit = 1`);
   addConversation(database, 'conversation-paid');
@@ -248,9 +249,9 @@ test('already-counted traffic recovers after daily and paid quota are exhausted'
   `);
 
   assert.equal(
-    (await assignConversationAgent(d1(database), 'conversation-paid'))?.id,
-    'agent-a',
-    'a paid conversation must recover without another new-traffic unit',
+    await assignConversationAgent(d1(database), 'conversation-paid'),
+    null,
+    'a historical paid conversation must not recover',
   );
   assert.equal(
     database.prepare(`SELECT traffic_quota_used FROM agents`).get()

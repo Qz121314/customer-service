@@ -443,6 +443,41 @@ test('concurrent CTA starts coalesce into one conversation and one quota receipt
   database.close();
 });
 
+test('concurrent no-agent starts leave no reusable claim or handoff', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  database.exec(`UPDATE agents SET status = 'offline' WHERE id = 'cta-agent'`);
+
+  const responses = await Promise.all([
+    startConversation(database, rooms, '20202020-2020-4020-8020-202020202020'),
+    startConversation(database, rooms, '21212121-2121-4121-8121-212121212121'),
+  ]);
+  const values = await Promise.all(
+    responses.map((response) => response.json()),
+  );
+
+  assert.deepEqual(
+    responses.map((response) => response.status),
+    [503, 503],
+  );
+  assert.deepEqual(
+    values.map((value) => value.error.code),
+    ['NO_AGENT_AVAILABLE', 'NO_AGENT_AVAILABLE'],
+  );
+  for (const table of [
+    'conversations',
+    'conversation_creation_quota_receipts',
+    'conversation_source_handoffs',
+  ]) {
+    assert.equal(
+      scalar(database, `SELECT COUNT(*) AS count FROM ${table}`, 'count'),
+      0,
+      `${table} must not retain a no-agent claim`,
+    );
+  }
+  database.close();
+});
+
 test('assignment delivery failure does not turn a committed CTA into an error', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms({ failName: 'agent-inbox:cta-agent' });
@@ -622,7 +657,80 @@ test('a fresh closed conversation prefers its original eligible agent', async ()
   database.close();
 });
 
-test('active affinity falls back when the original agent is offline', async () => {
+test('an active conversation returns no-agent when its owner is offline', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  const first = await startConversation(
+    database,
+    rooms,
+    'abababab-abab-4aba-8aba-abababababab',
+  );
+  const firstValue = await first.json();
+
+  database.exec(`
+    UPDATE agents
+    SET status = 'offline'
+    WHERE id = 'cta-agent';
+
+    INSERT INTO agents (
+      id, site_id, name, username, password_hash, password_salt,
+      status, is_enabled, last_seen_at, daily_conversation_limit,
+      traffic_quota_enabled,
+      traffic_quota_total, traffic_quota_used
+    ) VALUES (
+      'aaa-agent', 'default', 'AAA Agent', 'aaa-agent', 'hash', 'salt',
+      'online', 1, CURRENT_TIMESTAMP, 0, 1, 10, 0
+    );
+    INSERT INTO agent_routing_scopes (
+      site_id, agent_id, scope_type, section_id, category_id, product_id,
+      is_enabled
+    ) VALUES ('default', 'aaa-agent', 'section', 'west', '', '', 1);
+  `);
+
+  const repeated = await startConversation(
+    database,
+    rooms,
+    'acacacac-acac-4aca-8aca-acacacacacac',
+  );
+  const repeatedValue = await repeated.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(repeated.status, 503);
+  assert.equal(repeatedValue.error.code, 'NO_AGENT_AVAILABLE');
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    1,
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT assigned_agent FROM conversations WHERE id = ?`,
+      'assigned_agent',
+      firstValue.conversation.id,
+    ),
+    'cta-agent',
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT traffic_quota_used FROM agents WHERE id = 'aaa-agent'`,
+      'traffic_quota_used',
+    ),
+    0,
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COUNT(*) AS count FROM conversation_creation_quota_receipts',
+      'count',
+    ),
+    1,
+  );
+
+  database.close();
+});
+
+test('closed affinity falls back when the original agent is offline', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const first = await startConversation(

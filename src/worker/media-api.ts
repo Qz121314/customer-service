@@ -344,6 +344,7 @@ async function authorizedVisitorMedia(
        WHERE mi.id = ?1
          AND (s.id = ?2 OR s.public_key = ?2) AND s.is_enabled = 1
          AND v.external_id = ?3
+         AND c.assigned_agent IS NOT NULL
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
   )
@@ -410,6 +411,7 @@ async function ownedVisitorConversation(
        WHERE c.id = ?1
          AND (s.id = ?2 OR s.public_key = ?2) AND s.is_enabled = 1
          AND v.external_id = ?3
+         AND c.assigned_agent IS NOT NULL
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
     )

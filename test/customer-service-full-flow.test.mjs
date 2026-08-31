@@ -33,6 +33,7 @@ let adminConfigApi;
 let agentApi;
 let clientApi;
 let mediaApi;
+let pushApi;
 let hashAgentPassword;
 try {
   [
@@ -40,12 +41,14 @@ try {
     { agentApi },
     { clientApi },
     { mediaApi },
+    { pushApi },
     { hashAgentPassword },
   ] = await Promise.all([
     import('../src/worker/admin-config-api.ts'),
     import('../src/worker/agent-api.ts'),
     import('../src/worker/client-api.ts'),
     import('../src/worker/media-api.ts'),
+    import('../src/worker/push-api.ts'),
     import('../src/worker/agent-password.ts'),
   ]);
 } finally {
@@ -1778,6 +1781,89 @@ test('visitor APIs hide and never recover an unassigned legacy conversation', as
   );
   assert.equal(messageResponse.status, 404);
 
+  database
+    .prepare(
+      `INSERT INTO media_items (
+         id, conversation_id, reserved_message_id, sender_type, sender_id,
+         object_key, mime_type, byte_size, width, height, original_name,
+         client_upload_id, status, is_initial, reserved_created_at,
+         created_at, updated_at
+       ) VALUES (
+         'legacy-unassigned-media', ?, 'legacy-unassigned-media-message',
+         'visitor', ?, 'chat/legacy/unassigned.png', 'image/png', 4, 1, 1,
+         'legacy.png', 'legacy-unassigned-upload', 'pending', 0,
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+       )`,
+    )
+    .run(conversationId, visitorRowId);
+
+  const mediaInitResponse = await mediaApi.request(
+    `/client/v1/conversations/${conversationId}/media/init`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId,
+        mimeType: 'image/png',
+        byteSize: 4,
+        width: 1,
+        height: 1,
+        clientUploadId: 'must-not-reserve-unassigned',
+      }),
+    },
+    env,
+  );
+  assert.equal(mediaInitResponse.status, 404);
+
+  const mediaListResponse = await mediaApi.request(
+    `/client/v1/conversations/${conversationId}/media?visitorId=${visitorId}`,
+    undefined,
+    env,
+  );
+  assert.equal(mediaListResponse.status, 404);
+
+  const mediaCompleteResponse = await mediaApi.request(
+    '/client/v1/media/legacy-unassigned-media/complete',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ visitorId }),
+    },
+    env,
+  );
+  assert.equal(mediaCompleteResponse.status, 404);
+
+  const mediaContentResponse = await mediaApi.request(
+    `/client/v1/media/legacy-unassigned-media/content?visitorId=${visitorId}`,
+    undefined,
+    env,
+  );
+  assert.equal(mediaContentResponse.status, 404);
+
+  const pushResponse = await pushApi.request(
+    '/client/v1/push/subscriptions',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId,
+        conversationId,
+        subscription: {
+          endpoint: 'https://push.example.test/legacy-unassigned',
+          expirationTime: null,
+        },
+      }),
+    },
+    env,
+  );
+  assert.equal(pushResponse.status, 401);
+  assert.equal(
+    database
+      .prepare('SELECT COUNT(*) AS count FROM visitor_push_subscriptions')
+      .get().count,
+    0,
+  );
+
   const replayBody = {
     visitorId,
     sourceHandoffId: '00000000-0000-4000-8000-000000008888',
@@ -1852,6 +1938,12 @@ test('visitor APIs hide and never recover an unassigned legacy conversation', as
       )
       .get(conversationId).count,
     1,
+  );
+  assert.equal(
+    database
+      .prepare(`SELECT status FROM media_items WHERE id = ?`)
+      .get('legacy-unassigned-media').status,
+    'pending',
   );
 
   database

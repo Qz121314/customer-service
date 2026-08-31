@@ -79,7 +79,7 @@ new consultation claim
 → paid traffic quota consumed once when enabled
 ```
 
-System recovery, reconnects and retries cannot create a second traffic receipt and therefore cannot consume another consultation unit.
+Assigned-conversation reconnects and retries cannot create a second traffic receipt and therefore cannot consume another consultation unit. Historical or abnormal unassigned records are never recovered.
 
 ## Optional initial greeting
 
@@ -90,7 +90,7 @@ On the first traffic receipt, D1 resolves the `initial_greeting` automation once
 - configured and enabled: store `sent` and materialize one normal `agent` message;
 - not configured or disabled: store `skipped` and create no message.
 
-The automation receipt uses `(conversation_id, automation_key)` as its unique boundary. A later system recovery, reconnect or settings change cannot send another initial greeting.
+The automation receipt uses `(conversation_id, automation_key)` as its unique boundary. A later reconnect, retry or settings change cannot send another initial greeting.
 
 Existing conversations are migrated as `skipped`, so deploying the feature never sends retroactive greetings.
 

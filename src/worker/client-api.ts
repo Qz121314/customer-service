@@ -457,7 +457,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       conversation &&
       !(await reusableConversationIsAvailable(c.env.DB, conversation))
     ) {
-      conversation = null;
+      return noAgentResponse(c, site);
     }
     if (conversation) {
       const handoffOwner = await rememberSourceHandoff(
@@ -656,6 +656,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
       assignmentPolicy: 'complete-new-claim',
     });
     if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
+      await discardUnassignedConversation(c.env.DB, {
+        siteId: site.id,
+        conversationId: conversation.id,
+        reuseKey: startClaimKey,
+        sourceHandoffId,
+      });
       return noAgentResponse(c, site);
     }
     return c.json({
@@ -673,6 +679,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
     handoffOwner.externalId !== visitorId ||
     handoffOwner.conversationId !== conversationId
   ) {
+    await discardUnassignedConversation(c.env.DB, {
+      siteId: site.id,
+      conversationId,
+      reuseKey: startClaimKey,
+      sourceHandoffId,
+    });
     return error(
       c,
       409,
@@ -1255,22 +1267,33 @@ async function discardUnassignedConversation(
   await db.batch([
     db
       .prepare(
+        `DELETE FROM conversation_creation_quota_receipts
+         WHERE site_id = ?1 AND reuse_key = ?2
+           AND EXISTS (
+             SELECT 1
+             FROM conversations
+             WHERE id = ?3 AND site_id = ?1 AND assigned_agent IS NULL
+           )`,
+      )
+      .bind(input.siteId, input.reuseKey, input.conversationId),
+    db
+      .prepare(
+        `DELETE FROM conversation_source_handoffs
+         WHERE site_id = ?1 AND source_handoff_id = ?2
+           AND conversation_id = ?3
+           AND EXISTS (
+             SELECT 1
+             FROM conversations
+             WHERE id = ?3 AND site_id = ?1 AND assigned_agent IS NULL
+           )`,
+      )
+      .bind(input.siteId, input.sourceHandoffId, input.conversationId),
+    db
+      .prepare(
         `DELETE FROM conversations
          WHERE id = ?1 AND site_id = ?2 AND assigned_agent IS NULL`,
       )
       .bind(input.conversationId, input.siteId),
-    db
-      .prepare(
-        `DELETE FROM conversation_creation_quota_receipts
-         WHERE site_id = ?1 AND reuse_key = ?2`,
-      )
-      .bind(input.siteId, input.reuseKey),
-    db
-      .prepare(
-        `DELETE FROM conversation_source_handoffs
-         WHERE site_id = ?1 AND source_handoff_id = ?2`,
-      )
-      .bind(input.siteId, input.sourceHandoffId),
   ]);
 }
 

@@ -51,15 +51,14 @@ test('expired push subscriptions are cleaned in one bounded daily cron window', 
   assert.match(retention, /PUSH_SUBSCRIPTION_DELETE_BATCH_SIZE = 1000/u);
 });
 
-test('visitor media completion reuses assignment state from the update batch', () => {
+test('visitor media completion never revives an unassigned conversation', () => {
   const start = mediaStore.indexOf('export async function completeMedia');
   const end = mediaStore.indexOf('function completedMedia');
   const source = mediaStore.slice(start, end);
 
-  assert.match(source, /RETURNING assigned_agent/u);
-  assert.match(source, /const assignmentResult = results\[1\]/u);
-  assert.doesNotMatch(
-    source,
-    /SELECT assigned_agent FROM conversations WHERE id = \?1/u,
-  );
+  assert.doesNotMatch(source, /assignConversationAgent/u);
+  assert.doesNotMatch(source, /RETURNING assigned_agent/u);
+  assert.doesNotMatch(source, /conversation\.assigned/u);
+  assert.match(source, /assigned_agent IS NOT NULL/u);
+  assert.match(source, /SELECT 1 FROM messages WHERE id = \?1/u);
 });

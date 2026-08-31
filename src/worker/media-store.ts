@@ -1,5 +1,4 @@
 import { broadcastClientConversationEvent } from './client-api';
-import { assignConversationAgent } from './routing';
 import {
   MIME_EXTENSIONS,
   publicMedia,
@@ -251,6 +250,11 @@ export async function completeMedia(
        SELECT ?1, ?2, ?3, ?4, '', 'image', ?5
        WHERE EXISTS (
          SELECT 1 FROM media_items WHERE id = ?6 AND status = 'pending'
+       )
+         AND EXISTS (
+           SELECT 1
+           FROM conversations
+           WHERE id = ?2 AND assigned_agent IS NOT NULL
        )`,
     ).bind(
       messageId,
@@ -271,6 +275,7 @@ export async function completeMedia(
              agent_unread_count = 0,
              last_message_at = ?1, last_message_preview = '', updated_at = ?1
          WHERE id = ?2
+           AND assigned_agent IS NOT NULL
            AND EXISTS (
              SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
            )`,
@@ -283,10 +288,10 @@ export async function completeMedia(
          SET agent_unread_count = agent_unread_count + 1,
              last_message_at = ?1, last_message_preview = '', updated_at = ?1
          WHERE id = ?2
+           AND assigned_agent IS NOT NULL
            AND EXISTS (
              SELECT 1 FROM media_items WHERE id = ?3 AND status = 'pending'
-           )
-         RETURNING assigned_agent`,
+           )`,
       ).bind(createdAt, media.conversation_id, media.id),
     );
   }
@@ -294,7 +299,10 @@ export async function completeMedia(
     env.DB.prepare(
       `UPDATE media_items
        SET message_id = ?1, status = 'ready', updated_at = ?2
-       WHERE id = ?3 AND status = 'pending'`,
+       WHERE id = ?3 AND status = 'pending'
+         AND EXISTS (
+           SELECT 1 FROM messages WHERE id = ?1
+         )`,
     ).bind(messageId, new Date().toISOString(), media.id),
   );
   const results = await env.DB.batch(statements);
@@ -349,24 +357,6 @@ export async function completeMedia(
       },
     ),
   ]);
-
-  if (media.sender_type === 'visitor') {
-    const assignmentResult = results[1]?.results?.[0] as
-      { assigned_agent?: string | null } | undefined;
-    if (!assignmentResult?.assigned_agent) {
-      const assignment = await assignConversationAgent(
-        env.DB,
-        media.conversation_id,
-      );
-      if (assignment) {
-        await broadcastClientConversationEvent(
-          env,
-          media.conversation_id,
-          'conversation.assigned',
-        );
-      }
-    }
-  }
 
   return {
     ok: true,

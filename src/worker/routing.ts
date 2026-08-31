@@ -77,12 +77,7 @@ export async function assignConversationAgent(
            COALESCE(c.section_id, p.section_id) AS section_id,
            COALESCE(c.category_id, p.category_id) AS category_id,
            c.cta_affinity_agent_id,
-           c.cta_affinity_expires_at,
-           EXISTS (
-             SELECT 1
-             FROM agent_traffic_receipts receipt
-             WHERE receipt.conversation_id = c.id
-           ) AS already_received
+           c.cta_affinity_expires_at
          FROM conversations c
          LEFT JOIN product_catalog p
            ON p.site_id = c.site_id
@@ -90,6 +85,11 @@ export async function assignConversationAgent(
          WHERE c.id = ?1
            AND c.assigned_agent IS NULL
            AND c.expires_at > CURRENT_TIMESTAMP
+           AND NOT EXISTS (
+             SELECT 1
+             FROM agent_traffic_receipts receipt
+             WHERE receipt.conversation_id = c.id
+           )
          LIMIT 1
        ),
        cursor AS (
@@ -136,8 +136,7 @@ export async function assignConversationAgent(
            AND a.password_hash IS NOT NULL
            AND a.password_hash <> ''
            AND (
-             ctx.already_received = 1
-             OR a.daily_conversation_limit <= 0
+             a.daily_conversation_limit <= 0
              OR COALESCE((
                SELECT daily.conversation_count
                FROM agent_daily_stats daily
@@ -148,8 +147,7 @@ export async function assignConversationAgent(
              ), 0) < a.daily_conversation_limit
            )
            AND (
-             ctx.already_received = 1
-             OR a.traffic_quota_enabled = 0
+             a.traffic_quota_enabled = 0
              OR a.traffic_quota_used < a.traffic_quota_total
            )
          ORDER BY
