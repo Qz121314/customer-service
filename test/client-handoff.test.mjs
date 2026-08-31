@@ -383,9 +383,15 @@ test('visitor access token can replace the short visitor id for reads', async ()
   assert.equal(listResponse.status, 200);
   assert.equal((await listResponse.json()).conversations.length, 1);
   assert.equal(detailResponse.status, 200);
-  assert.equal((await detailResponse.json()).conversation.id, value.conversation.id);
+  assert.equal(
+    (await detailResponse.json()).conversation.id,
+    value.conversation.id,
+  );
   assert.equal(invalidResponse.status, 401);
-  assert.equal((await invalidResponse.json()).error.code, 'INVALID_VISITOR_TOKEN');
+  assert.equal(
+    (await invalidResponse.json()).error.code,
+    'INVALID_VISITOR_TOKEN',
+  );
   assert.equal(
     scalar(
       database,
@@ -402,27 +408,18 @@ test('concurrent CTA starts coalesce into one conversation and one quota receipt
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const responses = await Promise.all([
-    startConversation(
-      database,
-      rooms,
-      '16161616-1616-4616-8616-161616161616',
-    ),
-    startConversation(
-      database,
-      rooms,
-      '17171717-1717-4717-8717-171717171717',
-    ),
+    startConversation(database, rooms, '16161616-1616-4616-8616-161616161616'),
+    startConversation(database, rooms, '17171717-1717-4717-8717-171717171717'),
   ]);
-  const values = await Promise.all(responses.map((response) => response.json()));
+  const values = await Promise.all(
+    responses.map((response) => response.json()),
+  );
 
   assert.deepEqual(
     responses.map((response) => response.status).sort(),
     [200, 201],
   );
-  assert.equal(
-    new Set(values.map((value) => value.conversation.id)).size,
-    1,
-  );
+  assert.equal(new Set(values.map((value) => value.conversation.id)).size, 1);
   assert.equal(
     scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
     1,
