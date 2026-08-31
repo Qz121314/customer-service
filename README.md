@@ -133,7 +133,9 @@ Busy 切回在线  → online
 ```text
 A. 网络重试 / 幂等重放
    sourceHandoffId 或 clientMessageId 已处理
-   → 返回原结果，不创建第二个会话，不重新轮询
+   → 仍绑定原会话，不创建第二个会话，不重新轮询
+   → 活动会话的原客服仍为 enabled + online 时返回原会话
+   → 原客服 busy / offline / disabled 时返回当前无可用客服，原会话归属不变
 
 B. CTA 两小时活动会话复用
    同一 site + visitor + product 存在两小时内仍活动的 open / pending 会话
@@ -398,8 +400,9 @@ error.format = plain / markdown
 
 为了避免两个访客同时发起咨询时产生重复分配或破坏轮询，以下约束是强制要求：
 
-- 同一个 `sourceHandoffId` 永远只能对应同一条创建结果；
+- 同一个 `sourceHandoffId` 永远只能绑定同一条会话记录；
 - 同一个 `clientMessageId` 的重试不能生成重复消息或第二次创建；
+- 幂等重试只复用原会话，不重新分流；活动会话原客服当前不可用时，响应可以反映最新的无客服状态；
 - 同一个会话只能从“未分配”成功进入一次首次分配；
 - 候选选择与 `assigned_agent` 写入必须保持在 D1 原子写入路径中；
 - 产品轮询游标只能随真实成功的客服分配推进；
@@ -666,6 +669,7 @@ dailyConversationLimit = 0 时不限
 全部新流量候选达到上限时返回 NO_AGENT_AVAILABLE 且不创建等待会话
 下一业务日重新获得每日接待资格
 活动会话在 CTA 两小时内直接复用原会话和原客服
+幂等重试不创建第二个会话，活动会话原客服不可用时返回 NO_AGENT_AVAILABLE
 已关闭会话在 CTA 两小时内只对仍合格的原客服提供亲和优先级
 亲和客服 busy / offline / disabled / 日上限 / 额度耗尽时回退严格轮询
 已经分配的会话不会因为客服 busy / offline / disabled / 日上限 / 额度耗尽而自动迁移
