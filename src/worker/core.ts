@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
+import { touchAgentActivity } from './agent-activity';
 
 type RealtimeParticipantRole = 'visitor' | 'agent';
 
@@ -152,7 +153,7 @@ export class ConversationRoom extends DurableObject<Bindings> {
       participantId,
       participantRole,
     } satisfies RealtimeSocketAttachment);
-    if (agentId) await this.touchAgent(agentId);
+    if (agentId) await touchAgentActivity(this.env.DB, agentId);
     server.send(
       JSON.stringify({ type: 'ready', time: new Date().toISOString() }),
     );
@@ -190,21 +191,6 @@ export class ConversationRoom extends DurableObject<Bindings> {
         // Dead sockets are cleaned up by the runtime.
       }
     }
-  }
-
-  private async touchAgent(agentId: string): Promise<void> {
-    await this.env.DB.prepare(
-      `UPDATE agents
-       SET last_seen_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1
-         AND (
-           last_seen_at IS NULL
-           OR datetime(last_seen_at) <= datetime('now', '-90 seconds')
-         )`,
-    )
-      .bind(agentId)
-      .run();
   }
 
   webSocketClose(socket: WebSocket, code: number, reason: string): void {
