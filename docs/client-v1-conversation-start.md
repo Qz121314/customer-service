@@ -17,6 +17,17 @@ CTA click
 → later visitor text uses /messages
 ```
 
+A CTA start has only two externally visible outcomes: an assigned conversation, or `NO_AGENT_AVAILABLE`. An unassigned row may exist transiently while the create request is being processed, but it is never a visitor-visible waiting session.
+
+Visitor-facing conversation status is therefore only:
+
+```text
+active
+closed
+```
+
+`waiting` is not part of the Client v1 conversation contract.
+
 ## CTA request
 
 The request requires the existing visitor, handoff and product context but does not require message fields:
@@ -38,7 +49,7 @@ The request requires the existing visitor, handoff and product context but does 
 }
 ```
 
-`sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing conversation and must not create a second conversation, traffic receipt, quota charge or greeting.
+`sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing assigned conversation and must not create a second conversation, traffic receipt, quota charge or greeting. Historical or abnormal rows with `assigned_agent = NULL` are not recovered by a later retry or visitor message; they do not re-enter automatic routing.
 
 ## Legacy create-with-message compatibility
 
@@ -61,23 +72,21 @@ Visitor text after the consultation exists uses:
 POST /client/v1/conversations/:id/messages
 ```
 
-The message endpoint remains independently idempotent through `clientMessageId`.
+The message endpoint remains independently idempotent through `clientMessageId`. It only accepts an already assigned conversation; it must never act as a delayed assignment or waiting-queue recovery path.
 
 ## First reception and quota
-
-A CTA click by itself does not consume a seat quota while the conversation is waiting.
 
 The first successful agent assignment is the existing billing boundary:
 
 ```text
-unassigned conversation
+transient unassigned create row
 → eligible agent selected
 → immutable agent_traffic_receipts row
 → daily reception count +1
 → paid traffic quota consumed once when enabled
 ```
 
-System recovery, reconnects and retries cannot create a second traffic receipt and therefore cannot consume another consultation unit.
+If no eligible agent exists, the transient create row is discarded and the request returns the configured `NO_AGENT_AVAILABLE` response. System recovery, reconnects, retries and later visitor messages cannot turn a historical unassigned row into a newly assigned conversation.
 
 ## Optional initial greeting
 
