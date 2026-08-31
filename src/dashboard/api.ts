@@ -238,6 +238,8 @@ const errorMessages: Record<string, string> = {
   INVALID_MONTH: '月份格式无效',
   AGENT_CREATE_FAILED: '创建客服失败，请重新提交',
   AGENT_DELETE_FAILED: '删除客服失败，请稍后重试',
+  AGENT_HAS_ACTIVE_CONVERSATIONS:
+    '该客服仍有进行中的会话，请先停用账号并处理完会话后再永久删除',
   CONVERSATION_CLOSED: '会话已关闭',
   INVALID_AGENT_STATUS: '坐席接待状态无效',
   MESSAGE_ID_CONFLICT: '消息标识冲突，请重新编辑后发送',

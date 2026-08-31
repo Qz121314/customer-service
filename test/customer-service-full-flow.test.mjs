@@ -485,6 +485,15 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     ADMIN_PASSWORD: 'admin-password',
   };
 
+  database.exec(`
+    INSERT INTO product_catalog (
+      site_id, id, title, href, section_id, section_name,
+      category_id, category_name, is_enabled
+    ) VALUES ('default', 'product-e2e', 'Product E2E',
+      '/sections/west/products/product-e2e/', 'west', 'West',
+      'massage', 'Massage', 1);
+  `);
+
   const token = 'agent-session-e2e';
   const agentPassword = 'agent-e2e-password';
   const agentCredentials = await hashAgentPassword(agentPassword, 1_000);
@@ -925,6 +934,14 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   );
   assert.equal(resumed.availability, 'online');
 
+  database.exec(`
+    INSERT INTO product_catalog (
+      site_id, id, title, href, section_id, section_name,
+      category_id, category_name, is_enabled
+    ) VALUES ('default', 'product-after-disable', 'Product After Disable',
+      '/sections/west/products/product-after-disable/', 'west', 'West',
+      'massage', 'Massage', 1);
+  `);
   database
     .prepare(
       `INSERT INTO agents (
@@ -1149,6 +1166,21 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
   async function createConversation(sectionId) {
     handoffIndex += 1;
     const visitorId = `QTA00${handoffIndex}`;
+    const productId = `quota-final-product-${sectionId}-${handoffIndex}`;
+    database
+      .prepare(
+        `INSERT INTO product_catalog (
+           site_id, id, title, href, section_id, section_name,
+           category_id, category_name, is_enabled
+         ) VALUES ('default', ?, ?, ?, ?, ?, 'quota-test', 'Quota test', 1)`,
+      )
+      .run(
+        productId,
+        `Quota ${sectionId} ${handoffIndex}`,
+        `/quota/${sectionId}/${handoffIndex}`,
+        sectionId,
+        sectionId,
+      );
     const response = await clientApi.request(
       '/client/v1/conversations',
       {
@@ -1160,7 +1192,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
           clientMessageId: `quota-final-message-${handoffIndex}`,
           message: `Quota acceptance ${handoffIndex}`,
           product: {
-            id: `quota-final-product-${sectionId}-${handoffIndex}`,
+            id: productId,
             sectionId,
             sectionName: sectionId,
             categoryId: 'quota-test',
@@ -1500,9 +1532,43 @@ test('admin permanently deletes an agent while preserving historical records', a
     },
     env,
   );
-  const deleted = await deleteResponse.json();
-  assert.equal(deleteResponse.status, 200);
-  assert.equal(deleted.reassignedConversationCount, 1);
+  const blocked = await deleteResponse.json();
+  assert.equal(deleteResponse.status, 409);
+  assert.equal(blocked.error, 'AGENT_HAS_ACTIVE_CONVERSATIONS');
+  assert.equal(blocked.activeConversationCount, 1);
+  assert.equal(
+    database.prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?').get(agentId)
+      .count,
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT assigned_agent, status
+         FROM conversations WHERE id = 'delete-active-conversation'`,
+      )
+      .get().assigned_agent,
+    agentId,
+  );
+
+  database
+    .prepare(
+      `UPDATE conversations
+       SET status = 'closed'
+       WHERE id = 'delete-active-conversation'`,
+    )
+    .run();
+  const finalDeleteResponse = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(agentId)}`,
+    {
+      method: 'DELETE',
+      headers: { cookie: adminCookie(adminPassword) },
+    },
+    env,
+  );
+  const deleted = await finalDeleteResponse.json();
+  assert.equal(finalDeleteResponse.status, 200);
+  assert.equal(deleted.reassignedConversationCount, 0);
   assert.equal(
     database
       .prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?')
@@ -1540,8 +1606,8 @@ test('admin permanently deletes an agent while preserving historical records', a
        FROM conversations WHERE id = 'delete-active-conversation'`,
     )
     .get();
-  assert.equal(active.status, 'open');
-  assert.equal(active.assigned_agent, null);
+  assert.equal(active.status, 'closed');
+  assert.equal(active.assigned_agent, agentId);
   assert.equal(active.cta_affinity_agent_id, null);
 
   const historical = database
@@ -1644,6 +1710,15 @@ test('visitor APIs never expose an unassigned legacy conversation as waiting', a
   const conversationId = 'conversation-no-wait';
   const sourceHandoffId = '00000000-0000-4000-8000-000000009999';
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  database
+    .prepare(
+      `INSERT INTO product_catalog (
+         site_id, id, title, href, section_id, section_name, is_enabled
+       ) VALUES ('default', 'product-no-wait', 'No-wait product',
+         '/products/no-wait', 'west', 'West', 1)`,
+    )
+    .run();
 
   database
     .prepare(

@@ -323,7 +323,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   async function removeAgent(agent: Pick<AgentAccount, 'id' | 'name'>) {
     if (deletingAgentId) return;
     const confirmed = window.confirm(
-      `确定永久删除客服「${agent.name}」？\n\n删除后该账号将立即无法登录，当前未结束会话会释放并重新分配；历史聊天与统计记录会保留。`,
+      `确定永久删除客服「${agent.name}」？\n\n仍有进行中的会话时系统会拒绝删除；请先停用账号并处理完会话。历史聊天与统计记录会保留。`,
     );
     if (!confirmed) return;
 

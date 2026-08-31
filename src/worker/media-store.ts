@@ -307,7 +307,7 @@ export async function completeMedia(
     return { ok: false, status: 409, code: 'MEDIA_NOT_PENDING' };
   }
 
-  await Promise.all([
+  await Promise.allSettled([
     broadcastRoom(env, media.conversation_id, {
       type: 'message',
       message: {
