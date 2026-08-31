@@ -52,15 +52,15 @@ function assignmentResult(
 
 /**
  * Assign one conversation to one enabled, online seat with matching routing
- * scope. Paid quota and the daily reception limit are eligibility gates only;
- * neither one changes candidate priority.
+ * scope. Product/section/category routing decides eligibility only; all normal
+ * new traffic for a site shares one circular round-robin cursor. Paid quota and
+ * the daily reception limit are eligibility gates only and never change
+ * candidate priority.
  *
- * CTA affinity is the only priority override. All other eligible traffic uses a
- * product-local circular cursor, so assignments for one product never change the
- * order of another product. Busy/offline/disabled/exhausted seats are skipped
- * without receiving a catch-up priority when they later become eligible again.
- * Candidate selection and assignment remain one D1 statement; the product cursor
- * advances through a database trigger in the same write path.
+ * CTA affinity is the only priority override. Busy/offline/disabled/exhausted
+ * seats are skipped without receiving catch-up priority when they later become
+ * eligible again. Candidate selection and assignment remain one D1 statement;
+ * the site cursor advances through a database trigger in the same write path.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -97,7 +97,6 @@ export async function assignConversationAgent(
          FROM context ctx
          LEFT JOIN routing_round_robin_cursors rr
            ON rr.site_id = ctx.site_id
-          AND rr.product_id = COALESCE(ctx.product_id, '')
        ),
        matching AS (
          SELECT DISTINCT ars.agent_id
