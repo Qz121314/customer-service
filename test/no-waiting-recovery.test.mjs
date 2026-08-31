@@ -33,7 +33,7 @@ let broadcastAssignments;
 try {
   ({ clientApi } = await import('../src/worker/client-api.ts'));
   ({ broadcastAssignments } = await import(
-    '../src/worker/assignment-broadcast.ts'
+    '../src/worker/assignment-broadcast.ts',
   ));
 } finally {
   for (const shimPath of shims) unlinkSync(shimPath);
@@ -161,120 +161,126 @@ function scalar(database, sql, column, ...bindings) {
   return database.prepare(sql).get(...bindings)[column];
 }
 
-test('visitor-facing open conversations remain active and never expose waiting', async () => {
-  const database = setup();
-  const rooms = fakeRooms();
-  const started = await startConversation(
-    database,
-    rooms,
-    '11111111-1111-4111-8111-111111111111',
-  );
-  const startedValue = await started.json();
-  assert.equal(started.status, 201);
+test(
+  'visitor-facing open conversations remain active and never expose waiting',
+  async () => {
+    const database = setup();
+    const rooms = fakeRooms();
+    const started = await startConversation(
+      database,
+      rooms,
+      '11111111-1111-4111-8111-111111111111',
+    );
+    const startedValue = await started.json();
+    assert.equal(started.status, 201);
 
-  database
-    .prepare(`UPDATE conversations SET status = 'open' WHERE id = ?`)
-    .run(startedValue.conversation.id);
+    database
+      .prepare(`UPDATE conversations SET status = 'open' WHERE id = ?`)
+      .run(startedValue.conversation.id);
 
-  const detail = await clientApi.request(
-    `/client/v1/conversations/${encodeURIComponent(startedValue.conversation.id)}?visitorToken=${encodeURIComponent(startedValue.visitorToken)}`,
-    undefined,
-    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
-  );
-  const detailValue = await detail.json();
-  assert.equal(detail.status, 200);
-  assert.equal(detailValue.conversation.status, 'active');
+    const detail = await clientApi.request(
+      `/client/v1/conversations/${encodeURIComponent(startedValue.conversation.id)}?visitorToken=${encodeURIComponent(startedValue.visitorToken)}`,
+      undefined,
+      { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+    );
+    const detailValue = await detail.json();
+    assert.equal(detail.status, 200);
+    assert.equal(detailValue.conversation.status, 'active');
 
-  const assignmentAt = new Date().toISOString();
-  await broadcastAssignments(
-    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
-    'cta-agent',
-    [startedValue.conversation.id],
-    assignmentAt,
-  );
-  const assignedEvent = rooms.events
-    .filter(
-      (event) =>
-        event.name === 'client:default:ABC123' &&
-        event.payload.type === 'conversation.assigned',
-    )
-    .at(-1);
-  assert.equal(assignedEvent?.payload.conversation.status, 'active');
+    const assignmentAt = new Date().toISOString();
+    await broadcastAssignments(
+      { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+      'cta-agent',
+      [startedValue.conversation.id],
+      assignmentAt,
+    );
+    const assignedEvent = rooms.events
+      .filter(
+        (event) =>
+          event.name === 'client:default:ABC123' &&
+          event.payload.type === 'conversation.assigned',
+      )
+      .at(-1);
+    assert.equal(assignedEvent?.payload.conversation.status, 'active');
 
-  database.close();
-});
+    database.close();
+  },
+);
 
-test('later visitor activity cannot resurrect a residual unassigned conversation', async () => {
-  const database = setup();
-  const rooms = fakeRooms();
-  const handoff = '22222222-2222-4222-8222-222222222222';
-  const started = await startConversation(database, rooms, handoff);
-  const startedValue = await started.json();
-  assert.equal(started.status, 201);
+test(
+  'later visitor activity cannot resurrect a residual unassigned conversation',
+  async () => {
+    const database = setup();
+    const rooms = fakeRooms();
+    const handoff = '22222222-2222-4222-8222-222222222222';
+    const started = await startConversation(database, rooms, handoff);
+    const startedValue = await started.json();
+    assert.equal(started.status, 201);
 
-  database
-    .prepare(
-      `UPDATE conversations
+    database
+      .prepare(
+        `UPDATE conversations
        SET assigned_agent = NULL, status = 'open'
        WHERE id = ?`,
-    )
-    .run(startedValue.conversation.id);
+      )
+      .run(startedValue.conversation.id);
 
-  const messageResponse = await clientApi.request(
-    `/client/v1/conversations/${encodeURIComponent(startedValue.conversation.id)}/messages`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        visitorToken: startedValue.visitorToken,
-        clientMessageId: 'residual-message-1',
-        body: 'Hello again',
-      }),
-    },
-    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
-  );
-  const messageValue = await messageResponse.json();
-  assert.equal(messageResponse.status, 503);
-  assert.equal(messageValue.error.code, 'NO_AGENT_AVAILABLE');
-  assert.equal(
-    scalar(
-      database,
-      `SELECT assigned_agent FROM conversations WHERE id = ?`,
-      'assigned_agent',
-      startedValue.conversation.id,
-    ),
-    null,
-  );
-  assert.equal(
-    scalar(
-      database,
-      `SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?`,
-      'count',
-      startedValue.conversation.id,
-    ),
-    0,
-  );
+    const messageResponse = await clientApi.request(
+      `/client/v1/conversations/${encodeURIComponent(startedValue.conversation.id)}/messages`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          visitorToken: startedValue.visitorToken,
+          clientMessageId: 'residual-message-1',
+          body: 'Hello again',
+        }),
+      },
+      { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+    );
+    const messageValue = await messageResponse.json();
+    assert.equal(messageResponse.status, 503);
+    assert.equal(messageValue.error.code, 'NO_AGENT_AVAILABLE');
+    assert.equal(
+      scalar(
+        database,
+        `SELECT assigned_agent FROM conversations WHERE id = ?`,
+        'assigned_agent',
+        startedValue.conversation.id,
+      ),
+      null,
+    );
+    assert.equal(
+      scalar(
+        database,
+        `SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?`,
+        'count',
+        startedValue.conversation.id,
+      ),
+      0,
+    );
 
-  const detail = await clientApi.request(
-    `/client/v1/conversations/${encodeURIComponent(startedValue.conversation.id)}?visitorToken=${encodeURIComponent(startedValue.visitorToken)}`,
-    undefined,
-    { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
-  );
-  assert.equal(detail.status, 404);
+    const detail = await clientApi.request(
+      `/client/v1/conversations/${encodeURIComponent(startedValue.conversation.id)}?visitorToken=${encodeURIComponent(startedValue.visitorToken)}`,
+      undefined,
+      { DB: d1(database), CONVERSATION_ROOMS: rooms.namespace },
+    );
+    assert.equal(detail.status, 404);
 
-  const replay = await startConversation(database, rooms, handoff);
-  const replayValue = await replay.json();
-  assert.equal(replay.status, 503);
-  assert.equal(replayValue.error.code, 'NO_AGENT_AVAILABLE');
-  assert.equal(
-    scalar(
-      database,
-      `SELECT assigned_agent FROM conversations WHERE id = ?`,
-      'assigned_agent',
-      startedValue.conversation.id,
-    ),
-    null,
-  );
+    const replay = await startConversation(database, rooms, handoff);
+    const replayValue = await replay.json();
+    assert.equal(replay.status, 503);
+    assert.equal(replayValue.error.code, 'NO_AGENT_AVAILABLE');
+    assert.equal(
+      scalar(
+        database,
+        `SELECT assigned_agent FROM conversations WHERE id = ?`,
+        'assigned_agent',
+        startedValue.conversation.id,
+      ),
+      null,
+    );
 
-  database.close();
-});
+    database.close();
+  },
+);
