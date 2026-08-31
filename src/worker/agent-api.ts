@@ -838,7 +838,9 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
     broadcastClientConversationEvent(
       c.env,
       id,
-      body.status === 'closed' ? 'conversation.closed' : 'conversation.assigned',
+      body.status === 'closed'
+        ? 'conversation.closed'
+        : 'conversation.assigned',
     ),
   ]);
   return c.json({ ok: true });
