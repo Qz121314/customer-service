@@ -103,6 +103,7 @@ async function createDatabase() {
     await read('../migrations/0042_simple_round_robin_routing.sql'),
   );
   database.exec(await read('../migrations/0048_product_round_robin.sql'));
+  database.exec(await read('../migrations/0051_site_global_round_robin.sql'));
   return database;
 }
 
@@ -184,7 +185,7 @@ async function assigned(database, id) {
   return (await assignConversationAgent(d1(database), id))?.id ?? null;
 }
 
-test('one product uses strict circular round robin', async () => {
+test('one site uses strict circular round robin', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
@@ -210,52 +211,68 @@ test('one product uses strict circular round robin', async () => {
   database.close();
 });
 
-test('products keep independent round robin cursors', async () => {
+test('different products share one site-wide round robin cursor', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
+    addScope(database, id, { type: 'section', sectionId: 'west' });
   }
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'west' });
-  addScope(database, 'agent-a', { type: 'section', sectionId: 'east' });
-  addScope(database, 'agent-b', { type: 'section', sectionId: 'west' });
-  addScope(database, 'agent-c', { type: 'section', sectionId: 'east' });
 
   const steps = [
-    ['west-1', 'west-product', 'west'],
-    ['east-1', 'east-product', 'east'],
-    ['west-2', 'west-product', 'west'],
-    ['east-2', 'east-product', 'east'],
-    ['west-3', 'west-product', 'west'],
-    ['east-3', 'east-product', 'east'],
+    ['conversation-1', 'product-a'],
+    ['conversation-2', 'product-b'],
+    ['conversation-3', 'product-c'],
+    ['conversation-4', 'product-a'],
+    ['conversation-5', 'product-d'],
+    ['conversation-6', 'product-b'],
   ];
   const assignedAgents = [];
-  for (const [id, productId, sectionId] of steps) {
-    addConversation(database, id, productId, { sectionId });
+  for (const [id, productId] of steps) {
+    addConversation(database, id, productId);
     assignedAgents.push(await assigned(database, id));
   }
 
   assert.deepEqual(assignedAgents, [
     'agent-a',
-    'agent-a',
     'agent-b',
     'agent-c',
     'agent-a',
-    'agent-a',
+    'agent-b',
+    'agent-c',
   ]);
   assert.deepEqual(
     database
       .prepare(
-        `SELECT product_id, last_agent_id
-         FROM routing_round_robin_cursors
-         ORDER BY product_id`,
+        `SELECT site_id, last_agent_id
+         FROM routing_round_robin_cursors`,
       )
       .all()
       .map((row) => ({ ...row })),
-    [
-      { product_id: 'east-product', last_agent_id: 'agent-a' },
-      { product_id: 'west-product', last_agent_id: 'agent-a' },
-    ],
+    [{ site_id: 'default', last_agent_id: 'agent-c' }],
   );
+  database.close();
+});
+
+test('global cursor skips seats outside the current product scope', async () => {
+  const database = await createDatabase();
+  for (const id of ['agent-a', 'agent-b', 'agent-c', 'agent-d']) {
+    addAgent(database, { id });
+    addScope(database, id, { type: 'product', productId: 'base-product' });
+  }
+  for (const id of ['agent-a', 'agent-b']) {
+    addScope(database, id, { type: 'product', productId: 'target-product' });
+  }
+
+  for (let index = 1; index <= 3; index += 1) {
+    addConversation(database, `base-${index}`, 'base-product');
+    assert.equal(
+      await assigned(database, `base-${index}`),
+      `agent-${String.fromCharCode(96 + index)}`,
+    );
+  }
+
+  addConversation(database, 'target-1', 'target-product');
+  assert.equal(await assigned(database, 'target-1'), 'agent-a');
   database.close();
 });
 
@@ -434,7 +451,7 @@ test('affinity falls back when its seat is offline', async () => {
   database.close();
 });
 
-test('eligible CTA affinity takes precedence over the product cursor', async () => {
+test('eligible CTA affinity takes precedence over the global cursor', async () => {
   const database = await createDatabase();
   for (const id of ['agent-a', 'agent-b', 'agent-c']) {
     addAgent(database, { id });
