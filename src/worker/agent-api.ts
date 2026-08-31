@@ -190,8 +190,7 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
   if (!agent) return unauthorized(c);
   await c.env.DB.prepare(
     `UPDATE agents
-     SET status = CASE WHEN status = 'busy' THEN 'busy' ELSE 'online' END,
-         last_seen_at = CURRENT_TIMESTAMP,
+     SET last_seen_at = CURRENT_TIMESTAMP,
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?1
        AND (
@@ -203,10 +202,7 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
     .run();
   return c.json({
     ok: true,
-    ...(await loadAgentInbox(c.env.DB, {
-      ...agent,
-      status: agent.status === 'busy' ? 'busy' : 'online',
-    })),
+    ...(await loadAgentInbox(c.env.DB, agent)),
   });
 });
 
