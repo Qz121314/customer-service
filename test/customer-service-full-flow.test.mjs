@@ -1537,8 +1537,9 @@ test('admin permanently deletes an agent while preserving historical records', a
   assert.equal(blocked.error, 'AGENT_HAS_ACTIVE_CONVERSATIONS');
   assert.equal(blocked.activeConversationCount, 1);
   assert.equal(
-    database.prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?').get(agentId)
-      .count,
+    database
+      .prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?')
+      .get(agentId).count,
     1,
   );
   assert.equal(
