@@ -777,7 +777,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     externalId: visitorId,
     accessToken: visitorToken,
   });
-  if (!visitor) {
+  if (!visitor && visitorToken) {
     return error(
       c,
       401,
@@ -971,7 +971,9 @@ clientApi.get('/client/v1/realtime', async (c) => {
   if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
     return error(c, 426, 'WEBSOCKET_REQUIRED', 'WebSocket upgrade required.');
   }
-  return visitorRoom(c.env, site.id, visitor.external_id).fetch(c.req.raw);
+  return visitorRoom(c.env, site.id, visitor?.external_id ?? visitorId!).fetch(
+    c.req.raw,
+  );
 });
 
 export async function broadcastClientConversationEvent(
