@@ -801,6 +801,9 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   if (conversation.status === 'closed') {
     return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
   }
+  if (!conversation.assigned_agent) {
+    return noAgentResponse(c, site);
+  }
 
   const persistedMessage = await persistClientMessage(c.env.DB, {
     conversationId: conversation.id,
@@ -814,29 +817,16 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   }
   const createdMessage = persistedMessage.message;
 
-  const assignment = !conversation.assigned_agent
-    ? await assignConversationAgent(c.env.DB, conversation.id)
-    : null;
-  if (assignment?.newlyAssigned && assignment.assignedAt) {
-    await broadcastAssignments(
-      c.env,
-      assignment.id,
-      [conversation.id],
-      assignment.assignedAt,
-      [assignmentVisitorMessage(createdMessage)],
-    );
-  } else {
-    await broadcastRoomSafely(c.env, conversation.id, {
-      type: 'message',
-      message: adminMessage(createdMessage),
-    });
-    await broadcastClientConversationEvent(
-      c.env,
-      conversation.id,
-      'message.created',
-      { message: clientMessage(createdMessage) },
-    );
-  }
+  await broadcastRoomSafely(c.env, conversation.id, {
+    type: 'message',
+    message: adminMessage(createdMessage),
+  });
+  await broadcastClientConversationEvent(
+    c.env,
+    conversation.id,
+    'message.created',
+    { message: clientMessage(createdMessage) },
+  );
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
@@ -875,7 +865,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
     site.id,
     visitor.external_id,
   );
-  if (!conversation)
+  if (!conversation || !conversation.assigned_agent)
     return error(
       c,
       404,
@@ -1432,7 +1422,7 @@ async function resolveIdentity(
     site.id,
     visitor.external_id,
   );
-  if (!conversation) {
+  if (!conversation || !conversation.assigned_agent) {
     return {
       ok: false,
       status: 404,
@@ -1528,8 +1518,8 @@ async function reusableConversationIsAvailable(
   db: D1Database,
   conversation: ConversationRow,
 ): Promise<boolean> {
-  if (conversation.status === 'closed') return true;
   if (!conversation.assigned_agent) return false;
+  if (conversation.status === 'closed') return true;
   const agent = await db
     .prepare(
       `SELECT 1 AS available
@@ -1677,6 +1667,8 @@ async function continueReusedConversationStart(
     clientMessageId: string | null;
   },
 ): Promise<ConversationRow> {
+  if (!input.conversation.assigned_agent) return input.conversation;
+
   let conversation = input.conversation;
   let createdMessage: MessageRow | null = null;
 
@@ -1693,20 +1685,7 @@ async function continueReusedConversationStart(
     }
   }
 
-  const assignment = !conversation.assigned_agent
-    ? await assignConversationAgent(env.DB, conversation.id)
-    : null;
-  if (assignment?.newlyAssigned && assignment.assignedAt) {
-    const snapshots = await broadcastAssignments(
-      env,
-      assignment.id,
-      [conversation.id],
-      assignment.assignedAt,
-      createdMessage ? [assignmentVisitorMessage(createdMessage)] : [],
-    );
-    conversation =
-      snapshots.find((item) => item.id === conversation.id) ?? conversation;
-  } else if (createdMessage) {
+  if (createdMessage) {
     await broadcastRoomSafely(env, conversation.id, {
       type: 'message',
       message: adminMessage(createdMessage),
@@ -1934,11 +1913,8 @@ function adminMessage(message: MessageRow) {
   };
 }
 
-function publicStatus(
-  status: ConversationStatus,
-): 'waiting' | 'active' | 'closed' {
-  if (status === 'closed') return 'closed';
-  return status === 'pending' ? 'active' : 'waiting';
+function publicStatus(status: ConversationStatus): 'active' | 'closed' {
+  return status === 'closed' ? 'closed' : 'active';
 }
 
 function clampLimit(raw?: string): number {
