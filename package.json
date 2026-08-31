@@ -22,7 +22,7 @@
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "lint": "eslint .",
-    "format": "prettier --write README.md && git diff -- README.md && git diff --exit-code",
+    "format": "prettier --check .",
     "format:write": "prettier --write .",
     "preflight": "pnpm guardrails && pnpm format && pnpm lint && pnpm typecheck",
     "verify": "pnpm preflight && pnpm db:migrate:local && pnpm test && pnpm build && pnpm cf:check",
