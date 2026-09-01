@@ -304,7 +304,8 @@ export function AgentAutoReplySettingsModal({
                 })}
                 {presets.length === 0 ? (
                   <p className="agent-auto-reply-attachment-empty">
-                    还没有附件。可在坐席设置的“名片”中添加 SMS 或链接名片，也可在这里添加问候图片。
+                    还没有附件。可在坐席设置的“名片”中添加 SMS
+                    或链接名片，也可在这里添加问候图片。
                   </p>
                 ) : null}
               </div>
