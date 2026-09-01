@@ -71,7 +71,8 @@ test('0053 migrates legacy phone/link cards without rewriting history', () => {
        FROM agent_attachment_presets
        ORDER BY id`,
     )
-    .all();
+    .all()
+    .map((row) => ({ ...row }));
   assert.deepEqual(presets, [
     {
       id: 'card-site',
@@ -97,7 +98,8 @@ test('0053 migrates legacy phone/link cards without rewriting history', () => {
        FROM message_attachments
        ORDER BY id`,
     )
-    .all();
+    .all()
+    .map((row) => ({ ...row }));
   assert.deepEqual(snapshots, [
     {
       id: 'snapshot-site',
