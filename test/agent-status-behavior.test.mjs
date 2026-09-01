@@ -1,56 +1,52 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
+  existsSync,
   readdirSync,
   readFileSync,
-  rmSync,
   symlinkSync,
-  writeFileSync,
+  unlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath, pathToFileURL, URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
 import { touchAgentActivity } from '../src/worker/agent-activity.ts';
 
-const repositoryDirectory = fileURLToPath(new URL('../', import.meta.url));
-
-function copyTypeScriptDirectory(runtimeDirectory, relativeDirectory) {
-  const sourceDirectory = join(repositoryDirectory, relativeDirectory);
-  const targetDirectory = join(runtimeDirectory, relativeDirectory);
-  mkdirSync(targetDirectory, { recursive: true });
-
-  for (const name of readdirSync(sourceDirectory)) {
-    if (!name.endsWith('.ts')) continue;
-    const sourcePath = join(sourceDirectory, name);
-    const targetPath = join(targetDirectory, name);
-    const shimPath = join(targetDirectory, name.slice(0, -3));
-    copyFileSync(sourcePath, targetPath);
-    symlinkSync(name, shimPath);
-  }
+const workerDirectory = fileURLToPath(
+  new URL('../src/worker/', import.meta.url),
+);
+const sharedDirectory = fileURLToPath(
+  new URL('../src/shared/', import.meta.url),
+);
+const shims = [];
+for (const name of [
+  'routing.ts',
+  'client-api.ts',
+  'agent-password.ts',
+  'media-api.ts',
+  'conversation-retention.ts',
+  'assignment-broadcast.ts',
+  'abuse-control.ts',
+  'no-agent-message.ts',
+  'media-store.ts',
+]) {
+  const shimPath = join(workerDirectory, name.slice(0, -3));
+  if (existsSync(shimPath)) continue;
+  symlinkSync(name, shimPath);
+  shims.push(shimPath);
+}
+const calendarShim = join(sharedDirectory, 'calendar-month');
+if (!existsSync(calendarShim)) {
+  symlinkSync('calendar-month.ts', calendarShim);
+  shims.push(calendarShim);
 }
 
-function createIsolatedTypeScriptRuntime() {
-  const runtimeDirectory = mkdtempSync(
-    join(repositoryDirectory, '.agent-status-runtime-'),
-  );
-  copyTypeScriptDirectory(runtimeDirectory, 'src/worker');
-  copyTypeScriptDirectory(runtimeDirectory, 'src/shared');
-  return runtimeDirectory;
-}
-
-const runtimeDirectory = createIsolatedTypeScriptRuntime();
-const agentApiUrl = pathToFileURL(
-  join(runtimeDirectory, 'src/worker/agent-api.ts'),
-).href;
 let agentApi;
 try {
-  ({ agentApi } = await import(agentApiUrl));
+  ({ agentApi } = await import('../src/worker/agent-api.ts'));
 } finally {
-  rmSync(runtimeDirectory, { recursive: true, force: true });
+  for (const shimPath of shims) unlinkSync(shimPath);
 }
 
 function applyMigrations(database) {
@@ -129,108 +125,85 @@ function seedAgent(database, id, status) {
     .run(id, id, id, status);
 }
 
-function diagnosticTest(name, fn) {
-  test(name, async () => {
-    try {
-      await fn();
-    } catch (error) {
-      writeFileSync(
-        '/tmp/admin-viewport-geometry.json',
-        JSON.stringify(
-          {
-            test: name,
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : null,
-          },
-          null,
-          2,
-        ),
-      );
-      throw error;
-    }
-  });
-}
+test('realtime activity touch preserves online, busy, and offline business status', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  seedAgent(database, 'agent-online', 'online');
+  seedAgent(database, 'agent-busy', 'busy');
+  seedAgent(database, 'agent-offline', 'offline');
 
-diagnosticTest(
-  'realtime activity touch preserves online, busy, and offline business status',
-  async () => {
-    const database = new DatabaseSync(':memory:');
-    applyMigrations(database);
-    seedAgent(database, 'agent-online', 'online');
-    seedAgent(database, 'agent-busy', 'busy');
-    seedAgent(database, 'agent-offline', 'offline');
+  for (const id of ['agent-online', 'agent-busy', 'agent-offline']) {
+    await touchAgentActivity(d1(database), id);
+  }
 
-    for (const id of ['agent-online', 'agent-busy', 'agent-offline']) {
-      await touchAgentActivity(d1(database), id);
-    }
-
-    assert.deepEqual(
-      database
-        .prepare(`SELECT id, status FROM agents ORDER BY id ASC`)
-        .all()
-        .map((row) => [row.id, row.status]),
-      [
-        ['agent-busy', 'busy'],
-        ['agent-offline', 'offline'],
-        ['agent-online', 'online'],
-      ],
-    );
-    assert.equal(
-      database
-        .prepare(
-          `SELECT COUNT(*) AS count
-           FROM agents
-           WHERE datetime(last_seen_at) > datetime('now', '-2 minutes')`,
-        )
-        .get().count,
-      3,
-    );
-
-    database.close();
-  },
-);
-
-diagnosticTest(
-  'heartbeat updates activity without changing an offline agent to online',
-  async () => {
-    const database = new DatabaseSync(':memory:');
-    applyMigrations(database);
-    seedAgent(database, 'agent-a', 'offline');
-
-    const token = 'heartbeat-contract-token';
-    const tokenHash = createHash('sha256').update(token).digest('hex');
+  assert.deepEqual(
     database
       .prepare(
-        `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
-         VALUES ('session-a', 'agent-a', ?, datetime('now', '+1 hour'))`,
+        `SELECT id, status FROM agents
+         WHERE id LIKE 'agent-%'
+         ORDER BY id ASC`,
       )
-      .run(tokenHash);
+      .all()
+      .map((row) => [row.id, row.status]),
+    [
+      ['agent-busy', 'busy'],
+      ['agent-offline', 'offline'],
+      ['agent-online', 'online'],
+    ],
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM agents
+         WHERE id LIKE 'agent-%'
+           AND datetime(last_seen_at) > datetime('now', '-2 minutes')`,
+      )
+      .get().count,
+    3,
+  );
 
-    const response = await agentApi.request(
-      '/api/agent/auth/heartbeat',
-      {
-        method: 'POST',
-        headers: { Cookie: `cs_agent_session=${token}` },
-      },
-      { DB: d1(database), CONVERSATION_ROOMS: fakeRooms() },
-    );
+  database.close();
+});
 
-    assert.equal(response.status, 200);
-    assert.equal(
-      database.prepare(`SELECT status FROM agents WHERE id = 'agent-a'`).get()
-        .status,
-      'offline',
-    );
-    assert.equal(
-      database
-        .prepare(
-          `SELECT datetime(last_seen_at) > datetime('now', '-2 minutes') AS fresh
-           FROM agents WHERE id = 'agent-a'`,
-        )
-        .get().fresh,
-      1,
-    );
+test('heartbeat updates activity without changing an offline agent to online', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  seedAgent(database, 'agent-a', 'offline');
 
-    database.close();
-  },
-);
+  const token = 'heartbeat-contract-token';
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES ('session-a', 'agent-a', ?, datetime('now', '+1 hour'))`,
+    )
+    .run(tokenHash);
+
+  const response = await agentApi.request(
+    '/api/agent/auth/heartbeat',
+    {
+      method: 'POST',
+      headers: { Cookie: `cs_agent_session=${token}` },
+    },
+    { DB: d1(database), CONVERSATION_ROOMS: fakeRooms() },
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    database.prepare(`SELECT status FROM agents WHERE id = 'agent-a'`).get()
+      .status,
+    'offline',
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT datetime(last_seen_at) > datetime('now', '-2 minutes') AS fresh
+         FROM agents WHERE id = 'agent-a'`,
+      )
+      .get().fresh,
+    1,
+  );
+
+  database.close();
+});
