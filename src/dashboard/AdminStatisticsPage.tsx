@@ -4,10 +4,16 @@ import type {
   ProductCatalogItem,
   TrafficOverviewStats,
 } from './api';
+import { TrafficDateRangePicker } from './TrafficDateRangePicker';
+import {
+  customTrafficRange,
+  parseCustomTrafficRange,
+  type TrafficRange,
+  type TrafficRangePreset,
+} from './traffic-statistics-range';
+import './traffic-date-range-picker.css';
 
-type TrafficRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
-
-const RANGE_OPTIONS: Array<{ value: TrafficRange; label: string }> = [
+const RANGE_OPTIONS: Array<{ value: TrafficRangePreset; label: string }> = [
   { value: 'today', label: '今日' },
   { value: 'yesterday', label: '昨日' },
   { value: '7d', label: '近 7 天' },
@@ -60,6 +66,7 @@ export function AdminStatisticsPage({
   const total = stats?.total ?? 0;
   const pending = agentRows.find((row) => row.agentId === null)?.count ?? 0;
   const accepted = Math.max(0, total - pending);
+  const customRange = parseCustomTrafficRange(range);
 
   return (
     <section className="admin-statistics-page">
@@ -81,22 +88,30 @@ export function AdminStatisticsPage({
               总量、客服和产品使用同一批会话数据，结果始终能够对账。
             </small>
           </div>
-          <div
-            className="traffic-range-switcher"
-            role="group"
-            aria-label="统计时间范围"
-          >
-            {RANGE_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                className={range === option.value ? 'is-active' : ''}
-                aria-pressed={range === option.value}
-                onClick={() => onRangeChange(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div className="traffic-range-controls">
+            <div
+              className="traffic-range-switcher"
+              role="group"
+              aria-label="统计快捷时间范围"
+            >
+              {RANGE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={range === option.value ? 'is-active' : ''}
+                  aria-pressed={range === option.value}
+                  onClick={() => onRangeChange(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <TrafficDateRangePicker
+              value={customRange}
+              onApply={(from, to) =>
+                onRangeChange(customTrafficRange(from, to))
+              }
+            />
           </div>
         </header>
 
