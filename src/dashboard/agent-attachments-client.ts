@@ -42,6 +42,15 @@ export type AgentMessageAttachment =
       url?: string;
     };
 
+type AgentContactCard = Extract<
+  AgentMessageAttachment,
+  { kind: 'phone' | 'link' }
+>;
+
+export function agentContactCardHref(card: AgentContactCard): string {
+  return card.kind === 'phone' ? `tel:${card.value}` : card.value;
+}
+
 export async function getAgentAttachmentPresets(): Promise<
   AgentAttachmentPreset[]
 > {

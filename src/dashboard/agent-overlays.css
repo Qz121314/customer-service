@@ -3,6 +3,7 @@
 /* Single owner for agent overlay entry motion and compositor stability. */
 
 .agent-auto-reply-backdrop,
+.agent-attachment-manager-backdrop,
 .agent-statistics-backdrop,
 .agent-avatar-backdrop {
   animation: agent-overlay-backdrop-in 140ms ease-out both;
@@ -10,6 +11,7 @@
 }
 
 .agent-auto-reply-dialog,
+.agent-attachment-manager-dialog,
 .agent-statistics-dialog,
 .agent-avatar-dialog {
   backface-visibility: hidden;
@@ -74,11 +76,13 @@
   }
 
   .agent-auto-reply-backdrop,
+  .agent-attachment-manager-backdrop,
   .agent-avatar-backdrop {
     backdrop-filter: none;
   }
 
-  .agent-auto-reply-dialog {
+  .agent-auto-reply-dialog,
+  .agent-attachment-manager-dialog {
     transform-origin: 50% 100%;
     animation-name: agent-overlay-sheet-in;
   }
@@ -92,9 +96,11 @@
 @media (prefers-reduced-motion: reduce) {
   .mobile-agent-settings-page,
   .agent-auto-reply-backdrop,
+  .agent-attachment-manager-backdrop,
   .agent-statistics-backdrop,
   .agent-avatar-backdrop,
   .agent-auto-reply-dialog,
+  .agent-attachment-manager-dialog,
   .agent-statistics-dialog,
   .agent-avatar-dialog {
     animation: none;

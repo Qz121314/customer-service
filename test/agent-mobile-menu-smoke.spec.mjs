@@ -78,6 +78,17 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     settingsGeometry.cardRadii.every((radius) => radius >= 16),
   ).toBeTruthy();
 
+  await settingsPage.getByRole('button', { name: /名片/u }).click();
+  const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
+  await expect(cardSettingsDialog).toBeVisible();
+  await expect(cardSettingsDialog).toHaveCSS(
+    'animation-name',
+    'agent-overlay-sheet-in',
+  );
+  await page.getByRole('button', { name: '关闭名片设置' }).click();
+  await expect(cardSettingsDialog).toBeHidden();
+  await expect(settingsPage).toBeVisible();
+
   await page.route('**/api/agent/settings/auto-reply', async (route) => {
     if (route.request().method() === 'GET') {
       await new Promise((resolve) => setTimeout(resolve, 650));

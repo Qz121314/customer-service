@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ContactRound,
   Download,
   ExternalLink,
   Headphones,
@@ -52,6 +53,7 @@ export type UiIconName =
   | 'check'
   | 'check-double'
   | 'user'
+  | 'contact'
   | 'plus'
   | 'phone'
   | 'link'
@@ -81,6 +83,7 @@ const ICONS: Record<UiIconName, LucideIcon> = {
   check: Check,
   'check-double': CheckCheck,
   user: UserRound,
+  contact: ContactRound,
   plus: Plus,
   phone: Phone,
   link: Link,
