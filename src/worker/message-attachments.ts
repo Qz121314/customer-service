@@ -1,4 +1,4 @@
-import { hasContactCardIconRef } from './contact-card-icon';
+import { hasContactCardIconRef } from './contact-card-icon.ts';
 
 export type ContactCardKind = 'sms' | 'whatsapp' | 'telegram' | 'website';
 export type AttachmentKind = 'image' | ContactCardKind;
