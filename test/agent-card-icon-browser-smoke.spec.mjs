@@ -9,7 +9,9 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-test('agent can create an SMS contact card with a custom icon', async ({ page }) => {
+test('agent can create an SMS contact card with a custom icon', async ({
+  page,
+}) => {
   const runId = randomUUID().replaceAll('-', '');
   const username = `ui-card-${runId.slice(0, 16)}`;
   const password = 'ui-card-pass';
