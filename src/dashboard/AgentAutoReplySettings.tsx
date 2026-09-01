@@ -1,17 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   getAgentAutoReplySettings,
   updateAgentAutoReplySettings,
   type AgentAutoReplySettings,
 } from './agent-auto-reply-client';
+import {
+  agentPresetImageUrl,
+  getAgentAttachmentPresets,
+  uploadAgentAttachmentImage,
+  type AgentAttachmentPreset,
+} from './agent-attachments-client';
 import { UiIcon } from './icons';
 import { Button, Textarea } from './ui';
 
 const EMPTY_SETTINGS: AgentAutoReplySettings = {
   enabled: false,
   text: '',
+  attachmentIds: [],
 };
 const AUTO_GREETING_LIMIT = 1000;
+const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
 
 export function AgentAutoReplySettingsModal({
   open,
@@ -23,8 +31,10 @@ export function AgentAutoReplySettingsModal({
   const [settings, setSettings] =
     useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
   const [saved, setSaved] = useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
+  const [presets, setPresets] = useState<AgentAttachmentPreset[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -32,11 +42,12 @@ export function AgentAutoReplySettingsModal({
     let active = true;
     setLoading(true);
     setError('');
-    void getAgentAutoReplySettings()
-      .then((value) => {
+    void Promise.all([getAgentAutoReplySettings(), getAgentAttachmentPresets()])
+      .then(([value, attachmentPresets]) => {
         if (!active) return;
         setSettings(value);
         setSaved(value);
+        setPresets(attachmentPresets);
       })
       .catch((reason) => {
         if (!active) return;
@@ -55,23 +66,33 @@ export function AgentAutoReplySettingsModal({
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !saving) onClose();
+      if (event.key === 'Escape' && !saving && !imageUploading) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, open, saving]);
+  }, [imageUploading, onClose, open, saving]);
+
+  const selectedIds = useMemo(
+    () => new Set(settings.attachmentIds),
+    [settings.attachmentIds],
+  );
 
   if (!open) return null;
 
   const normalizedText = settings.text.trim();
   const changed =
-    settings.enabled !== saved.enabled || settings.text !== saved.text;
+    settings.enabled !== saved.enabled ||
+    settings.text !== saved.text ||
+    settings.attachmentIds.join('\n') !== saved.attachmentIds.join('\n');
+  const hasContent = Boolean(normalizedText || settings.attachmentIds.length > 0);
   const canSave =
     !loading &&
     !saving &&
+    !imageUploading &&
     changed &&
     settings.text.length <= AUTO_GREETING_LIMIT &&
-    (!settings.enabled || Boolean(normalizedText));
+    settings.attachmentIds.length <= AUTO_GREETING_ATTACHMENT_LIMIT &&
+    (!settings.enabled || hasContent);
 
   const save = async () => {
     if (!canSave) return;
@@ -81,6 +102,7 @@ export function AgentAutoReplySettingsModal({
       const next = await updateAgentAutoReplySettings({
         enabled: settings.enabled,
         text: normalizedText,
+        attachmentIds: settings.attachmentIds,
       });
       setSettings(next);
       setSaved(next);
@@ -93,12 +115,51 @@ export function AgentAutoReplySettingsModal({
     }
   };
 
+  const toggleAttachment = (presetId: string) => {
+    setSettings((current) => {
+      const selected = current.attachmentIds.includes(presetId);
+      if (!selected && current.attachmentIds.length >= AUTO_GREETING_ATTACHMENT_LIMIT) {
+        return current;
+      }
+      return {
+        ...current,
+        attachmentIds: selected
+          ? current.attachmentIds.filter((id) => id !== presetId)
+          : [...current.attachmentIds, presetId],
+      };
+    });
+  };
+
+  const uploadGreetingImage = async (file: File) => {
+    if (imageUploading || settings.attachmentIds.length >= AUTO_GREETING_ATTACHMENT_LIMIT)
+      return;
+    setImageUploading(true);
+    setError('');
+    try {
+      const preset = await uploadAgentAttachmentImage(file, file.name || '问候图片');
+      setPresets((current) => [...current, preset]);
+      setSettings((current) => ({
+        ...current,
+        attachmentIds: [...current.attachmentIds, preset.id],
+      }));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '问候图片上传失败');
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   return (
     <div
       className="agent-auto-reply-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !saving) onClose();
+        if (
+          event.target === event.currentTarget &&
+          !saving &&
+          !imageUploading
+        )
+          onClose();
       }}
     >
       <section
@@ -118,7 +179,7 @@ export function AgentAutoReplySettingsModal({
             size="icon"
             className="agent-auto-reply-close"
             aria-label="关闭自动回复设置"
-            disabled={saving}
+            disabled={saving || imageUploading}
             onClick={onClose}
           >
             <UiIcon name="close" />
@@ -148,11 +209,11 @@ export function AgentAutoReplySettingsModal({
             </label>
 
             <label className="agent-auto-reply-field">
-              <span>问候内容</span>
+              <span>问候文案</span>
               <Textarea
                 value={settings.text}
                 maxLength={AUTO_GREETING_LIMIT}
-                rows={6}
+                rows={5}
                 placeholder="例如：您好，我来为您服务，请问有什么可以帮您？"
                 onChange={(event) =>
                   setSettings((current) => ({
@@ -166,9 +227,85 @@ export function AgentAutoReplySettingsModal({
               </small>
             </label>
 
+            <section className="agent-auto-reply-attachments">
+              <div className="agent-auto-reply-attachments-head">
+                <span>
+                  <strong>附件</strong>
+                  <small>
+                    可搭配手机号、链接和图片；最多 {AUTO_GREETING_ATTACHMENT_LIMIT}{' '}
+                    个。
+                  </small>
+                </span>
+                <label
+                  className={`agent-auto-reply-image-picker${imageUploading ? ' is-busy' : ''}`}
+                >
+                  <UiIcon name="image-plus" />
+                  <span>{imageUploading ? '上传中…' : '添加图片'}</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    disabled={
+                      imageUploading ||
+                      settings.attachmentIds.length >=
+                        AUTO_GREETING_ATTACHMENT_LIMIT
+                    }
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = '';
+                      if (file) void uploadGreetingImage(file);
+                    }}
+                  />
+                </label>
+              </div>
+
+              <div className="agent-auto-reply-attachment-grid">
+                {presets.map((preset) => {
+                  const selected = selectedIds.has(preset.id);
+                  return (
+                    <button
+                      type="button"
+                      className={`agent-auto-reply-attachment${selected ? ' is-selected' : ''}`}
+                      aria-pressed={selected}
+                      key={preset.id}
+                      onClick={() => toggleAttachment(preset.id)}
+                    >
+                      {preset.kind === 'image' ? (
+                        <img
+                          src={agentPresetImageUrl(preset.id)}
+                          alt=""
+                          loading="lazy"
+                        />
+                      ) : (
+                        <i aria-hidden="true">
+                          <UiIcon name={preset.kind === 'phone' ? 'phone' : 'link'} />
+                        </i>
+                      )}
+                      <span>
+                        <strong>{preset.label}</strong>
+                        <small>
+                          {preset.kind === 'image'
+                            ? preset.originalName || '图片'
+                            : preset.value}
+                        </small>
+                      </span>
+                      {selected ? <UiIcon name="check" /> : null}
+                    </button>
+                  );
+                })}
+                {presets.length === 0 ? (
+                  <p className="agent-auto-reply-attachment-empty">
+                    还没有附件。可先添加问候图片；手机号和链接可在聊天输入框的“+”中预设。
+                  </p>
+                ) : null}
+              </div>
+            </section>
+
             <div className="agent-auto-reply-note">
-              未开启或未配置问候语时，会话仍会正常创建和分配，不会发送任何默认文案。系统恢复分配和重连也不会重复发送。
+              问候语支持纯文案、纯附件或文案 + 附件。发送后会保存当时的附件快照，后续修改预设不会改变历史消息。系统恢复分配和重连也不会重复发送。
             </div>
+            {settings.enabled && !hasContent ? (
+              <div className="auth-error">开启后至少需要文案或一个附件。</div>
+            ) : null}
             {error ? <div className="auth-error">{error}</div> : null}
           </div>
         )}
@@ -177,7 +314,7 @@ export function AgentAutoReplySettingsModal({
           <Button
             type="button"
             variant="ghost"
-            disabled={saving}
+            disabled={saving || imageUploading}
             onClick={onClose}
           >
             关闭
