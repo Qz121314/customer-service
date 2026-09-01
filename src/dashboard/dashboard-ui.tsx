@@ -6,6 +6,7 @@ import {
   agentContactCardHref,
   type AgentMessageAttachment,
 } from './agent-attachments-client';
+import { AgentContactCardIcon } from './AgentContactCardIcon';
 import { formatTime } from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button, Input } from './ui';
@@ -256,12 +257,17 @@ function Bubble({
                   rel={attachment.kind === 'link' ? 'noreferrer' : undefined}
                   key={attachment.id}
                 >
-                  <UiIcon
-                    name={attachment.kind === 'phone' ? 'phone' : 'link'}
+                  <AgentContactCardIcon
+                    id={attachment.id}
+                    source="message"
+                    hasCustomIcon={attachment.hasCustomIcon}
                   />
                   <span>
                     <strong>{attachment.label}</strong>
-                    <small>{attachment.value}</small>
+                    <small>
+                      {attachment.kind === 'phone' ? 'SMS' : '链接'} ·{' '}
+                      {attachment.value}
+                    </small>
                   </span>
                 </a>
               );
