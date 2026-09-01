@@ -6,6 +6,7 @@ export type AgentAttachmentPreset =
       kind: 'phone' | 'link';
       label: string;
       value: string;
+      hasCustomIcon: boolean;
     }
   | {
       id: string;
@@ -26,6 +27,7 @@ export type AgentMessageAttachment =
       kind: 'phone' | 'link';
       label: string;
       value: string;
+      hasCustomIcon?: boolean;
     }
   | {
       id: string;
@@ -48,7 +50,7 @@ type AgentContactCard = Extract<
 >;
 
 export function agentContactCardHref(card: AgentContactCard): string {
-  return card.kind === 'phone' ? `tel:${card.value}` : card.value;
+  return card.kind === 'phone' ? `sms:${card.value}` : card.value;
 }
 
 export async function getAgentAttachmentPresets(): Promise<
@@ -96,6 +98,46 @@ export async function deleteAgentAttachmentPreset(id: string): Promise<void> {
       method: 'DELETE',
     },
   );
+}
+
+export async function uploadAgentContactCardIcon(
+  presetId: string,
+  file: File,
+): Promise<void> {
+  const form = new FormData();
+  form.set('file', file);
+  const response = await fetch(
+    `/api/agent/attachments/presets/${encodeURIComponent(presetId)}/icon`,
+    {
+      method: 'POST',
+      body: form,
+    },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  };
+  if (!response.ok) throw new Error(attachmentError(body.error));
+}
+
+export async function deleteAgentContactCardIcon(
+  presetId: string,
+): Promise<void> {
+  const response = await fetch(
+    `/api/agent/attachments/presets/${encodeURIComponent(presetId)}/icon`,
+    { method: 'DELETE' },
+  );
+  const body = (await response.json().catch(() => ({}))) as {
+    error?: string;
+  };
+  if (!response.ok) throw new Error(attachmentError(body.error));
+}
+
+export function agentPresetCardIconUrl(presetId: string): string {
+  return `/api/agent/attachments/presets/${encodeURIComponent(presetId)}/icon`;
+}
+
+export function agentAttachmentCardIconUrl(attachmentId: string): string {
+  return `/api/agent/attachments/${encodeURIComponent(attachmentId)}/icon`;
 }
 
 export async function uploadAgentAttachmentImage(
@@ -172,7 +214,9 @@ async function attachmentRequest<T = { ok: boolean }>(
 function attachmentError(code?: string): string {
   switch (code) {
     case 'INVALID_ATTACHMENT_PRESET':
-      return '联系方式或链接格式无效';
+      return '短信号码或链接格式无效';
+    case 'INVALID_CARD_ICON':
+      return '名片图标无效，请选择 256 KB 以内的 PNG、JPG 或 WebP 图片';
     case 'INVALID_ATTACHMENT_IMAGE':
       return '问候图片无效，请选择 JPG、PNG、WebP 或 GIF 图片';
     case 'INVALID_MESSAGE_ATTACHMENTS':
