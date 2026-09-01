@@ -21,6 +21,7 @@ for (const name of [
   'assignment-broadcast.ts',
   'abuse-control.ts',
   'no-agent-message.ts',
+  'message-attachments.ts',
 ]) {
   const shimPath = join(workerDirectory, name.slice(0, -3));
   if (existsSync(shimPath)) continue;
