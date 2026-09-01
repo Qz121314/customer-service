@@ -9,7 +9,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-test('agent can create an SMS contact card with a custom icon', async ({
+test('agent can configure channel cards, preset text and custom icon override', async ({
   page,
 }) => {
   const runId = randomUUID().replaceAll('-', '');
@@ -48,22 +48,45 @@ test('agent can create an SMS contact card with a custom icon', async ({
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('正在读取名片…')).toBeHidden();
 
+  await expect(dialog.getByRole('button', { name: 'SMS' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'WhatsApp' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Telegram' })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '网站' })).toBeVisible();
+
+  await dialog.getByLabel('名称').fill('短信名片');
+  await dialog.getByLabel('短信号码').fill('+1 213 555 1234');
+  await dialog
+    .getByLabel('预设话术（可选）')
+    .fill('Hello, I would like more information.');
+  await dialog.getByRole('button', { name: '添加' }).click();
+
+  const smsRow = dialog.locator('.agent-attachment-preset-row').filter({
+    hasText: '短信名片',
+  });
+  await expect(smsRow).toBeVisible();
+  await expect(smsRow.getByText('SMS', { exact: false })).toBeVisible();
+  await expect(smsRow.locator('.agent-contact-card-icon img')).toHaveCount(0);
+  await expect(
+    smsRow.locator('.agent-contact-card-icon[data-channel="sms"] svg'),
+  ).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'WhatsApp' }).click();
+  await dialog.getByLabel('名称').fill('WhatsApp 名片');
+  await dialog.getByLabel('WhatsApp 号码').fill('+1 213 555 9999');
+  await dialog.getByLabel('预设话术（可选）').fill('Need more info');
   await dialog.getByLabel('名片图标').setInputFiles({
-    name: 'sms-card.png',
+    name: 'whatsapp-card.png',
     mimeType: 'image/png',
     buffer: Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9ZQmcAAAAASUVORK5CYII=',
       'base64',
     ),
   });
-  await dialog.getByLabel('名称').fill('短信名片');
-  await dialog.getByLabel('手机号').fill('+1 213 555 1234');
   await dialog.getByRole('button', { name: '添加' }).click();
 
-  const row = dialog.locator('.agent-attachment-preset-row').filter({
-    hasText: '短信名片',
+  const whatsappRow = dialog.locator('.agent-attachment-preset-row').filter({
+    hasText: 'WhatsApp 名片',
   });
-  await expect(row).toBeVisible();
-  await expect(row.getByText('SMS', { exact: false })).toBeVisible();
-  await expect(row.locator('.agent-contact-card-icon img')).toBeVisible();
+  await expect(whatsappRow).toBeVisible();
+  await expect(whatsappRow.locator('.agent-contact-card-icon img')).toBeVisible();
 });
