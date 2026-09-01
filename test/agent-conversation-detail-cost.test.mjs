@@ -79,5 +79,8 @@ test('conversation detail cursors use normalized timestamp index semantics', asy
   assert.match(detail, /ORDER BY m\.created_at ASC, m\.id ASC/u);
   assert.doesNotMatch(attachmentList, /julianday\(m\.created_at\)/u);
   assert.match(attachmentList, /OR m\.created_at > \?2/u);
-  assert.match(attachmentList, /ORDER BY message_id ASC, sort_order ASC, id ASC/u);
+  assert.match(
+    attachmentList,
+    /ORDER BY message_id ASC, sort_order ASC, id ASC/u,
+  );
 });
