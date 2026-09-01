@@ -754,3 +754,551 @@
   margin: 0;
   transform: translateX(-50%);
 }
+
+/* Attachment UI owns composer shortcuts, preset management, message actions,
+ * and auto-greeting attachment selection across desktop and mobile agent views. */
+
+.composer-attachment-root {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.composer-attachment-trigger {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #596270;
+}
+
+.composer-attachment-trigger.is-open {
+  color: var(--agent-accent);
+  background: #ebeafe;
+}
+
+.composer-attachment-menu {
+  position: absolute;
+  z-index: 60;
+  bottom: calc(100% + 10px);
+  left: 0;
+  display: grid;
+  width: min(320px, calc(100vw - 28px));
+  max-height: min(520px, 62dvh);
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #dfe4ea;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 20px 54px rgb(15 23 42 / 18%);
+}
+
+.composer-attachment-menu-item,
+.composer-attachment-section > button,
+.composer-attachment-manage {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 11px;
+  color: #1f2937;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-attachment-menu-item:hover,
+.composer-attachment-section > button:hover,
+.composer-attachment-manage:hover {
+  background: #f4f5f8;
+}
+
+.composer-attachment-menu-item > .ui-icon,
+.composer-attachment-section > button > .ui-icon,
+.composer-attachment-manage > .ui-icon:first-child {
+  width: 18px;
+  height: 18px;
+  justify-self: center;
+  color: #596270;
+}
+
+.composer-attachment-menu-item > span,
+.composer-attachment-section > button > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.composer-attachment-menu-item strong,
+.composer-attachment-section strong {
+  overflow: hidden;
+  color: #20242a;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment-menu-item small,
+.composer-attachment-section small {
+  overflow: hidden;
+  color: #7b8490;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-attachment-menu-item input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.composer-attachment-section {
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+  margin-top: 6px;
+  border-top: 1px solid #edf0f3;
+}
+
+.composer-attachment-section > span {
+  padding: 4px 10px 3px;
+  color: #939aa4;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.composer-attachment-empty,
+.composer-attachment-error {
+  margin: 4px 8px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  color: #7b8490;
+  background: #f7f8fa;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.composer-attachment-error {
+  color: #9d4545;
+  background: #fff5f5;
+}
+
+.composer-attachment-manage {
+  grid-template-columns: 34px minmax(0, 1fr) 16px;
+  margin-top: 6px;
+  border-top: 1px solid #edf0f3;
+  border-radius: 0 0 11px 11px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.composer-attachment-manage > .ui-icon:last-child {
+  width: 15px;
+  height: 15px;
+  color: #9aa1aa;
+}
+
+.agent-attachment-manager-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(10 15 24 / 48%);
+  backdrop-filter: blur(8px);
+}
+
+.agent-attachment-manager-dialog {
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100dvh - 48px));
+  overflow: auto;
+  border: 1px solid rgb(15 23 42 / 10%);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgb(15 23 42 / 24%);
+}
+
+.agent-attachment-manager-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid rgb(15 23 42 / 8%);
+}
+
+.agent-attachment-manager-dialog h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+}
+
+.agent-attachment-manager-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.9fr);
+  gap: 18px;
+  padding: 20px 22px 22px;
+}
+
+.agent-attachment-preset-list {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.agent-attachment-preset-list > p {
+  margin: 0;
+  padding: 24px 12px;
+  color: #8a929d;
+  text-align: center;
+  font-size: 12px;
+}
+
+.agent-attachment-preset-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #e5e9ee;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.agent-attachment-preset-row > i {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 9px;
+  color: #555d69;
+  background: #eef1f4;
+}
+
+.agent-attachment-preset-row > i .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.agent-attachment-preset-row > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agent-attachment-preset-row strong,
+.agent-attachment-preset-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-attachment-preset-row strong {
+  color: #222831;
+  font-size: 12px;
+}
+
+.agent-attachment-preset-row small {
+  color: #7f8792;
+  font-size: 10px;
+}
+
+.agent-attachment-editor {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 15px;
+  border: 1px solid #e5e9ee;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.agent-attachment-editor > label {
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-attachment-kind-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #e9edf2;
+}
+
+.agent-attachment-kind-tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  color: #68717d;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-attachment-kind-tabs button.is-active {
+  color: #242b35;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(15 23 42 / 9%);
+}
+
+.agent-attachment-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agent-auto-reply-attachments {
+  display: grid;
+  gap: 10px;
+}
+
+.agent-auto-reply-attachments-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-auto-reply-attachments-head > span {
+  display: grid;
+  gap: 2px;
+}
+
+.agent-auto-reply-attachments-head strong {
+  color: #334155;
+  font-size: 13px;
+}
+
+.agent-auto-reply-attachments-head small {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.agent-auto-reply-image-picker {
+  position: relative;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #d8dee7;
+  border-radius: 9px;
+  color: #4d5561;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.agent-auto-reply-image-picker.is-busy {
+  opacity: 0.62;
+  cursor: wait;
+}
+
+.agent-auto-reply-image-picker .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.agent-auto-reply-image-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.agent-auto-reply-attachment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.agent-auto-reply-attachment {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #e0e5eb;
+  border-radius: 11px;
+  color: #313944;
+  background: #fff;
+  text-align: left;
+}
+
+.agent-auto-reply-attachment.is-selected {
+  border-color: #a9a5ef;
+  background: #f4f3ff;
+}
+
+.agent-auto-reply-attachment > img,
+.agent-auto-reply-attachment > i {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 9px;
+  object-fit: cover;
+  color: #606875;
+  background: #eef1f4;
+}
+
+.agent-auto-reply-attachment > i .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.agent-auto-reply-attachment > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agent-auto-reply-attachment strong,
+.agent-auto-reply-attachment small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-auto-reply-attachment strong {
+  font-size: 11px;
+}
+
+.agent-auto-reply-attachment small {
+  color: #8a929d;
+  font-size: 9px;
+}
+
+.agent-auto-reply-attachment > .ui-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--agent-accent);
+}
+
+.agent-auto-reply-attachment-empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 14px;
+  border-radius: 10px;
+  color: #8a929d;
+  background: #f7f8fa;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.message-attachments {
+  display: grid;
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.message-attachment-action {
+  display: flex;
+  min-width: 190px;
+  max-width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 11px;
+  color: inherit;
+  background: rgb(255 255 255 / 13%);
+  text-decoration: none;
+}
+
+.message:not(.mine) .message-attachment-action {
+  border-color: #dfe4ea;
+  background: #f7f8fa;
+}
+
+.message-attachment-action .ui-icon {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.message-attachment-action > span {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.message-attachment-action strong,
+.message-attachment-action small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-attachment-action strong {
+  font-size: 12px;
+}
+
+.message-attachment-action small {
+  opacity: 0.72;
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .composer-attachment-menu {
+    position: fixed;
+    right: 10px;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    left: 10px;
+    width: auto;
+    max-height: min(56dvh, 480px);
+  }
+
+  .agent-attachment-manager-backdrop {
+    align-items: end;
+    padding: 0;
+    background: rgb(10 15 24 / 34%);
+    backdrop-filter: none;
+  }
+
+  .agent-attachment-manager-dialog {
+    width: 100%;
+    max-height: 84dvh;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 22px 22px 0 0;
+  }
+
+  .agent-attachment-manager-body {
+    grid-template-columns: 1fr;
+    padding-right: 16px;
+    padding-bottom: max(22px, env(safe-area-inset-bottom));
+    padding-left: 16px;
+  }
+
+  .agent-auto-reply-attachments-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .agent-auto-reply-attachment-grid {
+    grid-template-columns: 1fr;
+  }
+}
