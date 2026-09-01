@@ -32,9 +32,15 @@ for (const name of [
 let clientApi;
 try {
   ({ clientApi } = await import('../src/worker/client-api.ts'));
-} finally {
+} catch (error) {
   for (const shimPath of shims) unlinkSync(shimPath);
+  throw error;
 }
+process.once('exit', () => {
+  for (const shimPath of shims) {
+    if (existsSync(shimPath)) unlinkSync(shimPath);
+  }
+});
 
 const product = {
   id: 'product-1',
