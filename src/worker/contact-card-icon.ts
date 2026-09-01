@@ -1,7 +1,4 @@
-export type ContactCardIconMimeType =
-  | 'image/png'
-  | 'image/jpeg'
-  | 'image/webp';
+export type ContactCardIconMimeType = 'image/png' | 'image/jpeg' | 'image/webp';
 
 export type ContactCardIconRef = {
   objectKey: string;
