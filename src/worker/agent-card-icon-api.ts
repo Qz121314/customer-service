@@ -45,56 +45,53 @@ agentCardIconApi.use(
   }),
 );
 
-agentCardIconApi.post(
-  '/api/agent/attachments/presets/:id/icon',
-  async (c) => {
-    const agent = await requireAgentSession(c);
-    if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-    const preset = await contactCardPresetForAgent(
-      c.env.DB,
-      c.req.param('id'),
-      agent.id,
-    );
-    if (!preset) return c.json({ error: 'NOT_FOUND' }, 404);
+agentCardIconApi.post('/api/agent/attachments/presets/:id/icon', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  const preset = await contactCardPresetForAgent(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
+  if (!preset) return c.json({ error: 'NOT_FOUND' }, 404);
 
-    let form: FormData;
-    try {
-      form = await c.req.raw.formData();
-    } catch {
-      return c.json({ error: 'INVALID_CARD_ICON' }, 400);
-    }
-    const file = form.get('file');
-    if (!(file instanceof File)) {
-      return c.json({ error: 'INVALID_CARD_ICON' }, 400);
-    }
-    const upload = normalizeCardIconUpload(file);
-    if (!upload) return c.json({ error: 'INVALID_CARD_ICON' }, 400);
+  let form: FormData;
+  try {
+    form = await c.req.raw.formData();
+  } catch {
+    return c.json({ error: 'INVALID_CARD_ICON' }, 400);
+  }
+  const file = form.get('file');
+  if (!(file instanceof File)) {
+    return c.json({ error: 'INVALID_CARD_ICON' }, 400);
+  }
+  const upload = normalizeCardIconUpload(file);
+  if (!upload) return c.json({ error: 'INVALID_CARD_ICON' }, 400);
 
-    const objectKey = `agent-card-icons/${agent.id}/${preset.id}/${crypto.randomUUID()}.${upload.extension}`;
-    await c.env.MEDIA.put(objectKey, file.stream(), {
-      httpMetadata: { contentType: upload.mimeType },
-    });
+  const objectKey = `agent-card-icons/${agent.id}/${preset.id}/${crypto.randomUUID()}.${upload.extension}`;
+  await c.env.MEDIA.put(objectKey, file.stream(), {
+    httpMetadata: { contentType: upload.mimeType },
+  });
 
-    const marker = encodeContactCardIconRef({
-      objectKey,
-      mimeType: upload.mimeType,
-    });
-    const result = await c.env.DB.prepare(
-      `UPDATE agent_attachment_presets
+  const marker = encodeContactCardIconRef({
+    objectKey,
+    mimeType: upload.mimeType,
+  });
+  const result = await c.env.DB.prepare(
+    `UPDATE agent_attachment_presets
        SET original_name = ?1,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?2 AND agent_id = ?3 AND kind IN ('phone', 'link')`,
-    )
-      .bind(marker, preset.id, agent.id)
-      .run();
-    if (!result.meta.changes) {
-      await c.env.MEDIA.delete(objectKey).catch(() => undefined);
-      return c.json({ error: 'NOT_FOUND' }, 404);
-    }
+  )
+    .bind(marker, preset.id, agent.id)
+    .run();
+  if (!result.meta.changes) {
+    await c.env.MEDIA.delete(objectKey).catch(() => undefined);
+    return c.json({ error: 'NOT_FOUND' }, 404);
+  }
 
-    return c.json({ ok: true, hasCustomIcon: true });
-  },
-);
+  return c.json({ ok: true, hasCustomIcon: true });
+});
 
 agentCardIconApi.delete(
   '/api/agent/attachments/presets/:id/icon',
@@ -117,20 +114,17 @@ agentCardIconApi.delete(
   },
 );
 
-agentCardIconApi.get(
-  '/api/agent/attachments/presets/:id/icon',
-  async (c) => {
-    const agent = await requireAgentSession(c);
-    if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-    const preset = await contactCardPresetForAgent(
-      c.env.DB,
-      c.req.param('id'),
-      agent.id,
-    );
-    if (!preset) return c.json({ error: 'NOT_FOUND' }, 404);
-    return readCardIcon(c.env.MEDIA, preset.original_name);
-  },
-);
+agentCardIconApi.get('/api/agent/attachments/presets/:id/icon', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  const preset = await contactCardPresetForAgent(
+    c.env.DB,
+    c.req.param('id'),
+    agent.id,
+  );
+  if (!preset) return c.json({ error: 'NOT_FOUND' }, 404);
+  return readCardIcon(c.env.MEDIA, preset.original_name);
+});
 
 agentCardIconApi.get('/api/agent/attachments/:id/icon', async (c) => {
   const agent = await requireAgentSession(c);
