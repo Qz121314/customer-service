@@ -973,6 +973,10 @@
   font-weight: 550;
 }
 
+.agent-attachment-section-heading small > span {
+  display: none;
+}
+
 .agent-attachment-preset-list {
   display: grid;
   align-content: start;
@@ -994,7 +998,7 @@
 .agent-attachment-preset-row {
   display: grid;
   min-width: 0;
-  grid-template-columns: 34px minmax(0, 1fr) 32px 32px;
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
   padding: 9px 8px 9px 10px;
@@ -1002,6 +1006,59 @@
   border-radius: 13px;
   background: #fff;
   box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
+}
+
+.agent-attachment-preset-swipe {
+  min-width: 0;
+}
+
+.agent-attachment-preset-track {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.agent-attachment-preset-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 46px);
+  gap: 4px;
+}
+
+.agent-attachment-preset-actions button {
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  padding: 4px;
+  border: 0;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.agent-attachment-preset-actions button > .ui-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.agent-attachment-preset-actions .is-edit {
+  color: #514bc3;
+  background: #efefff;
+}
+
+.agent-attachment-preset-actions .is-delete {
+  color: #b74747;
+  background: #fff0f0;
+}
+
+.agent-attachment-preset-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .agent-attachment-preset-row > i {
@@ -1444,7 +1501,20 @@
   }
 
   .agent-attachment-manager-dialog > header {
+    position: relative;
+    justify-content: center;
     padding: 16px 18px 15px;
+    text-align: center;
+  }
+
+  .agent-attachment-manager-dialog > header > div {
+    display: grid;
+    justify-items: center;
+  }
+
+  .agent-attachment-manager-dialog > header > button {
+    position: absolute;
+    right: 12px;
   }
 
   .agent-attachment-manager-dialog h2 {
@@ -1464,33 +1534,66 @@
   }
 
   .agent-attachment-manager-body::-webkit-scrollbar,
-  .agent-attachment-preset-list::-webkit-scrollbar {
+  .agent-attachment-preset-swipe::-webkit-scrollbar {
     display: none;
   }
 
   .agent-attachment-preset-list {
-    display: flex;
-    width: calc(100% + 32px);
+    display: grid;
+    width: auto;
     gap: 9px;
-    overflow-x: auto;
-    margin-inline: -16px;
-    padding: 0 16px 3px;
-    scroll-padding-inline: 16px;
-    scroll-snap-type: inline proximity;
-    scrollbar-width: none;
-    overscroll-behavior-inline: contain;
-    touch-action: pan-x;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
+    margin-inline: 0;
+    padding: 0;
   }
 
   .agent-attachment-preset-list > p {
     width: 100%;
-    flex: 0 0 calc(100% - 32px);
+  }
+
+  .agent-attachment-section-heading small > span {
+    display: inline;
+  }
+
+  .agent-attachment-preset-swipe {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 13px;
+    scroll-snap-type: inline mandatory;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .agent-attachment-preset-track {
+    width: calc(100% + 124px);
+    grid-template-columns: minmax(0, 1fr) 124px;
+    gap: 0;
   }
 
   .agent-attachment-preset-row {
-    flex: 0 0 min(84vw, 340px);
     scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .agent-attachment-preset-actions {
+    grid-template-columns: repeat(2, 58px);
+    gap: 0;
+    padding-left: 8px;
+    scroll-snap-align: end;
+    scroll-snap-stop: always;
+  }
+
+  .agent-attachment-preset-actions button {
+    border-radius: 0;
+  }
+
+  .agent-attachment-preset-actions button:first-child {
+    border-radius: 12px 0 0 12px;
+  }
+
+  .agent-attachment-preset-actions button:last-child {
+    border-radius: 0 12px 12px 0;
   }
 
   .agent-attachment-editor {

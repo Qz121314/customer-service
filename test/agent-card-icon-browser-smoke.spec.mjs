@@ -58,20 +58,27 @@ test('agent can configure channel cards, preset text and custom icon override', 
     const browser = element.ownerDocument.defaultView;
     const body = element.querySelector('.agent-attachment-manager-body');
     const editor = element.querySelector('.agent-attachment-editor');
+    const title = element.querySelector('#agent-attachment-manager-title');
     if (
       !browser ||
       !(body instanceof browser.HTMLElement) ||
-      !(editor instanceof browser.HTMLElement)
+      !(editor instanceof browser.HTMLElement) ||
+      !(title instanceof browser.HTMLElement)
     ) {
       return null;
     }
     const dialogRect = element.getBoundingClientRect();
+    const titleRect = title.getBoundingClientRect();
     return {
       dialogBottom: dialogRect.bottom,
       dialogTop: dialogRect.top,
       bodyOverflowY: browser.getComputedStyle(body).overflowY,
       editorWidth: editor.getBoundingClientRect().width,
       bodyWidth: body.getBoundingClientRect().width,
+      titleCenterOffset:
+        titleRect.left +
+        titleRect.width / 2 -
+        (dialogRect.left + dialogRect.width / 2),
     };
   });
   expect(initialLayout).not.toBeNull();
@@ -79,6 +86,7 @@ test('agent can configure channel cards, preset text and custom icon override', 
     expect(initialLayout.dialogTop).toBeGreaterThanOrEqual(0);
     expect(initialLayout.dialogBottom).toBeLessThanOrEqual(844);
     expect(initialLayout.bodyOverflowY).toBe('auto');
+    expect(Math.abs(initialLayout.titleCenterOffset)).toBeLessThanOrEqual(1);
     expect(initialLayout.editorWidth).toBeLessThanOrEqual(
       initialLayout.bodyWidth,
     );
@@ -177,6 +185,22 @@ test('agent can configure channel cards, preset text and custom icon override', 
     );
   }
 
+  const smsSwipe = dialog
+    .locator('.agent-attachment-preset-swipe')
+    .filter({ hasText: '短信名片' });
+  await smsSwipe.evaluate((element) =>
+    element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
+  );
+  await expect(
+    smsSwipe.getByRole('button', { name: '编辑 短信名片' }),
+  ).toBeVisible();
+  await expect(
+    smsSwipe.getByRole('button', { name: '删除 短信名片' }),
+  ).toBeVisible();
+  await smsSwipe.evaluate((element) =>
+    element.scrollTo({ left: 0, behavior: 'auto' }),
+  );
+
   await typeSelect.click();
   await dialog.getByRole('option', { name: /WhatsApp/u }).click();
   await expect(typeSelect).toContainText('WhatsApp');
@@ -202,7 +226,7 @@ test('agent can configure channel cards, preset text and custom icon override', 
     whatsappRow.locator('.agent-contact-card-custom-icon'),
   ).toBeVisible();
 
-  const horizontalList = await dialog
+  const swipeLayout = await dialog
     .locator('.agent-attachment-preset-list')
     .evaluate((element) => ({
       itemCount: element.querySelectorAll('.agent-attachment-preset-row')
@@ -210,10 +234,23 @@ test('agent can configure channel cards, preset text and custom icon override', 
       scrollWidth: element.scrollWidth,
       clientWidth: element.clientWidth,
       verticalOverflow: element.scrollHeight - element.clientHeight,
+      swipeRanges: [
+        ...element.querySelectorAll('.agent-attachment-preset-swipe'),
+      ].map((item) => item.scrollWidth - item.clientWidth),
     }));
-  expect(horizontalList.itemCount).toBe(2);
-  expect(horizontalList.scrollWidth).toBeGreaterThan(
-    horizontalList.clientWidth,
+  expect(swipeLayout.itemCount).toBe(2);
+  expect(swipeLayout.scrollWidth).toBeLessThanOrEqual(swipeLayout.clientWidth);
+  expect(swipeLayout.verticalOverflow).toBeLessThanOrEqual(1);
+  expect(swipeLayout.swipeRanges.every((range) => range >= 120)).toBeTruthy();
+
+  const whatsappSwipe = dialog
+    .locator('.agent-attachment-preset-swipe')
+    .filter({ hasText: 'WhatsApp 名片' });
+  await whatsappSwipe.evaluate((element) =>
+    element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
   );
-  expect(horizontalList.verticalOverflow).toBeLessThanOrEqual(1);
+  await whatsappSwipe
+    .getByRole('button', { name: '编辑 WhatsApp 名片' })
+    .click();
+  await expect(dialog.getByText('编辑名片', { exact: true })).toBeVisible();
 });
