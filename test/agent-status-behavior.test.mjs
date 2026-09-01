@@ -1,52 +1,55 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-  existsSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
-  unlinkSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath, URL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import test from 'node:test';
 import { touchAgentActivity } from '../src/worker/agent-activity.ts';
 
-const workerDirectory = fileURLToPath(
-  new URL('../src/worker/', import.meta.url),
-);
-const sharedDirectory = fileURLToPath(
-  new URL('../src/shared/', import.meta.url),
-);
-const shims = [];
-for (const name of [
-  'routing.ts',
-  'client-api.ts',
-  'agent-password.ts',
-  'media-api.ts',
-  'conversation-retention.ts',
-  'assignment-broadcast.ts',
-  'abuse-control.ts',
-  'no-agent-message.ts',
-  'media-store.ts',
-]) {
-  const shimPath = join(workerDirectory, name.slice(0, -3));
-  if (existsSync(shimPath)) continue;
-  symlinkSync(name, shimPath);
-  shims.push(shimPath);
-}
-const calendarShim = join(sharedDirectory, 'calendar-month');
-if (!existsSync(calendarShim)) {
-  symlinkSync('calendar-month.ts', calendarShim);
-  shims.push(calendarShim);
+const repositoryDirectory = fileURLToPath(new URL('../', import.meta.url));
+
+function copyTypeScriptDirectory(runtimeDirectory, relativeDirectory) {
+  const sourceDirectory = join(repositoryDirectory, relativeDirectory);
+  const targetDirectory = join(runtimeDirectory, relativeDirectory);
+  mkdirSync(targetDirectory, { recursive: true });
+
+  for (const name of readdirSync(sourceDirectory)) {
+    if (!name.endsWith('.ts')) continue;
+    const sourcePath = join(sourceDirectory, name);
+    const targetPath = join(targetDirectory, name);
+    const shimPath = join(targetDirectory, name.slice(0, -3));
+    copyFileSync(sourcePath, targetPath);
+    symlinkSync(name, shimPath);
+  }
 }
 
+function createIsolatedTypeScriptRuntime() {
+  const runtimeDirectory = mkdtempSync(
+    join(repositoryDirectory, '.agent-status-runtime-'),
+  );
+  copyTypeScriptDirectory(runtimeDirectory, 'src/worker');
+  copyTypeScriptDirectory(runtimeDirectory, 'src/shared');
+  return runtimeDirectory;
+}
+
+const runtimeDirectory = createIsolatedTypeScriptRuntime();
+const agentApiUrl = pathToFileURL(
+  join(runtimeDirectory, 'src/worker/agent-api.ts'),
+).href;
 let agentApi;
 try {
-  ({ agentApi } = await import('../src/worker/agent-api.ts'));
+  ({ agentApi } = await import(agentApiUrl));
 } finally {
-  for (const shimPath of shims) unlinkSync(shimPath);
+  rmSync(runtimeDirectory, { recursive: true, force: true });
 }
 
 function applyMigrations(database) {
