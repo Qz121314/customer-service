@@ -279,9 +279,9 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await cardSettingsDialog
     .getByRole('button', { name: '网站', exact: true })
     .click();
-  await expect(
-    cardSettingsDialog.getByLabel('预设话术（可选）'),
-  ).toHaveCount(0);
+  await expect(cardSettingsDialog.getByLabel('预设话术（可选）')).toHaveCount(
+    0,
+  );
   await cardSettingsDialog.getByLabel('名称').fill('付款链接');
   await cardSettingsDialog
     .getByLabel('网站 URL')
