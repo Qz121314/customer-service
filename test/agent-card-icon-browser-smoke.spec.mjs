@@ -12,6 +12,7 @@ function url(path) {
 test('agent can configure channel cards, preset text and custom icon override', async ({
   page,
 }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   const runId = randomUUID().replaceAll('-', '');
   const username = `ui-card-${runId.slice(0, 16)}`;
   const password = 'ui-card-pass';
@@ -47,6 +48,31 @@ test('agent can configure channel cards, preset text and custom icon override', 
   const dialog = page.getByRole('dialog', { name: '名片' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('正在读取名片…')).toBeHidden();
+
+  const initialLayout = await dialog.evaluate((element) => {
+    const body = element.querySelector('.agent-attachment-manager-body');
+    const editor = element.querySelector('.agent-attachment-editor');
+    if (!(body instanceof HTMLElement) || !(editor instanceof HTMLElement)) {
+      return null;
+    }
+    const dialogRect = element.getBoundingClientRect();
+    return {
+      dialogBottom: dialogRect.bottom,
+      dialogTop: dialogRect.top,
+      bodyOverflowY: getComputedStyle(body).overflowY,
+      editorWidth: editor.getBoundingClientRect().width,
+      bodyWidth: body.getBoundingClientRect().width,
+    };
+  });
+  expect(initialLayout).not.toBeNull();
+  if (initialLayout) {
+    expect(initialLayout.dialogTop).toBeGreaterThanOrEqual(0);
+    expect(initialLayout.dialogBottom).toBeLessThanOrEqual(844);
+    expect(initialLayout.bodyOverflowY).toBe('auto');
+    expect(initialLayout.editorWidth).toBeLessThanOrEqual(
+      initialLayout.bodyWidth,
+    );
+  }
 
   const typeSelect = dialog.getByRole('combobox', { name: '名片类型' });
   await expect(typeSelect).toContainText('SMS');
@@ -96,6 +122,48 @@ test('agent can configure channel cards, preset text and custom icon override', 
   await expect(smsRow.locator('.agent-contact-card-custom-icon')).toHaveCount(
     0,
   );
+  await expect
+    .poll(() =>
+      dialog
+        .locator('.agent-attachment-manager-body')
+        .evaluate((element) => element.scrollTop),
+    )
+    .toBeLessThan(3);
+
+  const savedCardLayout = await dialog.evaluate((element) => {
+    const body = element.querySelector('.agent-attachment-manager-body');
+    const list = element.querySelector('.agent-attachment-preset-list');
+    const row = element.querySelector('.agent-attachment-preset-row');
+    const editor = element.querySelector('.agent-attachment-editor');
+    if (
+      !(body instanceof HTMLElement) ||
+      !(list instanceof HTMLElement) ||
+      !(row instanceof HTMLElement) ||
+      !(editor instanceof HTMLElement)
+    ) {
+      return null;
+    }
+    const bodyRect = body.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const editorRect = editor.getBoundingClientRect();
+    return {
+      listVerticalOverflow: list.scrollHeight - list.clientHeight,
+      rowTop: rowRect.top,
+      rowBottom: rowRect.bottom,
+      editorTop: editorRect.top,
+      bodyTop: bodyRect.top,
+    };
+  });
+  expect(savedCardLayout).not.toBeNull();
+  if (savedCardLayout) {
+    expect(savedCardLayout.listVerticalOverflow).toBeLessThanOrEqual(1);
+    expect(savedCardLayout.rowTop).toBeGreaterThanOrEqual(
+      savedCardLayout.bodyTop,
+    );
+    expect(savedCardLayout.rowBottom).toBeLessThanOrEqual(
+      savedCardLayout.editorTop,
+    );
+  }
 
   await typeSelect.click();
   await dialog.getByRole('option', { name: /WhatsApp/u }).click();
@@ -121,4 +189,19 @@ test('agent can configure channel cards, preset text and custom icon override', 
   await expect(
     whatsappRow.locator('.agent-contact-card-custom-icon'),
   ).toBeVisible();
+
+  const horizontalList = await dialog
+    .locator('.agent-attachment-preset-list')
+    .evaluate((element) => ({
+      itemCount: element.querySelectorAll('.agent-attachment-preset-row')
+        .length,
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      verticalOverflow: element.scrollHeight - element.clientHeight,
+    }));
+  expect(horizontalList.itemCount).toBe(2);
+  expect(horizontalList.scrollWidth).toBeGreaterThan(
+    horizontalList.clientWidth,
+  );
+  expect(horizontalList.verticalOverflow).toBeLessThanOrEqual(1);
 });
