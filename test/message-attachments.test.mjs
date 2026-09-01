@@ -8,6 +8,7 @@ import {
   normalizeAttachmentLabel,
   normalizeLinkValue,
   normalizePhoneValue,
+  normalizeTelegramValue,
 } from '../src/worker/message-attachments.ts';
 
 const migrationsDirectory = fileURLToPath(
@@ -32,6 +33,14 @@ test('phone normalization keeps optional international plus and strips formattin
   assert.equal(normalizePhoneValue('javascript:alert(1)'), null);
 });
 
+test('telegram usernames normalize without allowing arbitrary paths', () => {
+  assert.equal(normalizeTelegramValue('@support_team'), 'support_team');
+  assert.equal(normalizeTelegramValue('support_team'), 'support_team');
+  assert.equal(normalizeTelegramValue('bad user'), null);
+  assert.equal(normalizeTelegramValue('abc'), null);
+  assert.equal(normalizeTelegramValue('support/team'), null);
+});
+
 test('link normalization only accepts absolute http and https URLs', () => {
   assert.equal(
     normalizeLinkValue('https://example.com/pay?id=123'),
@@ -50,7 +59,7 @@ test('attachment labels reject empty and oversized values', () => {
   assert.equal(normalizeAttachmentLabel('x'.repeat(81)), null);
 });
 
-test('unified conversation attachment history keeps legacy media and snapshot attachments', async () => {
+test('unified conversation history exposes channel cards and immutable metadata', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   database.exec(`
@@ -88,12 +97,19 @@ test('unified conversation attachment history keeps legacy media and snapshot at
       'ready', 0, '2026-08-18T20:00:00.000Z', '2026-08-18T20:00:00.000Z', '2026-08-18T20:00:00.000Z'
     );
     INSERT INTO message_attachments (
-      id, message_id, kind, label, value, original_name, sort_order, created_at
+      id, message_id, kind, label, value, preset_message, icon_ref,
+      sort_order, created_at
     ) VALUES
-      ('phone-1', 'message-action', 'phone', '短信联系', '+12135551234',
-       'contact-card-icon:v1:png:agent-card-icons/agent-1/card-1/icon-1.png', 0, '2026-08-18T20:01:00.000Z'),
-      ('link-1', 'message-action', 'link', '付款链接', 'https://example.com/pay',
-       NULL, 1, '2026-08-18T20:01:00.000Z');
+      ('sms-1', 'message-action', 'sms', '短信联系', '+12135551234',
+       '您好，我想了解更多信息',
+       'contact-card-icon:v1:png:agent-card-icons/agent-1/card-1/icon-1.png',
+       0, '2026-08-18T20:01:00.000Z'),
+      ('wa-1', 'message-action', 'whatsapp', 'WhatsApp', '+12135551234',
+       'Need more info', NULL, 1, '2026-08-18T20:01:00.000Z'),
+      ('tg-1', 'message-action', 'telegram', 'Telegram', 'support_team',
+       'Hello', NULL, 2, '2026-08-18T20:01:00.000Z'),
+      ('site-1', 'message-action', 'website', '官方网站', 'https://example.com/',
+       NULL, NULL, 3, '2026-08-18T20:01:00.000Z');
   `);
 
   const attachments = await listConversationAttachments(
@@ -116,8 +132,10 @@ test('unified conversation attachment history keeps legacy media and snapshot at
   assert.deepEqual(
     attachments.map((item) => [item.messageId, item.kind, item.label]),
     [
-      ['message-action', 'phone', '短信联系'],
-      ['message-action', 'link', '付款链接'],
+      ['message-action', 'sms', '短信联系'],
+      ['message-action', 'whatsapp', 'WhatsApp'],
+      ['message-action', 'telegram', 'Telegram'],
+      ['message-action', 'website', '官方网站'],
       ['message-image', 'image', 'legacy.png'],
     ],
   );
@@ -126,16 +144,20 @@ test('unified conversation attachment history keeps legacy media and snapshot at
     'media',
   );
   assert.equal(
-    attachments.find((item) => item.id === 'phone-1')?.value,
-    '+12135551234',
+    attachments.find((item) => item.id === 'sms-1')?.presetMessage,
+    '您好，我想了解更多信息',
   );
   assert.equal(
-    attachments.find((item) => item.id === 'phone-1')?.hasCustomIcon,
+    attachments.find((item) => item.id === 'sms-1')?.hasCustomIcon,
     true,
   );
   assert.equal(
-    attachments.find((item) => item.id === 'link-1')?.hasCustomIcon,
+    attachments.find((item) => item.id === 'wa-1')?.hasCustomIcon,
     false,
+  );
+  assert.equal(
+    attachments.find((item) => item.id === 'site-1')?.presetMessage,
+    null,
   );
 
   database.close();
