@@ -18,7 +18,7 @@ type Env = { Bindings: Bindings };
 
 type ContactCardRow = {
   id: string;
-  original_name: string | null;
+  icon_ref: string | null;
 };
 
 type ContactCardIconUpload = {
@@ -32,6 +32,7 @@ const CARD_ICON_TYPES: Record<string, ContactCardIconUpload> = {
   'image/jpeg': { mimeType: 'image/jpeg', extension: 'jpg' },
   'image/webp': { mimeType: 'image/webp', extension: 'webp' },
 };
+const CONTACT_CARD_KINDS_SQL = "'sms', 'whatsapp', 'telegram', 'website'";
 
 export const agentCardIconApi = new Hono<Env>();
 
@@ -79,9 +80,10 @@ agentCardIconApi.post('/api/agent/attachments/presets/:id/icon', async (c) => {
   });
   const result = await c.env.DB.prepare(
     `UPDATE agent_attachment_presets
-       SET original_name = ?1,
+       SET icon_ref = ?1,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?2 AND agent_id = ?3 AND kind IN ('phone', 'link')`,
+       WHERE id = ?2 AND agent_id = ?3
+         AND kind IN (${CONTACT_CARD_KINDS_SQL})`,
   )
     .bind(marker, preset.id, agent.id)
     .run();
@@ -100,16 +102,17 @@ agentCardIconApi.delete(
     if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
     const result = await c.env.DB.prepare(
       `UPDATE agent_attachment_presets
-       SET original_name = NULL,
+       SET icon_ref = NULL,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?1 AND agent_id = ?2 AND kind IN ('phone', 'link')`,
+       WHERE id = ?1 AND agent_id = ?2
+         AND kind IN (${CONTACT_CARD_KINDS_SQL})`,
     )
       .bind(c.req.param('id'), agent.id)
       .run();
     if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
 
-    // The old R2 object is intentionally retained. Existing messages may hold
-    // the immutable marker copied when the card was sent.
+    // Existing message snapshots keep their own immutable icon_ref. R2 objects
+    // are therefore retained when a reusable preset icon is replaced/removed.
     return c.json({ ok: true, hasCustomIcon: false });
   },
 );
@@ -123,19 +126,19 @@ agentCardIconApi.get('/api/agent/attachments/presets/:id/icon', async (c) => {
     agent.id,
   );
   if (!preset) return c.json({ error: 'NOT_FOUND' }, 404);
-  return readCardIcon(c.env.MEDIA, preset.original_name);
+  return readCardIcon(c.env.MEDIA, preset.icon_ref);
 });
 
 agentCardIconApi.get('/api/agent/attachments/:id/icon', async (c) => {
   const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
   const row = await c.env.DB.prepare(
-    `SELECT attachment.id, attachment.original_name
+    `SELECT attachment.id, attachment.icon_ref
      FROM message_attachments attachment
      JOIN messages message ON message.id = attachment.message_id
      JOIN conversations conversation ON conversation.id = message.conversation_id
      WHERE attachment.id = ?1
-       AND attachment.kind IN ('phone', 'link')
+       AND attachment.kind IN (${CONTACT_CARD_KINDS_SQL})
        AND conversation.assigned_agent = ?2
        AND COALESCE(conversation.expires_at, datetime(conversation.created_at, '+1 day')) > CURRENT_TIMESTAMP
      LIMIT 1`,
@@ -143,7 +146,7 @@ agentCardIconApi.get('/api/agent/attachments/:id/icon', async (c) => {
     .bind(c.req.param('id'), agent.id)
     .first<ContactCardRow>();
   if (!row) return c.json({ error: 'NOT_FOUND' }, 404);
-  return readCardIcon(c.env.MEDIA, row.original_name);
+  return readCardIcon(c.env.MEDIA, row.icon_ref);
 });
 
 agentCardIconApi.get('/client/v1/attachments/:id/icon', async (c) => {
@@ -164,14 +167,14 @@ agentCardIconApi.get('/client/v1/attachments/:id/icon', async (c) => {
   if (!visitor) return clientError(c, 401, 'INVALID_VISITOR_TOKEN');
 
   const row = await c.env.DB.prepare(
-    `SELECT attachment.id, attachment.original_name
+    `SELECT attachment.id, attachment.icon_ref
      FROM message_attachments attachment
      JOIN messages message ON message.id = attachment.message_id
      JOIN conversations conversation ON conversation.id = message.conversation_id
      JOIN visitors v ON v.id = conversation.visitor_id
      JOIN sites site ON site.id = conversation.site_id
      WHERE attachment.id = ?1
-       AND attachment.kind IN ('phone', 'link')
+       AND attachment.kind IN (${CONTACT_CARD_KINDS_SQL})
        AND (site.id = ?2 OR site.public_key = ?2)
        AND site.is_enabled = 1
        AND v.external_id = ?3
@@ -182,7 +185,7 @@ agentCardIconApi.get('/client/v1/attachments/:id/icon', async (c) => {
     .bind(c.req.param('id'), projectId, visitor.external_id)
     .first<ContactCardRow>();
   if (!row) return clientError(c, 404, 'ATTACHMENT_ICON_NOT_FOUND');
-  const icon = await readCardIcon(c.env.MEDIA, row.original_name);
+  const icon = await readCardIcon(c.env.MEDIA, row.icon_ref);
   if (icon.status === 404) {
     return clientError(c, 404, 'ATTACHMENT_ICON_NOT_FOUND');
   }
@@ -202,9 +205,10 @@ async function contactCardPresetForAgent(
 ): Promise<ContactCardRow | null> {
   return db
     .prepare(
-      `SELECT id, original_name
+      `SELECT id, icon_ref
        FROM agent_attachment_presets
-       WHERE id = ?1 AND agent_id = ?2 AND kind IN ('phone', 'link')
+       WHERE id = ?1 AND agent_id = ?2
+         AND kind IN (${CONTACT_CARD_KINDS_SQL})
        LIMIT 1`,
     )
     .bind(id, agentId)
