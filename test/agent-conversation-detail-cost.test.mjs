@@ -47,9 +47,9 @@ test('agent read acknowledgement writes one conversation cursor instead of messa
 });
 
 test('conversation detail cursors use normalized timestamp index semantics', async () => {
-  const [worker, media, initial, normalization] = await Promise.all([
+  const [worker, attachments, initial, normalization] = await Promise.all([
     read('../src/worker/agent-api.ts'),
-    read('../src/worker/media-api.ts'),
+    read('../src/worker/message-attachments.ts'),
     read('../migrations/0001_initial.sql'),
     read('../migrations/0007_message_timestamp_order.sql'),
   ]);
@@ -58,10 +58,10 @@ test('conversation detail cursors use normalized timestamp index semantics', asy
     "agentApi.get('/api/agent/conversations/:id/messages', async (c) => {",
     "agentApi.post('/api/agent/conversations/:id/read', async (c) => {",
   );
-  const mediaList = block(
-    media,
-    'export async function listConversationMedia(',
-    'async function authorizedVisitorMedia(',
+  const attachmentList = block(
+    attachments,
+    'export async function listConversationAttachments(',
+    'export async function loadMessageAttachments(',
   );
 
   assert.match(
@@ -77,7 +77,7 @@ test('conversation detail cursors use normalized timestamp index semantics', asy
   assert.match(detail, /OR m\.created_at > \?2/u);
   assert.match(detail, /OR \(m\.created_at = \?2 AND m\.id > \?3\)/u);
   assert.match(detail, /ORDER BY m\.created_at ASC, m\.id ASC/u);
-  assert.doesNotMatch(mediaList, /julianday\(m\.created_at\)/u);
-  assert.match(mediaList, /OR m\.created_at > \?2/u);
-  assert.match(mediaList, /ORDER BY m\.created_at ASC, m\.id ASC/u);
+  assert.doesNotMatch(attachmentList, /julianday\(m\.created_at\)/u);
+  assert.match(attachmentList, /OR m\.created_at > \?2/u);
+  assert.match(attachmentList, /ORDER BY message_id ASC, sort_order ASC, id ASC/u);
 });
