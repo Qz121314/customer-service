@@ -425,7 +425,6 @@ agentAttachmentApi.post(
         'message.created',
         {
           message: clientRealtimeMessage(message, publicAttachments),
-          attachments: publicAttachments,
         },
         { includeOverview: conversationStatus === 'open' },
       ),
