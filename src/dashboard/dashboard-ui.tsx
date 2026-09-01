@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react';
 import type { Message } from './api';
 import {
   agentAttachmentContentUrl,
+  agentContactCardHref,
   type AgentMessageAttachment,
 } from './agent-attachments-client';
 import { formatTime } from './dashboard-runtime';
@@ -247,14 +248,10 @@ function Bubble({
                   </a>
                 ) : null;
               }
-              const href =
-                attachment.kind === 'phone'
-                  ? `sms:${attachment.value}`
-                  : attachment.value;
               return (
                 <a
                   className="message-attachment-action"
-                  href={href}
+                  href={agentContactCardHref(attachment)}
                   target={attachment.kind === 'link' ? '_blank' : undefined}
                   rel={attachment.kind === 'link' ? 'noreferrer' : undefined}
                   key={attachment.id}

@@ -15,6 +15,7 @@ import {
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
+import { AgentCardSettingsModal } from './AgentAttachmentTools';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
 import { UiIcon } from './icons';
 import {
@@ -46,6 +47,7 @@ export function AgentSidebar({
   onLogout: () => void;
 }) {
   const [autoReplyOpen, setAutoReplyOpen] = useState(false);
+  const [cardSettingsOpen, setCardSettingsOpen] = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   return (
     <>
@@ -73,6 +75,7 @@ export function AgentSidebar({
           soundEnabled={soundEnabled}
           onToggleNotifications={onToggleNotifications}
           onToggleSound={onToggleSound}
+          onOpenCardSettings={() => setCardSettingsOpen(true)}
           onOpenAutoReply={() => setAutoReplyOpen(true)}
           onOpenStatistics={onOpenStatistics}
           onLogout={onLogout}
@@ -87,6 +90,7 @@ export function AgentSidebar({
         onClose={() => setMobileSettingsOpen(false)}
         onToggleNotifications={onToggleNotifications}
         onToggleSound={onToggleSound}
+        onOpenCardSettings={() => setCardSettingsOpen(true)}
         onOpenAutoReply={() => setAutoReplyOpen(true)}
         onOpenStatistics={onOpenStatistics}
         onLogout={onLogout}
@@ -94,6 +98,10 @@ export function AgentSidebar({
       <AgentAutoReplySettingsModal
         open={autoReplyOpen}
         onClose={() => setAutoReplyOpen(false)}
+      />
+      <AgentCardSettingsModal
+        open={cardSettingsOpen}
+        onClose={() => setCardSettingsOpen(false)}
       />
     </>
   );

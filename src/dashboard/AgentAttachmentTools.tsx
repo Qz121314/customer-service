@@ -31,7 +31,6 @@ export function AgentComposerAttachmentMenu({
   onSendPreset: (preset: PhoneOrLinkPreset) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [managerOpen, setManagerOpen] = useState(false);
   const [presets, setPresets] = useState<AgentAttachmentPreset[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -102,7 +101,12 @@ export function AgentComposerAttachmentMenu({
         aria-label="添加附件"
         aria-expanded={open}
         disabled={disabled}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() =>
+          setOpen((current) => {
+            if (!current) void refresh();
+            return !current;
+          })
+        }
       >
         <UiIcon name="plus" />
       </Button>
@@ -164,56 +168,47 @@ export function AgentComposerAttachmentMenu({
 
           {!loading && phones.length === 0 && links.length === 0 ? (
             <p className="composer-attachment-empty">
-              还没有预设手机号或链接。
+              还没有可用名片，请先在设置中添加手机号或链接。
             </p>
           ) : null}
           {loading ? (
             <p className="composer-attachment-empty">正在加载…</p>
           ) : null}
           {error ? <p className="composer-attachment-error">{error}</p> : null}
-
-          <button
-            type="button"
-            className="composer-attachment-manage"
-            onClick={() => {
-              setOpen(false);
-              setManagerOpen(true);
-            }}
-          >
-            <UiIcon name="settings" />
-            <span>管理手机号和链接</span>
-            <UiIcon name="chevron" />
-          </button>
         </div>
       ) : null}
-
-      <AgentAttachmentPresetManager
-        open={managerOpen}
-        presets={presets}
-        onClose={() => setManagerOpen(false)}
-        onPresetsChange={setPresets}
-      />
     </div>
   );
 }
 
-function AgentAttachmentPresetManager({
+export function AgentCardSettingsModal({
   open,
-  presets,
   onClose,
-  onPresetsChange,
 }: {
   open: boolean;
-  presets: AgentAttachmentPreset[];
   onClose: () => void;
-  onPresetsChange: (presets: AgentAttachmentPreset[]) => void;
 }) {
+  const [presets, setPresets] = useState<AgentAttachmentPreset[]>([]);
   const [kind, setKind] = useState<'phone' | 'link'>('phone');
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!open) return;
+    setPresets([]);
+    setLoading(true);
+    setError('');
+    void getAgentAttachmentPresets()
+      .then(setPresets)
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : '无法加载名片');
+      })
+      .finally(() => setLoading(false));
+  }, [open]);
 
   const editablePresets = useMemo(
     () =>
@@ -266,7 +261,7 @@ function AgentAttachmentPresetManager({
             label: label.trim(),
             value: value.trim(),
           });
-      onPresetsChange(
+      setPresets(
         editingId
           ? presets.map((item) => (item.id === preset.id ? preset : item))
           : [...presets, preset],
@@ -285,7 +280,7 @@ function AgentAttachmentPresetManager({
     setError('');
     try {
       await deleteAgentAttachmentPreset(preset.id);
-      onPresetsChange(presets.filter((item) => item.id !== preset.id));
+      setPresets(presets.filter((item) => item.id !== preset.id));
       if (editingId === preset.id) resetForm();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '删除失败');
@@ -310,14 +305,14 @@ function AgentAttachmentPresetManager({
       >
         <header>
           <div>
-            <span className="eyebrow">快捷附件</span>
-            <h2 id="agent-attachment-manager-title">手机号和链接</h2>
+            <span className="eyebrow">坐席设置</span>
+            <h2 id="agent-attachment-manager-title">名片</h2>
           </div>
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            aria-label="关闭快捷附件设置"
+            aria-label="关闭名片设置"
             disabled={saving}
             onClick={onClose}
           >
@@ -327,8 +322,10 @@ function AgentAttachmentPresetManager({
 
         <div className="agent-attachment-manager-body">
           <div className="agent-attachment-preset-list">
-            {editablePresets.length === 0 ? (
-              <p>还没有快捷手机号或链接。</p>
+            {loading ? (
+              <p>正在读取名片…</p>
+            ) : editablePresets.length === 0 ? (
+              <p>还没有名片。选择类型并添加手机号或链接。</p>
             ) : (
               editablePresets.map((preset) => (
                 <div className="agent-attachment-preset-row" key={preset.id}>
@@ -369,17 +366,19 @@ function AgentAttachmentPresetManager({
               <button
                 type="button"
                 className={kind === 'phone' ? 'is-active' : ''}
-                disabled={Boolean(editingId)}
+                disabled={loading || Boolean(editingId)}
                 onClick={() => setKind('phone')}
               >
+                <UiIcon name="phone" />
                 手机号
               </button>
               <button
                 type="button"
                 className={kind === 'link' ? 'is-active' : ''}
-                disabled={Boolean(editingId)}
+                disabled={loading || Boolean(editingId)}
                 onClick={() => setKind('link')}
               >
+                <UiIcon name="link" />
                 链接
               </button>
             </div>
@@ -388,6 +387,7 @@ function AgentAttachmentPresetManager({
               <Input
                 value={label}
                 maxLength={80}
+                disabled={loading || saving}
                 placeholder={
                   kind === 'phone' ? '例如：短信联系' : '例如：付款链接'
                 }
@@ -399,6 +399,7 @@ function AgentAttachmentPresetManager({
               <Input
                 value={value}
                 maxLength={2048}
+                disabled={loading || saving}
                 inputMode={kind === 'phone' ? 'tel' : 'url'}
                 placeholder={
                   kind === 'phone'
@@ -422,7 +423,7 @@ function AgentAttachmentPresetManager({
               ) : null}
               <Button
                 type="button"
-                disabled={saving || !label.trim() || !value.trim()}
+                disabled={loading || saving || !label.trim() || !value.trim()}
                 onClick={() => void save()}
               >
                 {saving ? '保存中…' : editingId ? '保存修改' : '添加'}

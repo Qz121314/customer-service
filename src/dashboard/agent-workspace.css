@@ -755,8 +755,8 @@
   transform: translateX(-50%);
 }
 
-/* Attachment UI owns composer shortcuts, preset management, message actions,
- * and auto-greeting attachment selection across desktop and mobile agent views. */
+/* Card settings own reusable phone/link content. The composer and auto greeting
+ * only reference those cards, while one-off images remain composer attachments. */
 
 .composer-attachment-root {
   position: relative;
@@ -793,8 +793,7 @@
 }
 
 .composer-attachment-menu-item,
-.composer-attachment-section > button,
-.composer-attachment-manage {
+.composer-attachment-section > button {
   display: grid;
   width: 100%;
   min-width: 0;
@@ -811,14 +810,12 @@
 }
 
 .composer-attachment-menu-item:hover,
-.composer-attachment-section > button:hover,
-.composer-attachment-manage:hover {
+.composer-attachment-section > button:hover {
   background: #f4f5f8;
 }
 
 .composer-attachment-menu-item > .ui-icon,
-.composer-attachment-section > button > .ui-icon,
-.composer-attachment-manage > .ui-icon:first-child {
+.composer-attachment-section > button > .ui-icon {
   width: 18px;
   height: 18px;
   justify-self: center;
@@ -890,21 +887,6 @@
 .composer-attachment-error {
   color: #9d4545;
   background: #fff5f5;
-}
-
-.composer-attachment-manage {
-  grid-template-columns: 34px minmax(0, 1fr) 16px;
-  margin-top: 6px;
-  border-top: 1px solid #edf0f3;
-  border-radius: 0 0 11px 11px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.composer-attachment-manage > .ui-icon:last-child {
-  width: 15px;
-  height: 15px;
-  color: #9aa1aa;
 }
 
 .agent-attachment-manager-backdrop {
@@ -1042,13 +1024,22 @@
 }
 
 .agent-attachment-kind-tabs button {
+  display: inline-flex;
   min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 0;
   border-radius: 8px;
   color: #68717d;
   background: transparent;
   font-size: 11px;
   font-weight: 700;
+}
+
+.agent-attachment-kind-tabs .ui-icon {
+  width: 15px;
+  height: 15px;
 }
 
 .agent-attachment-kind-tabs button.is-active {

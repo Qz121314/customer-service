@@ -303,7 +303,7 @@ export function AgentAutoReplySettingsModal({
                 })}
                 {presets.length === 0 ? (
                   <p className="agent-auto-reply-attachment-empty">
-                    还没有附件。可先添加问候图片；手机号和链接可在聊天输入框的“+”中预设。
+                    还没有附件。可在坐席设置的“名片”中添加手机号或链接，也可在这里添加问候图片。
                   </p>
                 ) : null}
               </div>

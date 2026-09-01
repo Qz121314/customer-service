@@ -10,6 +10,7 @@ export function AgentActionToolbar({
   soundEnabled,
   onToggleNotifications,
   onToggleSound,
+  onOpenCardSettings,
   onOpenAutoReply,
   onOpenStatistics,
   onLogout,
@@ -20,6 +21,7 @@ export function AgentActionToolbar({
   soundEnabled: boolean;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
+  onOpenCardSettings: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
   onLogout: () => void;
@@ -28,6 +30,17 @@ export function AgentActionToolbar({
   return (
     <>
       <div className="workspace-sidebar-actions" aria-label="客服工具">
+        <Button
+          type="button"
+          variant="ghost"
+          className="full workspace-card-settings-button"
+          aria-label="打开名片设置"
+          title="名片"
+          onClick={onOpenCardSettings}
+        >
+          <UiIcon name="contact" />
+          <span>名片</span>
+        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -135,6 +148,7 @@ export function AgentMobileSettingsPage({
   onClose,
   onToggleNotifications,
   onToggleSound,
+  onOpenCardSettings,
   onOpenAutoReply,
   onOpenStatistics,
   onLogout,
@@ -146,6 +160,7 @@ export function AgentMobileSettingsPage({
   onClose: () => void;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
+  onOpenCardSettings: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
   onLogout: () => void;
@@ -286,6 +301,20 @@ export function AgentMobileSettingsPage({
         <section className="mobile-agent-settings-group">
           <h2 className="mobile-agent-settings-label">接待</h2>
           <div className="mobile-agent-settings-card">
+            <button
+              type="button"
+              className="mobile-agent-settings-item"
+              onClick={() => openChild(onOpenCardSettings)}
+            >
+              <i aria-hidden="true">
+                <UiIcon name="contact" />
+              </i>
+              <span>
+                <strong>名片</strong>
+                <small>添加聊天和问候语使用的手机号或链接</small>
+              </span>
+              <UiIcon name="chevron" />
+            </button>
             <button
               type="button"
               className="mobile-agent-settings-item"
