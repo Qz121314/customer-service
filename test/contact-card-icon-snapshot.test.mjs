@@ -17,7 +17,7 @@ function applyMigrations(database) {
   }
 }
 
-test('first greeting copies the configured contact card icon marker into the immutable message snapshot', () => {
+test('first greeting snapshots channel, preset message and custom icon immutably', () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   const iconMarker =
@@ -50,10 +50,17 @@ test('first greeting copies the configured contact card icon marker into the imm
   database
     .prepare(
       `INSERT INTO agent_attachment_presets (
-         id, agent_id, kind, label, value, original_name, sort_order
-       ) VALUES (?, ?, 'phone', ?, ?, ?, 0)`,
+         id, agent_id, kind, label, value, preset_message, icon_ref, sort_order
+       ) VALUES (?, ?, 'sms', ?, ?, ?, ?, 0)`,
     )
-    .run('card-1', 'agent-1', '短信联系', '+12135551234', iconMarker);
+    .run(
+      'card-1',
+      'agent-1',
+      '短信联系',
+      '+12135551234',
+      '您好，我想了解更多信息',
+      iconMarker,
+    );
   database
     .prepare(
       `INSERT INTO agent_auto_greeting_attachments (
@@ -77,31 +84,36 @@ test('first greeting copies the configured contact card icon marker into the imm
 
   const snapshot = database
     .prepare(
-      `SELECT kind, label, value, original_name
+      `SELECT kind, label, value, preset_message, icon_ref
        FROM message_attachments
        WHERE message_id = 'auto-greeting:conversation-1'
        LIMIT 1`,
     )
     .get();
-  assert.equal(snapshot.kind, 'phone');
+  assert.equal(snapshot.kind, 'sms');
   assert.equal(snapshot.label, '短信联系');
   assert.equal(snapshot.value, '+12135551234');
-  assert.equal(snapshot.original_name, iconMarker);
+  assert.equal(snapshot.preset_message, '您好，我想了解更多信息');
+  assert.equal(snapshot.icon_ref, iconMarker);
 
   database.exec(`
     UPDATE agent_attachment_presets
-    SET original_name = NULL
+    SET value = '+12135550000',
+        preset_message = '新的话术',
+        icon_ref = NULL
     WHERE id = 'card-1';
   `);
   const unchanged = database
     .prepare(
-      `SELECT original_name
+      `SELECT value, preset_message, icon_ref
        FROM message_attachments
        WHERE message_id = 'auto-greeting:conversation-1'
        LIMIT 1`,
     )
     .get();
-  assert.equal(unchanged.original_name, iconMarker);
+  assert.equal(unchanged.value, '+12135551234');
+  assert.equal(unchanged.preset_message, '您好，我想了解更多信息');
+  assert.equal(unchanged.icon_ref, iconMarker);
 
   database.close();
 });
