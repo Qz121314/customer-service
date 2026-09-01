@@ -47,8 +47,10 @@ export function parseCustomTrafficRange(
   const [, from, to, ...rest] = value.split(':');
   if (
     rest.length ||
-    !REPORTING_DATE_PATTERN.test(from ?? '') ||
-    !REPORTING_DATE_PATTERN.test(to ?? '') ||
+    !from ||
+    !to ||
+    !REPORTING_DATE_PATTERN.test(from) ||
+    !REPORTING_DATE_PATTERN.test(to) ||
     from > to
   ) {
     return null;
