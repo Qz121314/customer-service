@@ -1,11 +1,18 @@
 import type { Message } from './api';
 
+export type AgentContactCardKind =
+  | 'sms'
+  | 'whatsapp'
+  | 'telegram'
+  | 'website';
+
 export type AgentAttachmentPreset =
   | {
       id: string;
-      kind: 'phone' | 'link';
+      kind: AgentContactCardKind;
       label: string;
       value: string;
+      presetMessage: string | null;
       hasCustomIcon: boolean;
     }
   | {
@@ -24,9 +31,10 @@ export type AgentMessageAttachment =
   | {
       id: string;
       messageId?: string;
-      kind: 'phone' | 'link';
+      kind: AgentContactCardKind;
       label: string;
       value: string;
+      presetMessage: string | null;
       hasCustomIcon?: boolean;
     }
   | {
@@ -46,11 +54,27 @@ export type AgentMessageAttachment =
 
 type AgentContactCard = Extract<
   AgentMessageAttachment,
-  { kind: 'phone' | 'link' }
+  { kind: AgentContactCardKind }
 >;
 
 export function agentContactCardHref(card: AgentContactCard): string {
-  return card.kind === 'phone' ? `sms:${card.value}` : card.value;
+  const message = card.presetMessage?.trim() || '';
+  const encodedMessage = encodeURIComponent(message);
+
+  switch (card.kind) {
+    case 'sms':
+      return `sms:${card.value}${message ? `?body=${encodedMessage}` : ''}`;
+    case 'whatsapp': {
+      const number = card.value.replace(/\D/gu, '');
+      return `https://wa.me/${number}${message ? `?text=${encodedMessage}` : ''}`;
+    }
+    case 'telegram':
+      return `https://t.me/${encodeURIComponent(card.value)}${
+        message ? `?text=${encodedMessage}` : ''
+      }`;
+    case 'website':
+      return card.value;
+  }
 }
 
 export async function getAgentAttachmentPresets(): Promise<
@@ -63,9 +87,10 @@ export async function getAgentAttachmentPresets(): Promise<
 }
 
 export async function createAgentAttachmentPreset(input: {
-  kind: 'phone' | 'link';
+  kind: AgentContactCardKind;
   label: string;
   value: string;
+  presetMessage?: string | null;
 }): Promise<AgentAttachmentPreset> {
   const response = await attachmentRequest<{ preset: AgentAttachmentPreset }>(
     '/api/agent/attachments/presets',
@@ -79,7 +104,7 @@ export async function createAgentAttachmentPreset(input: {
 
 export async function updateAgentAttachmentPreset(
   id: string,
-  input: { label: string; value?: string },
+  input: { label: string; value?: string; presetMessage?: string | null },
 ): Promise<AgentAttachmentPreset> {
   const response = await attachmentRequest<{ preset: AgentAttachmentPreset }>(
     `/api/agent/attachments/presets/${encodeURIComponent(id)}`,
@@ -214,7 +239,7 @@ async function attachmentRequest<T = { ok: boolean }>(
 function attachmentError(code?: string): string {
   switch (code) {
     case 'INVALID_ATTACHMENT_PRESET':
-      return '短信号码或链接格式无效';
+      return '名片类型、目标或预设话术格式无效';
     case 'INVALID_CARD_ICON':
       return '名片图标无效，请选择 256 KB 以内的 PNG、JPG 或 WebP 图片';
     case 'INVALID_ATTACHMENT_IMAGE':
