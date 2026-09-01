@@ -1,6 +1,7 @@
 export type AgentAutoReplySettings = {
   enabled: boolean;
   text: string;
+  attachmentIds: string[];
 };
 
 type AgentAutoReplyPayload = {
@@ -46,7 +47,7 @@ async function autoReplyRequest<T>(
       throw new Error('登录已失效，请重新登录');
     }
     if (body.error === 'INVALID_AUTO_REPLY') {
-      throw new Error('问候语内容无效，请检查后保存');
+      throw new Error('问候语或附件设置无效，请检查后保存');
     }
     throw new Error(body.error ?? '自动回复设置保存失败');
   }
