@@ -25,7 +25,9 @@ export function shiftReportingDate(date: string, days: number): string {
   return value.toISOString().slice(0, 10);
 }
 
-export function reportingRetentionStart(today = currentReportingDate()): string {
+export function reportingRetentionStart(
+  today = currentReportingDate(),
+): string {
   return shiftReportingDate(today, -(REPORTING_RETENTION_DAYS - 1));
 }
 
