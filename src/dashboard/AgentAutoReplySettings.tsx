@@ -10,6 +10,7 @@ import {
   uploadAgentAttachmentImage,
   type AgentAttachmentPreset,
 } from './agent-attachments-client';
+import { AgentContactCardIcon } from './AgentContactCardIcon';
 import { UiIcon } from './icons';
 import { Button, Textarea } from './ui';
 
@@ -239,7 +240,7 @@ export function AgentAutoReplySettingsModal({
                 <span>
                   <strong>附件</strong>
                   <small>
-                    可搭配手机号、链接和图片；最多{' '}
+                    可搭配 SMS 名片、链接名片和图片；最多{' '}
                     {AUTO_GREETING_ATTACHMENT_LIMIT} 个。
                   </small>
                 </span>
@@ -283,18 +284,18 @@ export function AgentAutoReplySettingsModal({
                           loading="lazy"
                         />
                       ) : (
-                        <i aria-hidden="true">
-                          <UiIcon
-                            name={preset.kind === 'phone' ? 'phone' : 'link'}
-                          />
-                        </i>
+                        <AgentContactCardIcon
+                          id={preset.id}
+                          source="preset"
+                          hasCustomIcon={preset.hasCustomIcon}
+                        />
                       )}
                       <span>
                         <strong>{preset.label}</strong>
                         <small>
                           {preset.kind === 'image'
                             ? preset.originalName || '图片'
-                            : preset.value}
+                            : `${preset.kind === 'phone' ? 'SMS' : '链接'} · ${preset.value}`}
                         </small>
                       </span>
                       {selected ? <UiIcon name="check" /> : null}
@@ -303,7 +304,7 @@ export function AgentAutoReplySettingsModal({
                 })}
                 {presets.length === 0 ? (
                   <p className="agent-auto-reply-attachment-empty">
-                    还没有附件。可在坐席设置的“名片”中添加手机号或链接，也可在这里添加问候图片。
+                    还没有附件。可在坐席设置的“名片”中添加 SMS 或链接名片，也可在这里添加问候图片。
                   </p>
                 ) : null}
               </div>
