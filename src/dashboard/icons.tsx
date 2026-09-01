@@ -12,12 +12,16 @@ import {
   ExternalLink,
   Headphones,
   ImagePlus,
+  Link,
   LogOut,
   MessageSquareReply,
+  Pencil,
+  Phone,
   Plus,
   Search,
   Send,
   Settings,
+  Trash2,
   UserRound,
   Users,
   Volume2,
@@ -48,7 +52,11 @@ export type UiIconName =
   | 'check'
   | 'check-double'
   | 'user'
-  | 'plus';
+  | 'plus'
+  | 'phone'
+  | 'link'
+  | 'edit'
+  | 'trash';
 
 const ICONS: Record<UiIconName, LucideIcon> = {
   agents: Users,
@@ -74,6 +82,10 @@ const ICONS: Record<UiIconName, LucideIcon> = {
   'check-double': CheckCheck,
   user: UserRound,
   plus: Plus,
+  phone: Phone,
+  link: Link,
+  edit: Pencil,
+  trash: Trash2,
 };
 
 export function UiIcon({
