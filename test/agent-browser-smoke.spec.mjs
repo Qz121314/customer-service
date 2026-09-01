@@ -284,13 +284,6 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     .click();
   await expect(cardSettingsDialog).toBeHidden();
 
-  const attachmentButton = page.getByRole('button', { name: '添加附件' });
-  await attachmentButton.click();
-  const attachmentMenu = page.getByRole('menu');
-  await expect(attachmentMenu.getByText('联系电话')).toBeVisible();
-  await expect(attachmentMenu.getByText('付款链接')).toBeVisible();
-  await attachmentButton.click();
-
   const autoReplyButton = page.getByRole('button', {
     name: '打开自动回复设置',
   });
@@ -342,6 +335,13 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(composer).toBeVisible();
   await expect(page).toHaveURL(url('/agent'));
   await expect(page.getByLabel('会话状态')).toBeVisible();
+
+  const attachmentButton = page.getByRole('button', { name: '添加附件' });
+  await attachmentButton.click();
+  const attachmentMenu = page.getByRole('menu');
+  await expect(attachmentMenu.getByText('联系电话')).toBeVisible();
+  await expect(attachmentMenu.getByText('付款链接')).toBeVisible();
+  await attachmentButton.click();
 
   await page.setViewportSize({ width: 390, height: 700 });
   const mobileComposer = page.getByPlaceholder('输入回复内容…');
