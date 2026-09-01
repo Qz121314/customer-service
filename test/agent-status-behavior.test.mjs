@@ -18,35 +18,37 @@ import { touchAgentActivity } from '../src/worker/agent-activity.ts';
 
 const repositoryDirectory = fileURLToPath(new URL('../', import.meta.url));
 
+function copyTypeScriptDirectory(runtimeDirectory, relativeDirectory) {
+  const sourceDirectory = join(repositoryDirectory, relativeDirectory);
+  const targetDirectory = join(runtimeDirectory, relativeDirectory);
+  mkdirSync(targetDirectory, { recursive: true });
+
+  for (const name of readdirSync(sourceDirectory)) {
+    if (!name.endsWith('.ts')) continue;
+    const sourcePath = join(sourceDirectory, name);
+    const targetPath = join(targetDirectory, name);
+    const shimPath = join(targetDirectory, name.slice(0, -3));
+    copyFileSync(sourcePath, targetPath);
+    symlinkSync(name, shimPath);
+  }
+}
+
 function createIsolatedTypeScriptRuntime() {
   const runtimeDirectory = mkdtempSync(
     join(repositoryDirectory, '.agent-status-runtime-'),
   );
-
-  for (const relativeDirectory of ['src/worker', 'src/shared']) {
-    const sourceDirectory = join(repositoryDirectory, relativeDirectory);
-    const targetDirectory = join(runtimeDirectory, relativeDirectory);
-    mkdirSync(targetDirectory, { recursive: true });
-    for (const name of readdirSync(sourceDirectory).filter((value) =>
-      value.endsWith('.ts'),
-    )) {
-      copyFileSync(
-        join(sourceDirectory, name),
-        join(targetDirectory, name),
-      );
-      symlinkSync(name, join(targetDirectory, name.slice(0, -3)));
-    }
-  }
-
+  copyTypeScriptDirectory(runtimeDirectory, 'src/worker');
+  copyTypeScriptDirectory(runtimeDirectory, 'src/shared');
   return runtimeDirectory;
 }
 
 const runtimeDirectory = createIsolatedTypeScriptRuntime();
+const agentApiUrl = pathToFileURL(
+  join(runtimeDirectory, 'src/worker/agent-api.ts'),
+).href;
 let agentApi;
 try {
-  ({ agentApi } = await import(
-    pathToFileURL(join(runtimeDirectory, 'src/worker/agent-api.ts')).href
-  ));
+  ({ agentApi } = await import(agentApiUrl));
 } finally {
   rmSync(runtimeDirectory, { recursive: true, force: true });
 }
