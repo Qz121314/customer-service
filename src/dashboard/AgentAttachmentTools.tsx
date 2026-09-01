@@ -482,6 +482,7 @@ export function AgentCardSettingsModal({
             <label>
               <span>{kind === 'phone' ? '短信号码' : 'URL'}</span>
               <Input
+                aria-label={kind === 'phone' ? '手机号' : undefined}
                 value={value}
                 maxLength={2048}
                 disabled={loading || saving}
