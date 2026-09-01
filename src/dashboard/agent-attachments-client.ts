@@ -42,10 +42,12 @@ export type AgentMessageAttachment =
       url?: string;
     };
 
-export async function getAgentAttachmentPresets(): Promise<AgentAttachmentPreset[]> {
-  const response = await attachmentRequest<{ presets: AgentAttachmentPreset[] }>(
-    '/api/agent/attachments/presets',
-  );
+export async function getAgentAttachmentPresets(): Promise<
+  AgentAttachmentPreset[]
+> {
+  const response = await attachmentRequest<{
+    presets: AgentAttachmentPreset[];
+  }>('/api/agent/attachments/presets');
   return response.presets;
 }
 
@@ -79,9 +81,12 @@ export async function updateAgentAttachmentPreset(
 }
 
 export async function deleteAgentAttachmentPreset(id: string): Promise<void> {
-  await attachmentRequest(`/api/agent/attachments/presets/${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-  });
+  await attachmentRequest(
+    `/api/agent/attachments/presets/${encodeURIComponent(id)}`,
+    {
+      method: 'DELETE',
+    },
+  );
 }
 
 export async function uploadAgentAttachmentImage(

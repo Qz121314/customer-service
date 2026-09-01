@@ -225,13 +225,23 @@ function Bubble({
           <div className="message-attachments">
             {attachments.map((attachment) => {
               if (attachment.kind === 'image') {
-                const url = attachment.url ?? agentAttachmentContentUrl(attachment);
+                const url =
+                  attachment.url ?? agentAttachmentContentUrl(attachment);
                 return url ? (
-                  <a href={url} target="_blank" rel="noreferrer" key={attachment.id}>
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    key={attachment.id}
+                  >
                     <img
                       className="message-image"
                       src={url}
-                      alt={attachment.label || attachment.originalName || '聊天图片'}
+                      alt={
+                        attachment.label ||
+                        attachment.originalName ||
+                        '聊天图片'
+                      }
                       loading="lazy"
                     />
                   </a>
@@ -249,7 +259,9 @@ function Bubble({
                   rel={attachment.kind === 'link' ? 'noreferrer' : undefined}
                   key={attachment.id}
                 >
-                  <UiIcon name={attachment.kind === 'phone' ? 'phone' : 'link'} />
+                  <UiIcon
+                    name={attachment.kind === 'phone' ? 'phone' : 'link'}
+                  />
                   <span>
                     <strong>{attachment.label}</strong>
                     <small>{attachment.value}</small>

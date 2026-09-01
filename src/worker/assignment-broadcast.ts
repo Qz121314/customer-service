@@ -189,9 +189,9 @@ async function broadcastAssignment(
 
   const greeting = greetingMessage(conversation);
   if (!initialAssignment || !greeting) return;
-  const attachments = (
-    await loadMessageAttachments(env.DB, greeting.id)
-  ).map(publicMessageAttachment);
+  const attachments = (await loadMessageAttachments(env.DB, greeting.id)).map(
+    publicMessageAttachment,
+  );
 
   const greetingUpdates: Promise<void>[] = [
     broadcastRoom(env, conversation.id, {
@@ -360,7 +360,10 @@ function conversationRoomMessage(message: AssignmentMessage) {
   };
 }
 
-function clientRealtimeMessage(message: AssignmentMessage, attachments: unknown[]) {
+function clientRealtimeMessage(
+  message: AssignmentMessage,
+  attachments: unknown[],
+) {
   return {
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',

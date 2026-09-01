@@ -84,7 +84,9 @@ export function AgentAutoReplySettingsModal({
     settings.enabled !== saved.enabled ||
     settings.text !== saved.text ||
     settings.attachmentIds.join('\n') !== saved.attachmentIds.join('\n');
-  const hasContent = Boolean(normalizedText || settings.attachmentIds.length > 0);
+  const hasContent = Boolean(
+    normalizedText || settings.attachmentIds.length > 0,
+  );
   const canSave =
     !loading &&
     !saving &&
@@ -118,7 +120,10 @@ export function AgentAutoReplySettingsModal({
   const toggleAttachment = (presetId: string) => {
     setSettings((current) => {
       const selected = current.attachmentIds.includes(presetId);
-      if (!selected && current.attachmentIds.length >= AUTO_GREETING_ATTACHMENT_LIMIT) {
+      if (
+        !selected &&
+        current.attachmentIds.length >= AUTO_GREETING_ATTACHMENT_LIMIT
+      ) {
         return current;
       }
       return {
@@ -131,12 +136,18 @@ export function AgentAutoReplySettingsModal({
   };
 
   const uploadGreetingImage = async (file: File) => {
-    if (imageUploading || settings.attachmentIds.length >= AUTO_GREETING_ATTACHMENT_LIMIT)
+    if (
+      imageUploading ||
+      settings.attachmentIds.length >= AUTO_GREETING_ATTACHMENT_LIMIT
+    )
       return;
     setImageUploading(true);
     setError('');
     try {
-      const preset = await uploadAgentAttachmentImage(file, file.name || '问候图片');
+      const preset = await uploadAgentAttachmentImage(
+        file,
+        file.name || '问候图片',
+      );
       setPresets((current) => [...current, preset]);
       setSettings((current) => ({
         ...current,
@@ -154,11 +165,7 @@ export function AgentAutoReplySettingsModal({
       className="agent-auto-reply-backdrop"
       role="presentation"
       onMouseDown={(event) => {
-        if (
-          event.target === event.currentTarget &&
-          !saving &&
-          !imageUploading
-        )
+        if (event.target === event.currentTarget && !saving && !imageUploading)
           onClose();
       }}
     >
@@ -232,8 +239,8 @@ export function AgentAutoReplySettingsModal({
                 <span>
                   <strong>附件</strong>
                   <small>
-                    可搭配手机号、链接和图片；最多 {AUTO_GREETING_ATTACHMENT_LIMIT}{' '}
-                    个。
+                    可搭配手机号、链接和图片；最多{' '}
+                    {AUTO_GREETING_ATTACHMENT_LIMIT} 个。
                   </small>
                 </span>
                 <label
@@ -277,7 +284,9 @@ export function AgentAutoReplySettingsModal({
                         />
                       ) : (
                         <i aria-hidden="true">
-                          <UiIcon name={preset.kind === 'phone' ? 'phone' : 'link'} />
+                          <UiIcon
+                            name={preset.kind === 'phone' ? 'phone' : 'link'}
+                          />
                         </i>
                       )}
                       <span>
@@ -301,7 +310,8 @@ export function AgentAutoReplySettingsModal({
             </section>
 
             <div className="agent-auto-reply-note">
-              问候语支持纯文案、纯附件或文案 + 附件。发送后会保存当时的附件快照，后续修改预设不会改变历史消息。系统恢复分配和重连也不会重复发送。
+              问候语支持纯文案、纯附件或文案 +
+              附件。发送后会保存当时的附件快照，后续修改预设不会改变历史消息。系统恢复分配和重连也不会重复发送。
             </div>
             {settings.enabled && !hasContent ? (
               <div className="auth-error">开启后至少需要文案或一个附件。</div>

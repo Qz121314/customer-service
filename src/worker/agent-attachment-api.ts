@@ -222,149 +222,158 @@ agentAttachmentApi.delete('/api/agent/attachments/presets/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-agentAttachmentApi.get('/api/agent/attachments/presets/:id/content', async (c) => {
-  const agent = await requireAgentSession(c);
-  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const row = await presetForAgent(c.env.DB, c.req.param('id'), agent.id);
-  if (!row || row.kind !== 'image') return c.json({ error: 'NOT_FOUND' }, 404);
-  return readAttachmentObject(c.env.MEDIA, row);
-});
+agentAttachmentApi.get(
+  '/api/agent/attachments/presets/:id/content',
+  async (c) => {
+    const agent = await requireAgentSession(c);
+    if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+    const row = await presetForAgent(c.env.DB, c.req.param('id'), agent.id);
+    if (!row || row.kind !== 'image')
+      return c.json({ error: 'NOT_FOUND' }, 404);
+    return readAttachmentObject(c.env.MEDIA, row);
+  },
+);
 
-agentAttachmentApi.get('/api/agent/conversations/:id/attachments', async (c) => {
-  const agent = await requireAgentSession(c);
-  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const conversation = await c.env.DB.prepare(
-    `SELECT id FROM conversations
+agentAttachmentApi.get(
+  '/api/agent/conversations/:id/attachments',
+  async (c) => {
+    const agent = await requireAgentSession(c);
+    if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+    const conversation = await c.env.DB.prepare(
+      `SELECT id FROM conversations
      WHERE id = ?1 AND assigned_agent = ?2
        AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
      LIMIT 1`,
-  )
-    .bind(c.req.param('id'), agent.id)
-    .first<{ id: string }>();
-  if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
-  return c.json({
-    items: await listConversationAttachments(c.env.DB, conversation.id),
-  });
-});
-
-agentAttachmentApi.post('/api/agent/conversations/:id/attachments', async (c) => {
-  const agent = await requireAgentSession(c);
-  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const body = await readJson<{
-    body?: string;
-    presetIds?: string[];
-    clientMessageId?: string;
-  }>(c.req.raw);
-  const text = body?.body?.trim() ?? '';
-  const clientMessageId = normalizeMessageId(body?.clientMessageId);
-  const presetIds = normalizePresetIds(body?.presetIds);
-  if (
-    text.length > MESSAGE_LIMIT ||
-    !clientMessageId ||
-    presetIds.length < 1 ||
-    presetIds.length > MAX_ATTACHMENTS_PER_MESSAGE
-  ) {
-    return c.json({ error: 'INVALID_MESSAGE_ATTACHMENTS' }, 400);
-  }
-
-  const requested = await loadRequestedPresets(
-    c.env.DB,
-    c.req.param('id'),
-    agent.id,
-    presetIds,
-  );
-  if (!requested.length) return c.json({ error: 'NOT_FOUND' }, 404);
-  const conversationStatus = requested[0].conversation_status;
-  if (requested.some((row) => !row.id || !row.kind || !row.label)) {
-    return c.json({ error: 'INVALID_ATTACHMENT_PRESET' }, 400);
-  }
-
-  const duplicate = await findAgentMessageByClientId(
-    c.env.DB,
-    c.req.param('id'),
-    agent.id,
-    clientMessageId,
-  );
-  if (duplicate) {
+    )
+      .bind(c.req.param('id'), agent.id)
+      .first<{ id: string }>();
+    if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
     return c.json({
-      message: duplicate,
-      attachments: (await loadMessageAttachments(c.env.DB, duplicate.id)).map(
-        publicMessageAttachment,
-      ),
-      duplicate: true,
+      items: await listConversationAttachments(c.env.DB, conversation.id),
     });
-  }
-  if (conversationStatus === 'closed') {
-    return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
-  }
+  },
+);
 
-  const messageId = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const inserted = await c.env.DB.prepare(
-    `INSERT OR IGNORE INTO messages (
-       id, conversation_id, sender_type, sender_id, body, kind,
-       client_message_id, created_at
-     ) VALUES (?1, ?2, 'agent', ?3, ?4, 'text', ?5, ?6)`,
-  )
-    .bind(messageId, c.req.param('id'), agent.id, text, clientMessageId, now)
-    .run();
-  if (!inserted.meta.changes) {
-    const existing = await findAgentMessageByClientId(
+agentAttachmentApi.post(
+  '/api/agent/conversations/:id/attachments',
+  async (c) => {
+    const agent = await requireAgentSession(c);
+    if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+    const body = await readJson<{
+      body?: string;
+      presetIds?: string[];
+      clientMessageId?: string;
+    }>(c.req.raw);
+    const text = body?.body?.trim() ?? '';
+    const clientMessageId = normalizeMessageId(body?.clientMessageId);
+    const presetIds = normalizePresetIds(body?.presetIds);
+    if (
+      text.length > MESSAGE_LIMIT ||
+      !clientMessageId ||
+      presetIds.length < 1 ||
+      presetIds.length > MAX_ATTACHMENTS_PER_MESSAGE
+    ) {
+      return c.json({ error: 'INVALID_MESSAGE_ATTACHMENTS' }, 400);
+    }
+
+    const requested = await loadRequestedPresets(
+      c.env.DB,
+      c.req.param('id'),
+      agent.id,
+      presetIds,
+    );
+    if (!requested.length) return c.json({ error: 'NOT_FOUND' }, 404);
+    const conversationStatus = requested[0].conversation_status;
+    if (requested.some((row) => !row.id || !row.kind || !row.label)) {
+      return c.json({ error: 'INVALID_ATTACHMENT_PRESET' }, 400);
+    }
+
+    const duplicate = await findAgentMessageByClientId(
       c.env.DB,
       c.req.param('id'),
       agent.id,
       clientMessageId,
     );
-    if (!existing) return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
-    return c.json({
-      message: existing,
-      attachments: (await loadMessageAttachments(c.env.DB, existing.id)).map(
-        publicMessageAttachment,
-      ),
-      duplicate: true,
-    });
-  }
+    if (duplicate) {
+      return c.json({
+        message: duplicate,
+        attachments: (await loadMessageAttachments(c.env.DB, duplicate.id)).map(
+          publicMessageAttachment,
+        ),
+        duplicate: true,
+      });
+    }
+    if (conversationStatus === 'closed') {
+      return c.json({ error: 'CONVERSATION_CLOSED' }, 409);
+    }
 
-  const snapshots = requested.map((row, index) => ({
-    id: crypto.randomUUID(),
-    messageId,
-    kind: row.kind as AttachmentKind,
-    label: row.label as string,
-    value: row.value,
-    objectKey: row.object_key,
-    mimeType: row.mime_type,
-    byteSize: row.byte_size,
-    width: row.width,
-    height: row.height,
-    originalName: row.original_name,
-    sortOrder: index,
-  }));
-  const preview = text || snapshots[0]?.label || 'Attachment';
-  const statements = snapshots.map((snapshot) =>
-    c.env.DB.prepare(
-      `INSERT INTO message_attachments (
+    const messageId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const inserted = await c.env.DB.prepare(
+      `INSERT OR IGNORE INTO messages (
+       id, conversation_id, sender_type, sender_id, body, kind,
+       client_message_id, created_at
+     ) VALUES (?1, ?2, 'agent', ?3, ?4, 'text', ?5, ?6)`,
+    )
+      .bind(messageId, c.req.param('id'), agent.id, text, clientMessageId, now)
+      .run();
+    if (!inserted.meta.changes) {
+      const existing = await findAgentMessageByClientId(
+        c.env.DB,
+        c.req.param('id'),
+        agent.id,
+        clientMessageId,
+      );
+      if (!existing) return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
+      return c.json({
+        message: existing,
+        attachments: (await loadMessageAttachments(c.env.DB, existing.id)).map(
+          publicMessageAttachment,
+        ),
+        duplicate: true,
+      });
+    }
+
+    const snapshots = requested.map((row, index) => ({
+      id: crypto.randomUUID(),
+      messageId,
+      kind: row.kind as AttachmentKind,
+      label: row.label as string,
+      value: row.value,
+      objectKey: row.object_key,
+      mimeType: row.mime_type,
+      byteSize: row.byte_size,
+      width: row.width,
+      height: row.height,
+      originalName: row.original_name,
+      sortOrder: index,
+    }));
+    const preview = text || snapshots[0]?.label || 'Attachment';
+    const statements = snapshots.map((snapshot) =>
+      c.env.DB.prepare(
+        `INSERT INTO message_attachments (
          id, message_id, kind, label, value, object_key, mime_type, byte_size,
          width, height, original_name, sort_order, created_at
        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
-    ).bind(
-      snapshot.id,
-      snapshot.messageId,
-      snapshot.kind,
-      snapshot.label,
-      snapshot.value,
-      snapshot.objectKey,
-      snapshot.mimeType,
-      snapshot.byteSize,
-      snapshot.width,
-      snapshot.height,
-      snapshot.originalName,
-      snapshot.sortOrder,
-      now,
-    ),
-  );
-  statements.push(
-    c.env.DB.prepare(
-      `UPDATE conversations
+      ).bind(
+        snapshot.id,
+        snapshot.messageId,
+        snapshot.kind,
+        snapshot.label,
+        snapshot.value,
+        snapshot.objectKey,
+        snapshot.mimeType,
+        snapshot.byteSize,
+        snapshot.width,
+        snapshot.height,
+        snapshot.originalName,
+        snapshot.sortOrder,
+        now,
+      ),
+    );
+    statements.push(
+      c.env.DB.prepare(
+        `UPDATE conversations
        SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
            visitor_unread_count = visitor_unread_count + 1,
            agent_unread_count = 0,
@@ -373,56 +382,57 @@ agentAttachmentApi.post('/api/agent/conversations/:id/attachments', async (c) =>
            updated_at = ?1
        WHERE id = ?3 AND assigned_agent = ?4
          AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP`,
-    ).bind(now, preview, c.req.param('id'), agent.id),
-  );
-  await c.env.DB.batch(statements);
+      ).bind(now, preview, c.req.param('id'), agent.id),
+    );
+    await c.env.DB.batch(statements);
 
-  const message: MessageRow = {
-    id: messageId,
-    conversation_id: c.req.param('id'),
-    sender_type: 'agent',
-    sender_id: agent.id,
-    body: text,
-    client_message_id: clientMessageId,
-    read_by_visitor_at: null,
-    read_by_agent_at: null,
-    created_at: now,
-  };
-  const publicAttachments = snapshots.map((snapshot) => ({
-    id: snapshot.id,
-    kind: snapshot.kind,
-    label: snapshot.label,
-    value: snapshot.value,
-    ...(snapshot.kind === 'image'
-      ? {
-          mimeType: snapshot.mimeType,
-          byteSize: snapshot.byteSize,
-          width: snapshot.width,
-          height: snapshot.height,
-          originalName: snapshot.originalName,
-          source: 'snapshot' as const,
-        }
-      : {}),
-  }));
-  await Promise.allSettled([
-    broadcastRoom(c.env, c.req.param('id'), {
-      type: 'message',
-      message,
-      attachments: publicAttachments,
-    }),
-    broadcastClientConversationEvent(
-      c.env,
-      c.req.param('id'),
-      'message.created',
-      {
-        message: clientRealtimeMessage(message, publicAttachments),
+    const message: MessageRow = {
+      id: messageId,
+      conversation_id: c.req.param('id'),
+      sender_type: 'agent',
+      sender_id: agent.id,
+      body: text,
+      client_message_id: clientMessageId,
+      read_by_visitor_at: null,
+      read_by_agent_at: null,
+      created_at: now,
+    };
+    const publicAttachments = snapshots.map((snapshot) => ({
+      id: snapshot.id,
+      kind: snapshot.kind,
+      label: snapshot.label,
+      value: snapshot.value,
+      ...(snapshot.kind === 'image'
+        ? {
+            mimeType: snapshot.mimeType,
+            byteSize: snapshot.byteSize,
+            width: snapshot.width,
+            height: snapshot.height,
+            originalName: snapshot.originalName,
+            source: 'snapshot' as const,
+          }
+        : {}),
+    }));
+    await Promise.allSettled([
+      broadcastRoom(c.env, c.req.param('id'), {
+        type: 'message',
+        message,
         attachments: publicAttachments,
-      },
-      { includeOverview: conversationStatus === 'open' },
-    ),
-  ]);
-  return c.json({ message, attachments: publicAttachments }, 201);
-});
+      }),
+      broadcastClientConversationEvent(
+        c.env,
+        c.req.param('id'),
+        'message.created',
+        {
+          message: clientRealtimeMessage(message, publicAttachments),
+          attachments: publicAttachments,
+        },
+        { includeOverview: conversationStatus === 'open' },
+      ),
+    ]);
+    return c.json({ message, attachments: publicAttachments }, 201);
+  },
+);
 
 agentAttachmentApi.get('/api/agent/attachments/:id/content', async (c) => {
   const agent = await requireAgentSession(c);
@@ -447,13 +457,16 @@ agentAttachmentApi.get('/api/agent/attachments/:id/content', async (c) => {
   return readAttachmentObject(c.env.MEDIA, row);
 });
 
-agentAttachmentApi.get('/client/v1/conversations/:id/attachments', async (c) => {
-  const access = await authorizeVisitorConversation(c, c.req.param('id'));
-  if (!access.ok) return clientError(c, access.status, access.code);
-  return c.json({
-    items: await listConversationAttachments(c.env.DB, access.conversationId),
-  });
-});
+agentAttachmentApi.get(
+  '/client/v1/conversations/:id/attachments',
+  async (c) => {
+    const access = await authorizeVisitorConversation(c, c.req.param('id'));
+    if (!access.ok) return clientError(c, access.status, access.code);
+    return c.json({
+      items: await listConversationAttachments(c.env.DB, access.conversationId),
+    });
+  },
+);
 
 agentAttachmentApi.get('/client/v1/attachments/:id/content', async (c) => {
   const visitorId = normalizeVisitorId(c.req.query('visitorId'));
@@ -649,7 +662,9 @@ function clientRealtimeMessage(message: MessageRow, attachments: unknown[]) {
     direction: 'agent' as const,
     body: message.body,
     sentAt: message.created_at,
-    delivery: message.read_by_visitor_at ? ('read' as const) : ('sent' as const),
+    delivery: message.read_by_visitor_at
+      ? ('read' as const)
+      : ('sent' as const),
     attachments,
   };
 }
@@ -669,11 +684,7 @@ function broadcastRoom(
   });
 }
 
-function clientError(
-  c: Context<Env>,
-  status: 400 | 401 | 404,
-  code: string,
-) {
+function clientError(c: Context<Env>, status: 400 | 401 | 404, code: string) {
   return c.json({ error: { code, message: code } }, status);
 }
 

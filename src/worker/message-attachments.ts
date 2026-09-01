@@ -235,7 +235,10 @@ export async function loadMessageAttachments(
 
 export async function readAttachmentObject(
   bucket: R2Bucket,
-  row: Pick<MessageAttachmentRow | AttachmentPresetRow, 'kind' | 'object_key' | 'mime_type'>,
+  row: Pick<
+    MessageAttachmentRow | AttachmentPresetRow,
+    'kind' | 'object_key' | 'mime_type'
+  >,
 ) {
   if (row.kind !== 'image' || !row.object_key || !row.mime_type) {
     return new Response('Not found', { status: 404 });

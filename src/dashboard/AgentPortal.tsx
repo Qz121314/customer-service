@@ -91,7 +91,9 @@ function normalizeAgentMessageAttachment(
   const id = typeof raw.id === 'string' ? raw.id : '';
   const kind = raw.kind;
   const messageId =
-    typeof raw.messageId === 'string' ? raw.messageId : messageIdFallback ?? undefined;
+    typeof raw.messageId === 'string'
+      ? raw.messageId
+      : (messageIdFallback ?? undefined);
   if (!id || (kind !== 'phone' && kind !== 'link' && kind !== 'image')) {
     return null;
   }
@@ -706,9 +708,7 @@ function AgentWorkspace({
             });
             const incomingAttachments = (value.media as unknown[])
               .map((item) => normalizeAgentMessageAttachment(item))
-              .filter(
-                (item): item is AgentMessageAttachment => Boolean(item),
-              );
+              .filter((item): item is AgentMessageAttachment => Boolean(item));
             setMessageAttachments((currentAttachments) => {
               if (!incremental) return incomingAttachments;
               return mergeMessageAttachments(
@@ -754,7 +754,8 @@ function AgentWorkspace({
       });
       socket.addEventListener('message', (event) => {
         if (!active) return;
-        const payload = parseRealtimeEvent<ThreadRealtimeWithAttachments>(event);
+        const payload =
+          parseRealtimeEvent<ThreadRealtimeWithAttachments>(event);
         if (!payload || payload.type === 'ready' || payload.type === 'pong')
           return;
 
@@ -802,9 +803,7 @@ function AgentWorkspace({
             ...(payload.media ? [payload.media] : []),
           ]
             .map((item) => normalizeAgentMessageAttachment(item, incoming.id))
-            .filter(
-              (item): item is AgentMessageAttachment => Boolean(item),
-            );
+            .filter((item): item is AgentMessageAttachment => Boolean(item));
           if (realtimeAttachments.length > 0) {
             setMessageAttachments((current) =>
               mergeMessageAttachments(current, realtimeAttachments),
@@ -1089,12 +1088,7 @@ function AgentWorkspace({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (
-      !selectedId ||
-      !draft.trim() ||
-      currentPendingText ||
-      attachmentSending
-    )
+    if (!selectedId || !draft.trim() || currentPendingText || attachmentSending)
       return;
     sendAgentTyping(false);
     if (agentTypingTimerRef.current !== null) {
@@ -1158,7 +1152,9 @@ function AgentWorkspace({
       );
       setDetail((current) => {
         if (!current || current.conversation.id !== selectedId) return current;
-        const exists = current.messages.some((item) => item.id === sent.message.id);
+        const exists = current.messages.some(
+          (item) => item.id === sent.message.id,
+        );
         return {
           ...current,
           conversation: {
@@ -1217,7 +1213,9 @@ function AgentWorkspace({
       );
       setDetail((current) => {
         if (!current || current.conversation.id !== selectedId) return current;
-        const exists = current.messages.some((item) => item.id === sentMessage.id);
+        const exists = current.messages.some(
+          (item) => item.id === sentMessage.id,
+        );
         return {
           ...current,
           conversation: {
@@ -1225,7 +1223,9 @@ function AgentWorkspace({
             last_message: attachment?.label || '图片',
             last_message_at: sent.createdAt,
           },
-          messages: exists ? current.messages : [...current.messages, sentMessage],
+          messages: exists
+            ? current.messages
+            : [...current.messages, sentMessage],
         };
       });
       if (attachment) {

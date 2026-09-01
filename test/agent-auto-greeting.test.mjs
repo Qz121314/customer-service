@@ -217,24 +217,14 @@ test('attachment-only greeting snapshots phone, link, and image presets in confi
     '付款链接',
     'https://example.com/pay',
   );
-  addImagePreset(
-    database,
-    'attachment-agent',
-    'image-preset',
-    '问候图片',
-  );
+  addImagePreset(database, 'attachment-agent', 'image-preset', '问候图片');
   addGreetingAttachment(database, 'attachment-agent', 'phone-preset', 0);
   addGreetingAttachment(database, 'attachment-agent', 'link-preset', 1);
   addGreetingAttachment(database, 'attachment-agent', 'image-preset', 2);
   addConversation(database, 'attachment-conversation');
 
   const assignedAt = '2026-08-18T20:00:30.000Z';
-  assign(
-    database,
-    'attachment-conversation',
-    'attachment-agent',
-    assignedAt,
-  );
+  assign(database, 'attachment-conversation', 'attachment-agent', assignedAt);
 
   const automation = row(
     database,

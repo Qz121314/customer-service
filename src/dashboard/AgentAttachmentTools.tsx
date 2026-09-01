@@ -167,7 +167,9 @@ export function AgentComposerAttachmentMenu({
               还没有预设手机号或链接。
             </p>
           ) : null}
-          {loading ? <p className="composer-attachment-empty">正在加载…</p> : null}
+          {loading ? (
+            <p className="composer-attachment-empty">正在加载…</p>
+          ) : null}
           {error ? <p className="composer-attachment-error">{error}</p> : null}
 
           <button
@@ -386,7 +388,9 @@ function AgentAttachmentPresetManager({
               <Input
                 value={label}
                 maxLength={80}
-                placeholder={kind === 'phone' ? '例如：短信联系' : '例如：付款链接'}
+                placeholder={
+                  kind === 'phone' ? '例如：短信联系' : '例如：付款链接'
+                }
                 onChange={(event) => setLabel(event.target.value)}
               />
             </label>
