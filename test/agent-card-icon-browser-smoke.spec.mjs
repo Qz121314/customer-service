@@ -51,6 +51,8 @@ test('agent can configure channel cards, preset text and custom icon override', 
   const dialog = page.getByRole('dialog', { name: '名片' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('正在读取名片…')).toBeHidden();
+  await expect(dialog).toHaveCSS('animation-name', 'agent-overlay-sheet-in');
+  await page.waitForTimeout(220);
 
   const initialLayout = await dialog.evaluate((element) => {
     const browser = element.ownerDocument.defaultView;
