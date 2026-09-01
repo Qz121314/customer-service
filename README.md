@@ -696,6 +696,7 @@ dailyConversationLimit = 0 时不限
 - `node:sqlite` 的 `.all()` 返回无原型行对象。与普通对象字面量做 `assert.deepEqual` 前，先使用 `{ ...row }` 转换成普通对象；字段和值仍须完整断言，不能通过放宽或删除迁移测试换取 CI 通过。
 - 新 migration 必须从上一版 schema 准备历史数据，再单独应用新 migration 验证转换结果；同时还要通过全量本地 D1 migration，禁止修改、重写或删除已经上线的 migration。
 - 名片预设与消息快照用途不同：预设可以编辑或删除，已发送快照必须不可变；自定义图标被替换或移除后，历史快照引用的 R2 对象不能被同步删除。
+- SMS、WhatsApp、Telegram 的官方渠道 SVG 集中放在 `public/icons/contact-card-*.svg`。不要换成 Lucide 通用图标，也不要在组件或 CSS 中复制内联 SVG；渠道选择仍保持单个紧凑下拉框，避免恢复成占高的多按钮网格。
 - PR 测试失败时，后续 Build、Worker bundle、浏览器 smoke 和 Cloudflare 部署会被跳过。排查时先看第一个失败步骤，不要把“未执行部署”误判为 Cloudflare 故障。
 - 合并前按 `pnpm verify` 验证完整仓库；名片 UI 还必须通过 Agent Chromium smoke。只有 PR 全绿后才能合并，最终完成标准仍是 main 部署成功并通过 production protocol smoke。
 

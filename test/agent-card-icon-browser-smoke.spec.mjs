@@ -65,10 +65,14 @@ test('agent can configure channel cards, preset text and custom icon override', 
     typeOptions.getByRole('option', { name: /网站/u }),
   ).toBeVisible();
   await expect(
-    typeOptions.locator('[data-brand="whatsapp"] path[fill="#25d366"]'),
+    typeOptions.locator(
+      '[data-brand="whatsapp"] img[src="/icons/contact-card-whatsapp.svg"]',
+    ),
   ).toBeVisible();
   await expect(
-    typeOptions.locator('[data-brand="telegram"] path[fill="#26a5e4"]'),
+    typeOptions.locator(
+      '[data-brand="telegram"] img[src="/icons/contact-card-telegram.svg"]',
+    ),
   ).toBeVisible();
   await typeSelect.click();
 
@@ -84,10 +88,14 @@ test('agent can configure channel cards, preset text and custom icon override', 
   });
   await expect(smsRow).toBeVisible();
   await expect(smsRow.getByText('SMS', { exact: false })).toBeVisible();
-  await expect(smsRow.locator('.agent-contact-card-icon img')).toHaveCount(0);
   await expect(
-    smsRow.locator('.agent-contact-card-icon[data-channel="sms"] svg'),
+    smsRow.locator(
+      '.agent-contact-card-icon[data-channel="sms"] img[src="/icons/contact-card-imessage.svg"]',
+    ),
   ).toBeVisible();
+  await expect(smsRow.locator('.agent-contact-card-custom-icon')).toHaveCount(
+    0,
+  );
 
   await typeSelect.click();
   await dialog.getByRole('option', { name: /WhatsApp/u }).click();
@@ -111,6 +119,6 @@ test('agent can configure channel cards, preset text and custom icon override', 
   });
   await expect(whatsappRow).toBeVisible();
   await expect(
-    whatsappRow.locator('.agent-contact-card-icon img'),
+    whatsappRow.locator('.agent-contact-card-custom-icon'),
   ).toBeVisible();
 });

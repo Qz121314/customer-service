@@ -361,7 +361,7 @@
   background: linear-gradient(145deg, #f4f7fa, #e9eff5);
 }
 
-.agent-contact-card-icon > img {
+.agent-contact-card-icon > .agent-contact-card-custom-icon {
   position: absolute;
   inset: 0;
   display: block;
