@@ -6,6 +6,7 @@ import type {
 } from './api';
 import type { AgentDraft } from './dashboard-runtime';
 import { relativeTime } from './dashboard-runtime';
+import { AgentDeleteButton } from './AgentDeleteButton';
 import { ProductAssignmentPicker } from './ProductAssignmentPicker';
 import { UiIcon } from './icons';
 import { Button } from './ui';
@@ -380,6 +381,9 @@ export function AgentEditorModal({
               </Button>
             ) : null}
             <div className="agent-editor-footer-actions">
+              {draft.id ? (
+                <AgentDeleteButton agentId={draft.id} disabled={saving} />
+              ) : null}
               <Button
                 type="button"
                 variant="secondary"

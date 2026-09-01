@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { coreApp, ConversationRoom } from './core';
 import { clientApi } from './client-api';
 import { integrationApi } from './integration-api';
+import { adminAgentDeleteApi } from './admin-agent-delete-api';
 import { adminConfigApi } from './admin-config-api';
 import { adminQuotaApi } from './admin-quota-api';
 import { agentApi } from './agent-api';
@@ -159,6 +160,7 @@ app.use('/api/agent/*', async (c, next) => {
 });
 
 app.route('/', adminQuotaApi);
+app.route('/', adminAgentDeleteApi);
 app.route('/', adminConfigApi);
 app.route('/', mediaApi);
 app.route('/', agentAttachmentApi);
