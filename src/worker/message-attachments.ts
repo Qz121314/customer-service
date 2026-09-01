@@ -1,6 +1,7 @@
 import { hasContactCardIconRef } from './contact-card-icon';
 
-export type AttachmentKind = 'image' | 'phone' | 'link';
+export type ContactCardKind = 'sms' | 'whatsapp' | 'telegram' | 'website';
+export type AttachmentKind = 'image' | ContactCardKind;
 
 export type AttachmentPresetRow = {
   id: string;
@@ -8,6 +9,8 @@ export type AttachmentPresetRow = {
   kind: AttachmentKind;
   label: string;
   value: string | null;
+  preset_message: string | null;
+  icon_ref: string | null;
   object_key: string | null;
   mime_type: string | null;
   byte_size: number | null;
@@ -25,6 +28,8 @@ export type MessageAttachmentRow = {
   kind: AttachmentKind;
   label: string;
   value: string | null;
+  preset_message: string | null;
+  icon_ref: string | null;
   object_key: string | null;
   mime_type: string | null;
   byte_size: number | null;
@@ -41,6 +46,8 @@ type UnifiedAttachmentRow = {
   kind: AttachmentKind;
   label: string | null;
   value: string | null;
+  preset_message: string | null;
+  icon_ref: string | null;
   object_key: string | null;
   mime_type: string | null;
   byte_size: number | null;
@@ -52,8 +59,19 @@ type UnifiedAttachmentRow = {
 };
 
 const PHONE_PATTERN = /^\+?[0-9][0-9 ()-]{4,30}$/u;
+const TELEGRAM_USERNAME_PATTERN = /^[A-Za-z0-9_]{5,32}$/u;
 const LABEL_LIMIT = 80;
 const VALUE_LIMIT = 2048;
+const PRESET_MESSAGE_LIMIT = 2000;
+
+export function isContactCardKind(value: unknown): value is ContactCardKind {
+  return (
+    value === 'sms' ||
+    value === 'whatsapp' ||
+    value === 'telegram' ||
+    value === 'website'
+  );
+}
 
 export function normalizeAttachmentLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -71,6 +89,13 @@ export function normalizePhoneValue(value: unknown): string | null {
   return `${leadingPlus ? '+' : ''}${digits}`;
 }
 
+export function normalizeTelegramValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const input = value.trim();
+  const username = input.startsWith('@') ? input.slice(1) : input;
+  return TELEGRAM_USERNAME_PATTERN.test(username) ? username : null;
+}
+
 export function normalizeLinkValue(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const input = value.trim();
@@ -83,6 +108,29 @@ export function normalizeLinkValue(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+export function normalizeContactCardValue(
+  kind: ContactCardKind,
+  value: unknown,
+): string | null {
+  switch (kind) {
+    case 'sms':
+    case 'whatsapp':
+      return normalizePhoneValue(value);
+    case 'telegram':
+      return normalizeTelegramValue(value);
+    case 'website':
+      return normalizeLinkValue(value);
+  }
+}
+
+export function normalizePresetMessage(value: unknown): string | null {
+  if (value == null) return null;
+  if (typeof value !== 'string') return null;
+  const message = value.trim();
+  if (!message) return null;
+  return message.length <= PRESET_MESSAGE_LIMIT ? message : null;
 }
 
 export function publicPreset(row: AttachmentPresetRow) {
@@ -99,7 +147,10 @@ export function publicPreset(row: AttachmentPresetRow) {
           height: row.height,
           originalName: row.original_name,
         }
-      : { hasCustomIcon: hasContactCardIconRef(row.original_name) }),
+      : {
+          presetMessage: row.preset_message,
+          hasCustomIcon: hasContactCardIconRef(row.icon_ref),
+        }),
   };
 }
 
@@ -118,7 +169,10 @@ export function publicMessageAttachment(row: MessageAttachmentRow) {
           originalName: row.original_name,
           source: 'snapshot' as const,
         }
-      : { hasCustomIcon: hasContactCardIconRef(row.original_name) }),
+      : {
+          presetMessage: row.preset_message,
+          hasCustomIcon: hasContactCardIconRef(row.icon_ref),
+        }),
   };
 }
 
@@ -128,12 +182,18 @@ export async function listAgentAttachmentPresets(
 ): Promise<AttachmentPresetRow[]> {
   const result = await db
     .prepare(
-      `SELECT id, agent_id, kind, label, value, object_key, mime_type,
-         byte_size, width, height, original_name, sort_order, created_at, updated_at
+      `SELECT id, agent_id, kind, label, value, preset_message, icon_ref,
+         object_key, mime_type, byte_size, width, height, original_name,
+         sort_order, created_at, updated_at
        FROM agent_attachment_presets
        WHERE agent_id = ?1
-       ORDER BY CASE kind WHEN 'phone' THEN 0 WHEN 'link' THEN 1 ELSE 2 END,
-         sort_order ASC, created_at ASC, id ASC`,
+       ORDER BY CASE kind
+         WHEN 'sms' THEN 0
+         WHEN 'whatsapp' THEN 1
+         WHEN 'telegram' THEN 2
+         WHEN 'website' THEN 3
+         ELSE 4
+       END, sort_order ASC, created_at ASC, id ASC`,
     )
     .bind(agentId)
     .all<AttachmentPresetRow>();
@@ -153,6 +213,8 @@ export async function listConversationAttachments(
          'image' AS kind,
          COALESCE(mi.original_name, 'Image') AS label,
          NULL AS value,
+         NULL AS preset_message,
+         NULL AS icon_ref,
          mi.object_key AS object_key,
          mi.mime_type AS mime_type,
          mi.byte_size AS byte_size,
@@ -178,6 +240,8 @@ export async function listConversationAttachments(
          attachment.kind,
          attachment.label,
          attachment.value,
+         attachment.preset_message,
+         attachment.icon_ref,
          attachment.object_key,
          attachment.mime_type,
          attachment.byte_size,
@@ -214,7 +278,10 @@ export async function listConversationAttachments(
           originalName: row.original_name,
           source: row.source,
         }
-      : { hasCustomIcon: hasContactCardIconRef(row.original_name) }),
+      : {
+          presetMessage: row.preset_message,
+          hasCustomIcon: hasContactCardIconRef(row.icon_ref),
+        }),
   }));
 }
 
@@ -224,8 +291,9 @@ export async function loadMessageAttachments(
 ): Promise<MessageAttachmentRow[]> {
   const result = await db
     .prepare(
-      `SELECT id, message_id, kind, label, value, object_key, mime_type,
-         byte_size, width, height, original_name, sort_order, created_at
+      `SELECT id, message_id, kind, label, value, preset_message, icon_ref,
+         object_key, mime_type, byte_size, width, height, original_name,
+         sort_order, created_at
        FROM message_attachments
        WHERE message_id = ?1
        ORDER BY sort_order ASC, id ASC`,
