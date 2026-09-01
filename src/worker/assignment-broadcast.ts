@@ -1,3 +1,8 @@
+import {
+  loadMessageAttachments,
+  publicMessageAttachment,
+} from './message-attachments';
+
 type AssignmentBroadcastEnv = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
@@ -150,7 +155,7 @@ async function broadcastAssignment(
             type: 'message.created',
             conversationId: conversation.id,
             conversation: visitorConversationSummary(conversation),
-            message: clientRealtimeMessage(visitorMessage),
+            message: clientRealtimeMessage(visitorMessage, []),
           },
         ),
       );
@@ -184,11 +189,15 @@ async function broadcastAssignment(
 
   const greeting = greetingMessage(conversation);
   if (!initialAssignment || !greeting) return;
+  const attachments = (await loadMessageAttachments(env.DB, greeting.id)).map(
+    publicMessageAttachment,
+  );
 
   const greetingUpdates: Promise<void>[] = [
     broadcastRoom(env, conversation.id, {
       type: 'message',
       message: conversationRoomMessage(greeting),
+      attachments,
     }),
   ];
   if (conversation.external_id) {
@@ -200,7 +209,8 @@ async function broadcastAssignment(
           type: 'message.created',
           conversationId: conversation.id,
           conversation: visitorConversationSummary(conversation),
-          message: clientRealtimeMessage(greeting),
+          message: clientRealtimeMessage(greeting, attachments),
+          attachments,
         },
       ),
     );
@@ -305,7 +315,7 @@ type GreetingMessage = {
   sender_type: 'agent';
   sender_id: string;
   body: string;
-  client_message_id: 'auto-greeting:v1';
+  client_message_id: 'auto-greeting:v2';
   read_by_visitor_at: null;
   read_by_agent_at: null;
   created_at: string;
@@ -319,7 +329,7 @@ function greetingMessage(
   if (
     !conversation.assigned_agent ||
     !conversation.greeting_message_id ||
-    !conversation.greeting_message_body ||
+    conversation.greeting_message_body === null ||
     !conversation.greeting_message_created_at
   ) {
     return null;
@@ -330,7 +340,7 @@ function greetingMessage(
     sender_type: 'agent',
     sender_id: conversation.assigned_agent,
     body: conversation.greeting_message_body,
-    client_message_id: 'auto-greeting:v1',
+    client_message_id: 'auto-greeting:v2',
     read_by_visitor_at: null,
     read_by_agent_at: null,
     created_at: conversation.greeting_message_created_at,
@@ -350,14 +360,17 @@ function conversationRoomMessage(message: AssignmentMessage) {
   };
 }
 
-function clientRealtimeMessage(message: AssignmentMessage) {
+function clientRealtimeMessage(
+  message: AssignmentMessage,
+  attachments: unknown[],
+) {
   return {
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
     sentAt: toIso(message.created_at),
     delivery: 'sent',
-    attachments: [],
+    attachments,
   };
 }
 

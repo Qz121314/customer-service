@@ -21,6 +21,7 @@ for (const name of [
   'assignment-broadcast.ts',
   'abuse-control.ts',
   'no-agent-message.ts',
+  'message-attachments.ts',
 ]) {
   const shimPath = join(workerDirectory, name.slice(0, -3));
   if (existsSync(shimPath)) continue;
@@ -31,9 +32,15 @@ for (const name of [
 let clientApi;
 try {
   ({ clientApi } = await import('../src/worker/client-api.ts'));
-} finally {
+} catch (error) {
   for (const shimPath of shims) unlinkSync(shimPath);
+  throw error;
 }
+process.once('exit', () => {
+  for (const shimPath of shims) {
+    if (existsSync(shimPath)) unlinkSync(shimPath);
+  }
+});
 
 function applyMigrations(database) {
   const directory = fileURLToPath(new URL('../migrations/', import.meta.url));

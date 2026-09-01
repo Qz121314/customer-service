@@ -17,6 +17,7 @@ import {
   type MediaBindings,
   type MediaRow,
 } from './media-types';
+import { listConversationAttachments } from './message-attachments';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
 import {
   normalizeVisitorId,
@@ -25,8 +26,6 @@ import {
 } from './client-api';
 
 type Env = { Bindings: MediaBindings };
-
-type ReadyMediaRow = MediaRow & { message_id: string };
 
 type AuthorizedAgentMediaRow = MediaRow & {
   conversation_status: 'open' | 'pending' | 'closed';
@@ -274,29 +273,7 @@ export async function listConversationMedia(
   conversationId: string,
   after?: { id: string; createdAt: string } | null,
 ) {
-  const result = await db
-    .prepare(
-      `SELECT mi.id, mi.conversation_id, mi.message_id,
-         mi.reserved_message_id, mi.sender_type, mi.sender_id, mi.object_key,
-         mi.mime_type, mi.byte_size, mi.width, mi.height, mi.original_name,
-         mi.client_upload_id, mi.status, mi.is_initial, mi.reserved_created_at
-       FROM media_items mi
-       JOIN messages m ON m.id = mi.message_id
-       WHERE mi.conversation_id = ?1 AND mi.status = 'ready'
-         AND mi.message_id IS NOT NULL
-         AND (
-           ?2 IS NULL
-           OR m.created_at > ?2
-           OR (m.created_at = ?2 AND m.id > ?3)
-         )
-       ORDER BY m.created_at ASC, m.id ASC`,
-    )
-    .bind(conversationId, after?.createdAt ?? null, after?.id ?? null)
-    .all<ReadyMediaRow>();
-  return (result.results ?? []).map((row) => ({
-    messageId: row.message_id,
-    ...publicMedia(row),
-  }));
+  return listConversationAttachments(db, conversationId, after);
 }
 
 async function authorizedVisitorMedia(

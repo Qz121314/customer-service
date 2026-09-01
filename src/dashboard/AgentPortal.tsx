@@ -58,7 +58,13 @@ import {
 } from './dashboard-ui';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { AgentInboxPane, AgentSidebar } from './AgentWorkspacePanels';
-import { sendAgentImage, type AgentMediaItem } from './agent-media';
+import { AgentComposerAttachmentMenu } from './AgentAttachmentTools';
+import {
+  sendAgentPresetAttachments,
+  type AgentAttachmentPreset,
+  type AgentMessageAttachment,
+} from './agent-attachments-client';
+import { sendAgentImage } from './agent-media';
 import {
   disableAgentNotifications,
   enableAgentNotifications,
@@ -66,6 +72,86 @@ import {
   type AgentNotificationState,
 } from './agent-push';
 import { UiIcon } from './icons';
+
+type QuickAttachmentPreset = Extract<
+  AgentAttachmentPreset,
+  { kind: 'phone' | 'link' }
+>;
+
+type ThreadRealtimeWithAttachments = ThreadRealtimeEvent & {
+  attachments?: unknown[];
+};
+
+function normalizeAgentMessageAttachment(
+  value: unknown,
+  messageIdFallback: string | null = null,
+): AgentMessageAttachment | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const id = typeof raw.id === 'string' ? raw.id : '';
+  const kind = raw.kind;
+  const messageId =
+    typeof raw.messageId === 'string'
+      ? raw.messageId
+      : (messageIdFallback ?? undefined);
+  if (!id || (kind !== 'phone' && kind !== 'link' && kind !== 'image')) {
+    return null;
+  }
+  const label =
+    typeof raw.label === 'string' && raw.label.trim()
+      ? raw.label.trim()
+      : kind === 'image'
+        ? typeof raw.originalName === 'string' && raw.originalName
+          ? raw.originalName
+          : '图片'
+        : '';
+
+  if (kind === 'phone' || kind === 'link') {
+    if (typeof raw.value !== 'string' || !raw.value) return null;
+    return {
+      id,
+      messageId,
+      kind,
+      label,
+      value: raw.value,
+    };
+  }
+
+  const mimeType = typeof raw.mimeType === 'string' ? raw.mimeType : '';
+  const byteSize = Number(raw.byteSize);
+  if (!mimeType || !Number.isFinite(byteSize)) return null;
+  const source = raw.source === 'snapshot' ? 'snapshot' : 'media';
+  const url =
+    typeof raw.url === 'string' && raw.url
+      ? raw.url
+      : source === 'snapshot'
+        ? `/api/agent/attachments/${encodeURIComponent(id)}/content`
+        : `/api/agent/media/${encodeURIComponent(id)}/content`;
+  return {
+    id,
+    messageId,
+    kind: 'image',
+    label,
+    value: null,
+    mimeType,
+    byteSize,
+    width: typeof raw.width === 'number' ? raw.width : null,
+    height: typeof raw.height === 'number' ? raw.height : null,
+    originalName:
+      typeof raw.originalName === 'string' ? raw.originalName : null,
+    source,
+    url,
+  };
+}
+
+function mergeMessageAttachments(
+  current: AgentMessageAttachment[],
+  incoming: AgentMessageAttachment[],
+): AgentMessageAttachment[] {
+  const merged = new Map(current.map((item) => [item.id, item]));
+  for (const item of incoming) merged.set(item.id, item);
+  return [...merged.values()];
+}
 
 export function AgentPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -163,7 +249,10 @@ function AgentWorkspace({
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
-  const [mediaItems, setMediaItems] = useState<AgentMediaItem[]>([]);
+  const [messageAttachments, setMessageAttachments] = useState<
+    AgentMessageAttachment[]
+  >([]);
+  const [attachmentSending, setAttachmentSending] = useState(false);
   const [mediaProgress, setMediaProgress] = useState<number | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const [mediaPendingFile, setMediaPendingFile] = useState<File | null>(null);
@@ -553,7 +642,7 @@ function AgentWorkspace({
     agentTypingSentRef.current = false;
     if (!selectedId) {
       setDetail(null);
-      setMediaItems([]);
+      setMessageAttachments([]);
       setThreadConnected(false);
       lastScrolledConversationRef.current = null;
       return;
@@ -617,17 +706,15 @@ function AgentWorkspace({
               delete next[selectedId];
               return next;
             });
-            const incomingMedia = value.media.map((item) => ({
-              ...item,
-              url: `/api/agent/media/${encodeURIComponent(item.id)}/content`,
-            }));
-            setMediaItems((currentMedia) => {
-              if (!incremental) return incomingMedia;
-              const media = new Map(
-                currentMedia.map((item) => [item.id, item]),
+            const incomingAttachments = (value.media as unknown[])
+              .map((item) => normalizeAgentMessageAttachment(item))
+              .filter((item): item is AgentMessageAttachment => Boolean(item));
+            setMessageAttachments((currentAttachments) => {
+              if (!incremental) return incomingAttachments;
+              return mergeMessageAttachments(
+                currentAttachments,
+                incomingAttachments,
               );
-              for (const item of incomingMedia) media.set(item.id, item);
-              return [...media.values()];
             });
             if (
               document.visibilityState === 'visible' &&
@@ -667,7 +754,8 @@ function AgentWorkspace({
       });
       socket.addEventListener('message', (event) => {
         if (!active) return;
-        const payload = parseRealtimeEvent<ThreadRealtimeEvent>(event);
+        const payload =
+          parseRealtimeEvent<ThreadRealtimeWithAttachments>(event);
         if (!payload || payload.type === 'ready' || payload.type === 'pong')
           return;
 
@@ -709,6 +797,19 @@ function AgentWorkspace({
               return next;
             });
           }
+
+          const realtimeAttachments = [
+            ...(Array.isArray(payload.attachments) ? payload.attachments : []),
+            ...(payload.media ? [payload.media] : []),
+          ]
+            .map((item) => normalizeAgentMessageAttachment(item, incoming.id))
+            .filter((item): item is AgentMessageAttachment => Boolean(item));
+          if (realtimeAttachments.length > 0) {
+            setMessageAttachments((current) =>
+              mergeMessageAttachments(current, realtimeAttachments),
+            );
+          }
+          const preview = incoming.body || realtimeAttachments[0]?.label || '';
           setDetail((current) => {
             if (!current || current.conversation.id !== selectedId)
               return current;
@@ -719,7 +820,7 @@ function AgentWorkspace({
               ...current,
               conversation: {
                 ...current.conversation,
-                last_message: incoming.body,
+                last_message: preview,
                 last_message_at: incoming.created_at,
               },
               messages: exists
@@ -729,17 +830,6 @@ function AgentWorkspace({
                 : [...current.messages, incoming],
             };
           });
-          if (payload.media?.id && payload.media.messageId) {
-            const media: AgentMediaItem = {
-              ...payload.media,
-              url: `/api/agent/media/${encodeURIComponent(payload.media.id)}/content`,
-            };
-            setMediaItems((current) =>
-              current.some((item) => item.id === media.id)
-                ? current.map((item) => (item.id === media.id ? media : item))
-                : [...current, media],
-            );
-          }
           if (
             incoming.sender_type === 'visitor' &&
             document.visibilityState === 'visible'
@@ -864,6 +954,7 @@ function AgentWorkspace({
   const selectedExpiresAt = detail?.conversation.expires_at ?? null;
 
   useEffect(() => {
+    setAttachmentSending(false);
     setMediaPendingFile(null);
     setMediaClientUploadId(null);
     setMediaFailed(false);
@@ -881,7 +972,7 @@ function AgentWorkspace({
     const expire = () => {
       setSelectedId(null);
       setDetail(null);
-      setMediaItems([]);
+      setMessageAttachments([]);
       void refresh().catch(() => undefined);
     };
     const remaining = expiresAt - Date.now();
@@ -909,9 +1000,11 @@ function AgentWorkspace({
     const frame = window.requestAnimationFrame(scroll);
     return () => window.cancelAnimationFrame(frame);
   }, [
+    attachmentSending,
     currentPendingText?.clientMessageId,
     currentPendingText?.status,
     lastMessageId,
+    messageAttachments.length,
     selectedId,
   ]);
 
@@ -995,7 +1088,8 @@ function AgentWorkspace({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!selectedId || !draft.trim() || currentPendingText) return;
+    if (!selectedId || !draft.trim() || currentPendingText || attachmentSending)
+      return;
     sendAgentTyping(false);
     if (agentTypingTimerRef.current !== null) {
       window.clearTimeout(agentTypingTimerRef.current);
@@ -1029,6 +1123,60 @@ function AgentWorkspace({
     );
   }
 
+  async function submitPresetAttachment(preset: QuickAttachmentPreset) {
+    if (
+      !selectedId ||
+      attachmentSending ||
+      currentPendingText ||
+      !networkOnline ||
+      !threadConnected ||
+      detail?.conversation.status === 'closed'
+    )
+      return;
+    setAttachmentSending(true);
+    setError('');
+    sendAgentTyping(false);
+    const body = draft.trim();
+    const clientMessageId = crypto.randomUUID();
+    try {
+      const sent = await sendAgentPresetAttachments(selectedId, {
+        body,
+        presetIds: [preset.id],
+        clientMessageId,
+      });
+      const attachments = sent.attachments
+        .map((item) => normalizeAgentMessageAttachment(item, sent.message.id))
+        .filter((item): item is AgentMessageAttachment => Boolean(item));
+      setMessageAttachments((current) =>
+        mergeMessageAttachments(current, attachments),
+      );
+      setDetail((current) => {
+        if (!current || current.conversation.id !== selectedId) return current;
+        const exists = current.messages.some(
+          (item) => item.id === sent.message.id,
+        );
+        return {
+          ...current,
+          conversation: {
+            ...current.conversation,
+            last_message: sent.message.body || preset.label,
+            last_message_at: sent.message.created_at,
+          },
+          messages: exists
+            ? current.messages.map((item) =>
+                item.id === sent.message.id ? sent.message : item,
+              )
+            : [...current.messages, sent.message],
+        };
+      });
+      if (body) updateDraft('');
+    } catch (reason) {
+      setError(message(reason, '附件发送失败'));
+    } finally {
+      setAttachmentSending(false);
+    }
+  }
+
   async function uploadImage(
     file: File,
     previewUrl: string,
@@ -1044,7 +1192,7 @@ function AgentWorkspace({
         clientUploadId,
         setMediaProgress,
       );
-      const message: Message = {
+      const sentMessage: Message = {
         id: sent.messageId,
         conversation_id: selectedId,
         sender_type: 'agent',
@@ -1055,26 +1203,36 @@ function AgentWorkspace({
         read_by_agent_at: null,
         created_at: sent.createdAt,
       };
+      const attachment = normalizeAgentMessageAttachment(
+        {
+          ...sent.media,
+          source: 'media',
+          label: sent.media.originalName || '图片',
+        },
+        sent.messageId,
+      );
       setDetail((current) => {
         if (!current || current.conversation.id !== selectedId) return current;
-        const exists = current.messages.some((item) => item.id === message.id);
+        const exists = current.messages.some(
+          (item) => item.id === sentMessage.id,
+        );
         return {
           ...current,
           conversation: {
             ...current.conversation,
-            last_message: '',
+            last_message: attachment?.label || '图片',
             last_message_at: sent.createdAt,
           },
-          messages: exists ? current.messages : [...current.messages, message],
+          messages: exists
+            ? current.messages
+            : [...current.messages, sentMessage],
         };
       });
-      setMediaItems((current) =>
-        current.some((item) => item.id === sent.media.id)
-          ? current.map((item) =>
-              item.id === sent.media.id ? sent.media : item,
-            )
-          : [...current, sent.media],
-      );
+      if (attachment) {
+        setMessageAttachments((current) =>
+          mergeMessageAttachments(current, [attachment]),
+        );
+      }
       setMediaPendingFile(null);
       setMediaClientUploadId(null);
       setMediaPreviewUrl(null);
@@ -1373,10 +1531,9 @@ function AgentWorkspace({
                 <Bubble
                   key={item.id}
                   message={item}
-                  media={
-                    mediaItems.find((media) => media.messageId === item.id) ??
-                    null
-                  }
+                  attachments={messageAttachments.filter(
+                    (attachment) => attachment.messageId === item.id,
+                  )}
                 />
               ))}
               {currentPendingText ? (
@@ -1471,24 +1628,18 @@ function AgentWorkspace({
             </div>
             <form className="composer" onSubmit={(event) => void submit(event)}>
               <div className="composer-tools">
-                <label className="media-picker" aria-label="发送图片">
-                  <UiIcon name="image-plus" />
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif"
-                    disabled={
-                      detail.conversation.status === 'closed' ||
-                      mediaProgress !== null ||
-                      !networkOnline ||
-                      !threadConnected
-                    }
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.currentTarget.value = '';
-                      if (file) void submitImage(file);
-                    }}
-                  />
-                </label>
+                <AgentComposerAttachmentMenu
+                  disabled={
+                    detail.conversation.status === 'closed' ||
+                    mediaProgress !== null ||
+                    attachmentSending ||
+                    Boolean(currentPendingText) ||
+                    !networkOnline ||
+                    !threadConnected
+                  }
+                  onSendImage={(file) => void submitImage(file)}
+                  onSendPreset={(preset) => void submitPresetAttachment(preset)}
+                />
               </div>
               <textarea
                 value={draft}
@@ -1523,12 +1674,15 @@ function AgentWorkspace({
                     ? '网络已断开，当前草稿已保存在本机'
                     : !threadConnected
                       ? '实时连接恢复后即可发送'
-                      : 'Enter 发送 · Shift + Enter 换行'}
+                      : attachmentSending
+                        ? '附件发送中…'
+                        : 'Enter 发送 · Shift + Enter 换行'}
                 </span>
                 <Button
                   aria-label="发送"
                   disabled={
                     Boolean(currentPendingText) ||
+                    attachmentSending ||
                     !draft.trim() ||
                     detail.conversation.status === 'closed' ||
                     !networkOnline ||
