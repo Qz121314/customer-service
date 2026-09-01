@@ -10,7 +10,6 @@ import { UiIcon } from './icons';
 import {
   currentReportingDate,
   reportingRetentionStart,
-  shiftReportingDate,
 } from './traffic-statistics-range';
 
 const PANEL_WIDTH = 332;
@@ -31,11 +30,16 @@ export function TrafficDateRangePicker({
   const today = currentReportingDate();
   const minDate = reportingRetentionStart(today);
   const [open, setOpen] = useState(false);
-  const [viewMonth, setViewMonth] = useState(() => (value?.to ?? today).slice(0, 7));
+  const [viewMonth, setViewMonth] = useState(() =>
+    (value?.to ?? today).slice(0, 7),
+  );
   const [draftFrom, setDraftFrom] = useState(value?.from ?? today);
   const [draftTo, setDraftTo] = useState(value?.to ?? today);
   const [anchorDate, setAnchorDate] = useState<string | null>(null);
-  const [position, setPosition] = useState<PopoverPosition>({ left: 0, top: 0 });
+  const [position, setPosition] = useState<PopoverPosition>({
+    left: 0,
+    top: 0,
+  });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -43,7 +47,10 @@ export function TrafficDateRangePicker({
     const trigger = triggerRef.current;
     if (!trigger) return;
     const triggerRect = trigger.getBoundingClientRect();
-    const panelWidth = Math.min(PANEL_WIDTH, window.innerWidth - VIEWPORT_GUTTER * 2);
+    const panelWidth = Math.min(
+      PANEL_WIDTH,
+      window.innerWidth - VIEWPORT_GUTTER * 2,
+    );
     const panelHeight = panelRef.current?.offsetHeight ?? 420;
     const maxLeft = Math.max(
       VIEWPORT_GUTTER,
@@ -185,7 +192,9 @@ export function TrafficDateRangePicker({
 
       <div className="traffic-date-picker-grid" role="grid">
         {monthDays.map((date, index) => {
-          if (!date) return <span key={`empty-${index}`} aria-hidden="true" />;
+          if (!date) {
+            return <span key={`empty-${index}`} aria-hidden="true" />;
+          }
           const disabled = date < minDate || date > today;
           const selectedStart = date === draftFrom;
           const selectedEnd = date === draftTo;
@@ -233,7 +242,11 @@ export function TrafficDateRangePicker({
           今天
         </button>
         <div>
-          <button type="button" className="is-secondary" onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="is-secondary"
+            onClick={() => setOpen(false)}
+          >
             取消
           </button>
           <button type="button" className="is-primary" onClick={apply}>
@@ -272,7 +285,10 @@ function calendarDays(month: string): Array<string | null> {
   const first = new Date(Date.UTC(year, monthNumber - 1, 1));
   const leading = (first.getUTCDay() + 6) % 7;
   const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-  const result: Array<string | null> = Array.from({ length: leading }, () => null);
+  const result: Array<string | null> = Array.from(
+    { length: leading },
+    () => null,
+  );
   for (let day = 1; day <= daysInMonth; day += 1) {
     result.push(
       `${year}-${String(monthNumber).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
