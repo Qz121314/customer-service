@@ -50,16 +50,21 @@ test('agent can configure channel cards, preset text and custom icon override', 
   await expect(dialog.getByText('正在读取名片…')).toBeHidden();
 
   const initialLayout = await dialog.evaluate((element) => {
+    const browser = element.ownerDocument.defaultView;
     const body = element.querySelector('.agent-attachment-manager-body');
     const editor = element.querySelector('.agent-attachment-editor');
-    if (!(body instanceof HTMLElement) || !(editor instanceof HTMLElement)) {
+    if (
+      !browser ||
+      !(body instanceof browser.HTMLElement) ||
+      !(editor instanceof browser.HTMLElement)
+    ) {
       return null;
     }
     const dialogRect = element.getBoundingClientRect();
     return {
       dialogBottom: dialogRect.bottom,
       dialogTop: dialogRect.top,
-      bodyOverflowY: getComputedStyle(body).overflowY,
+      bodyOverflowY: browser.getComputedStyle(body).overflowY,
       editorWidth: editor.getBoundingClientRect().width,
       bodyWidth: body.getBoundingClientRect().width,
     };
@@ -131,15 +136,17 @@ test('agent can configure channel cards, preset text and custom icon override', 
     .toBeLessThan(3);
 
   const savedCardLayout = await dialog.evaluate((element) => {
+    const browser = element.ownerDocument.defaultView;
     const body = element.querySelector('.agent-attachment-manager-body');
     const list = element.querySelector('.agent-attachment-preset-list');
     const row = element.querySelector('.agent-attachment-preset-row');
     const editor = element.querySelector('.agent-attachment-editor');
     if (
-      !(body instanceof HTMLElement) ||
-      !(list instanceof HTMLElement) ||
-      !(row instanceof HTMLElement) ||
-      !(editor instanceof HTMLElement)
+      !browser ||
+      !(body instanceof browser.HTMLElement) ||
+      !(list instanceof browser.HTMLElement) ||
+      !(row instanceof browser.HTMLElement) ||
+      !(editor instanceof browser.HTMLElement)
     ) {
       return null;
     }
