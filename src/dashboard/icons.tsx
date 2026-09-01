@@ -11,11 +11,14 @@ import {
   ContactRound,
   Download,
   ExternalLink,
+  Globe2,
   Headphones,
   ImagePlus,
   Link,
   LogOut,
+  MessageCircle,
   MessageSquareReply,
+  MessageSquareText,
   Pencil,
   Phone,
   Plus,
@@ -57,6 +60,10 @@ export type UiIconName =
   | 'plus'
   | 'phone'
   | 'link'
+  | 'channel-sms'
+  | 'channel-whatsapp'
+  | 'channel-telegram'
+  | 'channel-website'
   | 'edit'
   | 'trash';
 
@@ -87,6 +94,10 @@ const ICONS: Record<UiIconName, LucideIcon> = {
   plus: Plus,
   phone: Phone,
   link: Link,
+  'channel-sms': MessageSquareText,
+  'channel-whatsapp': MessageCircle,
+  'channel-telegram': Send,
+  'channel-website': Globe2,
   edit: Pencil,
   trash: Trash2,
 };
