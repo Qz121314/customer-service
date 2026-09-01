@@ -155,7 +155,10 @@ export function AdminStatisticsPage({
               <span>TOTAL</span>
               <strong>会话总数</strong>
             </div>
-            <div className="traffic-total-period" style={TOTAL_PERIOD_BADGE_STYLE}>
+            <div
+              className="traffic-total-period"
+              style={TOTAL_PERIOD_BADGE_STYLE}
+            >
               <span style={TOTAL_PERIOD_LABEL_STYLE}>统计区间</span>
               <strong style={TOTAL_PERIOD_VALUE_STYLE}>
                 {stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}
@@ -165,7 +168,10 @@ export function AdminStatisticsPage({
               <strong>{busy ? '—' : total.toLocaleString('zh-CN')}</strong>
               <span>个前端会话</span>
             </div>
-            <div className="traffic-total-breakdown" style={TOTAL_BREAKDOWN_STYLE}>
+            <div
+              className="traffic-total-breakdown"
+              style={TOTAL_BREAKDOWN_STYLE}
+            >
               <div>
                 <span>已接待</span>
                 <strong>{busy ? '—' : accepted}</strong>
