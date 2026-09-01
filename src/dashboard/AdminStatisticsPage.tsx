@@ -30,6 +30,37 @@ const DISTRIBUTION_COLORS = [
   '#9a7d68',
 ];
 
+const TOTAL_PERIOD_BADGE_STYLE: CSSProperties = {
+  top: 18,
+  right: 18,
+  bottom: 'auto',
+  left: 'auto',
+  minWidth: 116,
+  padding: '7px 10px',
+  border: '1px solid rgb(255 255 255 / 12%)',
+  borderRadius: 11,
+  background: 'rgb(255 255 255 / 8%)',
+  alignItems: 'flex-end',
+  flexDirection: 'column',
+  gap: 2,
+  backdropFilter: 'blur(12px)',
+};
+
+const TOTAL_PERIOD_LABEL_STYLE: CSSProperties = {
+  color: 'rgb(255 255 255 / 58%)',
+  fontSize: 8,
+  fontWeight: 690,
+};
+
+const TOTAL_PERIOD_VALUE_STYLE: CSSProperties = {
+  maxWidth: 180,
+  color: '#fff',
+  fontSize: 10,
+  fontWeight: 780,
+  lineHeight: 1.2,
+  textAlign: 'right',
+};
+
 export function AdminStatisticsPage({
   agents,
   products,
@@ -120,6 +151,12 @@ export function AdminStatisticsPage({
               <span>TOTAL</span>
               <strong>会话总数</strong>
             </div>
+            <div className="traffic-total-period" style={TOTAL_PERIOD_BADGE_STYLE}>
+              <span style={TOTAL_PERIOD_LABEL_STYLE}>统计区间</span>
+              <strong style={TOTAL_PERIOD_VALUE_STYLE}>
+                {stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}
+              </strong>
+            </div>
             <div className="traffic-total-value">
               <strong>{busy ? '—' : total.toLocaleString('zh-CN')}</strong>
               <span>个前端会话</span>
@@ -133,12 +170,6 @@ export function AdminStatisticsPage({
                 <span>待接待</span>
                 <strong>{busy ? '—' : pending}</strong>
               </div>
-            </div>
-            <div className="traffic-total-period">
-              <span>统计区间</span>
-              <strong>
-                {stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}
-              </strong>
             </div>
             <div className="traffic-total-visual" aria-hidden="true">
               {[42, 68, 52, 82, 63, 94, 72].map((height, index) => (
