@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import type { Message } from './api';
-import type { AgentMediaItem } from './agent-media';
+import {
+  agentAttachmentContentUrl,
+  type AgentMessageAttachment,
+} from './agent-attachments-client';
 import { formatTime } from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button, Input } from './ui';
@@ -205,10 +208,10 @@ function ConversationExpiryCountdown({
 
 function Bubble({
   message: item,
-  media,
+  attachments = [],
 }: {
   message: Message;
-  media: AgentMediaItem | null;
+  attachments?: AgentMessageAttachment[];
 }) {
   if (item.sender_type === 'system')
     return <div className="system-message">{item.body}</div>;
@@ -217,18 +220,45 @@ function Bubble({
   return (
     <div className={isAgent ? 'message mine' : 'message visitor'}>
       <div>
-        {media ? (
-          <a href={media.url} target="_blank" rel="noreferrer">
-            <img
-              className="message-image"
-              src={media.url}
-              alt="聊天图片"
-              loading="lazy"
-            />
-          </a>
-        ) : (
-          <p>{item.body}</p>
-        )}
+        {item.body ? <p>{item.body}</p> : null}
+        {attachments.length > 0 ? (
+          <div className="message-attachments">
+            {attachments.map((attachment) => {
+              if (attachment.kind === 'image') {
+                const url = attachment.url ?? agentAttachmentContentUrl(attachment);
+                return url ? (
+                  <a href={url} target="_blank" rel="noreferrer" key={attachment.id}>
+                    <img
+                      className="message-image"
+                      src={url}
+                      alt={attachment.label || attachment.originalName || '聊天图片'}
+                      loading="lazy"
+                    />
+                  </a>
+                ) : null;
+              }
+              const href =
+                attachment.kind === 'phone'
+                  ? `sms:${attachment.value}`
+                  : attachment.value;
+              return (
+                <a
+                  className="message-attachment-action"
+                  href={href}
+                  target={attachment.kind === 'link' ? '_blank' : undefined}
+                  rel={attachment.kind === 'link' ? 'noreferrer' : undefined}
+                  key={attachment.id}
+                >
+                  <UiIcon name={attachment.kind === 'phone' ? 'phone' : 'link'} />
+                  <span>
+                    <strong>{attachment.label}</strong>
+                    <small>{attachment.value}</small>
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        ) : null}
         <span className="message-meta">
           <time>{formatTime(item.created_at)}</time>
           {isAgent ? (
