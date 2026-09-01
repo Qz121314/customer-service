@@ -1,16 +1,21 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { agentContactCardHref } from '../src/dashboard/agent-attachments-client.ts';
+import {
+  decodeContactCardIconRef,
+  encodeContactCardIconRef,
+  hasContactCardIconRef,
+} from '../src/worker/contact-card-icon.ts';
 
-test('agent contact cards map phone numbers and links to clickable destinations', () => {
+test('agent contact cards map SMS numbers and links to clickable destinations', () => {
   assert.equal(
     agentContactCardHref({
-      id: 'phone-card',
+      id: 'sms-card',
       kind: 'phone',
-      label: '联系电话',
+      label: '短信联系',
       value: '+12135551234',
     }),
-    'tel:+12135551234',
+    'sms:+12135551234',
   );
   assert.equal(
     agentContactCardHref({
@@ -21,4 +26,21 @@ test('agent contact cards map phone numbers and links to clickable destinations'
     }),
     'https://example.com/pay',
   );
+});
+
+test('contact card icon references expose only validated internal R2 objects', () => {
+  const marker = encodeContactCardIconRef({
+    objectKey: 'agent-card-icons/agent-1/card-1/icon-1.png',
+    mimeType: 'image/png',
+  });
+  assert.equal(hasContactCardIconRef(marker), true);
+  assert.deepEqual(decodeContactCardIconRef(marker), {
+    objectKey: 'agent-card-icons/agent-1/card-1/icon-1.png',
+    mimeType: 'image/png',
+  });
+  assert.equal(
+    decodeContactCardIconRef('contact-card-icon:v1:png:other-bucket/icon.png'),
+    null,
+  );
+  assert.equal(decodeContactCardIconRef('not-a-card-icon'), null);
 });
