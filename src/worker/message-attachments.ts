@@ -1,3 +1,5 @@
+import { hasContactCardIconRef } from './contact-card-icon';
+
 export type AttachmentKind = 'image' | 'phone' | 'link';
 
 export type AttachmentPresetRow = {
@@ -97,7 +99,7 @@ export function publicPreset(row: AttachmentPresetRow) {
           height: row.height,
           originalName: row.original_name,
         }
-      : {}),
+      : { hasCustomIcon: hasContactCardIconRef(row.original_name) }),
   };
 }
 
@@ -116,7 +118,7 @@ export function publicMessageAttachment(row: MessageAttachmentRow) {
           originalName: row.original_name,
           source: 'snapshot' as const,
         }
-      : {}),
+      : { hasCustomIcon: hasContactCardIconRef(row.original_name) }),
   };
 }
 
@@ -212,7 +214,7 @@ export async function listConversationAttachments(
           originalName: row.original_name,
           source: row.source,
         }
-      : {}),
+      : { hasCustomIcon: hasContactCardIconRef(row.original_name) }),
   }));
 }
 
