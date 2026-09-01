@@ -4,11 +4,20 @@ import type { Message } from './api';
 import {
   agentAttachmentContentUrl,
   agentContactCardHref,
+  type AgentContactCardKind,
   type AgentMessageAttachment,
 } from './agent-attachments-client';
+import { AgentContactCardIcon } from './AgentContactCardIcon';
 import { formatTime } from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button, Input } from './ui';
+
+const CONTACT_CARD_LABELS: Record<AgentContactCardKind, string> = {
+  sms: 'SMS',
+  whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
+  website: '网站',
+};
 
 function AdminLogin({
   password,
@@ -248,20 +257,27 @@ function Bubble({
                   </a>
                 ) : null;
               }
+              const opensExternalPage = attachment.kind !== 'sms';
               return (
                 <a
                   className="message-attachment-action"
                   href={agentContactCardHref(attachment)}
-                  target={attachment.kind === 'link' ? '_blank' : undefined}
-                  rel={attachment.kind === 'link' ? 'noreferrer' : undefined}
+                  target={opensExternalPage ? '_blank' : undefined}
+                  rel={opensExternalPage ? 'noreferrer' : undefined}
                   key={attachment.id}
                 >
-                  <UiIcon
-                    name={attachment.kind === 'phone' ? 'phone' : 'link'}
+                  <AgentContactCardIcon
+                    id={attachment.id}
+                    kind={attachment.kind}
+                    source="message"
+                    hasCustomIcon={attachment.hasCustomIcon}
                   />
                   <span>
                     <strong>{attachment.label}</strong>
-                    <small>{attachment.value}</small>
+                    <small>
+                      {CONTACT_CARD_LABELS[attachment.kind]} ·{' '}
+                      {attachment.value}
+                    </small>
                   </span>
                 </a>
               );

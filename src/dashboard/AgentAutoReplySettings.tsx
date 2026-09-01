@@ -9,7 +9,9 @@ import {
   getAgentAttachmentPresets,
   uploadAgentAttachmentImage,
   type AgentAttachmentPreset,
+  type AgentContactCardKind,
 } from './agent-attachments-client';
+import { AgentContactCardIcon } from './AgentContactCardIcon';
 import { UiIcon } from './icons';
 import { Button, Textarea } from './ui';
 
@@ -20,6 +22,12 @@ const EMPTY_SETTINGS: AgentAutoReplySettings = {
 };
 const AUTO_GREETING_LIMIT = 1000;
 const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
+const CONTACT_CARD_LABELS: Record<AgentContactCardKind, string> = {
+  sms: 'SMS',
+  whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
+  website: '网站',
+};
 
 export function AgentAutoReplySettingsModal({
   open,
@@ -239,7 +247,7 @@ export function AgentAutoReplySettingsModal({
                 <span>
                   <strong>附件</strong>
                   <small>
-                    可搭配手机号、链接和图片；最多{' '}
+                    可搭配 SMS、WhatsApp、Telegram、网站名片和图片；最多{' '}
                     {AUTO_GREETING_ATTACHMENT_LIMIT} 个。
                   </small>
                 </span>
@@ -283,18 +291,19 @@ export function AgentAutoReplySettingsModal({
                           loading="lazy"
                         />
                       ) : (
-                        <i aria-hidden="true">
-                          <UiIcon
-                            name={preset.kind === 'phone' ? 'phone' : 'link'}
-                          />
-                        </i>
+                        <AgentContactCardIcon
+                          id={preset.id}
+                          kind={preset.kind}
+                          source="preset"
+                          hasCustomIcon={preset.hasCustomIcon}
+                        />
                       )}
                       <span>
                         <strong>{preset.label}</strong>
                         <small>
                           {preset.kind === 'image'
                             ? preset.originalName || '图片'
-                            : preset.value}
+                            : `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.value}`}
                         </small>
                       </span>
                       {selected ? <UiIcon name="check" /> : null}
@@ -303,7 +312,7 @@ export function AgentAutoReplySettingsModal({
                 })}
                 {presets.length === 0 ? (
                   <p className="agent-auto-reply-attachment-empty">
-                    还没有附件。可在坐席设置的“名片”中添加手机号或链接，也可在这里添加问候图片。
+                    还没有附件。可先在坐席设置的“名片”中添加渠道名片，也可在这里添加问候图片。
                   </p>
                 ) : null}
               </div>
@@ -311,7 +320,7 @@ export function AgentAutoReplySettingsModal({
 
             <div className="agent-auto-reply-note">
               问候语支持纯文案、纯附件或文案 +
-              附件。发送后会保存当时的附件快照，后续修改预设不会改变历史消息。系统恢复分配和重连也不会重复发送。
+              附件。名片的渠道、目标、预设话术和自定义图标都会在发送时保存快照，后续修改预设不会改变历史消息。系统恢复分配和重连也不会重复发送。
             </div>
             {settings.enabled && !hasContent ? (
               <div className="auth-error">开启后至少需要文案或一个附件。</div>

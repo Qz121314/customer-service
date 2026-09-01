@@ -62,6 +62,7 @@ import { AgentComposerAttachmentMenu } from './AgentAttachmentTools';
 import {
   sendAgentPresetAttachments,
   type AgentAttachmentPreset,
+  type AgentContactCardKind,
   type AgentMessageAttachment,
 } from './agent-attachments-client';
 import { sendAgentImage } from './agent-media';
@@ -73,14 +74,20 @@ import {
 } from './agent-push';
 import { UiIcon } from './icons';
 
-type QuickAttachmentPreset = Extract<
-  AgentAttachmentPreset,
-  { kind: 'phone' | 'link' }
->;
+type QuickAttachmentPreset = Exclude<AgentAttachmentPreset, { kind: 'image' }>;
 
 type ThreadRealtimeWithAttachments = ThreadRealtimeEvent & {
   attachments?: unknown[];
 };
+
+function isAgentContactCardKind(value: unknown): value is AgentContactCardKind {
+  return (
+    value === 'sms' ||
+    value === 'whatsapp' ||
+    value === 'telegram' ||
+    value === 'website'
+  );
+}
 
 function normalizeAgentMessageAttachment(
   value: unknown,
@@ -94,7 +101,7 @@ function normalizeAgentMessageAttachment(
     typeof raw.messageId === 'string'
       ? raw.messageId
       : (messageIdFallback ?? undefined);
-  if (!id || (kind !== 'phone' && kind !== 'link' && kind !== 'image')) {
+  if (!id || (!isAgentContactCardKind(kind) && kind !== 'image')) {
     return null;
   }
   const label =
@@ -106,7 +113,7 @@ function normalizeAgentMessageAttachment(
           : '图片'
         : '';
 
-  if (kind === 'phone' || kind === 'link') {
+  if (isAgentContactCardKind(kind)) {
     if (typeof raw.value !== 'string' || !raw.value) return null;
     return {
       id,
@@ -114,6 +121,9 @@ function normalizeAgentMessageAttachment(
       kind,
       label,
       value: raw.value,
+      presetMessage:
+        typeof raw.presetMessage === 'string' ? raw.presetMessage : null,
+      hasCustomIcon: raw.hasCustomIcon === true,
     };
   }
 

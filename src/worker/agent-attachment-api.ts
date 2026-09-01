@@ -7,23 +7,26 @@ import {
   normalizeVisitorToken,
   resolveVisitor,
 } from './client-api';
+import { hasContactCardIconRef } from './contact-card-icon';
 import {
   MIME_EXTENSIONS,
   normalizeMediaInput,
   type MediaBindings,
 } from './media-types';
 import {
+  isContactCardKind,
   listAgentAttachmentPresets,
   listConversationAttachments,
   loadMessageAttachments,
   normalizeAttachmentLabel,
-  normalizeLinkValue,
-  normalizePhoneValue,
+  normalizeContactCardValue,
+  normalizePresetMessage,
   publicMessageAttachment,
   publicPreset,
   readAttachmentObject,
   type AttachmentKind,
   type AttachmentPresetRow,
+  type ContactCardKind,
   type MessageAttachmentRow,
 } from './message-attachments';
 
@@ -51,6 +54,8 @@ type RequestedPresetRow = {
   kind: AttachmentKind | null;
   label: string | null;
   value: string | null;
+  preset_message: string | null;
+  icon_ref: string | null;
   object_key: string | null;
   mime_type: string | null;
   byte_size: number | null;
@@ -88,31 +93,47 @@ agentAttachmentApi.post('/api/agent/attachments/presets', async (c) => {
   const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
   const body = await readJson<{
-    kind?: 'phone' | 'link';
+    kind?: ContactCardKind;
     label?: string;
     value?: string;
+    presetMessage?: string | null;
   }>(c.req.raw);
   const label = normalizeAttachmentLabel(body?.label);
   const kind = body?.kind;
-  const value =
-    kind === 'phone'
-      ? normalizePhoneValue(body?.value)
-      : kind === 'link'
-        ? normalizeLinkValue(body?.value)
-        : null;
-  if (!label || !value || (kind !== 'phone' && kind !== 'link')) {
+  if (!label || !isContactCardKind(kind)) {
+    return c.json({ error: 'INVALID_ATTACHMENT_PRESET' }, 400);
+  }
+  const value = normalizeContactCardValue(kind, body?.value);
+  const presetMessage = normalizePresetMessage(body?.presetMessage);
+  const hasPresetMessage =
+    typeof body?.presetMessage === 'string' &&
+    body.presetMessage.trim().length > 0;
+  if (
+    !value ||
+    (body?.presetMessage != null && typeof body.presetMessage !== 'string') ||
+    (hasPresetMessage && !presetMessage) ||
+    (kind === 'website' && hasPresetMessage)
+  ) {
     return c.json({ error: 'INVALID_ATTACHMENT_PRESET' }, 400);
   }
 
   const id = crypto.randomUUID();
   const row = await c.env.DB.prepare(
     `INSERT INTO agent_attachment_presets (
-       id, agent_id, kind, label, value, sort_order
-     ) VALUES (?1, ?2, ?3, ?4, ?5, 0)
-     RETURNING id, agent_id, kind, label, value, object_key, mime_type,
-       byte_size, width, height, original_name, sort_order, created_at, updated_at`,
+       id, agent_id, kind, label, value, preset_message, sort_order
+     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0)
+     RETURNING id, agent_id, kind, label, value, preset_message, icon_ref,
+       object_key, mime_type, byte_size, width, height, original_name,
+       sort_order, created_at, updated_at`,
   )
-    .bind(id, agent.id, kind, label, value)
+    .bind(
+      id,
+      agent.id,
+      kind,
+      label,
+      value,
+      kind === 'website' ? null : presetMessage,
+    )
     .first<AttachmentPresetRow>();
   if (!row) return c.json({ error: 'ATTACHMENT_PRESET_CREATE_FAILED' }, 500);
   return c.json({ preset: publicPreset(row) }, 201);
@@ -154,8 +175,9 @@ agentAttachmentApi.post('/api/agent/attachments/presets/image', async (c) => {
          id, agent_id, kind, label, value, object_key, mime_type, byte_size,
          width, height, original_name, sort_order
        ) VALUES (?1, ?2, 'image', ?3, NULL, ?4, ?5, ?6, ?7, ?8, ?9, 0)
-       RETURNING id, agent_id, kind, label, value, object_key, mime_type,
-         byte_size, width, height, original_name, sort_order, created_at, updated_at`,
+       RETURNING id, agent_id, kind, label, value, preset_message, icon_ref,
+         object_key, mime_type, byte_size, width, height, original_name,
+         sort_order, created_at, updated_at`,
     )
       .bind(
         id,
@@ -182,27 +204,50 @@ agentAttachmentApi.patch('/api/agent/attachments/presets/:id', async (c) => {
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
   const current = await presetForAgent(c.env.DB, c.req.param('id'), agent.id);
   if (!current) return c.json({ error: 'NOT_FOUND' }, 404);
-  const body = await readJson<{ label?: string; value?: string }>(c.req.raw);
+  const body = await readJson<{
+    label?: string;
+    value?: string;
+    presetMessage?: string | null;
+  }>(c.req.raw);
   const label = normalizeAttachmentLabel(body?.label ?? current.label);
-  const value =
-    current.kind === 'phone'
-      ? normalizePhoneValue(body?.value ?? current.value)
-      : current.kind === 'link'
-        ? normalizeLinkValue(body?.value ?? current.value)
-        : null;
-  if (!label || (current.kind !== 'image' && !value)) {
+  const value = isContactCardKind(current.kind)
+    ? normalizeContactCardValue(current.kind, body?.value ?? current.value)
+    : null;
+  const hasPresetMessageField = Boolean(
+    body && Object.prototype.hasOwnProperty.call(body, 'presetMessage'),
+  );
+  const requestedPresetMessage = hasPresetMessageField
+    ? body?.presetMessage
+    : current.preset_message;
+  const presetMessage = normalizePresetMessage(requestedPresetMessage);
+  const hasPresetMessage =
+    typeof requestedPresetMessage === 'string' &&
+    requestedPresetMessage.trim().length > 0;
+  if (
+    !label ||
+    (isContactCardKind(current.kind) && !value) ||
+    (requestedPresetMessage != null &&
+      typeof requestedPresetMessage !== 'string') ||
+    (hasPresetMessage && !presetMessage) ||
+    (current.kind === 'website' && hasPresetMessage)
+  ) {
     return c.json({ error: 'INVALID_ATTACHMENT_PRESET' }, 400);
   }
   const row = await c.env.DB.prepare(
     `UPDATE agent_attachment_presets
      SET label = ?1,
          value = CASE WHEN kind = 'image' THEN NULL ELSE ?2 END,
+         preset_message = CASE
+           WHEN kind IN ('image', 'website') THEN NULL
+           ELSE ?3
+         END,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?3 AND agent_id = ?4
-     RETURNING id, agent_id, kind, label, value, object_key, mime_type,
-       byte_size, width, height, original_name, sort_order, created_at, updated_at`,
+     WHERE id = ?4 AND agent_id = ?5
+     RETURNING id, agent_id, kind, label, value, preset_message, icon_ref,
+       object_key, mime_type, byte_size, width, height, original_name,
+       sort_order, created_at, updated_at`,
   )
-    .bind(label, value, current.id, agent.id)
+    .bind(label, value, presetMessage, current.id, agent.id)
     .first<AttachmentPresetRow>();
   if (!row) return c.json({ error: 'NOT_FOUND' }, 404);
   return c.json({ preset: publicPreset(row) });
@@ -217,8 +262,8 @@ agentAttachmentApi.delete('/api/agent/attachments/presets/:id', async (c) => {
     .bind(c.req.param('id'), agent.id)
     .run();
   if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
-  // Image objects are intentionally retained. A previously sent message may
-  // still reference the immutable object key even after the preset is deleted.
+  // Image/icon objects are intentionally retained. Previously sent messages may
+  // still reference immutable R2 objects after the reusable preset is deleted.
   return c.json({ ok: true });
 });
 
@@ -340,6 +385,8 @@ agentAttachmentApi.post(
       kind: row.kind as AttachmentKind,
       label: row.label as string,
       value: row.value,
+      presetMessage: row.preset_message,
+      iconRef: row.icon_ref,
       objectKey: row.object_key,
       mimeType: row.mime_type,
       byteSize: row.byte_size,
@@ -352,15 +399,20 @@ agentAttachmentApi.post(
     const statements = snapshots.map((snapshot) =>
       c.env.DB.prepare(
         `INSERT INTO message_attachments (
-         id, message_id, kind, label, value, object_key, mime_type, byte_size,
-         width, height, original_name, sort_order, created_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+         id, message_id, kind, label, value, preset_message, icon_ref,
+         object_key, mime_type, byte_size, width, height, original_name,
+         sort_order, created_at
+       ) VALUES (
+         ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15
+       )`,
       ).bind(
         snapshot.id,
         snapshot.messageId,
         snapshot.kind,
         snapshot.label,
         snapshot.value,
+        snapshot.presetMessage,
+        snapshot.iconRef,
         snapshot.objectKey,
         snapshot.mimeType,
         snapshot.byteSize,
@@ -411,7 +463,10 @@ agentAttachmentApi.post(
             originalName: snapshot.originalName,
             source: 'snapshot' as const,
           }
-        : {}),
+        : {
+            presetMessage: snapshot.presetMessage,
+            hasCustomIcon: hasContactCardIconRef(snapshot.iconRef),
+          }),
     }));
     await Promise.allSettled([
       broadcastRoom(c.env, c.req.param('id'), {
@@ -438,10 +493,10 @@ agentAttachmentApi.get('/api/agent/attachments/:id/content', async (c) => {
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
   const row = await c.env.DB.prepare(
     `SELECT attachment.id, attachment.message_id, attachment.kind,
-       attachment.label, attachment.value, attachment.object_key,
-       attachment.mime_type, attachment.byte_size, attachment.width,
-       attachment.height, attachment.original_name, attachment.sort_order,
-       attachment.created_at
+       attachment.label, attachment.value, attachment.preset_message,
+       attachment.icon_ref, attachment.object_key, attachment.mime_type,
+       attachment.byte_size, attachment.width, attachment.height,
+       attachment.original_name, attachment.sort_order, attachment.created_at
      FROM message_attachments attachment
      JOIN messages message ON message.id = attachment.message_id
      JOIN conversations conversation ON conversation.id = message.conversation_id
@@ -484,10 +539,10 @@ agentAttachmentApi.get('/client/v1/attachments/:id/content', async (c) => {
   if (!visitor) return clientError(c, 401, 'INVALID_VISITOR_TOKEN');
   const row = await c.env.DB.prepare(
     `SELECT attachment.id, attachment.message_id, attachment.kind,
-       attachment.label, attachment.value, attachment.object_key,
-       attachment.mime_type, attachment.byte_size, attachment.width,
-       attachment.height, attachment.original_name, attachment.sort_order,
-       attachment.created_at
+       attachment.label, attachment.value, attachment.preset_message,
+       attachment.icon_ref, attachment.object_key, attachment.mime_type,
+       attachment.byte_size, attachment.width, attachment.height,
+       attachment.original_name, attachment.sort_order, attachment.created_at
      FROM message_attachments attachment
      JOIN messages message ON message.id = attachment.message_id
      JOIN conversations conversation ON conversation.id = message.conversation_id
@@ -515,8 +570,9 @@ async function presetForAgent(
 ): Promise<AttachmentPresetRow | null> {
   return db
     .prepare(
-      `SELECT id, agent_id, kind, label, value, object_key, mime_type,
-         byte_size, width, height, original_name, sort_order, created_at, updated_at
+      `SELECT id, agent_id, kind, label, value, preset_message, icon_ref,
+         object_key, mime_type, byte_size, width, height, original_name,
+         sort_order, created_at, updated_at
        FROM agent_attachment_presets
        WHERE id = ?1 AND agent_id = ?2
        LIMIT 1`,
@@ -540,9 +596,10 @@ async function loadRequestedPresets(
        SELECT requested.request_order,
          conversation.status AS conversation_status,
          preset.id, preset.agent_id, preset.kind, preset.label, preset.value,
-         preset.object_key, preset.mime_type, preset.byte_size, preset.width,
-         preset.height, preset.original_name, preset.sort_order,
-         preset.created_at, preset.updated_at
+         preset.preset_message, preset.icon_ref, preset.object_key,
+         preset.mime_type, preset.byte_size, preset.width, preset.height,
+         preset.original_name, preset.sort_order, preset.created_at,
+         preset.updated_at
        FROM conversations conversation
        CROSS JOIN requested
        LEFT JOIN agent_attachment_presets preset

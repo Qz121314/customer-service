@@ -268,15 +268,24 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
   await expect(cardSettingsDialog).toBeVisible();
   await expect(cardSettingsDialog.getByText('正在读取名片…')).toBeHidden();
-  await cardSettingsDialog.getByLabel('名称').fill('联系电话');
-  await cardSettingsDialog.getByLabel('手机号').fill('+1 213 555 1234');
-  await cardSettingsDialog.getByRole('button', { name: '添加' }).click();
-  await expect(cardSettingsDialog.getByText('联系电话')).toBeVisible();
+  await expect(cardSettingsDialog.getByText('SMS 内置图标')).toBeVisible();
+  await cardSettingsDialog.getByLabel('名称').fill('短信联系');
+  await cardSettingsDialog.getByLabel('短信号码').fill('+1 213 555 1234');
   await cardSettingsDialog
-    .getByRole('button', { name: '链接', exact: true })
+    .getByLabel('预设话术（可选）')
+    .fill('您好，我想了解更多信息');
+  await cardSettingsDialog.getByRole('button', { name: '添加' }).click();
+  await expect(cardSettingsDialog.getByText('短信联系')).toBeVisible();
+  await cardSettingsDialog
+    .getByRole('button', { name: '网站', exact: true })
     .click();
+  await expect(cardSettingsDialog.getByLabel('预设话术（可选）')).toHaveCount(
+    0,
+  );
   await cardSettingsDialog.getByLabel('名称').fill('付款链接');
-  await cardSettingsDialog.getByLabel('URL').fill('https://example.com/pay');
+  await cardSettingsDialog
+    .getByLabel('网站 URL')
+    .fill('https://example.com/pay');
   await cardSettingsDialog.getByRole('button', { name: '添加' }).click();
   await expect(cardSettingsDialog.getByText('付款链接')).toBeVisible();
   await cardSettingsDialog
@@ -291,7 +300,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await autoReplyButton.click();
   const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
   await expect(autoReplyDialog).toBeVisible();
-  await expect(autoReplyDialog.getByText('联系电话')).toBeVisible();
+  await expect(autoReplyDialog.getByText('短信联系')).toBeVisible();
   await expect(autoReplyDialog.getByText('付款链接')).toBeVisible();
   const autoReplyToggle = autoReplyDialog.getByRole('checkbox', {
     name: /自动发送首次问候/u,
@@ -339,7 +348,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const attachmentButton = page.getByRole('button', { name: '添加附件' });
   await attachmentButton.click();
   const attachmentMenu = page.getByRole('menu');
-  await expect(attachmentMenu.getByText('联系电话')).toBeVisible();
+  await expect(attachmentMenu.getByText('短信联系')).toBeVisible();
   await expect(attachmentMenu.getByText('付款链接')).toBeVisible();
   await attachmentButton.click();
 

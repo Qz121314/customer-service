@@ -317,6 +317,172 @@
   min-width: 96px;
 }
 
+/* Contact-card icon styles stay in the existing agent overlay owner so the
+   dashboard CSS ownership count does not grow for a single feature. */
+.agent-contact-card-icon {
+  position: relative;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 10px;
+  color: #596270;
+  background: #eef1f4;
+}
+
+.agent-contact-card-icon > .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.agent-contact-card-icon > img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #fff;
+}
+
+.composer-attachment-section > button > .agent-contact-card-icon {
+  justify-self: center;
+}
+
+.agent-attachment-preset-row > .agent-contact-card-icon {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 9px;
+}
+
+.agent-auto-reply-attachment > .agent-contact-card-icon {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 9px;
+}
+
+.message-attachment-action > .agent-contact-card-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  flex: 0 0 30px;
+  gap: 0;
+  border-radius: 9px;
+}
+
+.agent-card-icon-editor {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-card-icon-editor > span:first-child {
+  color: #596270;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.agent-card-icon-control {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  background: #fafbfc;
+}
+
+.agent-card-icon-control > .agent-contact-card-icon {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  border-radius: 10px;
+}
+
+.agent-card-icon-control > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agent-card-icon-control strong,
+.agent-card-icon-control small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-card-icon-control strong {
+  color: #29313c;
+  font-size: 12px;
+}
+
+.agent-card-icon-control small {
+  color: #858d98;
+  font-size: 10px;
+}
+
+.agent-card-icon-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.agent-card-icon-picker {
+  position: relative;
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid #d8dde5;
+  border-radius: 9px;
+  color: #3f4752;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.agent-card-icon-picker:hover {
+  border-color: #c9c7f7;
+  color: #403bb6;
+  background: #f6f5ff;
+}
+
+.agent-card-icon-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.agent-card-icon-remove {
+  min-height: 32px;
+  padding-inline: 8px;
+  border: 0;
+  color: #8b4b4b;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.agent-card-icon-remove:disabled,
+.agent-card-icon-picker:has(input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @media (max-width: 760px) {
   .agent-auto-reply-backdrop {
     align-items: end;
@@ -358,6 +524,15 @@
 
   .agent-auto-reply-actions {
     padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+
+  .agent-card-icon-control {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .agent-card-icon-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }
 

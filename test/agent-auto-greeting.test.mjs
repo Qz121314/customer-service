@@ -64,24 +64,22 @@ function addConversation(database, id, visitorId = `${id}-visitor`) {
     .run(id, visitorId);
 }
 
-function addPhonePreset(database, agentId, id, label, value) {
+function addContactCardPreset(
+  database,
+  agentId,
+  id,
+  kind,
+  label,
+  value,
+  { presetMessage = null, iconRef = null } = {},
+) {
   database
     .prepare(
       `INSERT INTO agent_attachment_presets (
-         id, agent_id, kind, label, value, sort_order
-       ) VALUES (?, ?, 'phone', ?, ?, 0)`,
+         id, agent_id, kind, label, value, preset_message, icon_ref, sort_order
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
     )
-    .run(id, agentId, label, value);
-}
-
-function addLinkPreset(database, agentId, id, label, value) {
-  database
-    .prepare(
-      `INSERT INTO agent_attachment_presets (
-         id, agent_id, kind, label, value, sort_order
-       ) VALUES (?, ?, 'link', ?, ?, 0)`,
-    )
-    .run(id, agentId, label, value);
+    .run(id, agentId, kind, label, value, presetMessage, iconRef);
 }
 
 function addImagePreset(database, agentId, id, label) {
@@ -196,31 +194,56 @@ test('first effective assignment sends one configured greeting as a normal agent
   database.close();
 });
 
-test('attachment-only greeting snapshots phone, link, and image presets in configured order', () => {
+test('attachment-only greeting snapshots channel cards and image in configured order', () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   addAgent(database, 'attachment-agent', {
     greetingEnabled: true,
     greetingText: null,
   });
-  addPhonePreset(
+  const iconRef =
+    'contact-card-icon:v1:png:agent-card-icons/attachment-agent/sms-preset/icon.png';
+  addContactCardPreset(
     database,
     'attachment-agent',
-    'phone-preset',
+    'sms-preset',
+    'sms',
     '短信联系',
     '+12135551234',
+    { presetMessage: '您好，我想了解更多信息', iconRef },
   );
-  addLinkPreset(
+  addContactCardPreset(
     database,
     'attachment-agent',
-    'link-preset',
-    '付款链接',
-    'https://example.com/pay',
+    'whatsapp-preset',
+    'whatsapp',
+    'WhatsApp',
+    '+13105555678',
+    { presetMessage: 'Need more info' },
+  );
+  addContactCardPreset(
+    database,
+    'attachment-agent',
+    'telegram-preset',
+    'telegram',
+    'Telegram',
+    'support_team',
+    { presetMessage: 'Hello' },
+  );
+  addContactCardPreset(
+    database,
+    'attachment-agent',
+    'website-preset',
+    'website',
+    '官方网站',
+    'https://example.com/contact',
   );
   addImagePreset(database, 'attachment-agent', 'image-preset', '问候图片');
-  addGreetingAttachment(database, 'attachment-agent', 'phone-preset', 0);
-  addGreetingAttachment(database, 'attachment-agent', 'link-preset', 1);
-  addGreetingAttachment(database, 'attachment-agent', 'image-preset', 2);
+  addGreetingAttachment(database, 'attachment-agent', 'sms-preset', 0);
+  addGreetingAttachment(database, 'attachment-agent', 'whatsapp-preset', 1);
+  addGreetingAttachment(database, 'attachment-agent', 'telegram-preset', 2);
+  addGreetingAttachment(database, 'attachment-agent', 'website-preset', 3);
+  addGreetingAttachment(database, 'attachment-agent', 'image-preset', 4);
   addConversation(database, 'attachment-conversation');
 
   const assignedAt = '2026-08-18T20:00:30.000Z';
@@ -246,29 +269,38 @@ test('attachment-only greeting snapshots phone, link, and image presets in confi
 
   const attachments = rows(
     database,
-    `SELECT kind, label, value, object_key, mime_type, byte_size, sort_order
+    `SELECT kind, label, value, preset_message, icon_ref,
+       object_key, mime_type, byte_size, sort_order
      FROM message_attachments
      WHERE message_id = ?
      ORDER BY sort_order ASC, id ASC`,
     automation.message_id,
   );
-  assert.equal(attachments.length, 3);
+  assert.equal(attachments.length, 5);
   assert.deepEqual(
     attachments.map((item) => [item.kind, item.label, item.sort_order]),
     [
-      ['phone', '短信联系', 0],
-      ['link', '付款链接', 1],
-      ['image', '问候图片', 2],
+      ['sms', '短信联系', 0],
+      ['whatsapp', 'WhatsApp', 1],
+      ['telegram', 'Telegram', 2],
+      ['website', '官方网站', 3],
+      ['image', '问候图片', 4],
     ],
   );
   assert.equal(attachments[0].value, '+12135551234');
-  assert.equal(attachments[1].value, 'https://example.com/pay');
+  assert.equal(attachments[0].preset_message, '您好，我想了解更多信息');
+  assert.equal(attachments[0].icon_ref, iconRef);
+  assert.equal(attachments[1].preset_message, 'Need more info');
+  assert.equal(attachments[2].value, 'support_team');
+  assert.equal(attachments[2].preset_message, 'Hello');
+  assert.equal(attachments[3].value, 'https://example.com/contact');
+  assert.equal(attachments[3].preset_message, null);
   assert.equal(
-    attachments[2].object_key,
+    attachments[4].object_key,
     'agent-assets/attachment-agent/image-preset.png',
   );
-  assert.equal(attachments[2].mime_type, 'image/png');
-  assert.equal(attachments[2].byte_size, 128);
+  assert.equal(attachments[4].mime_type, 'image/png');
+  assert.equal(attachments[4].byte_size, 128);
 
   const conversation = row(
     database,
@@ -282,21 +314,25 @@ test('attachment-only greeting snapshots phone, link, and image presets in confi
   database.close();
 });
 
-test('greeting attachment snapshots remain immutable after preset edit or delete', () => {
+test('greeting card snapshots remain immutable after reusable preset edit or delete', () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   addAgent(database, 'snapshot-agent', {
     greetingEnabled: true,
     greetingText: '请通过下面方式联系我们',
   });
-  addPhonePreset(
+  const iconRef =
+    'contact-card-icon:v1:webp:agent-card-icons/snapshot-agent/snapshot-sms/icon.webp';
+  addContactCardPreset(
     database,
     'snapshot-agent',
-    'snapshot-phone',
+    'snapshot-sms',
+    'sms',
     '原号码',
     '+12135551234',
+    { presetMessage: '原始话术', iconRef },
   );
-  addGreetingAttachment(database, 'snapshot-agent', 'snapshot-phone', 0);
+  addGreetingAttachment(database, 'snapshot-agent', 'snapshot-sms', 0);
   addConversation(database, 'snapshot-conversation');
   assign(
     database,
@@ -308,23 +344,30 @@ test('greeting attachment snapshots remain immutable after preset edit or delete
   database
     .prepare(
       `UPDATE agent_attachment_presets
-       SET label = '新号码', value = '+13105555678'
-       WHERE id = 'snapshot-phone'`,
+       SET label = '新号码',
+           value = '+13105555678',
+           preset_message = '新的话术',
+           icon_ref = NULL
+       WHERE id = 'snapshot-sms'`,
     )
     .run();
   database
-    .prepare(`DELETE FROM agent_attachment_presets WHERE id = 'snapshot-phone'`)
+    .prepare(`DELETE FROM agent_attachment_presets WHERE id = 'snapshot-sms'`)
     .run();
 
   const snapshot = row(
     database,
-    `SELECT attachment.label, attachment.value, message.body
+    `SELECT attachment.kind, attachment.label, attachment.value,
+       attachment.preset_message, attachment.icon_ref, message.body
      FROM message_attachments attachment
      JOIN messages message ON message.id = attachment.message_id
      WHERE message.conversation_id = 'snapshot-conversation'`,
   );
+  assert.equal(snapshot.kind, 'sms');
   assert.equal(snapshot.label, '原号码');
   assert.equal(snapshot.value, '+12135551234');
+  assert.equal(snapshot.preset_message, '原始话术');
+  assert.equal(snapshot.icon_ref, iconRef);
   assert.equal(snapshot.body, '请通过下面方式联系我们');
   assert.equal(
     count(
