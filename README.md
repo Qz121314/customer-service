@@ -481,7 +481,7 @@ error.format = plain / markdown
 - 对外昵称和头像；
 - PWA 安装与移动端安全区适配。
 
-名片属于长期准备项：坐席在设置菜单中选择 SMS、WhatsApp、Telegram 或网站，填写名称和号码、用户名或链接；标准渠道默认使用系统内置图标，自定义上传只作为扩展能力。SMS、WhatsApp 和 Telegram 可选填预设话术，网站名片不带预设话术。聊天“+”菜单和首次问候语只引用已保存的名片，不在发送时临时创建。访客点击 SMS 必须打开 `sms:` 短信界面，不能生成 `tel:` 拨号链接；WhatsApp、Telegram 和网站分别使用对应的安全链接。名片发送时固化为消息快照，之后编辑、删除预设或替换图标都不能改写历史消息。聊天输入框仍可直接选择并发送一次性图片。
+名片属于长期准备项：坐席在设置菜单中通过紧凑下拉选择 SMS、WhatsApp、Telegram 或网站，填写名称和号码、用户名或链接；SMS 使用苹果 Messages / iMessage 绿色消息图标样式，WhatsApp 和 Telegram 使用各自官方品牌标志与品牌色，自定义上传只作为覆盖扩展。SMS、WhatsApp 和 Telegram 可选填预设话术，网站名片不带预设话术。聊天“+”菜单和首次问候语只引用已保存的名片，不在发送时临时创建。访客点击 SMS 必须打开 `sms:` 短信界面，不能生成 `tel:` 拨号链接；WhatsApp、Telegram 和网站分别使用对应的安全链接。名片发送时固化为消息快照，之后编辑、删除预设或替换图标都不能改写历史消息。聊天输入框仍可直接选择并发送一次性图片。
 
 账号“停用”只关闭新的自动分流资格，不等于禁止登录。停用客服仍可登录工作台、切换在线/忙碌、处理原有会话和使用个人设置；重新启用后，只有其本人状态为在线时才恢复接收新会话。
 
@@ -696,6 +696,7 @@ dailyConversationLimit = 0 时不限
 - `node:sqlite` 的 `.all()` 返回无原型行对象。与普通对象字面量做 `assert.deepEqual` 前，先使用 `{ ...row }` 转换成普通对象；字段和值仍须完整断言，不能通过放宽或删除迁移测试换取 CI 通过。
 - 新 migration 必须从上一版 schema 准备历史数据，再单独应用新 migration 验证转换结果；同时还要通过全量本地 D1 migration，禁止修改、重写或删除已经上线的 migration。
 - 名片预设与消息快照用途不同：预设可以编辑或删除，已发送快照必须不可变；自定义图标被替换或移除后，历史快照引用的 R2 对象不能被同步删除。
+- SMS、WhatsApp、Telegram 的官方渠道 SVG 集中放在 `public/icons/contact-card-*.svg`。不要换成 Lucide 通用图标，也不要在组件或 CSS 中复制内联 SVG；渠道选择仍保持单个紧凑下拉框，避免恢复成占高的多按钮网格。
 - PR 测试失败时，后续 Build、Worker bundle、浏览器 smoke 和 Cloudflare 部署会被跳过。排查时先看第一个失败步骤，不要把“未执行部署”误判为 Cloudflare 故障。
 - 合并前按 `pnpm verify` 验证完整仓库；名片 UI 还必须通过 Agent Chromium smoke。只有 PR 全绿后才能合并，最终完成标准仍是 main 部署成功并通过 production protocol smoke。
 

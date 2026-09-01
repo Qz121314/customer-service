@@ -48,10 +48,33 @@ test('agent can configure channel cards, preset text and custom icon override', 
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('正在读取名片…')).toBeHidden();
 
-  await expect(dialog.getByRole('button', { name: 'SMS' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'WhatsApp' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: 'Telegram' })).toBeVisible();
-  await expect(dialog.getByRole('button', { name: '网站' })).toBeVisible();
+  const typeSelect = dialog.getByRole('combobox', { name: '名片类型' });
+  await expect(typeSelect).toContainText('SMS');
+  await expect(typeSelect.locator('[data-brand="imessage"]')).toBeVisible();
+  await typeSelect.click();
+  const typeOptions = dialog.getByRole('listbox', {
+    name: '名片类型选项',
+  });
+  await expect(
+    typeOptions.getByRole('option', { name: /WhatsApp/u }),
+  ).toBeVisible();
+  await expect(
+    typeOptions.getByRole('option', { name: /Telegram/u }),
+  ).toBeVisible();
+  await expect(
+    typeOptions.getByRole('option', { name: /网站/u }),
+  ).toBeVisible();
+  await expect(
+    typeOptions.locator(
+      '[data-brand="whatsapp"] img[src="/icons/contact-card-whatsapp.svg"]',
+    ),
+  ).toBeVisible();
+  await expect(
+    typeOptions.locator(
+      '[data-brand="telegram"] img[src="/icons/contact-card-telegram.svg"]',
+    ),
+  ).toBeVisible();
+  await typeSelect.click();
 
   await dialog.getByLabel('名称').fill('短信名片');
   await dialog.getByLabel('短信号码').fill('+1 213 555 1234');
@@ -65,12 +88,19 @@ test('agent can configure channel cards, preset text and custom icon override', 
   });
   await expect(smsRow).toBeVisible();
   await expect(smsRow.getByText('SMS', { exact: false })).toBeVisible();
-  await expect(smsRow.locator('.agent-contact-card-icon img')).toHaveCount(0);
   await expect(
-    smsRow.locator('.agent-contact-card-icon[data-channel="sms"] svg'),
+    smsRow.locator(
+      '.agent-contact-card-icon[data-channel="sms"] img[src="/icons/contact-card-imessage.svg"]',
+    ),
   ).toBeVisible();
+  await expect(smsRow.locator('.agent-contact-card-custom-icon')).toHaveCount(
+    0,
+  );
 
-  await dialog.getByRole('button', { name: 'WhatsApp' }).click();
+  await typeSelect.click();
+  await dialog.getByRole('option', { name: /WhatsApp/u }).click();
+  await expect(typeSelect).toContainText('WhatsApp');
+  await expect(typeSelect.locator('[data-brand="whatsapp"]')).toBeVisible();
   await dialog.getByLabel('名称').fill('WhatsApp 名片');
   await dialog.getByLabel('WhatsApp 号码').fill('+1 213 555 9999');
   await dialog.getByLabel('预设话术（可选）').fill('Need more info');
@@ -89,6 +119,6 @@ test('agent can configure channel cards, preset text and custom icon override', 
   });
   await expect(whatsappRow).toBeVisible();
   await expect(
-    whatsappRow.locator('.agent-contact-card-icon img'),
+    whatsappRow.locator('.agent-contact-card-custom-icon'),
   ).toBeVisible();
 });

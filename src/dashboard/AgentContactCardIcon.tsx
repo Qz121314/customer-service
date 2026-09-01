@@ -4,14 +4,20 @@ import {
   agentPresetCardIconUrl,
   type AgentContactCardKind,
 } from './agent-attachments-client';
-import { UiIcon, type UiIconName } from './icons';
+import { UiIcon } from './icons';
 
-const CHANNEL_ICONS: Record<AgentContactCardKind, UiIconName> = {
-  sms: 'channel-sms',
-  whatsapp: 'channel-whatsapp',
-  telegram: 'channel-telegram',
-  website: 'channel-website',
+const CHANNEL_BRANDS: Record<AgentContactCardKind, string> = {
+  sms: 'imessage',
+  whatsapp: 'whatsapp',
+  telegram: 'telegram',
+  website: 'website',
 };
+
+const CHANNEL_BRAND_ICON_URLS = {
+  sms: '/icons/contact-card-imessage.svg',
+  whatsapp: '/icons/contact-card-whatsapp.svg',
+  telegram: '/icons/contact-card-telegram.svg',
+} as const;
 
 export function AgentContactCardIcon({
   id,
@@ -43,11 +49,13 @@ export function AgentContactCardIcon({
     <span
       className="agent-contact-card-icon"
       data-channel={kind}
+      data-brand={CHANNEL_BRANDS[kind]}
       aria-hidden="true"
     >
-      <UiIcon name={CHANNEL_ICONS[kind]} />
+      <BuiltInContactCardIcon kind={kind} />
       {shouldLoadCustom ? (
         <img
+          className="agent-contact-card-custom-icon"
           src={iconUrl}
           alt=""
           loading="lazy"
@@ -55,5 +63,17 @@ export function AgentContactCardIcon({
         />
       ) : null}
     </span>
+  );
+}
+
+function BuiltInContactCardIcon({ kind }: { kind: AgentContactCardKind }) {
+  if (kind === 'website') return <UiIcon name="channel-website" />;
+  return (
+    <img
+      className="channel-brand-icon"
+      src={CHANNEL_BRAND_ICON_URLS[kind]}
+      alt=""
+      draggable="false"
+    />
   );
 }

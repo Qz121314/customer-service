@@ -268,7 +268,12 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
   await expect(cardSettingsDialog).toBeVisible();
   await expect(cardSettingsDialog.getByText('正在读取名片…')).toBeHidden();
-  await expect(cardSettingsDialog.getByText('SMS 内置图标')).toBeVisible();
+  const cardTypeSelect = cardSettingsDialog.getByRole('combobox', {
+    name: '名片类型',
+  });
+  await expect(cardTypeSelect).toContainText('SMS');
+  await expect(cardTypeSelect.locator('[data-brand="imessage"]')).toBeVisible();
+  await expect(cardSettingsDialog.getByText('SMS 官方图标')).toBeVisible();
   await cardSettingsDialog.getByLabel('名称').fill('短信联系');
   await cardSettingsDialog.getByLabel('短信号码').fill('+1 213 555 1234');
   await cardSettingsDialog
@@ -276,9 +281,16 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     .fill('您好，我想了解更多信息');
   await cardSettingsDialog.getByRole('button', { name: '添加' }).click();
   await expect(cardSettingsDialog.getByText('短信联系')).toBeVisible();
-  await cardSettingsDialog
-    .getByRole('button', { name: '网站', exact: true })
-    .click();
+  await cardTypeSelect.click();
+  const typeOptions = cardSettingsDialog.getByRole('listbox', {
+    name: '名片类型选项',
+  });
+  await expect(
+    typeOptions.getByRole('option', { name: /WhatsApp/u }),
+  ).toContainText('号码与可选预设话术');
+  await expect(typeOptions.locator('[data-brand="whatsapp"]')).toBeVisible();
+  await expect(typeOptions.locator('[data-brand="telegram"]')).toBeVisible();
+  await typeOptions.getByRole('option', { name: /网站/u }).click();
   await expect(cardSettingsDialog.getByLabel('预设话术（可选）')).toHaveCount(
     0,
   );
