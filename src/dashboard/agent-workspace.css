@@ -901,11 +901,13 @@
 }
 
 .agent-attachment-manager-dialog {
-  width: min(620px, 100%);
+  width: min(680px, 100%);
   max-height: min(760px, calc(100dvh - 48px));
-  overflow: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
   border: 1px solid rgb(15 23 42 / 10%);
-  border-radius: 22px;
+  border-radius: 24px;
   background: #fff;
   box-shadow: 0 28px 80px rgb(15 23 42 / 24%);
 }
@@ -926,9 +928,12 @@
 
 .agent-attachment-manager-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.9fr);
-  gap: 18px;
-  padding: 20px 22px 22px;
+  min-height: 0;
+  grid-template-columns: minmax(0, 0.88fr) minmax(300px, 1.12fr);
+  gap: 16px;
+  overflow-y: auto;
+  padding: 18px 20px 20px;
+  overscroll-behavior: contain;
 }
 
 .agent-attachment-preset-list {
@@ -949,13 +954,14 @@
 .agent-attachment-preset-row {
   display: grid;
   min-width: 0;
-  grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
+  grid-template-columns: 34px minmax(0, 1fr) 32px 32px;
   align-items: center;
-  gap: 6px;
-  padding: 8px;
-  border: 1px solid #e5e9ee;
-  border-radius: 12px;
-  background: #fafbfc;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid #e2e7ed;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
 }
 
 .agent-attachment-preset-row > i {
@@ -999,10 +1005,10 @@
 .agent-attachment-editor {
   display: grid;
   align-content: start;
-  gap: 12px;
-  padding: 15px;
-  border: 1px solid #e5e9ee;
-  border-radius: 14px;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid #e1e6ec;
+  border-radius: 16px;
   background: #f8fafc;
 }
 
@@ -1014,38 +1020,136 @@
   font-weight: 700;
 }
 
-.agent-attachment-kind-tabs {
+.agent-attachment-kind-field {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 10px;
-  background: #e9edf2;
+  gap: 6px;
 }
 
-.agent-attachment-kind-tabs button {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  border: 0;
-  border-radius: 8px;
-  color: #68717d;
-  background: transparent;
+.agent-attachment-kind-field > span {
+  color: #475569;
   font-size: 11px;
   font-weight: 700;
 }
 
-.agent-attachment-kind-tabs .ui-icon {
-  width: 15px;
-  height: 15px;
+.agent-attachment-kind-select {
+  position: relative;
+  min-width: 0;
 }
 
-.agent-attachment-kind-tabs button.is-active {
-  color: #242b35;
+.agent-attachment-kind-trigger {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  grid-template-columns: 36px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #d9e0e8;
+  border-radius: 12px;
+  color: #1f2937;
   background: #fff;
-  box-shadow: 0 1px 4px rgb(15 23 42 / 9%);
+  text-align: left;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 3%);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.agent-attachment-kind-trigger:hover:not(:disabled),
+.agent-attachment-kind-trigger[aria-expanded='true'] {
+  border-color: #aaa7ed;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 9%);
+}
+
+.agent-attachment-kind-trigger:focus-visible,
+.agent-attachment-kind-options button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 18%);
+}
+
+.agent-attachment-kind-trigger:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.agent-attachment-kind-trigger > span,
+.agent-attachment-kind-options button > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.agent-attachment-kind-trigger strong,
+.agent-attachment-kind-options strong {
+  color: #202731;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.agent-attachment-kind-trigger small,
+.agent-attachment-kind-options small {
+  overflow: hidden;
+  color: #7d8794;
+  font-size: 10px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-attachment-kind-trigger > .ui-icon {
+  width: 17px;
+  height: 17px;
+  color: #7b8490;
+  transform: rotate(90deg);
+  transition: transform 150ms ease;
+}
+
+.agent-attachment-kind-trigger[aria-expanded='true'] > .ui-icon {
+  transform: rotate(-90deg);
+}
+
+.agent-attachment-kind-options {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid #dfe5ec;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 98%);
+  box-shadow: 0 18px 44px rgb(15 23 42 / 18%);
+  backdrop-filter: blur(16px);
+}
+
+.agent-attachment-kind-options button {
+  display: grid;
+  width: 100%;
+  min-height: 50px;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 10px;
+  color: #202731;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-attachment-kind-options button:hover,
+.agent-attachment-kind-options button[aria-selected='true'] {
+  background: #f3f4ff;
+}
+
+.agent-attachment-kind-options button > .ui-icon {
+  width: 16px;
+  height: 16px;
+  color: #5751c9;
 }
 
 .agent-attachment-editor-actions {
@@ -1270,7 +1374,7 @@
 
   .agent-attachment-manager-dialog {
     width: 100%;
-    max-height: 84dvh;
+    max-height: 88dvh;
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
@@ -1279,9 +1383,23 @@
 
   .agent-attachment-manager-body {
     grid-template-columns: 1fr;
+    gap: 12px;
+    padding-top: 14px;
     padding-right: 16px;
     padding-bottom: max(22px, env(safe-area-inset-bottom));
     padding-left: 16px;
+  }
+
+  .agent-attachment-preset-list:has(.agent-attachment-preset-row) {
+    max-height: 132px;
+    overflow-y: auto;
+    padding-right: 2px;
+    overscroll-behavior: contain;
+  }
+
+  .agent-attachment-editor {
+    gap: 10px;
+    padding: 12px;
   }
 
   .agent-auto-reply-attachments-head {

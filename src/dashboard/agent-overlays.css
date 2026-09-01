@@ -328,13 +328,37 @@
   place-items: center;
   overflow: hidden;
   border-radius: 10px;
-  color: #596270;
-  background: #eef1f4;
+  color: #53616f;
+  background: #fff;
+  box-shadow:
+    inset 0 0 0 1px rgb(15 23 42 / 7%),
+    0 1px 3px rgb(15 23 42 / 6%);
 }
 
 .agent-contact-card-icon > .ui-icon {
   width: 17px;
   height: 17px;
+}
+
+.agent-contact-card-icon > .channel-brand-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.agent-contact-card-icon[data-brand='imessage'] > .channel-brand-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.agent-contact-card-icon[data-brand='whatsapp'] > .channel-brand-icon {
+  width: 23px;
+  height: 23px;
+}
+
+.agent-contact-card-icon[data-brand='website'] {
+  color: #52677f;
+  background: linear-gradient(145deg, #f4f7fa, #e9eff5);
 }
 
 .agent-contact-card-icon > img {
@@ -392,10 +416,10 @@
   grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 9px;
+  padding: 8px;
   border: 1px solid #dfe4ea;
-  border-radius: 12px;
-  background: #fafbfc;
+  border-radius: 13px;
+  background: #fff;
 }
 
 .agent-card-icon-control > .agent-contact-card-icon {
@@ -426,6 +450,7 @@
 .agent-card-icon-control small {
   color: #858d98;
   font-size: 10px;
+  line-height: 1.35;
 }
 
 .agent-card-icon-actions {
@@ -532,7 +557,8 @@
 
   .agent-card-icon-actions {
     grid-column: 1 / -1;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    padding-left: 2px;
   }
 }
 
