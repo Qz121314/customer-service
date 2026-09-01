@@ -23,7 +23,6 @@ import {
   LoadState,
   AgentDraft,
   emptyAgentDraft,
-  CHAT_TIME_ZONE,
   productsForScope,
   agentScopeSummary,
   presenceClass,
@@ -39,10 +38,13 @@ import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import { Button } from './ui';
+import {
+  trafficRangePeriod,
+  type TrafficRange,
+} from './traffic-statistics-range';
 
 type AdminView = 'agents' | 'statistics' | 'settings';
 type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
-type TrafficRange = 'today' | 'yesterday' | '7d' | '30d' | '90d';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -357,7 +359,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
       : section === 'settings'
         ? '配置产品无客服可用时返回给访客的提示语。'
-        : '按自然月查看产品带来的首次有效咨询与流量转化分布。';
+        : '按日期范围查看产品带来的首次有效咨询与流量转化分布。';
 
   return (
     <div className="admin-console">
@@ -403,7 +405,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               <UiIcon name="statistics" />
               <span>流量统计</span>
             </span>
-            <small>自然月</small>
+            <small>日期</small>
           </button>
         </nav>
         <div className="admin-sidebar-foot">
@@ -764,37 +766,4 @@ function agentIsLimited(agent: AgentAccount): boolean {
   const trafficExhausted =
     agent.trafficQuotaEnabled && agent.trafficQuotaRemaining <= 0;
   return dailyFull || trafficExhausted;
-}
-
-function currentBusinessDate(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: CHAT_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(
-    parts.map((part) => [part.type, part.value]),
-  );
-  return `${values.year}-${values.month}-${values.day}`;
-}
-
-function shiftBusinessDate(date: string, days: number): string {
-  const value = new Date(`${date}T00:00:00.000Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
-function trafficRangePeriod(range: TrafficRange): {
-  from: string;
-  to: string;
-} {
-  const today = currentBusinessDate();
-  if (range === 'yesterday') {
-    const yesterday = shiftBusinessDate(today, -1);
-    return { from: yesterday, to: yesterday };
-  }
-  const days =
-    range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 1;
-  return { from: shiftBusinessDate(today, -(days - 1)), to: today };
 }
