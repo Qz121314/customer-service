@@ -6,6 +6,7 @@ import {
   readFileSync,
   symlinkSync,
   unlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -125,80 +126,108 @@ function seedAgent(database, id, status) {
     .run(id, id, id, status);
 }
 
-test('realtime activity touch preserves online, busy, and offline business status', async () => {
-  const database = new DatabaseSync(':memory:');
-  applyMigrations(database);
-  seedAgent(database, 'agent-online', 'online');
-  seedAgent(database, 'agent-busy', 'busy');
-  seedAgent(database, 'agent-offline', 'offline');
+function diagnosticTest(name, fn) {
+  test(name, async () => {
+    try {
+      await fn();
+    } catch (error) {
+      writeFileSync(
+        '/tmp/admin-viewport-geometry.json',
+        JSON.stringify(
+          {
+            test: name,
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : null,
+          },
+          null,
+          2,
+        ),
+      );
+      throw error;
+    }
+  });
+}
 
-  for (const id of ['agent-online', 'agent-busy', 'agent-offline']) {
-    await touchAgentActivity(d1(database), id);
-  }
+diagnosticTest(
+  'realtime activity touch preserves online, busy, and offline business status',
+  async () => {
+    const database = new DatabaseSync(':memory:');
+    applyMigrations(database);
+    seedAgent(database, 'agent-online', 'online');
+    seedAgent(database, 'agent-busy', 'busy');
+    seedAgent(database, 'agent-offline', 'offline');
 
-  assert.deepEqual(
-    database
-      .prepare(`SELECT id, status FROM agents ORDER BY id ASC`)
-      .all()
-      .map((row) => [row.id, row.status]),
-    [
-      ['agent-busy', 'busy'],
-      ['agent-offline', 'offline'],
-      ['agent-online', 'online'],
-    ],
-  );
-  assert.equal(
+    for (const id of ['agent-online', 'agent-busy', 'agent-offline']) {
+      await touchAgentActivity(d1(database), id);
+    }
+
+    assert.deepEqual(
+      database
+        .prepare(`SELECT id, status FROM agents ORDER BY id ASC`)
+        .all()
+        .map((row) => [row.id, row.status]),
+      [
+        ['agent-busy', 'busy'],
+        ['agent-offline', 'offline'],
+        ['agent-online', 'online'],
+      ],
+    );
+    assert.equal(
+      database
+        .prepare(
+          `SELECT COUNT(*) AS count
+           FROM agents
+           WHERE datetime(last_seen_at) > datetime('now', '-2 minutes')`,
+        )
+        .get().count,
+      3,
+    );
+
+    database.close();
+  },
+);
+
+diagnosticTest(
+  'heartbeat updates activity without changing an offline agent to online',
+  async () => {
+    const database = new DatabaseSync(':memory:');
+    applyMigrations(database);
+    seedAgent(database, 'agent-a', 'offline');
+
+    const token = 'heartbeat-contract-token';
+    const tokenHash = createHash('sha256').update(token).digest('hex');
     database
       .prepare(
-        `SELECT COUNT(*) AS count
-         FROM agents
-         WHERE datetime(last_seen_at) > datetime('now', '-2 minutes')`,
+        `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+         VALUES ('session-a', 'agent-a', ?, datetime('now', '+1 hour'))`,
       )
-      .get().count,
-    3,
-  );
+      .run(tokenHash);
 
-  database.close();
-});
+    const response = await agentApi.request(
+      '/api/agent/auth/heartbeat',
+      {
+        method: 'POST',
+        headers: { Cookie: `cs_agent_session=${token}` },
+      },
+      { DB: d1(database), CONVERSATION_ROOMS: fakeRooms() },
+    );
 
-test('heartbeat updates activity without changing an offline agent to online', async () => {
-  const database = new DatabaseSync(':memory:');
-  applyMigrations(database);
-  seedAgent(database, 'agent-a', 'offline');
+    assert.equal(response.status, 200);
+    assert.equal(
+      database.prepare(`SELECT status FROM agents WHERE id = 'agent-a'`).get()
+        .status,
+      'offline',
+    );
+    assert.equal(
+      database
+        .prepare(
+          `SELECT datetime(last_seen_at) > datetime('now', '-2 minutes') AS fresh
+           FROM agents WHERE id = 'agent-a'`,
+        )
+        .get().fresh,
+      1,
+    );
 
-  const token = 'heartbeat-contract-token';
-  const tokenHash = createHash('sha256').update(token).digest('hex');
-  database
-    .prepare(
-      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
-       VALUES ('session-a', 'agent-a', ?, datetime('now', '+1 hour'))`,
-    )
-    .run(tokenHash);
-
-  const response = await agentApi.request(
-    '/api/agent/auth/heartbeat',
-    {
-      method: 'POST',
-      headers: { Cookie: `cs_agent_session=${token}` },
-    },
-    { DB: d1(database), CONVERSATION_ROOMS: fakeRooms() },
-  );
-
-  assert.equal(response.status, 200);
-  assert.equal(
-    database.prepare(`SELECT status FROM agents WHERE id = 'agent-a'`).get()
-      .status,
-    'offline',
-  );
-  assert.equal(
-    database
-      .prepare(
-        `SELECT datetime(last_seen_at) > datetime('now', '-2 minutes') AS fresh
-         FROM agents WHERE id = 'agent-a'`,
-      )
-      .get().fresh,
-    1,
-  );
-
-  database.close();
-});
+    database.close();
+  },
+);
