@@ -433,7 +433,10 @@ export function AgentCardSettingsModal({
           <div className="agent-attachment-preset-section">
             <div className="agent-attachment-section-heading">
               <strong>已保存</strong>
-              <small>{editablePresets.length} 张名片</small>
+              <small>
+                {editablePresets.length} 张名片
+                <span> · 左滑管理</span>
+              </small>
             </div>
             <div
               className="agent-attachment-preset-list"
@@ -445,39 +448,48 @@ export function AgentCardSettingsModal({
                 <p>还没有名片，先在右侧创建一个常用联系方式。</p>
               ) : (
                 editablePresets.map((preset) => (
-                  <div className="agent-attachment-preset-row" key={preset.id}>
-                    <AgentContactCardIcon
-                      id={preset.id}
-                      kind={preset.kind}
-                      source="preset"
-                      hasCustomIcon={preset.hasCustomIcon}
-                    />
-                    <span>
-                      <strong>{preset.label}</strong>
-                      <small>
-                        {CONTACT_CARD_LABELS[preset.kind]} · {preset.value}
-                      </small>
-                    </span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`编辑 ${preset.label}`}
-                      disabled={saving}
-                      onClick={() => edit(preset)}
-                    >
-                      <UiIcon name="edit" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`删除 ${preset.label}`}
-                      disabled={saving}
-                      onClick={() => void remove(preset)}
-                    >
-                      <UiIcon name="trash" />
-                    </Button>
+                  <div
+                    className="agent-attachment-preset-swipe"
+                    key={preset.id}
+                  >
+                    <div className="agent-attachment-preset-track">
+                      <div className="agent-attachment-preset-row">
+                        <AgentContactCardIcon
+                          id={preset.id}
+                          kind={preset.kind}
+                          source="preset"
+                          hasCustomIcon={preset.hasCustomIcon}
+                        />
+                        <span>
+                          <strong>{preset.label}</strong>
+                          <small>
+                            {CONTACT_CARD_LABELS[preset.kind]} · {preset.value}
+                          </small>
+                        </span>
+                      </div>
+                      <div className="agent-attachment-preset-actions">
+                        <button
+                          type="button"
+                          className="is-edit"
+                          aria-label={`编辑 ${preset.label}`}
+                          disabled={saving}
+                          onClick={() => edit(preset)}
+                        >
+                          <UiIcon name="edit" />
+                          <span>编辑</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="is-delete"
+                          aria-label={`删除 ${preset.label}`}
+                          disabled={saving}
+                          onClick={() => void remove(preset)}
+                        >
+                          <UiIcon name="trash" />
+                          <span>删除</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 ))
               )}
