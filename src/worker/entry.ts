@@ -5,6 +5,7 @@ import { integrationApi } from './integration-api';
 import { adminConfigApi } from './admin-config-api';
 import { adminQuotaApi } from './admin-quota-api';
 import { agentApi } from './agent-api';
+import { agentAttachmentApi } from './agent-attachment-api';
 import { agentBootstrapApi } from './agent-bootstrap-api';
 import { agentAutoReplyApi } from './agent-auto-reply-api';
 import { agentAvatarApi } from './agent-avatar-api';
@@ -59,6 +60,8 @@ const PROTOCOL_NAMESPACE_PREFIXES = [
 ] as const;
 const AGENT_TEXT_MESSAGE_PATH =
   /^\/api\/agent\/conversations\/([^/]+)\/messages$/u;
+const AGENT_ATTACHMENT_MESSAGE_PATH =
+  /^\/api\/agent\/conversations\/([^/]+)\/attachments$/u;
 const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 const CLIENT_CONVERSATION_CREATE_PATH = /^\/client\/v1\/conversations$/u;
 const CLIENT_MESSAGE_PATH = /^\/client\/v1\/conversations\/([^/]+)\/messages$/u;
@@ -117,16 +120,19 @@ app.use('/client/v1/*', async (c, next) => {
   );
 });
 
-// Agent replies are persisted first. A successful text or image reply then
-// wakes subscribed visitor devices without owning the chat transaction.
+// Agent replies are persisted first. A successful text, structured attachment,
+// or image reply then wakes subscribed visitor devices without owning the chat
+// transaction.
 app.use('/api/agent/*', async (c, next) => {
   await next();
   if (c.req.method !== 'POST' || !c.res.ok) return;
 
   const pathname = new URL(c.req.url).pathname;
   const textMatch = pathname.match(AGENT_TEXT_MESSAGE_PATH);
-  if (textMatch?.[1] && c.res.status === 201) {
-    const conversationId = decodeURIComponent(textMatch[1]);
+  const attachmentMatch = pathname.match(AGENT_ATTACHMENT_MESSAGE_PATH);
+  const conversationMatch = textMatch ?? attachmentMatch;
+  if (conversationMatch?.[1] && c.res.status === 201) {
+    const conversationId = decodeURIComponent(conversationMatch[1]);
     c.executionCtx.waitUntil(
       sendVisitorPushForConversation(c.env, conversationId).catch((error) => {
         console.warn('Visitor push dispatch failed.', error);
@@ -154,6 +160,7 @@ app.use('/api/agent/*', async (c, next) => {
 app.route('/', adminQuotaApi);
 app.route('/', adminConfigApi);
 app.route('/', mediaApi);
+app.route('/', agentAttachmentApi);
 app.route('/', agentAvatarApi);
 app.route('/', agentAutoReplyApi);
 app.route('/', agentBootstrapApi);
