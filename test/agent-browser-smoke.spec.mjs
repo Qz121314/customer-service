@@ -273,7 +273,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(autoReplyToggle).not.toBeChecked();
   await autoReplyToggle.check();
   await autoReplyDialog
-    .getByLabel('问候内容')
+    .getByLabel('问候文案')
     .fill('您好，我来为您服务，请问有什么可以帮您？');
   await autoReplyDialog.getByRole('button', { name: '保存设置' }).click();
   await expect(
