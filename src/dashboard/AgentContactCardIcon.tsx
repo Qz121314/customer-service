@@ -27,7 +27,8 @@ export function AgentContactCardIcon({
     : source === 'preset'
       ? agentPresetCardIconUrl(id)
       : agentAttachmentCardIconUrl(id);
-  const shouldLoad = Boolean(previewUrl) || (hasCustomIcon !== false && !failed);
+  const shouldLoad =
+    Boolean(previewUrl) || (hasCustomIcon !== false && !failed);
 
   return (
     <span className="agent-contact-card-icon" aria-hidden="true">
