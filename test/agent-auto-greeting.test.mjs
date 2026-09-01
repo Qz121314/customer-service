@@ -64,6 +64,47 @@ function addConversation(database, id, visitorId = `${id}-visitor`) {
     .run(id, visitorId);
 }
 
+function addPhonePreset(database, agentId, id, label, value) {
+  database
+    .prepare(
+      `INSERT INTO agent_attachment_presets (
+         id, agent_id, kind, label, value, sort_order
+       ) VALUES (?, ?, 'phone', ?, ?, 0)`,
+    )
+    .run(id, agentId, label, value);
+}
+
+function addLinkPreset(database, agentId, id, label, value) {
+  database
+    .prepare(
+      `INSERT INTO agent_attachment_presets (
+         id, agent_id, kind, label, value, sort_order
+       ) VALUES (?, ?, 'link', ?, ?, 0)`,
+    )
+    .run(id, agentId, label, value);
+}
+
+function addImagePreset(database, agentId, id, label) {
+  database
+    .prepare(
+      `INSERT INTO agent_attachment_presets (
+         id, agent_id, kind, label, value, object_key, mime_type, byte_size,
+         width, height, original_name, sort_order
+       ) VALUES (?, ?, 'image', ?, NULL, ?, 'image/png', 128, 320, 180, ?, 0)`,
+    )
+    .run(id, agentId, label, `agent-assets/${agentId}/${id}.png`, `${id}.png`);
+}
+
+function addGreetingAttachment(database, agentId, presetId, sortOrder) {
+  database
+    .prepare(
+      `INSERT INTO agent_auto_greeting_attachments (
+         agent_id, preset_id, sort_order
+       ) VALUES (?, ?, ?)`,
+    )
+    .run(agentId, presetId, sortOrder);
+}
+
 function assign(database, conversationId, agentId, at) {
   database
     .prepare(
@@ -80,6 +121,10 @@ function assign(database, conversationId, agentId, at) {
 
 function row(database, sql, ...bindings) {
   return database.prepare(sql).get(...bindings);
+}
+
+function rows(database, sql, ...bindings) {
+  return database.prepare(sql).all(...bindings);
 }
 
 function count(database, table, where = '1 = 1', ...bindings) {
@@ -135,7 +180,7 @@ test('first effective assignment sends one configured greeting as a normal agent
   assert.equal(message.sender_type, 'agent');
   assert.equal(message.sender_id, 'greeting-agent');
   assert.equal(message.body, '您好，我来为您服务。');
-  assert.equal(message.client_message_id, 'auto-greeting:v1');
+  assert.equal(message.client_message_id, 'auto-greeting:v2');
   assert.equal(message.created_at, assignedAt);
 
   const conversation = row(
@@ -147,6 +192,158 @@ test('first effective assignment sends one configured greeting as a normal agent
   assert.equal(conversation.agent_unread_count, 1);
   assert.equal(conversation.visitor_unread_count, 1);
   assert.equal(conversation.last_message_preview, '您好，我来为您服务。');
+
+  database.close();
+});
+
+test('attachment-only greeting snapshots phone, link, and image presets in configured order', () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  addAgent(database, 'attachment-agent', {
+    greetingEnabled: true,
+    greetingText: null,
+  });
+  addPhonePreset(
+    database,
+    'attachment-agent',
+    'phone-preset',
+    '短信联系',
+    '+12135551234',
+  );
+  addLinkPreset(
+    database,
+    'attachment-agent',
+    'link-preset',
+    '付款链接',
+    'https://example.com/pay',
+  );
+  addImagePreset(
+    database,
+    'attachment-agent',
+    'image-preset',
+    '问候图片',
+  );
+  addGreetingAttachment(database, 'attachment-agent', 'phone-preset', 0);
+  addGreetingAttachment(database, 'attachment-agent', 'link-preset', 1);
+  addGreetingAttachment(database, 'attachment-agent', 'image-preset', 2);
+  addConversation(database, 'attachment-conversation');
+
+  const assignedAt = '2026-08-18T20:00:30.000Z';
+  assign(
+    database,
+    'attachment-conversation',
+    'attachment-agent',
+    assignedAt,
+  );
+
+  const automation = row(
+    database,
+    `SELECT outcome, message_id, message_body
+     FROM conversation_automation_receipts
+     WHERE conversation_id = ? AND automation_key = 'initial_greeting'`,
+    'attachment-conversation',
+  );
+  assert.equal(automation.outcome, 'sent');
+  assert.equal(automation.message_body, '');
+
+  const message = row(
+    database,
+    `SELECT body, client_message_id FROM messages WHERE id = ?`,
+    automation.message_id,
+  );
+  assert.equal(message.body, '');
+  assert.equal(message.client_message_id, 'auto-greeting:v2');
+
+  const attachments = rows(
+    database,
+    `SELECT kind, label, value, object_key, mime_type, byte_size, sort_order
+     FROM message_attachments
+     WHERE message_id = ?
+     ORDER BY sort_order ASC, id ASC`,
+    automation.message_id,
+  );
+  assert.equal(attachments.length, 3);
+  assert.deepEqual(
+    attachments.map((item) => [item.kind, item.label, item.sort_order]),
+    [
+      ['phone', '短信联系', 0],
+      ['link', '付款链接', 1],
+      ['image', '问候图片', 2],
+    ],
+  );
+  assert.equal(attachments[0].value, '+12135551234');
+  assert.equal(attachments[1].value, 'https://example.com/pay');
+  assert.equal(
+    attachments[2].object_key,
+    'agent-assets/attachment-agent/image-preset.png',
+  );
+  assert.equal(attachments[2].mime_type, 'image/png');
+  assert.equal(attachments[2].byte_size, 128);
+
+  const conversation = row(
+    database,
+    `SELECT visitor_unread_count, last_message_preview
+     FROM conversations WHERE id = ?`,
+    'attachment-conversation',
+  );
+  assert.equal(conversation.visitor_unread_count, 1);
+  assert.equal(conversation.last_message_preview, '短信联系');
+
+  database.close();
+});
+
+test('greeting attachment snapshots remain immutable after preset edit or delete', () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  addAgent(database, 'snapshot-agent', {
+    greetingEnabled: true,
+    greetingText: '请通过下面方式联系我们',
+  });
+  addPhonePreset(
+    database,
+    'snapshot-agent',
+    'snapshot-phone',
+    '原号码',
+    '+12135551234',
+  );
+  addGreetingAttachment(database, 'snapshot-agent', 'snapshot-phone', 0);
+  addConversation(database, 'snapshot-conversation');
+  assign(
+    database,
+    'snapshot-conversation',
+    'snapshot-agent',
+    '2026-08-18T20:00:45.000Z',
+  );
+
+  database
+    .prepare(
+      `UPDATE agent_attachment_presets
+       SET label = '新号码', value = '+13105555678'
+       WHERE id = 'snapshot-phone'`,
+    )
+    .run();
+  database
+    .prepare(`DELETE FROM agent_attachment_presets WHERE id = 'snapshot-phone'`)
+    .run();
+
+  const snapshot = row(
+    database,
+    `SELECT attachment.label, attachment.value, message.body
+     FROM message_attachments attachment
+     JOIN messages message ON message.id = attachment.message_id
+     WHERE message.conversation_id = 'snapshot-conversation'`,
+  );
+  assert.equal(snapshot.label, '原号码');
+  assert.equal(snapshot.value, '+12135551234');
+  assert.equal(snapshot.body, '请通过下面方式联系我们');
+  assert.equal(
+    count(
+      database,
+      'agent_auto_greeting_attachments',
+      "agent_id = 'snapshot-agent'",
+    ),
+    0,
+  );
 
   database.close();
 });
