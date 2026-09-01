@@ -14,7 +14,6 @@ async function loadAgentStyles() {
   await import('./month-picker.css');
   await import('./agent-overlays.css');
   await import('./agent-avatar.css');
-  await import('./agent-contact-card.css');
   await import('./agent-workspace.css');
   await import('./agent-desktop-layout.css');
   await import('./agent-mobile-layout.css');
