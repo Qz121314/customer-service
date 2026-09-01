@@ -30,7 +30,10 @@ test('contact card values normalize by final channel contract', () => {
   );
 
   assert.equal(normalizeContactCardValue('telegram', 'bad user'), null);
-  assert.equal(normalizeContactCardValue('website', 'javascript:alert(1)'), null);
+  assert.equal(
+    normalizeContactCardValue('website', 'javascript:alert(1)'),
+    null,
+  );
 });
 
 test('prefilled messages are optional, trimmed and bounded', () => {

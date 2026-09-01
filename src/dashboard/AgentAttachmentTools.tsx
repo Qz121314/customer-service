@@ -374,7 +374,10 @@ export function AgentCardSettingsModal({
             {loading ? (
               <p>正在读取名片…</p>
             ) : editablePresets.length === 0 ? (
-              <p>还没有名片。可添加任意数量的 SMS、WhatsApp、Telegram 或网站名片。</p>
+              <p>
+                还没有名片。可添加任意数量的 SMS、WhatsApp、Telegram
+                或网站名片。
+              </p>
             ) : (
               editablePresets.map((preset) => (
                 <div className="agent-attachment-preset-row" key={preset.id}>
@@ -457,7 +460,9 @@ export function AgentCardSettingsModal({
                         ? '自定义图标'
                         : `${CONTACT_CARD_LABELS[kind]} 内置图标`}
                   </strong>
-                  <small>默认使用标准渠道图标；可上传 PNG / JPG / WebP，最大 256 KB</small>
+                  <small>
+                    默认使用标准渠道图标；可上传 PNG / JPG / WebP，最大 256 KB
+                  </small>
                 </span>
                 <div className="agent-card-icon-actions">
                   <label className="agent-card-icon-picker">

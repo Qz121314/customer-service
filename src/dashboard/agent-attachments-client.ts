@@ -1,10 +1,6 @@
 import type { Message } from './api';
 
-export type AgentContactCardKind =
-  | 'sms'
-  | 'whatsapp'
-  | 'telegram'
-  | 'website';
+export type AgentContactCardKind = 'sms' | 'whatsapp' | 'telegram' | 'website';
 
 export type AgentAttachmentPreset =
   | {

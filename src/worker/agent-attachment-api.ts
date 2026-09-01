@@ -106,7 +106,8 @@ agentAttachmentApi.post('/api/agent/attachments/presets', async (c) => {
   const value = normalizeContactCardValue(kind, body?.value);
   const presetMessage = normalizePresetMessage(body?.presetMessage);
   const hasPresetMessage =
-    typeof body?.presetMessage === 'string' && body.presetMessage.trim().length > 0;
+    typeof body?.presetMessage === 'string' &&
+    body.presetMessage.trim().length > 0;
   if (
     !value ||
     (body?.presetMessage != null && typeof body.presetMessage !== 'string') ||
@@ -125,7 +126,14 @@ agentAttachmentApi.post('/api/agent/attachments/presets', async (c) => {
        object_key, mime_type, byte_size, width, height, original_name,
        sort_order, created_at, updated_at`,
   )
-    .bind(id, agent.id, kind, label, value, kind === 'website' ? null : presetMessage)
+    .bind(
+      id,
+      agent.id,
+      kind,
+      label,
+      value,
+      kind === 'website' ? null : presetMessage,
+    )
     .first<AttachmentPresetRow>();
   if (!row) return c.json({ error: 'ATTACHMENT_PRESET_CREATE_FAILED' }, 500);
   return c.json({ preset: publicPreset(row) }, 201);

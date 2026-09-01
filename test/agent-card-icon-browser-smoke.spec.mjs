@@ -88,5 +88,7 @@ test('agent can configure channel cards, preset text and custom icon override', 
     hasText: 'WhatsApp 名片',
   });
   await expect(whatsappRow).toBeVisible();
-  await expect(whatsappRow.locator('.agent-contact-card-icon img')).toBeVisible();
+  await expect(
+    whatsappRow.locator('.agent-contact-card-icon img'),
+  ).toBeVisible();
 });

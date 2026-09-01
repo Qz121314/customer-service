@@ -74,10 +74,7 @@ import {
 } from './agent-push';
 import { UiIcon } from './icons';
 
-type QuickAttachmentPreset = Exclude<
-  AgentAttachmentPreset,
-  { kind: 'image' }
->;
+type QuickAttachmentPreset = Exclude<AgentAttachmentPreset, { kind: 'image' }>;
 
 type ThreadRealtimeWithAttachments = ThreadRealtimeEvent & {
   attachments?: unknown[];

@@ -275,7 +275,8 @@ function Bubble({
                   <span>
                     <strong>{attachment.label}</strong>
                     <small>
-                      {CONTACT_CARD_LABELS[attachment.kind]} · {attachment.value}
+                      {CONTACT_CARD_LABELS[attachment.kind]} ·{' '}
+                      {attachment.value}
                     </small>
                   </span>
                 </a>
