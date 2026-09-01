@@ -11,7 +11,6 @@ import {
   type TrafficRange,
   type TrafficRangePreset,
 } from './traffic-statistics-range';
-import './traffic-date-range-picker.css';
 
 const RANGE_OPTIONS: Array<{ value: TrafficRangePreset; label: string }> = [
   { value: 'today', label: '今日' },
