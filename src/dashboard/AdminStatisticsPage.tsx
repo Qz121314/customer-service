@@ -61,6 +61,10 @@ const TOTAL_PERIOD_VALUE_STYLE: CSSProperties = {
   textAlign: 'right',
 };
 
+const TOTAL_BREAKDOWN_STYLE: CSSProperties = {
+  bottom: 18,
+};
+
 export function AdminStatisticsPage({
   agents,
   products,
@@ -161,7 +165,7 @@ export function AdminStatisticsPage({
               <strong>{busy ? '—' : total.toLocaleString('zh-CN')}</strong>
               <span>个前端会话</span>
             </div>
-            <div className="traffic-total-breakdown">
+            <div className="traffic-total-breakdown" style={TOTAL_BREAKDOWN_STYLE}>
               <div>
                 <span>已接待</span>
                 <strong>{busy ? '—' : accepted}</strong>
