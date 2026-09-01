@@ -82,16 +82,14 @@
 
 所有相关 test 先归入以下类别：
 
-| 类型 | 处理原则 |
-| --- | --- |
-| 行为测试 | 必须保留。验证业务输入/输出和用户可见结果。 |
-| 安全/权限测试 | 必须保留。不得为性能让步。 |
-| 并发/幂等测试 | 必须保留。核心热路径优先级最高。 |
-| 性能预算测试 | 保留并按新目标更新预算。不能绑定偶然实现细节。 |
-| 数据库契约测试 | 保留关键约束、索引、trigger 和 migration 安全检查。 |
-| 浏览器/Smoke 测试 | 保留真实 UI、移动端、WebSocket、发送/接收链路。 |
-| 源码结构测试 | 重点审查。若只匹配函数名、字符串或旧代码布局，应优先改成行为/预算测试。 |
-| 历史实现测试 | 如果产品契约已不再要求旧实现，先确认后更新或删除。 |
+- 行为测试：必须保留，验证业务输入、输出和用户可见结果。
+- 安全/权限测试：必须保留，不得为性能让步。
+- 并发/幂等测试：必须保留，核心热路径优先级最高。
+- 性能预算测试：保留并按新目标更新预算，不能绑定偶然实现细节。
+- 数据库契约测试：保留关键约束、索引、trigger 和 migration 安全检查。
+- 浏览器/Smoke 测试：保留真实 UI、移动端、WebSocket、发送和接收链路。
+- 源码结构测试：重点审查；若只匹配函数名、字符串或旧代码布局，应优先改成行为或预算测试。
+- 历史实现测试：如果产品契约已不再要求旧实现，先确认后更新或删除。
 
 ### 4.2 修改顺序
 
@@ -190,12 +188,10 @@ pnpm verify
 
 ## 6. 风险分级
 
-| 等级 | 范围 | 典型内容 | 执行要求 |
-| --- | --- | --- | --- |
-| Low | 前端局部实现 | CSS 加载、memo/map、draft debounce | 可先做，但仍需全量 CI + 浏览器 Smoke |
-| Medium | 共享查询/状态 | Inbox/Overview/Session 去重、移动 viewport | 独立 PR，必须验证 PC + Mobile |
-| High | 消息热路径 | D1 batch、realtime event pipeline | 单独阶段，完整消息矩阵测试 |
-| Very High | 创建/路由/DB | conversation create、routing SQL、trigger、migration | 不与其他改动混合，要求行为/并发/迁移专项测试 |
+- Low：前端局部实现，包括 CSS 加载、memo/map 和 draft debounce；可先做，但仍需全量 CI 与浏览器 Smoke。
+- Medium：共享查询和状态，包括 Inbox、Overview、Session 去重与移动 viewport；必须使用独立 PR，并验证 PC 和 Mobile。
+- High：消息热路径，包括 D1 batch 和 realtime event pipeline；必须单独进入一个阶段并执行完整消息矩阵测试。
+- Very High：创建、路由和数据库，包括 conversation create、routing SQL、trigger 与 migration；不得与其他改动混合，必须执行行为、并发和迁移专项测试。
 
 原则：**每个 PR 只跨一个主要风险等级。**
 
