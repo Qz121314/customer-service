@@ -88,10 +88,12 @@ test('unified conversation attachment history keeps legacy media and snapshot at
       'ready', 0, '2026-08-18T20:00:00.000Z', '2026-08-18T20:00:00.000Z', '2026-08-18T20:00:00.000Z'
     );
     INSERT INTO message_attachments (
-      id, message_id, kind, label, value, sort_order, created_at
+      id, message_id, kind, label, value, original_name, sort_order, created_at
     ) VALUES
-      ('phone-1', 'message-action', 'phone', '短信联系', '+12135551234', 0, '2026-08-18T20:01:00.000Z'),
-      ('link-1', 'message-action', 'link', '付款链接', 'https://example.com/pay', 1, '2026-08-18T20:01:00.000Z');
+      ('phone-1', 'message-action', 'phone', '短信联系', '+12135551234',
+       'contact-card-icon:v1:png:agent-card-icons/agent-1/card-1/icon-1.png', 0, '2026-08-18T20:01:00.000Z'),
+      ('link-1', 'message-action', 'link', '付款链接', 'https://example.com/pay',
+       NULL, 1, '2026-08-18T20:01:00.000Z');
   `);
 
   const attachments = await listConversationAttachments(
@@ -126,6 +128,14 @@ test('unified conversation attachment history keeps legacy media and snapshot at
   assert.equal(
     attachments.find((item) => item.id === 'phone-1')?.value,
     '+12135551234',
+  );
+  assert.equal(
+    attachments.find((item) => item.id === 'phone-1')?.hasCustomIcon,
+    true,
+  );
+  assert.equal(
+    attachments.find((item) => item.id === 'link-1')?.hasCustomIcon,
+    false,
   );
 
   database.close();
