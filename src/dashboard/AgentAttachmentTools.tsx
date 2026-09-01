@@ -145,7 +145,8 @@ export function AgentComposerAttachmentMenu({
                   <span>
                     <strong>{preset.label}</strong>
                     <small>
-                      {preset.kind === 'phone' ? 'SMS' : '链接'} · {preset.value}
+                      {preset.kind === 'phone' ? 'SMS' : '链接'} ·{' '}
+                      {preset.value}
                     </small>
                   </span>
                 </button>
@@ -291,7 +292,9 @@ export function AgentCardSettingsModal({
       resetForm();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '保存失败');
-      void getAgentAttachmentPresets().then(setPresets).catch(() => undefined);
+      void getAgentAttachmentPresets()
+        .then(setPresets)
+        .catch(() => undefined);
     } finally {
       setSaving(false);
     }
@@ -364,7 +367,8 @@ export function AgentCardSettingsModal({
                   <span>
                     <strong>{preset.label}</strong>
                     <small>
-                      {preset.kind === 'phone' ? 'SMS' : '链接'} · {preset.value}
+                      {preset.kind === 'phone' ? 'SMS' : '链接'} ·{' '}
+                      {preset.value}
                     </small>
                   </span>
                   <Button
@@ -457,7 +461,9 @@ export function AgentCardSettingsModal({
                       disabled={loading || saving}
                       onClick={() => {
                         setIconFile(null);
-                        setRemoveIconRequested(Boolean(editingPreset?.hasCustomIcon));
+                        setRemoveIconRequested(
+                          Boolean(editingPreset?.hasCustomIcon),
+                        );
                       }}
                     >
                       移除
