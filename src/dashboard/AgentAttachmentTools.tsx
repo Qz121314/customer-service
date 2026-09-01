@@ -213,6 +213,8 @@ export function AgentCardSettingsModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const kindMenuRef = useRef<HTMLDivElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const editorRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -220,12 +222,27 @@ export function AgentCardSettingsModal({
     setPresets([]);
     setLoading(true);
     setError('');
+    requestAnimationFrame(() => bodyRef.current?.scrollTo({ top: 0 }));
     void getAgentAttachmentPresets()
       .then(setPresets)
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : '无法加载名片');
       })
       .finally(() => setLoading(false));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const rootOverflow = root.style.overflow;
+    const bodyOverflow = body.style.overflow;
+    root.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = rootOverflow;
+      body.style.overflow = bodyOverflow;
+    };
   }, [open]);
 
   const editablePresets = useMemo(
@@ -301,6 +318,9 @@ export function AgentCardSettingsModal({
     setRemoveIconRequested(false);
     setKindMenuOpen(false);
     setError('');
+    requestAnimationFrame(() =>
+      editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
   };
 
   const save = async () => {
@@ -342,6 +362,9 @@ export function AgentCardSettingsModal({
           : [...current, preset];
       });
       resetForm();
+      requestAnimationFrame(() =>
+        bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' }),
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '保存失败');
       void getAgentAttachmentPresets()
@@ -406,56 +429,69 @@ export function AgentCardSettingsModal({
           </Button>
         </header>
 
-        <div className="agent-attachment-manager-body">
-          <div className="agent-attachment-preset-list">
-            {loading ? (
-              <p>正在读取名片…</p>
-            ) : editablePresets.length === 0 ? (
-              <p>
-                还没有名片。可添加任意数量的 SMS、WhatsApp、Telegram
-                或网站名片。
-              </p>
-            ) : (
-              editablePresets.map((preset) => (
-                <div className="agent-attachment-preset-row" key={preset.id}>
-                  <AgentContactCardIcon
-                    id={preset.id}
-                    kind={preset.kind}
-                    source="preset"
-                    hasCustomIcon={preset.hasCustomIcon}
-                  />
-                  <span>
-                    <strong>{preset.label}</strong>
-                    <small>
-                      {CONTACT_CARD_LABELS[preset.kind]} · {preset.value}
-                    </small>
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`编辑 ${preset.label}`}
-                    disabled={saving}
-                    onClick={() => edit(preset)}
-                  >
-                    <UiIcon name="edit" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`删除 ${preset.label}`}
-                    disabled={saving}
-                    onClick={() => void remove(preset)}
-                  >
-                    <UiIcon name="trash" />
-                  </Button>
-                </div>
-              ))
-            )}
+        <div className="agent-attachment-manager-body" ref={bodyRef}>
+          <div className="agent-attachment-preset-section">
+            <div className="agent-attachment-section-heading">
+              <strong>已保存</strong>
+              <small>{editablePresets.length} 张名片</small>
+            </div>
+            <div
+              className="agent-attachment-preset-list"
+              aria-label="已保存名片"
+            >
+              {loading ? (
+                <p>正在读取名片…</p>
+              ) : editablePresets.length === 0 ? (
+                <p>还没有名片，先在右侧创建一个常用联系方式。</p>
+              ) : (
+                editablePresets.map((preset) => (
+                  <div className="agent-attachment-preset-row" key={preset.id}>
+                    <AgentContactCardIcon
+                      id={preset.id}
+                      kind={preset.kind}
+                      source="preset"
+                      hasCustomIcon={preset.hasCustomIcon}
+                    />
+                    <span>
+                      <strong>{preset.label}</strong>
+                      <small>
+                        {CONTACT_CARD_LABELS[preset.kind]} · {preset.value}
+                      </small>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`编辑 ${preset.label}`}
+                      disabled={saving}
+                      onClick={() => edit(preset)}
+                    >
+                      <UiIcon name="edit" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`删除 ${preset.label}`}
+                      disabled={saving}
+                      onClick={() => void remove(preset)}
+                    >
+                      <UiIcon name="trash" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
-          <div className="agent-attachment-editor">
+          <div className="agent-attachment-editor" ref={editorRef}>
+            <div className="agent-attachment-editor-heading">
+              <span>
+                <strong>{editingId ? '编辑名片' : '新建名片'}</strong>
+                <small>选择渠道并填写访客可用的联系方式</small>
+              </span>
+              {editingId ? <i>编辑中</i> : null}
+            </div>
             <div className="agent-attachment-kind-field">
               <span>类型</span>
               <div className="agent-attachment-kind-select" ref={kindMenuRef}>
@@ -541,7 +577,7 @@ export function AgentCardSettingsModal({
                 </span>
                 <div className="agent-card-icon-actions">
                   <label className="agent-card-icon-picker">
-                    {currentHasCustomIcon ? '更换图标' : '上传自定义图标'}
+                    {currentHasCustomIcon ? '更换图标' : '上传图标'}
                     <input
                       aria-label="名片图标"
                       type="file"

@@ -697,6 +697,7 @@ dailyConversationLimit = 0 时不限
 - 新 migration 必须从上一版 schema 准备历史数据，再单独应用新 migration 验证转换结果；同时还要通过全量本地 D1 migration，禁止修改、重写或删除已经上线的 migration。
 - 名片预设与消息快照用途不同：预设可以编辑或删除，已发送快照必须不可变；自定义图标被替换或移除后，历史快照引用的 R2 对象不能被同步删除。
 - SMS、WhatsApp、Telegram 的官方渠道 SVG 集中放在 `public/icons/contact-card-*.svg`。不要换成 Lucide 通用图标，也不要在组件或 CSS 中复制内联 SVG；渠道选择仍保持单个紧凑下拉框，避免恢复成占高的多按钮网格。
+- 移动端名片弹窗保持“固定标题 + 单一纵向正文滚动 + 横向已保存名片 + 表单内固定主操作”。禁止给已保存名片再套纵向滚动容器，否则保存后保留的 `scrollTop` 会让名片行被截断；保存成功必须回到正文顶部，编辑时必须把表单滚动到可见区域。`test/agent-card-icon-browser-smoke.spec.mjs` 必须继续纳入 CI 的 Agent Chromium smoke，验证 390×844 视口几何与横向滑动。
 - PR 测试失败时，后续 Build、Worker bundle、浏览器 smoke 和 Cloudflare 部署会被跳过。排查时先看第一个失败步骤，不要把“未执行部署”误判为 Cloudflare 故障。
 - 合并前按 `pnpm verify` 验证完整仓库；名片 UI 还必须通过 Agent Chromium smoke。只有 PR 全绿后才能合并，最终完成标准仍是 main 部署成功并通过 production protocol smoke。
 
