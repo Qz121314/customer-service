@@ -1,13 +1,6 @@
-export type TrafficRangePreset =
-  | 'today'
-  | 'yesterday'
-  | '7d'
-  | '30d'
-  | '90d';
+export type TrafficRangePreset = 'today' | 'yesterday' | '7d' | '30d' | '90d';
 
-export type TrafficRange =
-  | TrafficRangePreset
-  | `custom:${string}:${string}`;
+export type TrafficRange = TrafficRangePreset | `custom:${string}:${string}`;
 
 const REPORTING_TIME_ZONE = 'America/Los_Angeles';
 const REPORTING_RETENTION_DAYS = 90;
