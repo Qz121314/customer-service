@@ -131,7 +131,9 @@ export const AgentSidebar = memo(function AgentSidebar({
       {mobileView === 'statistics' && (
         <AgentStatisticsModal
           identity={identity}
-          onClose={() => setMobileView('menu')}
+          onClose={(reason) =>
+            setMobileView(reason === 'notification' ? 'workspace' : 'menu')
+          }
         />
       )}
     </>
