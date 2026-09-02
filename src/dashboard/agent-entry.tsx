@@ -1,10 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AgentPortal } from './AgentPortal';
-import {
-  clearAgentThreadHistoryMarker,
-  readAgentThreadHistoryMarker,
-} from './agent-history';
 
 const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
 
@@ -85,94 +81,6 @@ function installAgentVisualViewportSync() {
   bindShell();
 }
 
-function installAgentHistoryNavigation() {
-  const root = document.getElementById('root');
-  if (!root) return;
-
-  document.body.style.overscrollBehaviorX = 'auto';
-  clearAgentThreadHistoryMarker();
-
-  let backPending = false;
-  let wasThreadOpen = false;
-  let observedShell: HTMLElement | null = null;
-
-  const threadIsOpen = () =>
-    observedShell?.classList.contains('is-thread-open') ?? false;
-
-  const clickThreadBack = () => {
-    root.querySelector<HTMLButtonElement>('.thread-back-button')?.click();
-  };
-
-  const reopenHistoryThread = (conversationId: string) => {
-    const row = [
-      ...root.querySelectorAll<HTMLButtonElement>(
-        '.conversation-row[data-conversation-id]',
-      ),
-    ].find((item) => item.dataset.conversationId === conversationId);
-    row?.click();
-  };
-
-  root.addEventListener(
-    'click',
-    (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (!target.closest('.thread-back-button')) return;
-      if (!readAgentThreadHistoryMarker()) return;
-      event.preventDefault();
-      event.stopPropagation();
-      backPending = true;
-      window.history.back();
-    },
-    true,
-  );
-
-  window.addEventListener('popstate', () => {
-    backPending = false;
-    const marker = readAgentThreadHistoryMarker();
-    if (marker) {
-      if (!threadIsOpen()) reopenHistoryThread(marker.conversationId);
-      return;
-    }
-    if (threadIsOpen()) clickThreadBack();
-  });
-
-  const reconcileThreadClosure = () => {
-    const threadOpen = threadIsOpen();
-    if (
-      wasThreadOpen &&
-      !threadOpen &&
-      readAgentThreadHistoryMarker() &&
-      !backPending
-    ) {
-      backPending = true;
-      window.history.back();
-    }
-    wasThreadOpen = threadOpen;
-  };
-
-  const threadStateObserver = new MutationObserver(reconcileThreadClosure);
-
-  const bindShell = () => {
-    const shell = root.querySelector<HTMLElement>('.workspace-shell');
-    if (shell === observedShell) return;
-
-    threadStateObserver.disconnect();
-    observedShell = shell;
-    if (shell) {
-      threadStateObserver.observe(shell, {
-        attributes: true,
-        attributeFilter: ['class'],
-      });
-    }
-    reconcileThreadClosure();
-  };
-
-  const historyRootObserver = new MutationObserver(bindShell);
-  historyRootObserver.observe(root, { childList: true });
-  bindShell();
-}
-
 function installAgentServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   window.addEventListener(
@@ -195,5 +103,4 @@ export async function bootstrap() {
     </StrictMode>,
   );
   installAgentVisualViewportSync();
-  installAgentHistoryNavigation();
 }
