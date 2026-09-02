@@ -11,12 +11,14 @@ import { UiIcon } from './icons';
 
 const CHAT_TIME_ZONE = 'America/Los_Angeles';
 
+type AgentStatisticsCloseReason = 'dismiss' | 'notification';
+
 export function AgentStatisticsModal({
   identity,
   onClose,
 }: {
   identity: AgentIdentity;
-  onClose: () => void;
+  onClose: (reason?: AgentStatisticsCloseReason) => void;
 }) {
   const [month, setMonth] = useState(() => currentBusinessMonth());
   const [stats, setStats] = useState<AgentSelfMonthlyStats | null>(null);
@@ -47,7 +49,7 @@ export function AgentStatisticsModal({
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onClose('dismiss');
     };
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
@@ -56,7 +58,7 @@ export function AgentStatisticsModal({
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     const closeForNotification = (event: MessageEvent) => {
-      if (isAgentNotificationOpenMessage(event.data)) onClose();
+      if (isAgentNotificationOpenMessage(event.data)) onClose('notification');
     };
     navigator.serviceWorker.addEventListener('message', closeForNotification);
     return () =>
@@ -74,7 +76,10 @@ export function AgentStatisticsModal({
     stats?.month === month ? stats.days : calendarMonthPeriod(month).days;
 
   return (
-    <div className="agent-statistics-backdrop" onMouseDown={onClose}>
+    <div
+      className="agent-statistics-backdrop"
+      onMouseDown={() => onClose('dismiss')}
+    >
       <section
         className="agent-statistics-dialog"
         role="dialog"
@@ -94,7 +99,7 @@ export function AgentStatisticsModal({
               type="button"
               className="modal-close"
               aria-label="关闭接待流量"
-              onClick={onClose}
+              onClick={() => onClose('dismiss')}
             >
               <UiIcon name="close" />
             </button>
