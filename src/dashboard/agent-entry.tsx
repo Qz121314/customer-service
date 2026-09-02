@@ -9,17 +9,7 @@ import {
 const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
 
 async function loadAgentStyles() {
-  await import('./agent-foundation.css');
-  await import('./agent-statistics.css');
-  await import('./month-picker.css');
-  await import('./agent-overlays.css');
-  await import('./agent-avatar.css');
-  await import('./agent-workspace.css');
-  await import('./agent-desktop-layout.css');
-  await import('./agent-mobile-layout.css');
-  await import('./agent-thread.css');
-  await import('./agent-state.css');
-  await import('./commercial-polish.css');
+  await import('./agent-route.css');
 }
 
 function installAgentVisualViewportSync() {
