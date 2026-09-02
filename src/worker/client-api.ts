@@ -1264,6 +1264,17 @@ async function discardUnassignedConversation(
   await db.batch([
     db
       .prepare(
+        `DELETE FROM conversation_traffic_receipts
+         WHERE conversation_id = ?1 AND site_id = ?2
+           AND EXISTS (
+             SELECT 1
+             FROM conversations
+             WHERE id = ?1 AND site_id = ?2 AND assigned_agent IS NULL
+           )`,
+      )
+      .bind(input.conversationId, input.siteId),
+    db
+      .prepare(
         `DELETE FROM conversation_creation_quota_receipts
          WHERE site_id = ?1 AND reuse_key = ?2
            AND EXISTS (
