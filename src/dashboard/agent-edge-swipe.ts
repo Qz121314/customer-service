@@ -12,8 +12,6 @@ const COMMIT_DISTANCE_MAX = 132;
 const SETTLE_DURATION_MS = 180;
 const REBOUND_CURVE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const COMMIT_CURVE = 'cubic-bezier(0.32, 0.72, 0, 1)';
-const SWIPE_SURFACE_SELECTOR = '[data-agent-swipe-back-surface="true"]';
-const SWIPE_TRIGGER_SELECTOR = '[data-agent-swipe-back-trigger="true"]';
 const PAGE_BACK_TRIGGER_SELECTOR = 'button[aria-label^="返回"]';
 const MODAL_CLOSE_TRIGGER_SELECTOR =
   'button[aria-label^="关闭"], button[aria-label^="返回"]';
@@ -74,7 +72,9 @@ function findVisibleModalTarget(hits: Element[]): SwipeTarget | null {
   for (const dialog of dialogs) {
     if (!elementIsVisible(dialog)) continue;
     const surface =
-      dialog.parentElement instanceof HTMLElement ? dialog.parentElement : dialog;
+      dialog.parentElement instanceof HTMLElement
+        ? dialog.parentElement
+        : dialog;
     if (!hits.some((hit) => surface.contains(hit))) continue;
     const backButton = dialog.querySelector<HTMLButtonElement>(
       MODAL_CLOSE_TRIGGER_SELECTOR,
@@ -155,7 +155,12 @@ function prepareWorkspaceUnderlay(target: SwipeTarget): () => void {
   }> = [];
 
   for (const sibling of shell.children) {
-    if (!(sibling instanceof HTMLElement) || sibling === target.element) continue;
+    if (
+      !(sibling instanceof HTMLElement) ||
+      sibling === target.element
+    ) {
+      continue;
+    }
     if (!['ASIDE', 'SECTION'].includes(sibling.tagName)) continue;
     if (window.getComputedStyle(sibling).display !== 'none') continue;
     restoredLayers.push({
@@ -403,11 +408,4 @@ export function installAgentEdgeSwipeBack() {
   window.addEventListener('pointerup', onPointerUp, { capture: true });
   window.addEventListener('pointercancel', cancelGesture, { capture: true });
   mobileAgentQuery.addEventListener('change', cancelGesture);
-
-  root.querySelectorAll<HTMLElement>(SWIPE_SURFACE_SELECTOR).forEach((surface) => {
-    surface.removeAttribute('data-agent-swipe-back-surface');
-  });
-  root.querySelectorAll<HTMLElement>(SWIPE_TRIGGER_SELECTOR).forEach((trigger) => {
-    trigger.removeAttribute('data-agent-swipe-back-trigger');
-  });
 }
