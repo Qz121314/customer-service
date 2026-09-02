@@ -272,11 +272,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
   if (!site)
     return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
 
-  const product = await findEnabledProduct(c.env.DB, site.id, productInput.id);
-  if (!product) {
-    return error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
-  }
-
   const visitorResult = await ensureVisitor(
     c.env.DB,
     site.id,
@@ -296,7 +291,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   const reuseKey = await conversationReuseKey(
     site.id,
     visitor.external_id,
-    product.id,
+    productInput.id,
   );
 
   // A source handoff still has permanent retry idempotency. A separate reuse
@@ -369,7 +364,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
        (SELECT last_message_at FROM reuse_match) AS reuse_last_message_at,
        (SELECT expires_at FROM reuse_match) AS reuse_expires_at`,
   )
-    .bind(site.id, visitorId, clientMessageId, sourceHandoffId, product.id)
+    .bind(site.id, visitorId, clientMessageId, sourceHandoffId, productInput.id)
     .first<{
       message_conversation_id: string | null;
       handoff_conversation_id: string | null;
@@ -504,6 +499,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
         });
       }
     }
+  }
+
+  // Existing conversations are immutable snapshots. A visitor must be able to
+  // reopen a still-valid snapshot even while the product catalog is waiting for
+  // its next Site sync. Only a genuinely new conversation requires the current
+  // catalog's canonical absolute public URL.
+  const product = await findEnabledProduct(c.env.DB, site.id, productInput.id);
+  if (!product) {
+    return error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
   }
 
   const startClaimKey = replay?.reuse_conversation_id

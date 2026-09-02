@@ -571,6 +571,41 @@ test('same visitor and product reuse one assigned conversation for two hours', a
   database.close();
 });
 
+test('an active historical conversation reopens before a legacy catalog URL is rejected', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+
+  const first = await startConversation(
+    database,
+    rooms,
+    '45454545-4545-4454-8454-454545454545',
+  );
+  const firstValue = await first.json();
+  database
+    .prepare(
+      `UPDATE product_catalog
+       SET href = '/sections/west/products/product-1/'
+       WHERE site_id = 'default' AND id = 'product-1'`,
+    )
+    .run();
+
+  const reopened = await startConversation(
+    database,
+    rooms,
+    '46464646-4646-4464-8464-464646464646',
+  );
+  const reopenedValue = await reopened.json();
+
+  assert.equal(first.status, 201);
+  assert.equal(reopened.status, 200);
+  assert.equal(reopenedValue.conversation.id, firstValue.conversation.id);
+  assert.equal(
+    scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
+    1,
+  );
+  database.close();
+});
+
 test('different products keep independent conversations', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
