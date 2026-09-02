@@ -40,16 +40,28 @@ async function loginAgent(page) {
   await expect(page.getByText('我的会话')).toBeVisible();
 }
 
-test('mobile settings keeps its navigation context after child dialogs close', async ({
+async function readHistoryView(page) {
+  return page.evaluate(
+    () => globalThis.history.state?.__customerServiceAgentView?.view ?? null,
+  );
+}
+
+async function expectHistoryView(page, view) {
+  await expect.poll(() => readHistoryView(page)).toBe(view);
+}
+
+test('mobile settings uses browser history for back navigation', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedAgent(page);
   await loginAgent(page);
 
-  await page.getByRole('button', { name: '打开功能菜单' }).click();
+  const openSettings = page.getByRole('button', { name: '打开功能菜单' });
+  await openSettings.click();
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
   await expect(settingsPage).toBeVisible();
+  await expectHistoryView(page, 'menu');
   await expect(settingsPage).toHaveCSS(
     'animation-name',
     'agent-overlay-page-in',
@@ -81,13 +93,15 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await settingsPage.getByRole('button', { name: /名片/u }).click();
   const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
   await expect(cardSettingsDialog).toBeVisible();
+  await expectHistoryView(page, 'cards');
   await expect(cardSettingsDialog).toHaveCSS(
     'animation-name',
     'agent-overlay-sheet-in',
   );
-  await page.getByRole('button', { name: '关闭名片设置' }).click();
+  await page.evaluate(() => globalThis.history.back());
   await expect(cardSettingsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
+  await expectHistoryView(page, 'menu');
 
   await page.route('**/api/agent/settings/auto-reply', async (route) => {
     if (route.request().method() === 'GET') {
@@ -98,6 +112,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await settingsPage.getByRole('button', { name: /首次问候语/u }).click();
   const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
   await expect(autoReplyDialog).toBeVisible();
+  await expectHistoryView(page, 'autoReply');
   await expect(autoReplyDialog).toHaveCSS(
     'animation-name',
     'agent-overlay-sheet-in',
@@ -125,18 +140,30 @@ test('mobile settings keeps its navigation context after child dialogs close', a
       ),
     ).toBeLessThanOrEqual(1);
   }
-  await page.getByRole('button', { name: '关闭自动回复设置' }).click();
+  await page.evaluate(() => globalThis.history.back());
   await expect(autoReplyDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
+  await expectHistoryView(page, 'menu');
 
   await settingsPage.getByRole('button', { name: /接待流量/u }).click();
   const statsDialog = page.getByRole('dialog', { name: /接待数据/u });
   await expect(statsDialog).toBeVisible();
-  await page.getByRole('button', { name: '关闭接待流量' }).click();
+  await expectHistoryView(page, 'statistics');
+  await page.evaluate(() => globalThis.history.back());
   await expect(statsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
+  await expectHistoryView(page, 'menu');
 
+  await page.evaluate(() => globalThis.history.back());
+  await expect(settingsPage).toBeHidden();
+  await expect(page.getByText('我的会话')).toBeVisible();
+  await expectHistoryView(page, null);
+
+  await openSettings.click();
+  await expect(settingsPage).toBeVisible();
+  await expectHistoryView(page, 'menu');
   await settingsPage.getByRole('button', { name: '返回工作台' }).click();
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
+  await expectHistoryView(page, null);
 });
