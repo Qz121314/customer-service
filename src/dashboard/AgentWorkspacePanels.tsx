@@ -5,7 +5,16 @@ import type {
   AgentInbox,
   Conversation,
 } from './api';
-import { rememberAgentConversationHistory } from './agent-history';
+import {
+  navigateAgentBack,
+  navigateAgentSettings,
+  navigateAgentWorkspace,
+  readAgentMobileView,
+  readAgentNavigationMarker,
+  rememberAgentConversationHistory,
+  subscribeAgentNavigation,
+  type AgentMobileView,
+} from './agent-navigation';
 import {
   clearAgentNotificationOpenIntent,
   hasAgentNotificationOpenIntent,
@@ -23,9 +32,6 @@ import {
   AgentActionToolbar,
   AgentMobileSettingsPage,
 } from './AgentWorkspaceChrome';
-
-type AgentMobileView =
-  'workspace' | 'menu' | 'cards' | 'autoReply' | 'statistics';
 
 export const AgentSidebar = memo(function AgentSidebar({
   identity,
@@ -52,11 +58,25 @@ export const AgentSidebar = memo(function AgentSidebar({
 }) {
   const [desktopAutoReplyOpen, setDesktopAutoReplyOpen] = useState(false);
   const [desktopCardSettingsOpen, setDesktopCardSettingsOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<AgentMobileView>('workspace');
+  const [mobileView, setMobileView] = useState<AgentMobileView>(() =>
+    readAgentMobileView(),
+  );
+
+  useEffect(
+    () =>
+      subscribeAgentNavigation(() => {
+        setMobileView(readAgentMobileView());
+      }),
+    [],
+  );
+
+  const backMobileView = () => {
+    if (!navigateAgentBack()) setMobileView('workspace');
+  };
 
   const closeCardSettings = () => {
     if (mobileView === 'cards') {
-      setMobileView('menu');
+      backMobileView();
       return;
     }
     setDesktopCardSettingsOpen(false);
@@ -64,7 +84,7 @@ export const AgentSidebar = memo(function AgentSidebar({
 
   const closeAutoReply = () => {
     if (mobileView === 'autoReply') {
-      setMobileView('menu');
+      backMobileView();
       return;
     }
     setDesktopAutoReplyOpen(false);
@@ -100,7 +120,7 @@ export const AgentSidebar = memo(function AgentSidebar({
           onOpenAutoReply={() => setDesktopAutoReplyOpen(true)}
           onOpenStatistics={onOpenStatistics}
           onLogout={onLogout}
-          onOpenMobileSettings={() => setMobileView('menu')}
+          onOpenMobileSettings={() => navigateAgentSettings('menu')}
         />
       </aside>
       <AgentMobileSettingsPage
@@ -108,12 +128,12 @@ export const AgentSidebar = memo(function AgentSidebar({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
-        onClose={() => setMobileView('workspace')}
+        onClose={backMobileView}
         onToggleNotifications={onToggleNotifications}
         onToggleSound={onToggleSound}
-        onOpenCardSettings={() => setMobileView('cards')}
-        onOpenAutoReply={() => setMobileView('autoReply')}
-        onOpenStatistics={() => setMobileView('statistics')}
+        onOpenCardSettings={() => navigateAgentSettings('cards')}
+        onOpenAutoReply={() => navigateAgentSettings('autoReply')}
+        onOpenStatistics={() => navigateAgentSettings('statistics')}
         onLogout={onLogout}
       />
       <AgentAutoReplySettingsModal
@@ -127,9 +147,13 @@ export const AgentSidebar = memo(function AgentSidebar({
       {mobileView === 'statistics' && (
         <AgentStatisticsModal
           identity={identity}
-          onClose={(reason) =>
-            setMobileView(reason === 'notification' ? 'workspace' : 'menu')
-          }
+          onClose={(reason) => {
+            if (reason === 'notification') {
+              navigateAgentWorkspace();
+              return;
+            }
+            backMobileView();
+          }}
         />
       )}
     </>
@@ -175,7 +199,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   onSearchChange: (value: string) => void;
   onToggleUnreadFirst: () => void;
   onToggleAvailability: () => void;
-  onSelectConversation: (id: string) => void;
+  onSelectConversation: (id: string | null) => void;
 }) {
   const [notificationOpenPending, setNotificationOpenPending] = useState(() =>
     hasAgentNotificationOpenIntent(),
@@ -183,6 +207,8 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   const overviewRef = useRef(overview);
   const notificationOverviewBaselineRef = useRef(overview);
   const lastOverviewChangeAtRef = useRef(Date.now());
+  const selectedIdRef = useRef(selectedId);
+  const previousSelectedIdRef = useRef(selectedId);
   const filterCounts: Record<Filter, number> = {
     all: conversationCount,
     open: overview.open,
@@ -195,10 +221,40 @@ export const AgentInboxPane = memo(function AgentInboxPane({
     lastOverviewChangeAtRef.current = Date.now();
   }, [overview]);
 
+  useEffect(() => {
+    const previousSelectedId = previousSelectedIdRef.current;
+    previousSelectedIdRef.current = selectedId;
+    selectedIdRef.current = selectedId;
+    if (!previousSelectedId || selectedId) return;
+    const marker = readAgentNavigationMarker();
+    if (
+      marker?.view === 'thread' &&
+      marker.conversationId === previousSelectedId
+    ) {
+      navigateAgentBack();
+    }
+  }, [selectedId]);
+
+  useEffect(() => {
+    const syncHistorySelection = () => {
+      const marker = readAgentNavigationMarker();
+      const historyConversationId =
+        marker?.view === 'thread' ? marker.conversationId : null;
+      if (historyConversationId !== selectedIdRef.current) {
+        onSelectConversation(historyConversationId);
+      }
+    };
+    syncHistorySelection();
+    return subscribeAgentNavigation(syncHistorySelection);
+  }, [onSelectConversation]);
+
   const selectConversation = useCallback(
     (conversationId: string) => {
-      rememberAgentConversationHistory(conversationId, Boolean(selectedId));
-      onSelectConversation(conversationId);
+      const activateImmediately = rememberAgentConversationHistory(
+        conversationId,
+        Boolean(selectedId),
+      );
+      if (activateImmediately) onSelectConversation(conversationId);
     },
     [onSelectConversation, selectedId],
   );
