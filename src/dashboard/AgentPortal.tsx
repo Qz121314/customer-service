@@ -61,8 +61,13 @@ import {
   ConversationExpiryCountdown,
   Bubble,
 } from './dashboard-ui';
-import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { AgentInboxPane, AgentSidebar } from './AgentWorkspacePanels';
+import {
+  inboxRoute,
+  threadRoute,
+  useAgentNavigation,
+  withOverlay,
+} from './agent-navigation';
 import { AgentComposerAttachmentMenu } from './AgentAttachmentTools';
 import {
   groupAgentMessageAttachments,
@@ -367,9 +372,7 @@ function AgentWorkspace({
     identity.status === 'busy' ? 'busy' : 'online',
   );
   const [availabilitySaving, setAvailabilitySaving] = useState(false);
-  const [statisticsOpen, setStatisticsOpen] = useState(() =>
-    window.location.pathname.startsWith('/agent/stats'),
-  );
+  const { navigation, navigate, replace, back } = useAgentNavigation();
   const [overview, setOverview] = useState({
     open: 0,
     pending: 0,
@@ -383,7 +386,10 @@ function AgentWorkspace({
     trafficQuotaRemaining: 0,
   });
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selectedId =
+    navigation.workspace.kind === 'thread'
+      ? navigation.workspace.conversationId
+      : null;
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [messageAttachments, setMessageAttachments] = useState<
     AgentMessageAttachment[]
@@ -648,14 +654,14 @@ function AgentWorkspace({
         current.filter((conversation) => !expiredIds.has(conversation.id)),
       );
       if (selectedId && expiredIds.has(selectedId)) {
-        setSelectedId(null);
+        replace(inboxRoute());
         setDetail(null);
         setMessageAttachments([]);
       }
       void refresh().catch(() => undefined);
       return true;
     },
-    [conversations, refresh, selectedId],
+    [conversations, refresh, replace, selectedId],
   );
 
   useEffect(() => {
@@ -675,6 +681,17 @@ function AgentWorkspace({
       .catch((reason) => setError(message(reason, '无法加载会话')))
       .finally(() => setBusy(false));
   }, [refresh]);
+
+  useEffect(() => {
+    if (
+      !selectedId ||
+      busy ||
+      conversations.some((conversation) => conversation.id === selectedId)
+    ) {
+      return;
+    }
+    replace(inboxRoute());
+  }, [busy, conversations, replace, selectedId]);
 
   useEffect(() => {
     const recover = () => {
@@ -1168,7 +1185,7 @@ function AgentWorkspace({
     const expiresAt = Date.parse(selectedExpiresAt);
     if (!Number.isFinite(expiresAt)) return;
     const expire = () => {
-      setSelectedId(null);
+      replace(inboxRoute());
       setDetail(null);
       setMessageAttachments([]);
       void refresh().catch(() => undefined);
@@ -1180,7 +1197,7 @@ function AgentWorkspace({
     }
     const timer = window.setTimeout(expire, remaining + 100);
     return () => window.clearTimeout(timer);
-  }, [refresh, selectedExpiresAt, selectedId]);
+  }, [refresh, replace, selectedExpiresAt, selectedId]);
   useLayoutEffect(() => {
     const timeline = messagesRef.current;
     if (!timeline || !selectedId) return;
@@ -1637,7 +1654,47 @@ function AgentWorkspace({
   });
   const handleToggleSound = useEventCallback(toggleSound);
   const handleOpenStatistics = useEventCallback(() => {
-    setStatisticsOpen(true);
+    navigate(withOverlay(navigation, 'statistics'));
+  });
+  const handleOpenCardSettings = useEventCallback(() => {
+    navigate(withOverlay(navigation, 'cards'));
+  });
+  const handleOpenAutoReply = useEventCallback(() => {
+    navigate(withOverlay(navigation, 'autoReply'));
+  });
+  const handleOpenMobileSettings = useEventCallback(() => {
+    navigate(withOverlay(navigation, 'menu'));
+  });
+  const handleCloseOverlay = useEventCallback(() => {
+    back();
+  });
+  const handleCloseStatistics = useEventCallback(
+    (reason?: 'dismiss' | 'notification') => {
+      if (reason === 'notification') {
+        replace(inboxRoute());
+        return;
+      }
+      back();
+    },
+  );
+  const handleSelectConversation = useEventCallback(
+    (conversationId: string, source: 'inbox' | 'notification' = 'inbox') => {
+      if (source === 'notification') {
+        replace(inboxRoute());
+      }
+      navigate(threadRoute(conversationId));
+    },
+  );
+  useEffect(() => {
+    if (
+      window.location.pathname.startsWith('/agent/stats') &&
+      navigation.overlay === 'none'
+    ) {
+      replace(withOverlay(inboxRoute(), 'statistics'));
+    }
+  }, [navigation.overlay, replace]);
+  const handleBackToInbox = useEventCallback(() => {
+    back();
   });
   const handleLogout = useEventCallback(() => {
     void logoutFromWorkspace();
@@ -1676,7 +1733,13 @@ function AgentWorkspace({
         onNicknameChange={handleNicknameChange}
         onToggleNotifications={handleToggleNotifications}
         onToggleSound={handleToggleSound}
+        overlay={navigation.overlay}
+        onOpenCardSettings={handleOpenCardSettings}
+        onOpenAutoReply={handleOpenAutoReply}
         onOpenStatistics={handleOpenStatistics}
+        onOpenMobileSettings={handleOpenMobileSettings}
+        onCloseOverlay={handleCloseOverlay}
+        onCloseStatistics={handleCloseStatistics}
         onLogout={handleLogout}
       />
 
@@ -1699,7 +1762,7 @@ function AgentWorkspace({
         onSearchChange={setSearchQuery}
         onToggleUnreadFirst={handleToggleUnreadFirst}
         onToggleAvailability={handleToggleAvailability}
-        onSelectConversation={setSelectedId}
+        onSelectConversation={handleSelectConversation}
       />
 
       <main className="thread-pane">
@@ -1726,7 +1789,7 @@ function AgentWorkspace({
                 type="button"
                 className="thread-back-button"
                 aria-label="返回会话列表"
-                onClick={() => setSelectedId(null)}
+                onClick={handleBackToInbox}
               >
                 <UiIcon name="back" />
               </button>
@@ -1937,12 +2000,6 @@ function AgentWorkspace({
           </>
         )}
       </main>
-      {statisticsOpen && (
-        <AgentStatisticsModal
-          identity={identity}
-          onClose={() => setStatisticsOpen(false)}
-        />
-      )}
     </div>
   );
 }
