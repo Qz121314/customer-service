@@ -191,9 +191,9 @@ const allowedCiSecrets = [
   'PERF_AUDIT_AGENT_PASSWORD',
   'PERF_AUDIT_AGENT_USERNAME',
 ];
-const ciSecretReferences = [...ciWorkflow.matchAll(/secrets\.([A-Z0-9_]+)/gu)].map(
-  (match) => match[1],
-);
+const ciSecretReferences = [
+  ...ciWorkflow.matchAll(/secrets\.([A-Z0-9_]+)/gu),
+].map((match) => match[1]);
 assert.deepEqual(
   [...new Set(ciSecretReferences)].toSorted(),
   allowedCiSecrets.toSorted(),
