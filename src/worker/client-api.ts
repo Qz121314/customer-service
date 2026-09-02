@@ -625,6 +625,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       sourceHandoffId,
       conversation.id,
+      visitorId,
     );
     if (handoffOwner.externalId !== visitorId) {
       return error(
