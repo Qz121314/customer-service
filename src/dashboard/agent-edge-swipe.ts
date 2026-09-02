@@ -79,11 +79,7 @@ function findVisibleModalTarget(hits: Element[]): SwipeTarget | null {
     const backButton = dialog.querySelector<HTMLButtonElement>(
       MODAL_CLOSE_TRIGGER_SELECTOR,
     );
-    if (
-      !backButton ||
-      backButton.disabled ||
-      !elementIsVisible(backButton)
-    ) {
+    if (!backButton || backButton.disabled || !elementIsVisible(backButton)) {
       continue;
     }
     return { element: surface, backButton };
@@ -99,11 +95,7 @@ function findVisiblePageTarget(hits: Element[]): SwipeTarget | null {
     const backButton = surface.querySelector<HTMLButtonElement>(
       PAGE_BACK_TRIGGER_SELECTOR,
     );
-    if (
-      !backButton ||
-      backButton.disabled ||
-      !elementIsVisible(backButton)
-    ) {
+    if (!backButton || backButton.disabled || !elementIsVisible(backButton)) {
       continue;
     }
     return { element: surface, backButton };
@@ -155,10 +147,7 @@ function prepareWorkspaceUnderlay(target: SwipeTarget): () => void {
   }> = [];
 
   for (const sibling of shell.children) {
-    if (
-      !(sibling instanceof HTMLElement) ||
-      sibling === target.element
-    ) {
+    if (!(sibling instanceof HTMLElement) || sibling === target.element) {
       continue;
     }
     if (!['ASIDE', 'SECTION'].includes(sibling.tagName)) continue;
