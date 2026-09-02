@@ -106,4 +106,3 @@ test('conversation start only refreshes a snapshot after a concurrent assignment
     /return \(\s*\(await ownedConversation[\s\S]*\?\? conversation\s*\);/u,
   );
 });
-
