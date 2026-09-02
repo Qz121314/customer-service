@@ -31,6 +31,7 @@ for (const directory of [workerDirectory, sharedDirectory]) {
 
 let adminConfigApi;
 let agentApi;
+let agentAttachmentApi;
 let clientApi;
 let mediaApi;
 let pushApi;
@@ -39,6 +40,7 @@ try {
   [
     { adminConfigApi },
     { agentApi },
+    { agentAttachmentApi },
     { clientApi },
     { mediaApi },
     { pushApi },
@@ -46,6 +48,7 @@ try {
   ] = await Promise.all([
     import('../src/worker/admin-config-api.ts'),
     import('../src/worker/agent-api.ts'),
+    import('../src/worker/agent-attachment-api.ts'),
     import('../src/worker/client-api.ts'),
     import('../src/worker/media-api.ts'),
     import('../src/worker/push-api.ts'),
@@ -719,6 +722,87 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     1,
   );
 
+  const cardPresetResponse = await agentAttachmentApi.request(
+    '/api/agent/attachments/presets',
+    {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'whatsapp',
+        label: 'WhatsApp',
+        value: '+12135551234',
+        presetMessage: 'Hello from support',
+      }),
+    },
+    env,
+  );
+  assert.equal(cardPresetResponse.status, 201);
+  const cardPreset = await json(cardPresetResponse);
+  const cardSendResponse = await agentAttachmentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/attachments`,
+    {
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        body: '联系信息',
+        presetIds: [cardPreset.preset.id],
+        clientMessageId: 'agent-card-e2e-1',
+      }),
+    },
+    env,
+  );
+  assert.equal(cardSendResponse.status, 201);
+  const cardDelivery = await json(cardSendResponse);
+  assert.equal(cardDelivery.message.body, '联系信息');
+  assert.deepEqual(
+    cardDelivery.attachments.map((attachment) => ({
+      kind: attachment.kind,
+      label: attachment.label,
+      value: attachment.value,
+      presetMessage: attachment.presetMessage,
+    })),
+    [
+      {
+        kind: 'whatsapp',
+        label: 'WhatsApp',
+        value: '+12135551234',
+        presetMessage: 'Hello from support',
+      },
+    ],
+  );
+
+  const visitorCardEvent = (
+    rooms.events.get(`client:default:${visitorId}`) ?? []
+  ).find(
+    (event) =>
+      event.type === 'message.created' &&
+      event.message?.id === cardDelivery.message.id,
+  );
+  assert.ok(visitorCardEvent, 'visitor realtime must receive the contact card');
+  assert.deepEqual(
+    visitorCardEvent.message.attachments.map((attachment) => ({
+      kind: attachment.kind,
+      label: attachment.label,
+      value: attachment.value,
+      presetMessage: attachment.presetMessage,
+    })),
+    [
+      {
+        kind: 'whatsapp',
+        label: 'WhatsApp',
+        value: '+12135551234',
+        presetMessage: 'Hello from support',
+      },
+    ],
+  );
+
+  const threadCardEvent = (rooms.events.get(conversationId) ?? []).find(
+    (event) =>
+      event.type === 'message' && event.message?.id === cardDelivery.message.id,
+  );
+  assert.ok(threadCardEvent, 'conversation realtime must receive the contact card');
+  assert.equal(threadCardEvent.attachments[0].kind, 'whatsapp');
+
   const uploadId = 'agent-image-e2e-1';
   const imageInitBody = JSON.stringify({
     mimeType: 'image/png',
@@ -860,10 +944,41 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   const delta = await json(deltaResponse);
   assert.deepEqual(
     delta.messages.map((item) => item.id),
-    [reply.message.id, firstComplete.messageId],
+    [reply.message.id, cardDelivery.message.id, firstComplete.messageId],
   );
-  assert.equal(delta.media.length, 1);
-  assert.equal(delta.media[0].messageId, firstComplete.messageId);
+  assert.equal(delta.media.length, 2);
+  assert.equal(
+    delta.media.find((item) => item.kind === 'whatsapp')?.messageId,
+    cardDelivery.message.id,
+  );
+  assert.equal(
+    delta.media.find((item) => item.kind === 'image')?.messageId,
+    firstComplete.messageId,
+  );
+
+  const visitorMediaResponse = await mediaApi.request(
+    `/client/v1/conversations/${encodeURIComponent(conversationId)}/media?visitorId=${encodeURIComponent(visitorId)}`,
+    undefined,
+    env,
+  );
+  const visitorMedia = await json(visitorMediaResponse);
+  const visitorCard = visitorMedia.items.find(
+    (item) => item.messageId === cardDelivery.message.id,
+  );
+  assert.deepEqual(
+    {
+      kind: visitorCard.kind,
+      label: visitorCard.label,
+      value: visitorCard.value,
+      presetMessage: visitorCard.presetMessage,
+    },
+    {
+      kind: 'whatsapp',
+      label: 'WhatsApp',
+      value: '+12135551234',
+      presetMessage: 'Hello from support',
+    },
+  );
 
   const clientDetailResponse = await clientApi.request(
     `/client/v1/conversations/${encodeURIComponent(conversationId)}?visitorId=${encodeURIComponent(visitorId)}`,
@@ -871,14 +986,16 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     env,
   );
   const clientDetail = await json(clientDetailResponse);
-  assert.equal(clientDetail.conversation.messages.length, 3);
+  assert.equal(clientDetail.conversation.messages.length, 4);
   assert.equal(
     clientDetail.conversation.messages[0].body,
     'Hello from visitor',
   );
   assert.equal(clientDetail.conversation.messages[1].body, 'Hello from agent');
   assert.equal(clientDetail.conversation.messages[1].direction, 'agent');
+  assert.equal(clientDetail.conversation.messages[2].body, '联系信息');
   assert.equal(clientDetail.conversation.messages[2].direction, 'agent');
+  assert.equal(clientDetail.conversation.messages[3].direction, 'agent');
 
   const visitorEvents = rooms.events.get(`client:default:${visitorId}`) ?? [];
   assert.ok(
