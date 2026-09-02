@@ -31,6 +31,16 @@ type InlineGestureStyles = {
   boxShadow: string;
 };
 
+type ThreadStackStyles = {
+  sidebarDisplay: string;
+  conversationDisplay: string;
+  threadPosition: string;
+  threadInset: string;
+  threadZIndex: string;
+  threadWidth: string;
+  threadHeight: string;
+};
+
 type ActiveGesture = {
   pointerId: number;
   startX: number;
@@ -38,6 +48,8 @@ type ActiveGesture = {
   startAt: number;
   distanceX: number;
   direction: 'pending' | 'horizontal';
+  stackPrepared: boolean;
+  restoreStack: () => void;
   target: SwipeTarget;
   styles: InlineGestureStyles;
 };
@@ -92,7 +104,9 @@ function registerExistingAgentSurfaces(root: HTMLElement) {
     );
     if (!backButton) continue;
     const surface =
-      dialog.parentElement instanceof HTMLElement ? dialog.parentElement : dialog;
+      dialog.parentElement instanceof HTMLElement
+        ? dialog.parentElement
+        : dialog;
     registerSwipeSurface(surface, backButton);
   }
 }
@@ -156,6 +170,57 @@ function restoreInlineGestureStyles(
   element.style.boxShadow = styles.boxShadow;
 }
 
+function prepareThreadStack(target: SwipeTarget): () => void {
+  if (!target.element.classList.contains('thread-pane')) return () => undefined;
+
+  const shell = target.element.closest<HTMLElement>(
+    '.workspace-shell.is-thread-open',
+  );
+  const sidebar = shell?.querySelector<HTMLElement>('.workspace-sidebar');
+  const conversation = shell?.querySelector<HTMLElement>('.conversation-pane');
+  if (!shell || !sidebar || !conversation) return () => undefined;
+
+  const styles: ThreadStackStyles = {
+    sidebarDisplay: sidebar.style.display,
+    conversationDisplay: conversation.style.display,
+    threadPosition: target.element.style.position,
+    threadInset: target.element.style.inset,
+    threadZIndex: target.element.style.zIndex,
+    threadWidth: target.element.style.width,
+    threadHeight: target.element.style.height,
+  };
+
+  sidebar.style.display = 'flex';
+  conversation.style.display = 'flex';
+  target.element.style.position = 'absolute';
+  target.element.style.inset = '0';
+  target.element.style.zIndex = '60';
+  target.element.style.width = '100%';
+  target.element.style.height = '100%';
+
+  return () => {
+    sidebar.style.display = styles.sidebarDisplay;
+    conversation.style.display = styles.conversationDisplay;
+    target.element.style.position = styles.threadPosition;
+    target.element.style.inset = styles.threadInset;
+    target.element.style.zIndex = styles.threadZIndex;
+    target.element.style.width = styles.threadWidth;
+    target.element.style.height = styles.threadHeight;
+  };
+}
+
+function prepareGestureStack(gesture: ActiveGesture) {
+  if (gesture.stackPrepared) return;
+  gesture.stackPrepared = true;
+  gesture.restoreStack = prepareThreadStack(gesture.target);
+}
+
+function restoreGesture(gesture: ActiveGesture) {
+  restoreInlineGestureStyles(gesture.target.element, gesture.styles);
+  gesture.restoreStack();
+  gesture.restoreStack = () => undefined;
+}
+
 function translateX(distanceX: number): string {
   return `translate3d(${Math.round(distanceX)}px, 0, 0)`;
 }
@@ -212,23 +277,33 @@ export function installAgentEdgeSwipeBack() {
 
   let gesture: ActiveGesture | null = null;
   let settleTimer: number | null = null;
+  let pendingRestore: (() => void) | null = null;
+
+  const restorePending = () => {
+    const restore = pendingRestore;
+    pendingRestore = null;
+    restore?.();
+  };
 
   const clearSettleTimer = () => {
-    if (settleTimer === null) return;
-    window.clearTimeout(settleTimer);
-    settleTimer = null;
+    if (settleTimer !== null) {
+      window.clearTimeout(settleTimer);
+      settleTimer = null;
+    }
+    restorePending();
   };
 
   const settleBack = (current: ActiveGesture) => {
     const { element } = current.target;
+    clearSettleTimer();
+    pendingRestore = () => restoreGesture(current);
     element.style.animation = 'none';
     element.style.transition = settleTransition(REBOUND_CURVE);
     element.style.transform = translateX(0);
     element.style.boxShadow = 'none';
-    clearSettleTimer();
     settleTimer = window.setTimeout(() => {
-      restoreInlineGestureStyles(element, current.styles);
       settleTimer = null;
+      restorePending();
     }, SETTLE_DURATION_MS + 24);
   };
 
@@ -238,42 +313,35 @@ export function installAgentEdgeSwipeBack() {
       1,
       element.getBoundingClientRect().width || window.innerWidth,
     );
+    clearSettleTimer();
+    pendingRestore = () => restoreGesture(current);
     element.style.animation = 'none';
     element.style.transition = settleTransition(COMMIT_CURVE);
     element.style.willChange = 'transform';
     element.style.transform = translateX(Math.ceil(width));
     element.style.boxShadow = '-14px 0 34px rgba(15, 23, 42, 0.16)';
 
-    clearSettleTimer();
     settleTimer = window.setTimeout(() => {
       settleTimer = null;
       if (backButton.disabled) {
-        settleBack(current);
+        restorePending();
         return;
       }
 
       if (mode === 'history') {
         const restoreAfterHistory = () => {
-          window.setTimeout(
-            () => restoreInlineGestureStyles(element, current.styles),
-            32,
-          );
+          window.setTimeout(restorePending, 32);
         };
         window.addEventListener('popstate', restoreAfterHistory, {
           once: true,
         });
         backButton.click();
-        window.setTimeout(
-          () => restoreInlineGestureStyles(element, current.styles),
-          280,
-        );
+        window.setTimeout(restorePending, 280);
         return;
       }
 
       backButton.click();
-      window.requestAnimationFrame(() =>
-        restoreInlineGestureStyles(element, current.styles),
-      );
+      window.requestAnimationFrame(restorePending);
     }, SETTLE_DURATION_MS - 16);
   };
 
@@ -299,6 +367,8 @@ export function installAgentEdgeSwipeBack() {
       startAt: event.timeStamp,
       distanceX: 0,
       direction: 'pending',
+      stackPrepared: false,
+      restoreStack: () => undefined,
       target,
       styles: readInlineGestureStyles(target.element),
     };
@@ -322,6 +392,7 @@ export function installAgentEdgeSwipeBack() {
         return;
       }
       gesture.direction = 'horizontal';
+      prepareGestureStack(gesture);
     }
 
     if (event.cancelable) event.preventDefault();
