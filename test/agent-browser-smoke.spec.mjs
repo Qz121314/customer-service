@@ -382,6 +382,63 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     );
   }
 
+  const runtimeGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const shell = browser.document.querySelector('.workspace-shell');
+    const conversationPane = browser.document.querySelector('.conversation-pane');
+    const threadPane = browser.document.querySelector('.thread-pane');
+    if (
+      !(shell instanceof browser.HTMLElement) ||
+      !(conversationPane instanceof browser.HTMLElement) ||
+      !(threadPane instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    return {
+      shellPosition: shell.style.position,
+      conversationInlineHeight: conversationPane.style.height,
+      threadInlineHeight: threadPane.style.height,
+    };
+  });
+  expect(runtimeGeometry).toEqual({
+    shellPosition: 'fixed',
+    conversationInlineHeight: '',
+    threadInlineHeight: '',
+  });
+
+  await page.setViewportSize({ width: 390, height: 620 });
+  await expectMobileThreadGeometry(page);
+  const compactGeometry = await page.evaluate(() => {
+    const browser = globalThis;
+    const shell = browser.document.querySelector('.workspace-shell');
+    const composer = browser.document.querySelector('.composer');
+    if (
+      !(shell instanceof browser.HTMLElement) ||
+      !(composer instanceof browser.HTMLElement)
+    ) {
+      return null;
+    }
+    const shellRect = shell.getBoundingClientRect();
+    const composerRect = composer.getBoundingClientRect();
+    return {
+      viewportHeight: browser.innerHeight,
+      shellTop: shellRect.top,
+      shellBottom: shellRect.bottom,
+      composerBottom: composerRect.bottom,
+    };
+  });
+  expect(compactGeometry).not.toBeNull();
+  if (compactGeometry) {
+    expect(compactGeometry.shellTop).toBeGreaterThanOrEqual(0);
+    expect(compactGeometry.shellBottom).toBeLessThanOrEqual(
+      compactGeometry.viewportHeight + 1,
+    );
+    expect(compactGeometry.composerBottom).toBeLessThanOrEqual(
+      compactGeometry.viewportHeight + 1,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 700 });
+
   const sendButton = page.getByRole('button', { name: '发送' });
   const sendButtonBox = await sendButton.boundingBox();
   expect(sendButtonBox).not.toBeNull();
