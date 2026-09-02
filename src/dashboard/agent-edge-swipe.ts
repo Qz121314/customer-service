@@ -64,9 +64,7 @@ function rememberSwipeContract(target: SwipeTarget) {
   target.backButton.dataset.agentSwipeBackTrigger = 'true';
 }
 
-function declaredTargetForSurface(
-  surface: HTMLElement,
-): SwipeTarget | null {
+function declaredTargetForSurface(surface: HTMLElement): SwipeTarget | null {
   if (!elementIsVisible(surface)) return null;
   const backButton = surface.querySelector<HTMLButtonElement>(
     DECLARED_TRIGGER_SELECTOR,
