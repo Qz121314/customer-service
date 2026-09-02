@@ -27,7 +27,7 @@ function d1(database) {
         },
         async run() {
           const result = database.prepare(sql).run(...bindings);
-          return { meta: { changes: Number(result.changes) } };
+          return { meta: { changes: Number(result.changes) };
         },
       };
     },
@@ -98,6 +98,11 @@ async function createDatabase() {
     CREATE TABLE agent_traffic_receipts (
       conversation_id TEXT PRIMARY KEY
     );
+    CREATE TABLE agent_push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      expiration_time INTEGER
+    );
   `);
   database.exec(
     await read('../migrations/0042_simple_round_robin_routing.sql'),
@@ -144,6 +149,13 @@ function addAgent(
       quotaUsed,
       lastAssignedAt,
     );
+  database
+    .prepare(
+      `INSERT INTO agent_push_subscriptions (
+         endpoint, agent_id, expiration_time
+       ) VALUES (?, ?, NULL)`,
+    )
+    .run(`https://push.example.test/${id}`, id);
 }
 
 function addScope(
