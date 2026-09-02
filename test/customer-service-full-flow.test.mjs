@@ -1,27 +1,27 @@
-import assert from "node:assert/strict";
-import { Buffer } from "node:buffer";
-import { createHash, createHmac } from "node:crypto";
+import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
+import { createHash, createHmac } from 'node:crypto';
 import {
   existsSync,
   readdirSync,
   readFileSync,
   symlinkSync,
   unlinkSync,
-} from "node:fs";
-import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
-import { fileURLToPath, URL } from "node:url";
-import test from "node:test";
+} from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { fileURLToPath, URL } from 'node:url';
+import test from 'node:test';
 const workerDirectory = fileURLToPath(
-  new URL("../src/worker/", import.meta.url),
+  new URL('../src/worker/', import.meta.url),
 );
 const sharedDirectory = fileURLToPath(
-  new URL("../src/shared/", import.meta.url),
+  new URL('../src/shared/', import.meta.url),
 );
 const moduleShims = [];
 for (const directory of [workerDirectory, sharedDirectory]) {
   for (const name of readdirSync(directory)) {
-    if (!name.endsWith(".ts") || name.endsWith(".d.ts")) continue;
+    if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
     const shimPath = join(directory, name.slice(0, -3));
     if (existsSync(shimPath)) continue;
     symlinkSync(name, shimPath);
@@ -46,24 +46,24 @@ try {
     { pushApi },
     { hashAgentPassword },
   ] = await Promise.all([
-    import("../src/worker/admin-config-api.ts"),
-    import("../src/worker/agent-api.ts"),
-    import("../src/worker/agent-attachment-api.ts"),
-    import("../src/worker/client-api.ts"),
-    import("../src/worker/media-api.ts"),
-    import("../src/worker/push-api.ts"),
-    import("../src/worker/agent-password.ts"),
+    import('../src/worker/admin-config-api.ts'),
+    import('../src/worker/agent-api.ts'),
+    import('../src/worker/agent-attachment-api.ts'),
+    import('../src/worker/client-api.ts'),
+    import('../src/worker/media-api.ts'),
+    import('../src/worker/push-api.ts'),
+    import('../src/worker/agent-password.ts'),
   ]);
 } finally {
   for (const shimPath of moduleShims) unlinkSync(shimPath);
 }
 
 function applyMigrations(database) {
-  const directory = fileURLToPath(new URL("../migrations/", import.meta.url));
+  const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
   for (const name of readdirSync(directory)
     .filter((value) => /^\d+.*\.sql$/u.test(value))
     .sort()) {
-    database.exec(readFileSync(`${directory}/${name}`, "utf8"));
+    database.exec(readFileSync(`${directory}/${name}`, 'utf8'));
   }
 }
 
@@ -94,13 +94,13 @@ function d1(database) {
     prepare: statement,
     async batch(statements) {
       const results = [];
-      database.exec("BEGIN");
+      database.exec('BEGIN');
       try {
         for (const item of statements) results.push(await item.run());
-        database.exec("COMMIT");
+        database.exec('COMMIT');
         return results;
       } catch (error) {
-        database.exec("ROLLBACK");
+        database.exec('ROLLBACK');
         throw error;
       }
     },
@@ -118,7 +118,7 @@ function fakeRooms() {
       get(name) {
         return {
           async fetch(_input, init) {
-            const payload = JSON.parse(String(init?.body ?? "{}"));
+            const payload = JSON.parse(String(init?.body ?? '{}'));
             const current = events.get(name) ?? [];
             current.push(payload);
             events.set(name, current);
@@ -157,7 +157,7 @@ function fakeMediaBucket() {
         if (!object) return null;
         return {
           size: object.bytes.length,
-          httpEtag: "test-etag",
+          httpEtag: 'test-etag',
           httpMetadata: { contentType: object.contentType },
           body: object.bytes,
         };
@@ -172,21 +172,21 @@ function fakeMediaBucket() {
 }
 
 function sha256(value) {
-  return createHash("sha256").update(value).digest("hex");
+  return createHash('sha256').update(value).digest('hex');
 }
 
 function adminCookie(password) {
   const payload = Buffer.from(
     JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 }),
-  ).toString("base64url");
-  const signature = createHmac("sha256", password)
+  ).toString('base64url');
+  const signature = createHmac('sha256', password)
     .update(payload)
-    .digest("base64url");
+    .digest('base64url');
   return `cs_session=${payload}.${signature}`;
 }
 
-test("admin can save multiple whole-section routing rules in one request", async () => {
-  const database = new DatabaseSync(":memory:");
+test('admin can save multiple whole-section routing rules in one request', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   database.exec(`
     INSERT INTO product_catalog (
@@ -196,24 +196,24 @@ test("admin can save multiple whole-section routing rules in one request", async
       ('default', 'product-east', 'East product', 'east', 'East', 1);
   `);
 
-  const adminPassword = "admin-password";
+  const adminPassword = 'admin-password';
   const response = await adminConfigApi.request(
-    "/api/admin/agents",
+    '/api/admin/agents',
     {
-      method: "POST",
+      method: 'POST',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
-        name: "Multi Section Agent",
-        username: "multi-section",
-        password: "pass",
-        routingScope: { type: "section", sectionIds: ["west", "east"] },
+        name: 'Multi Section Agent',
+        username: 'multi-section',
+        password: 'pass',
+        routingScope: { type: 'section', sectionIds: ['west', 'east'] },
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 100,
-        trafficQuotaRequestId: "quota-create-request-001",
+        trafficQuotaRequestId: 'quota-create-request-001',
         isEnabled: true,
       }),
     },
@@ -236,19 +236,19 @@ test("admin can save multiple whole-section routing rules in one request", async
       )
       .all(created.id)
       .map((row) => row.section_id),
-    ["east", "west"],
+    ['east', 'west'],
   );
   const topUpResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         trafficQuotaTopUp: 50,
-        trafficQuotaRequestId: "quota-topup-request-001",
+        trafficQuotaRequestId: 'quota-topup-request-001',
       }),
     },
     {
@@ -272,14 +272,14 @@ test("admin can save multiple whole-section routing rules in one request", async
   const duplicateTopUpResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         trafficQuotaTopUp: 50,
-        trafficQuotaRequestId: "quota-topup-request-001",
+        trafficQuotaRequestId: 'quota-topup-request-001',
       }),
     },
     {
@@ -291,7 +291,7 @@ test("admin can save multiple whole-section routing rules in one request", async
   assert.equal(duplicateTopUpResponse.status, 200);
   assert.equal(
     database
-      .prepare("SELECT traffic_quota_total FROM agents WHERE id = ?")
+      .prepare('SELECT traffic_quota_total FROM agents WHERE id = ?')
       .get(created.id).traffic_quota_total,
     150,
   );
@@ -299,14 +299,14 @@ test("admin can save multiple whole-section routing rules in one request", async
   const conflictingTopUpResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         trafficQuotaTopUp: 60,
-        trafficQuotaRequestId: "quota-topup-request-001",
+        trafficQuotaRequestId: 'quota-topup-request-001',
       }),
     },
     {
@@ -318,7 +318,7 @@ test("admin can save multiple whole-section routing rules in one request", async
   assert.equal(conflictingTopUpResponse.status, 409);
   assert.equal(
     (await conflictingTopUpResponse.json()).error,
-    "QUOTA_REQUEST_CONFLICT",
+    'QUOTA_REQUEST_CONFLICT',
   );
 
   const historyResponse = await adminConfigApi.request(
@@ -350,14 +350,14 @@ test("admin can save multiple whole-section routing rules in one request", async
   const restoredQuotaResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         trafficQuotaTopUp: 1,
-        trafficQuotaRequestId: "quota-restore-request-001",
+        trafficQuotaRequestId: 'quota-restore-request-001',
       }),
     },
     {
@@ -379,10 +379,10 @@ test("admin can save multiple whole-section routing rules in one request", async
   database.close();
 });
 
-test("admin can save and update a private agent marker", async () => {
-  const database = new DatabaseSync(":memory:");
+test('admin can save and update a private agent marker', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
-  const adminPassword = "admin-password";
+  const adminPassword = 'admin-password';
   const env = {
     DB: d1(database),
     CONVERSATION_ROOMS: fakeRooms().namespace,
@@ -390,20 +390,20 @@ test("admin can save and update a private agent marker", async () => {
   };
   const headers = {
     cookie: adminCookie(adminPassword),
-    "content-type": "application/json",
+    'content-type': 'application/json',
   };
 
   const createResponse = await adminConfigApi.request(
-    "/api/admin/agents",
+    '/api/admin/agents',
     {
-      method: "POST",
+      method: 'POST',
       headers,
       body: JSON.stringify({
-        name: "Numbered Agent",
-        adminLabel: " 1号 ",
-        username: "numbered-agent",
-        password: "pass",
-        routingScope: { type: "none" },
+        name: 'Numbered Agent',
+        adminLabel: ' 1号 ',
+        username: 'numbered-agent',
+        password: 'pass',
+        routingScope: { type: 'none' },
         dailyConversationLimit: 0,
         trafficQuotaEnabled: false,
         trafficQuotaTopUp: 0,
@@ -415,58 +415,58 @@ test("admin can save and update a private agent marker", async () => {
   const created = await json(createResponse);
 
   const bootstrapResponse = await adminConfigApi.request(
-    "/api/admin/bootstrap",
+    '/api/admin/bootstrap',
     { headers },
     env,
   );
   const bootstrap = await json(bootstrapResponse);
   assert.equal(
     bootstrap.agents.find((agent) => agent.id === created.id).adminLabel,
-    "1号",
+    '1号',
   );
 
   const updateResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers,
-      body: JSON.stringify({ adminLabel: "2号" }),
+      body: JSON.stringify({ adminLabel: '2号' }),
     },
     env,
   );
   assert.equal(updateResponse.status, 200);
   assert.equal(
     database
-      .prepare("SELECT admin_label FROM agents WHERE id = ?")
+      .prepare('SELECT admin_label FROM agents WHERE id = ?')
       .get(created.id).admin_label,
-    "2号",
+    '2号',
   );
 
   const loginResponse = await agentApi.request(
-    "/api/agent/auth/login",
+    '/api/agent/auth/login',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "numbered-agent", password: "pass" }),
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'numbered-agent', password: 'pass' }),
     },
     env,
   );
   const login = await json(loginResponse);
-  assert.equal(login.agent.name, "Numbered Agent");
-  assert.equal(login.agent.username, "numbered-agent");
-  assert.ok(!Object.hasOwn(login.agent, "adminLabel"));
+  assert.equal(login.agent.name, 'Numbered Agent');
+  assert.equal(login.agent.username, 'numbered-agent');
+  assert.ok(!Object.hasOwn(login.agent, 'adminLabel'));
 
   const invalidResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(created.id)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers,
-      body: JSON.stringify({ adminLabel: "12345678901" }),
+      body: JSON.stringify({ adminLabel: '12345678901' }),
     },
     env,
   );
   assert.equal(invalidResponse.status, 400);
-  assert.equal((await invalidResponse.json()).error, "INVALID_AGENT_LABEL");
+  assert.equal((await invalidResponse.json()).error, 'INVALID_AGENT_LABEL');
   database.close();
 });
 
@@ -478,8 +478,8 @@ async function json(response, { allowError = false } = {}) {
   return value;
 }
 
-test("isolated client -> routing -> agent -> client flow works through real Hono handlers", async () => {
-  const database = new DatabaseSync(":memory:");
+test('isolated client -> routing -> agent -> client flow works through real Hono handlers', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   const db = d1(database);
   const rooms = fakeRooms();
@@ -488,7 +488,7 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     DB: db,
     MEDIA: media.bucket,
     CONVERSATION_ROOMS: rooms.namespace,
-    ADMIN_PASSWORD: "admin-password",
+    ADMIN_PASSWORD: 'admin-password',
   };
 
   database.exec(`
@@ -500,8 +500,8 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
       'massage', 'Massage', 1);
   `);
 
-  const token = "agent-session-e2e";
-  const agentPassword = "agent-e2e-password";
+  const token = 'agent-session-e2e';
+  const agentPassword = 'agent-e2e-password';
   const agentCredentials = await hashAgentPassword(agentPassword, 1_000);
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   database
@@ -512,9 +512,9 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
        ) VALUES (?, 'default', ?, ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
     .run(
-      "agent-e2e",
-      "Agent E2E",
-      "agent-e2e",
+      'agent-e2e',
+      'Agent E2E',
+      'agent-e2e',
       agentCredentials.hash,
       agentCredentials.salt,
       agentCredentials.iterations,
@@ -524,7 +524,7 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
       `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
        VALUES (?, ?, ?, ?)`,
     )
-    .run("session-e2e", "agent-e2e", sha256(token), expiresAt);
+    .run('session-e2e', 'agent-e2e', sha256(token), expiresAt);
   database
     .prepare(
       `INSERT INTO agent_routing_scopes (
@@ -533,26 +533,26 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     )
     .run();
 
-  const visitorId = "TST123";
-  const sourceHandoffId = "018f47c2-6c72-4d8a-9f11-4b0db21c7358";
+  const visitorId = 'TST123';
+  const sourceHandoffId = '018f47c2-6c72-4d8a-9f11-4b0db21c7358';
   const createResponse = await clientApi.request(
-    "/client/v1/conversations",
+    '/client/v1/conversations',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
         sourceHandoffId,
-        clientMessageId: "client-message-e2e-1",
-        message: "Hello from visitor",
+        clientMessageId: 'client-message-e2e-1',
+        message: 'Hello from visitor',
         product: {
-          id: "product-e2e",
-          sectionId: "west",
-          sectionName: "West",
-          categoryId: "massage",
-          categoryName: "Massage",
-          title: "Product E2E",
-          href: "/sections/west/products/product-e2e/",
+          id: 'product-e2e',
+          sectionId: 'west',
+          sectionName: 'West',
+          categoryId: 'massage',
+          categoryName: 'Massage',
+          title: 'Product E2E',
+          href: '/sections/west/products/product-e2e/',
           coverUrl: null,
         },
       }),
@@ -563,29 +563,29 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(createResponse.status, 201);
   const conversationId = created.conversation.id;
   assert.ok(conversationId);
-  assert.equal(created.conversation.agentName, "Agent E2E");
-  assert.equal(created.conversation.status, "active");
+  assert.equal(created.conversation.agentName, 'Agent E2E');
+  assert.equal(created.conversation.status, 'active');
   assert.equal(created.conversation.messages.length, 1);
-  assert.equal(created.conversation.messages[0].direction, "customer");
+  assert.equal(created.conversation.messages[0].direction, 'customer');
 
   const duplicateHandoffResponse = await clientApi.request(
-    "/client/v1/conversations",
+    '/client/v1/conversations',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
         sourceHandoffId,
-        clientMessageId: "client-message-e2e-duplicate",
-        message: "This duplicate handoff must not create traffic",
+        clientMessageId: 'client-message-e2e-duplicate',
+        message: 'This duplicate handoff must not create traffic',
         product: {
-          id: "product-e2e",
-          sectionId: "west",
-          sectionName: "West",
-          categoryId: "massage",
-          categoryName: "Massage",
-          title: "Product E2E",
-          href: "/sections/west/products/product-e2e/",
+          id: 'product-e2e',
+          sectionId: 'west',
+          sectionName: 'West',
+          categoryId: 'massage',
+          categoryName: 'Massage',
+          title: 'Product E2E',
+          href: '/sections/west/products/product-e2e/',
           coverUrl: null,
         },
       }),
@@ -610,10 +610,10 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
        FROM conversations WHERE id = ?`,
     )
     .get(conversationId);
-  assert.equal(assigned.assigned_agent, "agent-e2e");
-  assert.equal(assigned.status, "pending");
-  assert.equal(assigned.section_id, "west");
-  assert.equal(assigned.category_id, "massage");
+  assert.equal(assigned.assigned_agent, 'agent-e2e');
+  assert.equal(assigned.status, 'pending');
+  assert.equal(assigned.section_id, 'west');
+  assert.equal(assigned.category_id, 'massage');
   assert.equal(assigned.source_handoff_id, sourceHandoffId);
   const trafficReceipt = database
     .prepare(
@@ -623,8 +623,8 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     )
     .get(conversationId);
   assert.equal(trafficReceipt.source_handoff_id, sourceHandoffId);
-  assert.equal(trafficReceipt.product_id, "product-e2e");
-  assert.equal(trafficReceipt.product_title, "Product E2E");
+  assert.equal(trafficReceipt.product_id, 'product-e2e');
+  assert.equal(trafficReceipt.product_title, 'Product E2E');
 
   const conversationTrafficReceipt = database
     .prepare(
@@ -633,34 +633,34 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
        WHERE conversation_id = ?`,
     )
     .get(conversationId);
-  assert.equal(conversationTrafficReceipt.product_id, "product-e2e");
-  assert.equal(conversationTrafficReceipt.product_title, "Product E2E");
-  assert.equal(conversationTrafficReceipt.agent_id, "agent-e2e");
-  assert.equal(conversationTrafficReceipt.agent_name, "Agent E2E");
+  assert.equal(conversationTrafficReceipt.product_id, 'product-e2e');
+  assert.equal(conversationTrafficReceipt.product_title, 'Product E2E');
+  assert.equal(conversationTrafficReceipt.agent_id, 'agent-e2e');
+  assert.equal(conversationTrafficReceipt.agent_name, 'Agent E2E');
 
   const statisticsMonth = trafficReceipt.business_date.slice(0, 7);
   const trafficStatsResponse = await adminConfigApi.request(
     `/api/admin/traffic-stats?from=${conversationTrafficReceipt.business_date}&to=${conversationTrafficReceipt.business_date}`,
-    { headers: { cookie: adminCookie("admin-password") } },
+    { headers: { cookie: adminCookie('admin-password') } },
     env,
   );
   assert.equal(trafficStatsResponse.status, 200);
   const trafficStats = await json(trafficStatsResponse);
   assert.equal(trafficStats.total, 1);
   assert.deepEqual(trafficStats.agents, [
-    { agentId: "agent-e2e", agentName: "Agent E2E", count: 1 },
+    { agentId: 'agent-e2e', agentName: 'Agent E2E', count: 1 },
   ]);
   assert.deepEqual(trafficStats.products, [
     {
-      productId: "product-e2e",
-      productTitle: "Product E2E",
+      productId: 'product-e2e',
+      productTitle: 'Product E2E',
       count: 1,
     },
   ]);
 
   const agentStatsResponse = await adminConfigApi.request(
     `/api/admin/agent-stats?month=${statisticsMonth}&agentId=agent-e2e`,
-    { headers: { cookie: adminCookie("admin-password") } },
+    { headers: { cookie: adminCookie('admin-password') } },
     env,
   );
   assert.equal(agentStatsResponse.status, 200);
@@ -671,40 +671,40 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
 
   const cookie = `cs_agent_session=${token}`;
   const inboxResponse = await agentApi.request(
-    "/api/agent/conversations",
+    '/api/agent/conversations',
     { headers: { cookie } },
     env,
   );
   const inbox = await json(inboxResponse);
   assert.equal(inbox.conversations.length, 1);
   assert.equal(inbox.conversations[0].id, conversationId);
-  assert.equal(inbox.conversations[0].assigned_agent, "agent-e2e");
+  assert.equal(inbox.conversations[0].assigned_agent, 'agent-e2e');
 
   const replyResponse = await agentApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages`,
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({
-        body: "Hello from agent",
-        clientMessageId: "agent-message-e2e-1",
+        body: 'Hello from agent',
+        clientMessageId: 'agent-message-e2e-1',
       }),
     },
     env,
   );
   assert.equal(replyResponse.status, 201);
   const reply = await json(replyResponse);
-  assert.equal(reply.message.sender_type, "agent");
-  assert.equal(reply.message.body, "Hello from agent");
+  assert.equal(reply.message.sender_type, 'agent');
+  assert.equal(reply.message.body, 'Hello from agent');
 
   const retryResponse = await agentApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages`,
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({
-        body: "Hello from agent",
-        clientMessageId: "agent-message-e2e-1",
+        body: 'Hello from agent',
+        clientMessageId: 'agent-message-e2e-1',
       }),
     },
     env,
@@ -718,20 +718,20 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
         `SELECT COUNT(*) AS count FROM messages
          WHERE conversation_id = ? AND client_message_id = ?`,
       )
-      .get(conversationId, "agent-message-e2e-1").count,
+      .get(conversationId, 'agent-message-e2e-1').count,
     1,
   );
 
   const cardPresetResponse = await agentAttachmentApi.request(
-    "/api/agent/attachments/presets",
+    '/api/agent/attachments/presets',
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({
-        kind: "whatsapp",
-        label: "WhatsApp",
-        value: "+12135551234",
-        presetMessage: "Hello from support",
+        kind: 'whatsapp',
+        label: 'WhatsApp',
+        value: '+12135551234',
+        presetMessage: 'Hello from support',
       }),
     },
     env,
@@ -741,19 +741,19 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   const cardSendResponse = await agentAttachmentApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/attachments`,
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({
-        body: "联系信息",
+        body: '联系信息',
         presetIds: [cardPreset.preset.id],
-        clientMessageId: "agent-card-e2e-1",
+        clientMessageId: 'agent-card-e2e-1',
       }),
     },
     env,
   );
   assert.equal(cardSendResponse.status, 201);
   const cardDelivery = await json(cardSendResponse);
-  assert.equal(cardDelivery.message.body, "联系信息");
+  assert.equal(cardDelivery.message.body, '联系信息');
   assert.deepEqual(
     cardDelivery.attachments.map((attachment) => ({
       kind: attachment.kind,
@@ -763,10 +763,10 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     })),
     [
       {
-        kind: "whatsapp",
-        label: "WhatsApp",
-        value: "+12135551234",
-        presetMessage: "Hello from support",
+        kind: 'whatsapp',
+        label: 'WhatsApp',
+        value: '+12135551234',
+        presetMessage: 'Hello from support',
       },
     ],
   );
@@ -775,10 +775,10 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     rooms.events.get(`client:default:${visitorId}`) ?? []
   ).find(
     (event) =>
-      event.type === "message.created" &&
+      event.type === 'message.created' &&
       event.message?.id === cardDelivery.message.id,
   );
-  assert.ok(visitorCardEvent, "visitor realtime must receive the contact card");
+  assert.ok(visitorCardEvent, 'visitor realtime must receive the contact card');
   assert.deepEqual(
     visitorCardEvent.message.attachments.map((attachment) => ({
       kind: attachment.kind,
@@ -788,38 +788,38 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     })),
     [
       {
-        kind: "whatsapp",
-        label: "WhatsApp",
-        value: "+12135551234",
-        presetMessage: "Hello from support",
+        kind: 'whatsapp',
+        label: 'WhatsApp',
+        value: '+12135551234',
+        presetMessage: 'Hello from support',
       },
     ],
   );
 
   const threadCardEvent = (rooms.events.get(conversationId) ?? []).find(
     (event) =>
-      event.type === "message" && event.message?.id === cardDelivery.message.id,
+      event.type === 'message' && event.message?.id === cardDelivery.message.id,
   );
   assert.ok(
     threadCardEvent,
-    "conversation realtime must receive the contact card",
+    'conversation realtime must receive the contact card',
   );
-  assert.equal(threadCardEvent.attachments[0].kind, "whatsapp");
+  assert.equal(threadCardEvent.attachments[0].kind, 'whatsapp');
 
-  const uploadId = "agent-image-e2e-1";
+  const uploadId = 'agent-image-e2e-1';
   const imageInitBody = JSON.stringify({
-    mimeType: "image/png",
+    mimeType: 'image/png',
     byteSize: 4,
     width: 1,
     height: 1,
-    originalName: "test.png",
+    originalName: 'test.png',
     clientUploadId: uploadId,
   });
   const firstInitResponse = await mediaApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: imageInitBody,
     },
     env,
@@ -829,8 +829,8 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   const retryInitResponse = await mediaApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: imageInitBody,
     },
     env,
@@ -841,7 +841,7 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(
     database
       .prepare(
-        "SELECT COUNT(*) AS count FROM media_items WHERE client_upload_id = ?",
+        'SELECT COUNT(*) AS count FROM media_items WHERE client_upload_id = ?',
       )
       .get(uploadId).count,
     1,
@@ -851,8 +851,8 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   const uploadResponse = await mediaApi.request(
     uploadPath,
     {
-      method: "PUT",
-      headers: { cookie, "content-type": "image/png" },
+      method: 'PUT',
+      headers: { cookie, 'content-type': 'image/png' },
       body: new Uint8Array([1, 2, 3, 4]),
     },
     env,
@@ -862,14 +862,14 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   const firstComplete = await json(
     await mediaApi.request(
       completePath,
-      { method: "POST", headers: { cookie }, body: "{}" },
+      { method: 'POST', headers: { cookie }, body: '{}' },
       env,
     ),
   );
   const retryComplete = await json(
     await mediaApi.request(
       completePath,
-      { method: "POST", headers: { cookie }, body: "{}" },
+      { method: 'POST', headers: { cookie }, body: '{}' },
       env,
     ),
   );
@@ -890,8 +890,8 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     await mediaApi.request(
       `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
       {
-        method: "POST",
-        headers: { cookie, "content-type": "application/json" },
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
         body: imageInitBody,
       },
       env,
@@ -903,10 +903,10 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     const pending = await mediaApi.request(
       `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
       {
-        method: "POST",
-        headers: { cookie, "content-type": "application/json" },
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
         body: JSON.stringify({
-          mimeType: "image/png",
+          mimeType: 'image/png',
           byteSize: 4,
           width: 1,
           height: 1,
@@ -921,22 +921,22 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   const excessPending = await mediaApi.request(
     `/api/agent/conversations/${encodeURIComponent(conversationId)}/media/init`,
     {
-      method: "POST",
-      headers: { cookie, "content-type": "application/json" },
+      method: 'POST',
+      headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify({
-        mimeType: "image/png",
+        mimeType: 'image/png',
         byteSize: 4,
         width: 1,
         height: 1,
-        originalName: "pending-excess.png",
-        clientUploadId: "pending-agent-image-excess",
+        originalName: 'pending-excess.png',
+        clientUploadId: 'pending-agent-image-excess',
       }),
     },
     env,
   );
   assert.equal(excessPending.status, 429);
   assert.deepEqual(await excessPending.json(), {
-    error: "MEDIA_RESERVATION_LIMIT_REACHED",
+    error: 'MEDIA_RESERVATION_LIMIT_REACHED',
   });
 
   const deltaResponse = await agentApi.request(
@@ -951,11 +951,11 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   );
   assert.equal(delta.media.length, 2);
   assert.equal(
-    delta.media.find((item) => item.kind === "whatsapp")?.messageId,
+    delta.media.find((item) => item.kind === 'whatsapp')?.messageId,
     cardDelivery.message.id,
   );
   assert.equal(
-    delta.media.find((item) => item.kind === "image")?.messageId,
+    delta.media.find((item) => item.kind === 'image')?.messageId,
     firstComplete.messageId,
   );
 
@@ -976,10 +976,10 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
       presetMessage: visitorCard.presetMessage,
     },
     {
-      kind: "whatsapp",
-      label: "WhatsApp",
-      value: "+12135551234",
-      presetMessage: "Hello from support",
+      kind: 'whatsapp',
+      label: 'WhatsApp',
+      value: '+12135551234',
+      presetMessage: 'Hello from support',
     },
   );
 
@@ -992,70 +992,70 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(clientDetail.conversation.messages.length, 4);
   assert.equal(
     clientDetail.conversation.messages[0].body,
-    "Hello from visitor",
+    'Hello from visitor',
   );
-  assert.equal(clientDetail.conversation.messages[1].body, "Hello from agent");
-  assert.equal(clientDetail.conversation.messages[1].direction, "agent");
-  assert.equal(clientDetail.conversation.messages[2].body, "联系信息");
-  assert.equal(clientDetail.conversation.messages[2].direction, "agent");
-  assert.equal(clientDetail.conversation.messages[3].direction, "agent");
+  assert.equal(clientDetail.conversation.messages[1].body, 'Hello from agent');
+  assert.equal(clientDetail.conversation.messages[1].direction, 'agent');
+  assert.equal(clientDetail.conversation.messages[2].body, '联系信息');
+  assert.equal(clientDetail.conversation.messages[2].direction, 'agent');
+  assert.equal(clientDetail.conversation.messages[3].direction, 'agent');
 
   const visitorEvents = rooms.events.get(`client:default:${visitorId}`) ?? [];
   assert.ok(
     visitorEvents.some(
       (event) =>
-        event.type === "message.created" &&
+        event.type === 'message.created' &&
         event.conversationId === conversationId &&
-        event.message?.body === "Hello from agent",
+        event.message?.body === 'Hello from agent',
     ),
   );
-  const inboxEvents = rooms.events.get("agent-inbox:agent-e2e") ?? [];
+  const inboxEvents = rooms.events.get('agent-inbox:agent-e2e') ?? [];
   assert.ok(
     inboxEvents.some(
       (event) =>
-        event.type === "conversation.changed" &&
+        event.type === 'conversation.changed' &&
         event.conversation?.id === conversationId,
     ),
   );
-  assert.equal(rooms.events.has("admin-inbox"), false);
+  assert.equal(rooms.events.has('admin-inbox'), false);
 
   const paused = await json(
     await agentApi.request(
-      "/api/agent/auth/status",
+      '/api/agent/auth/status',
       {
-        method: "POST",
-        headers: { cookie, "content-type": "application/json" },
-        body: JSON.stringify({ status: "busy" }),
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'busy' }),
       },
       env,
     ),
   );
-  assert.equal(paused.availability, "busy");
+  assert.equal(paused.availability, 'busy');
   const heartbeatResult = await json(
     await agentApi.request(
-      "/api/agent/auth/heartbeat",
-      { method: "POST", headers: { cookie } },
+      '/api/agent/auth/heartbeat',
+      { method: 'POST', headers: { cookie } },
       env,
     ),
   );
-  assert.equal(heartbeatResult.availability, "busy");
+  assert.equal(heartbeatResult.availability, 'busy');
   assert.equal(
-    database.prepare("SELECT status FROM agents WHERE id = ?").get("agent-e2e")
+    database.prepare('SELECT status FROM agents WHERE id = ?').get('agent-e2e')
       .status,
-    "busy",
+    'busy',
   );
   const resumed = await json(
     await agentApi.request(
-      "/api/agent/auth/status",
+      '/api/agent/auth/status',
       {
-        method: "POST",
-        headers: { cookie, "content-type": "application/json" },
-        body: JSON.stringify({ status: "online" }),
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'online' }),
       },
       env,
     ),
   );
-  assert.equal(resumed.availability, "online");
+  assert.equal(resumed.availability, 'online');
 
   database.exec(`
     INSERT INTO product_catalog (
@@ -1072,7 +1072,7 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
          status, is_enabled, last_seen_at
        ) VALUES (?, 'default', ?, ?, ?, ?, 'online', 1, CURRENT_TIMESTAMP)`,
     )
-    .run("agent-standby", "Agent Standby", "agent-standby", "hash", "salt");
+    .run('agent-standby', 'Agent Standby', 'agent-standby', 'hash', 'salt');
   database
     .prepare(
       `INSERT INTO agent_routing_scopes (
@@ -1081,14 +1081,14 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
     )
     .run();
 
-  const adminPassword = "admin-password";
+  const adminPassword = 'admin-password';
   const disableResponse = await adminConfigApi.request(
-    "/api/admin/agents/agent-e2e",
+    '/api/admin/agents/agent-e2e',
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({ isEnabled: false }),
     },
@@ -1097,54 +1097,54 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
   await json(disableResponse);
 
   const disabledAgent = database
-    .prepare("SELECT status, is_enabled FROM agents WHERE id = ?")
-    .get("agent-e2e");
-  assert.equal(disabledAgent.status, "online");
+    .prepare('SELECT status, is_enabled FROM agents WHERE id = ?')
+    .get('agent-e2e');
+  assert.equal(disabledAgent.status, 'online');
   assert.equal(disabledAgent.is_enabled, 0);
   assert.equal(
     database
       .prepare(
-        "SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?",
+        'SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?',
       )
-      .get("agent-e2e").count,
+      .get('agent-e2e').count,
     1,
   );
   assert.equal(
     database
-      .prepare("SELECT assigned_agent FROM conversations WHERE id = ?")
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(conversationId).assigned_agent,
-    "agent-e2e",
+    'agent-e2e',
   );
   const disabledStatus = await json(
     await agentApi.request(
-      "/api/agent/auth/status",
+      '/api/agent/auth/status',
       {
-        method: "POST",
-        headers: { cookie, "content-type": "application/json" },
-        body: JSON.stringify({ status: "busy" }),
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({ status: 'busy' }),
       },
       env,
     ),
   );
-  assert.equal(disabledStatus.availability, "busy");
+  assert.equal(disabledStatus.availability, 'busy');
 
   const disabledLoginResponse = await agentApi.request(
-    "/api/agent/auth/login",
+    '/api/agent/auth/login',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ username: "agent-e2e", password: agentPassword }),
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'agent-e2e', password: agentPassword }),
     },
     env,
   );
   const disabledLogin = await json(disabledLoginResponse);
-  assert.equal(disabledLogin.agent.status, "online");
+  assert.equal(disabledLogin.agent.status, 'online');
   const disabledCookie =
-    disabledLoginResponse.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
-  assert.ok(disabledCookie.startsWith("cs_agent_session="));
+    disabledLoginResponse.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
+  assert.ok(disabledCookie.startsWith('cs_agent_session='));
   const disabledSession = await json(
     await agentApi.request(
-      "/api/agent/auth/session",
+      '/api/agent/auth/session',
       { headers: { cookie: disabledCookie } },
       env,
     ),
@@ -1153,23 +1153,23 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
 
   const postDisableConversation = await json(
     await clientApi.request(
-      "/client/v1/conversations",
+      '/client/v1/conversations',
       {
-        method: "POST",
-        headers: { "content-type": "application/json" },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          visitorId: "NEW456",
-          sourceHandoffId: "018f47c2-6c72-4d8a-9f11-4b0db21c7999",
-          clientMessageId: "client-message-after-disable",
-          message: "Route only to an enabled online seat",
+          visitorId: 'NEW456',
+          sourceHandoffId: '018f47c2-6c72-4d8a-9f11-4b0db21c7999',
+          clientMessageId: 'client-message-after-disable',
+          message: 'Route only to an enabled online seat',
           product: {
-            id: "product-after-disable",
-            sectionId: "west",
-            sectionName: "West",
-            categoryId: "massage",
-            categoryName: "Massage",
-            title: "Product After Disable",
-            href: "/sections/west/products/product-after-disable/",
+            id: 'product-after-disable',
+            sectionId: 'west',
+            sectionName: 'West',
+            categoryId: 'massage',
+            categoryName: 'Massage',
+            title: 'Product After Disable',
+            href: '/sections/west/products/product-after-disable/',
             coverUrl: null,
           },
         }),
@@ -1177,15 +1177,15 @@ test("isolated client -> routing -> agent -> client flow works through real Hono
       env,
     ),
   );
-  assert.equal(postDisableConversation.conversation.agentName, "Agent Standby");
+  assert.equal(postDisableConversation.conversation.agentName, 'Agent Standby');
 
   database.close();
 });
 
-test("consultation quota commercial lifecycle remains consistent end to end", async () => {
-  const database = new DatabaseSync(":memory:");
+test('consultation quota commercial lifecycle remains consistent end to end', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
-  const adminPassword = "admin-password";
+  const adminPassword = 'admin-password';
   const rooms = fakeRooms();
   const env = {
     DB: d1(database),
@@ -1217,18 +1217,18 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
     requestId,
   }) {
     const response = await adminConfigApi.request(
-      "/api/admin/agents",
+      '/api/admin/agents',
       {
-        method: "POST",
+        method: 'POST',
         headers: {
           cookie: adminCookie(adminPassword),
-          "content-type": "application/json",
+          'content-type': 'application/json',
         },
         body: JSON.stringify({
           name,
           username,
-          password: "pass",
-          routingScope: { type: "section", sectionIds },
+          password: 'pass',
+          routingScope: { type: 'section', sectionIds },
           dailyConversationLimit: dailyLimit,
           trafficQuotaEnabled: true,
           trafficQuotaTopUp: quota,
@@ -1243,24 +1243,24 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
   }
 
   const agentA = await createSeat({
-    name: "Quota Agent A",
-    username: "quota-agent-a",
-    sectionIds: ["west"],
+    name: 'Quota Agent A',
+    username: 'quota-agent-a',
+    sectionIds: ['west'],
     quota: 2,
     dailyLimit: 3,
-    requestId: "quota-final-create-a",
+    requestId: 'quota-final-create-a',
   });
   const agentB = await createSeat({
-    name: "Quota Agent B",
-    username: "quota-agent-b",
-    sectionIds: ["east", "west"],
+    name: 'Quota Agent B',
+    username: 'quota-agent-b',
+    sectionIds: ['east', 'west'],
     quota: 1,
     dailyLimit: 1,
-    requestId: "quota-final-create-b",
+    requestId: 'quota-final-create-b',
   });
 
-  const tokenA = "quota-final-session-a";
-  const tokenB = "quota-final-session-b";
+  const tokenA = 'quota-final-session-a';
+  const tokenB = 'quota-final-session-b';
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   database
     .prepare(
@@ -1275,11 +1275,11 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
        VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
     )
     .run(
-      "quota-final-session-row-a",
+      'quota-final-session-row-a',
       agentA,
       sha256(tokenA),
       expiresAt,
-      "quota-final-session-row-b",
+      'quota-final-session-row-b',
       agentB,
       sha256(tokenB),
       expiresAt,
@@ -1305,21 +1305,21 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
         sectionId,
       );
     const response = await clientApi.request(
-      "/client/v1/conversations",
+      '/client/v1/conversations',
       {
-        method: "POST",
-        headers: { "content-type": "application/json" },
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           visitorId,
-          sourceHandoffId: `00000000-0000-4000-8000-${String(handoffIndex).padStart(12, "0")}`,
+          sourceHandoffId: `00000000-0000-4000-8000-${String(handoffIndex).padStart(12, '0')}`,
           clientMessageId: `quota-final-message-${handoffIndex}`,
           message: `Quota acceptance ${handoffIndex}`,
           product: {
             id: productId,
             sectionId,
             sectionName: sectionId,
-            categoryId: "quota-test",
-            categoryName: "Quota test",
+            categoryId: 'quota-test',
+            categoryName: 'Quota test',
             title: `Quota ${sectionId} ${handoffIndex}`,
             href: `/quota/${sectionId}/${handoffIndex}`,
             coverUrl: null,
@@ -1332,11 +1332,11 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
     return response.ok ? payload : { response, ...payload };
   }
 
-  const east = await createConversation("east");
+  const east = await createConversation('east');
   const eastId = east.conversation.id;
   assert.equal(
     database
-      .prepare("SELECT assigned_agent FROM conversations WHERE id = ?")
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(eastId).assigned_agent,
     agentB,
   );
@@ -1351,25 +1351,25 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
     Object.assign(Object.create(null), { total: 1, used: 1 }),
   );
 
-  const westOne = await createConversation("west");
-  const westTwo = await createConversation("west");
-  const westThree = await createConversation("west");
+  const westOne = await createConversation('west');
+  const westTwo = await createConversation('west');
+  const westThree = await createConversation('west');
   const westOneId = westOne.conversation.id;
   const westTwoId = westTwo.conversation.id;
   assert.equal(
     database
-      .prepare("SELECT assigned_agent FROM conversations WHERE id = ?")
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(westOneId).assigned_agent,
     agentA,
   );
   assert.equal(
     database
-      .prepare("SELECT assigned_agent FROM conversations WHERE id = ?")
+      .prepare('SELECT assigned_agent FROM conversations WHERE id = ?')
       .get(westTwoId).assigned_agent,
     agentA,
   );
   assert.equal(westThree.response.status, 503);
-  assert.equal(westThree.error.code, "NO_AGENT_AVAILABLE");
+  assert.equal(westThree.error.code, 'NO_AGENT_AVAILABLE');
   assert.equal(
     database
       .prepare(
@@ -1379,9 +1379,9 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
            SELECT id FROM visitors WHERE external_id = ?
          )`,
       )
-      .get("QTA004").count,
+      .get('QTA004').count,
     0,
-    "fresh traffic must not create a waiting conversation when no seat is eligible",
+    'fresh traffic must not create a waiting conversation when no seat is eligible',
   );
   assert.deepEqual(
     database
@@ -1407,14 +1407,14 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
   const topUpResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(agentA)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         trafficQuotaTopUp: 1,
-        trafficQuotaRequestId: "quota-final-topup-a",
+        trafficQuotaRequestId: 'quota-final-topup-a',
       }),
     },
     env,
@@ -1423,9 +1423,9 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
   const toppedUp = await json(topUpResponse);
   assert.equal(toppedUp.quotaApplied, true);
   assert.equal(
-    Object.hasOwn(toppedUp, "assignedWaitingCount"),
+    Object.hasOwn(toppedUp, 'assignedWaitingCount'),
     false,
-    "quota changes must not recover a waiting queue",
+    'quota changes must not recover a waiting queue',
   );
   assert.deepEqual(
     database
@@ -1441,10 +1441,10 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
   const disableResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(agentA)}`,
     {
-      method: "PATCH",
+      method: 'PATCH',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({ isEnabled: false }),
     },
@@ -1462,7 +1462,7 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
       .all(westOneId, westTwoId)
       .map((row) => row.assigned_agent),
     [agentA, agentA],
-    "disabling a seat must preserve its existing active conversations",
+    'disabling a seat must preserve its existing active conversations',
   );
   assert.deepEqual(
     database
@@ -1476,7 +1476,7 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
       )
       .get(agentB),
     beforeDisableB,
-    "disabling another seat must not alter this seat quota or daily count",
+    'disabling another seat must not alter this seat quota or daily count',
   );
 
   assert.deepEqual(
@@ -1494,7 +1494,7 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
       { agentId: agentA, count: 2 },
       { agentId: agentB, count: 1 },
     ].sort((left, right) => left.agentId.localeCompare(right.agentId)),
-    "immutable first-reception receipts must remain the billing source of truth after disable",
+    'immutable first-reception receipts must remain the billing source of truth after disable',
   );
 
   function readQuotaLedger(agentId) {
@@ -1547,10 +1547,10 @@ test("consultation quota commercial lifecycle remains consistent end to end", as
   database.close();
 });
 
-test("admin permanently deletes an agent while preserving historical records", async () => {
-  const database = new DatabaseSync(":memory:");
+test('admin permanently deletes an agent while preserving historical records', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
-  const adminPassword = "admin-password";
+  const adminPassword = 'admin-password';
   const rooms = fakeRooms();
   const env = {
     DB: d1(database),
@@ -1559,22 +1559,22 @@ test("admin permanently deletes an agent while preserving historical records", a
   };
 
   const createResponse = await adminConfigApi.request(
-    "/api/admin/agents",
+    '/api/admin/agents',
     {
-      method: "POST",
+      method: 'POST',
       headers: {
         cookie: adminCookie(adminPassword),
-        "content-type": "application/json",
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
-        name: "Delete Me",
-        username: "delete-me",
-        password: "pass",
-        routingScope: { type: "none" },
+        name: 'Delete Me',
+        username: 'delete-me',
+        password: 'pass',
+        routingScope: { type: 'none' },
         dailyConversationLimit: 0,
         trafficQuotaEnabled: true,
         trafficQuotaTopUp: 10,
-        trafficQuotaRequestId: "delete-agent-quota-001",
+        trafficQuotaRequestId: 'delete-agent-quota-001',
         isEnabled: true,
       }),
     },
@@ -1589,7 +1589,7 @@ test("admin permanently deletes an agent while preserving historical records", a
       `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
        VALUES (?, ?, ?, datetime('now', '+1 hour'))`,
     )
-    .run("delete-agent-session", agentId, "delete-agent-session-token");
+    .run('delete-agent-session', agentId, 'delete-agent-session-token');
   database
     .prepare(
       `INSERT INTO agent_routing_scopes (
@@ -1650,18 +1650,18 @@ test("admin permanently deletes an agent while preserving historical records", a
   const deleteResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(agentId)}`,
     {
-      method: "DELETE",
+      method: 'DELETE',
       headers: { cookie: adminCookie(adminPassword) },
     },
     env,
   );
   const blocked = await deleteResponse.json();
   assert.equal(deleteResponse.status, 409);
-  assert.equal(blocked.error, "AGENT_HAS_ACTIVE_CONVERSATIONS");
+  assert.equal(blocked.error, 'AGENT_HAS_ACTIVE_CONVERSATIONS');
   assert.equal(blocked.activeConversationCount, 1);
   assert.equal(
     database
-      .prepare("SELECT COUNT(*) AS count FROM agents WHERE id = ?")
+      .prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?')
       .get(agentId).count,
     1,
   );
@@ -1685,7 +1685,7 @@ test("admin permanently deletes an agent while preserving historical records", a
   const finalDeleteResponse = await adminConfigApi.request(
     `/api/admin/agents/${encodeURIComponent(agentId)}`,
     {
-      method: "DELETE",
+      method: 'DELETE',
       headers: { cookie: adminCookie(adminPassword) },
     },
     env,
@@ -1695,14 +1695,14 @@ test("admin permanently deletes an agent while preserving historical records", a
   assert.equal(deleted.reassignedConversationCount, 0);
   assert.equal(
     database
-      .prepare("SELECT COUNT(*) AS count FROM agents WHERE id = ?")
+      .prepare('SELECT COUNT(*) AS count FROM agents WHERE id = ?')
       .get(agentId).count,
     0,
   );
   assert.equal(
     database
       .prepare(
-        "SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?",
+        'SELECT COUNT(*) AS count FROM agent_sessions WHERE agent_id = ?',
       )
       .get(agentId).count,
     0,
@@ -1710,7 +1710,7 @@ test("admin permanently deletes an agent while preserving historical records", a
   assert.equal(
     database
       .prepare(
-        "SELECT COUNT(*) AS count FROM agent_routing_scopes WHERE agent_id = ?",
+        'SELECT COUNT(*) AS count FROM agent_routing_scopes WHERE agent_id = ?',
       )
       .get(agentId).count,
     0,
@@ -1718,7 +1718,7 @@ test("admin permanently deletes an agent while preserving historical records", a
   assert.equal(
     database
       .prepare(
-        "SELECT COUNT(*) AS count FROM agent_quota_adjustments WHERE agent_id = ?",
+        'SELECT COUNT(*) AS count FROM agent_quota_adjustments WHERE agent_id = ?',
       )
       .get(agentId).count,
     0,
@@ -1730,7 +1730,7 @@ test("admin permanently deletes an agent while preserving historical records", a
        FROM conversations WHERE id = 'delete-active-conversation'`,
     )
     .get();
-  assert.equal(active.status, "closed");
+  assert.equal(active.status, 'closed');
   assert.equal(active.assigned_agent, agentId);
   assert.equal(active.cta_affinity_agent_id, null);
 
@@ -1740,7 +1740,7 @@ test("admin permanently deletes an agent while preserving historical records", a
        FROM conversations WHERE id = 'delete-history-conversation'`,
     )
     .get();
-  assert.equal(historical.status, "closed");
+  assert.equal(historical.status, 'closed');
   assert.equal(historical.assigned_agent, agentId);
   assert.equal(historical.cta_affinity_agent_id, null);
   assert.equal(
@@ -1763,76 +1763,76 @@ test("admin permanently deletes an agent while preserving historical records", a
   );
 });
 
-test("admin can configure the no-agent response as plain text or Markdown", async () => {
-  const database = new DatabaseSync(":memory:");
+test('admin can configure the no-agent response as plain text or Markdown', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   const env = {
     DB: d1(database),
     CONVERSATION_ROOMS: fakeRooms().namespace,
-    ADMIN_PASSWORD: "admin-password",
+    ADMIN_PASSWORD: 'admin-password',
   };
   const headers = {
-    cookie: adminCookie("admin-password"),
-    "content-type": "application/json",
+    cookie: adminCookie('admin-password'),
+    'content-type': 'application/json',
   };
 
   const initial = await json(
     await adminConfigApi.request(
-      "/api/admin/no-agent-message",
+      '/api/admin/no-agent-message',
       { headers },
       env,
     ),
   );
-  assert.equal(initial.noAgentMessage.format, "plain");
+  assert.equal(initial.noAgentMessage.format, 'plain');
   assert.equal(initial.noAgentMessage.message.length > 0, true);
 
   const saved = await json(
     await adminConfigApi.request(
-      "/api/admin/no-agent-message",
+      '/api/admin/no-agent-message',
       {
-        method: "PUT",
+        method: 'PUT',
         headers,
         body: JSON.stringify({
-          message: "  **暂时没有客服**\\n\\n请稍后再试。  ",
-          format: "markdown",
+          message: '  **暂时没有客服**\\n\\n请稍后再试。  ',
+          format: 'markdown',
         }),
       },
       env,
     ),
   );
   assert.deepEqual(saved.noAgentMessage, {
-    message: "**暂时没有客服**\\n\\n请稍后再试。",
-    format: "markdown",
+    message: '**暂时没有客服**\\n\\n请稍后再试。',
+    format: 'markdown',
   });
   assert.deepEqual(
     Object.assign(
       {},
       database
         .prepare(
-          "SELECT no_agent_message, no_agent_message_format FROM sites WHERE id = ?",
+          'SELECT no_agent_message, no_agent_message_format FROM sites WHERE id = ?',
         )
-        .get("default"),
+        .get('default'),
     ),
     {
-      no_agent_message: "**暂时没有客服**\\n\\n请稍后再试。",
-      no_agent_message_format: "markdown",
+      no_agent_message: '**暂时没有客服**\\n\\n请稍后再试。',
+      no_agent_message_format: 'markdown',
     },
   );
   database.close();
 });
 
-test("visitor APIs hide and never recover an unassigned legacy conversation", async () => {
-  const database = new DatabaseSync(":memory:");
+test('visitor APIs hide and never recover an unassigned legacy conversation', async () => {
+  const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   const rooms = fakeRooms();
   const env = {
     DB: d1(database),
     CONVERSATION_ROOMS: rooms.namespace,
   };
-  const visitorId = "NWT001";
-  const visitorRowId = "visitor-no-wait";
-  const conversationId = "conversation-no-wait";
-  const sourceHandoffId = "00000000-0000-4000-8000-000000009999";
+  const visitorId = 'NWT001';
+  const visitorRowId = 'visitor-no-wait';
+  const conversationId = 'conversation-no-wait';
+  const sourceHandoffId = '00000000-0000-4000-8000-000000009999';
   const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   database
@@ -1850,7 +1850,7 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
          id, site_id, token_hash, external_id, expires_at
        ) VALUES (?, 'default', ?, ?, ?)`,
     )
-    .run(visitorRowId, "token-no-wait", visitorId, expiresAt);
+    .run(visitorRowId, 'token-no-wait', visitorId, expiresAt);
   database
     .prepare(
       `INSERT INTO conversations (
@@ -1889,12 +1889,12 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   const messageResponse = await clientApi.request(
     `/client/v1/conversations/${conversationId}/messages`,
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
-        clientMessageId: "must-not-recover",
-        body: "must not be persisted",
+        clientMessageId: 'must-not-recover',
+        body: 'must not be persisted',
       }),
     },
     env,
@@ -1920,15 +1920,15 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   const mediaInitResponse = await mediaApi.request(
     `/client/v1/conversations/${conversationId}/media/init`,
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
-        mimeType: "image/png",
+        mimeType: 'image/png',
         byteSize: 4,
         width: 1,
         height: 1,
-        clientUploadId: "must-not-reserve-unassigned",
+        clientUploadId: 'must-not-reserve-unassigned',
       }),
     },
     env,
@@ -1943,10 +1943,10 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   assert.equal(mediaListResponse.status, 404);
 
   const mediaCompleteResponse = await mediaApi.request(
-    "/client/v1/media/legacy-unassigned-media/complete",
+    '/client/v1/media/legacy-unassigned-media/complete',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ visitorId }),
     },
     env,
@@ -1961,15 +1961,15 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   assert.equal(mediaContentResponse.status, 404);
 
   const pushResponse = await pushApi.request(
-    "/client/v1/push/subscriptions",
+    '/client/v1/push/subscriptions',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId,
         conversationId,
         subscription: {
-          endpoint: "https://push.example.test/legacy-unassigned",
+          endpoint: 'https://push.example.test/legacy-unassigned',
           expirationTime: null,
         },
       }),
@@ -1979,33 +1979,33 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   assert.equal(pushResponse.status, 401);
   assert.equal(
     database
-      .prepare("SELECT COUNT(*) AS count FROM visitor_push_subscriptions")
+      .prepare('SELECT COUNT(*) AS count FROM visitor_push_subscriptions')
       .get().count,
     0,
   );
 
   const replayBody = {
     visitorId,
-    sourceHandoffId: "00000000-0000-4000-8000-000000008888",
-    clientMessageId: "legacy-replay",
-    message: "legacy message",
+    sourceHandoffId: '00000000-0000-4000-8000-000000008888',
+    clientMessageId: 'legacy-replay',
+    message: 'legacy message',
     product: {
-      id: "product-no-wait",
-      sectionId: "west",
-      sectionName: "West",
+      id: 'product-no-wait',
+      sectionId: 'west',
+      sectionName: 'West',
       categoryId: null,
       categoryName: null,
-      title: "No-wait product",
-      href: "/products/no-wait",
+      title: 'No-wait product',
+      href: '/products/no-wait',
       coverUrl: null,
     },
   };
 
   const replayResponse = await clientApi.request(
-    "/client/v1/conversations",
+    '/client/v1/conversations',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(replayBody),
     },
     env,
@@ -2013,9 +2013,9 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   assert.equal(replayResponse.status, 503);
   assert.deepEqual(await json(replayResponse, { allowError: true }), {
     error: {
-      code: "NO_AGENT_AVAILABLE",
-      message: "当前暂无可用客服，请稍后再试。",
-      format: "plain",
+      code: 'NO_AGENT_AVAILABLE',
+      message: '当前暂无可用客服，请稍后再试。',
+      format: 'plain',
     },
   });
 
@@ -2036,10 +2036,10 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   `);
 
   const retryAfterAgentRecovery = await clientApi.request(
-    "/client/v1/conversations",
+    '/client/v1/conversations',
     {
-      method: "POST",
-      headers: { "content-type": "application/json" },
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify(replayBody),
     },
     env,
@@ -2062,8 +2062,8 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
   assert.equal(
     database
       .prepare(`SELECT status FROM media_items WHERE id = ?`)
-      .get("legacy-unassigned-media").status,
-    "pending",
+      .get('legacy-unassigned-media').status,
+    'pending',
   );
 
   database
@@ -2089,7 +2089,7 @@ test("visitor APIs hide and never recover an unassigned legacy conversation", as
     (await json(assignedListResponse)).conversations.map(
       (conversation) => conversation.status,
     ),
-    ["active"],
+    ['active'],
   );
 
   database.close();
