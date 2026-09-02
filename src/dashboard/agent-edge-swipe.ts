@@ -1,0 +1,271 @@
+const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
+
+const EDGE_START_MAX_X = 28;
+const DIRECTION_LOCK_DISTANCE = 8;
+const FAST_SWIPE_MIN_DISTANCE = 48;
+const FAST_SWIPE_MIN_VELOCITY = 0.45;
+const COMMIT_DISTANCE_RATIO = 0.28;
+const COMMIT_DISTANCE_MIN = 88;
+const COMMIT_DISTANCE_MAX = 132;
+const SETTLE_DURATION_MS = 180;
+
+type SwipeTargetKind = 'thread' | 'settings';
+
+type SwipeTarget = {
+  kind: SwipeTargetKind;
+  element: HTMLElement;
+  backButton: HTMLButtonElement;
+};
+
+type InlineGestureStyles = {
+  transform: string;
+  transition: string;
+  willChange: string;
+  boxShadow: string;
+};
+
+type ActiveGesture = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  lastX: number;
+  lastAt: number;
+  velocityX: number;
+  distanceX: number;
+  direction: 'pending' | 'horizontal';
+  target: SwipeTarget;
+  styles: InlineGestureStyles;
+};
+
+function elementIsVisible(element: HTMLElement): boolean {
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden';
+}
+
+function findSwipeTarget(root: HTMLElement): SwipeTarget | null {
+  if (!mobileAgentQuery.matches) return null;
+  if (document.querySelector('[role="dialog"][aria-modal="true"]')) return null;
+
+  const settingsPage = root.querySelector<HTMLElement>(
+    '.mobile-agent-settings-page',
+  );
+  if (settingsPage && elementIsVisible(settingsPage)) {
+    const backButton = settingsPage.querySelector<HTMLButtonElement>(
+      'button[aria-label="返回工作台"]',
+    );
+    if (backButton) {
+      return { kind: 'settings', element: settingsPage, backButton };
+    }
+  }
+
+  const shell = root.querySelector<HTMLElement>(
+    '.workspace-shell.is-thread-open',
+  );
+  const threadPane = shell?.querySelector<HTMLElement>('.thread-pane');
+  const backButton = shell?.querySelector<HTMLButtonElement>(
+    '.thread-back-button',
+  );
+  if (threadPane && backButton && elementIsVisible(threadPane)) {
+    return { kind: 'thread', element: threadPane, backButton };
+  }
+
+  return null;
+}
+
+function readInlineGestureStyles(element: HTMLElement): InlineGestureStyles {
+  return {
+    transform: element.style.transform,
+    transition: element.style.transition,
+    willChange: element.style.willChange,
+    boxShadow: element.style.boxShadow,
+  };
+}
+
+function restoreInlineGestureStyles(
+  element: HTMLElement,
+  styles: InlineGestureStyles,
+) {
+  element.style.transform = styles.transform;
+  element.style.transition = styles.transition;
+  element.style.willChange = styles.willChange;
+  element.style.boxShadow = styles.boxShadow;
+}
+
+function applyDrag(gesture: ActiveGesture, distanceX: number) {
+  const width = Math.max(
+    1,
+    gesture.target.element.getBoundingClientRect().width || window.innerWidth,
+  );
+  const clampedDistance = Math.min(Math.max(distanceX, 0), width);
+  const progress = Math.min(clampedDistance / width, 1);
+  gesture.distanceX = clampedDistance;
+  gesture.target.element.style.transition = 'none';
+  gesture.target.element.style.willChange = 'transform';
+  gesture.target.element.style.transform = `translate3d(${Math.round(clampedDistance)}px, 0, 0)`;
+  gesture.target.element.style.boxShadow = `-12px 0 30px rgba(15, 23, 42, ${Math.min(0.16, 0.05 + progress * 0.11)})`;
+}
+
+function commitDistance(width: number): number {
+  return Math.min(
+    COMMIT_DISTANCE_MAX,
+    Math.max(COMMIT_DISTANCE_MIN, width * COMMIT_DISTANCE_RATIO),
+  );
+}
+
+export function installAgentEdgeSwipeBack() {
+  const root = document.getElementById('root');
+  if (!root) return;
+
+  let gesture: ActiveGesture | null = null;
+  let settleTimer: number | null = null;
+
+  const clearSettleTimer = () => {
+    if (settleTimer === null) return;
+    window.clearTimeout(settleTimer);
+    settleTimer = null;
+  };
+
+  const settleBack = (current: ActiveGesture) => {
+    const { element } = current.target;
+    element.style.transition = `transform ${SETTLE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow ${SETTLE_DURATION_MS}ms ease`;
+    element.style.transform = 'translate3d(0, 0, 0)';
+    element.style.boxShadow = 'none';
+    clearSettleTimer();
+    settleTimer = window.setTimeout(() => {
+      restoreInlineGestureStyles(element, current.styles);
+      settleTimer = null;
+    }, SETTLE_DURATION_MS + 24);
+  };
+
+  const finishBack = (current: ActiveGesture) => {
+    const { element, backButton, kind } = current.target;
+    const width = Math.max(
+      1,
+      element.getBoundingClientRect().width || window.innerWidth,
+    );
+    element.style.transition = `transform ${SETTLE_DURATION_MS}ms cubic-bezier(0.32, 0.72, 0, 1), box-shadow ${SETTLE_DURATION_MS}ms ease`;
+    element.style.willChange = 'transform';
+    element.style.transform = `translate3d(${Math.ceil(width)}px, 0, 0)`;
+    element.style.boxShadow = '-14px 0 34px rgba(15, 23, 42, 0.16)';
+
+    clearSettleTimer();
+    settleTimer = window.setTimeout(() => {
+      settleTimer = null;
+      if (kind === 'thread') {
+        const restoreAfterHistory = () => {
+          window.setTimeout(
+            () => restoreInlineGestureStyles(element, current.styles),
+            32,
+          );
+        };
+        window.addEventListener('popstate', restoreAfterHistory, { once: true });
+        backButton.click();
+        window.setTimeout(
+          () => restoreInlineGestureStyles(element, current.styles),
+          280,
+        );
+        return;
+      }
+
+      backButton.click();
+      window.requestAnimationFrame(() =>
+        restoreInlineGestureStyles(element, current.styles),
+      );
+    }, SETTLE_DURATION_MS - 16);
+  };
+
+  const cancelGesture = () => {
+    if (!gesture) return;
+    const current = gesture;
+    gesture = null;
+    if (current.direction === 'horizontal') settleBack(current);
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    if (event.clientX < 0 || event.clientX > EDGE_START_MAX_X) return;
+
+    const target = findSwipeTarget(root);
+    if (!target) return;
+
+    clearSettleTimer();
+    gesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastX: event.clientX,
+      lastAt: event.timeStamp,
+      velocityX: 0,
+      distanceX: 0,
+      direction: 'pending',
+      target,
+      styles: readInlineGestureStyles(target.element),
+    };
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+
+    if (gesture.direction === 'pending') {
+      if (
+        Math.abs(deltaX) < DIRECTION_LOCK_DISTANCE &&
+        Math.abs(deltaY) < DIRECTION_LOCK_DISTANCE
+      ) {
+        return;
+      }
+      if (deltaX <= 0 || Math.abs(deltaY) >= Math.abs(deltaX)) {
+        gesture = null;
+        return;
+      }
+      gesture.direction = 'horizontal';
+    }
+
+    if (event.cancelable) event.preventDefault();
+
+    const elapsed = event.timeStamp - gesture.lastAt;
+    if (elapsed > 0) {
+      gesture.velocityX = Math.max(
+        0,
+        (event.clientX - gesture.lastX) / elapsed,
+      );
+    }
+    gesture.lastX = event.clientX;
+    gesture.lastAt = event.timeStamp;
+    applyDrag(gesture, deltaX);
+  };
+
+  const onPointerUp = (event: PointerEvent) => {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    const current = gesture;
+    gesture = null;
+
+    if (current.direction !== 'horizontal') return;
+
+    const width = Math.max(
+      1,
+      current.target.element.getBoundingClientRect().width || window.innerWidth,
+    );
+    const shouldCommit =
+      current.distanceX >= commitDistance(width) ||
+      (current.distanceX >= FAST_SWIPE_MIN_DISTANCE &&
+        current.velocityX >= FAST_SWIPE_MIN_VELOCITY);
+
+    if (shouldCommit) {
+      finishBack(current);
+      return;
+    }
+    settleBack(current);
+  };
+
+  window.addEventListener('pointerdown', onPointerDown, { capture: true });
+  window.addEventListener('pointermove', onPointerMove, {
+    capture: true,
+    passive: false,
+  });
+  window.addEventListener('pointerup', onPointerUp, { capture: true });
+  window.addEventListener('pointercancel', cancelGesture, { capture: true });
+  mobileAgentQuery.addEventListener('change', cancelGesture);
+}
