@@ -371,7 +371,7 @@ try {
     coldCache: true,
     serviceWorkerBlocked: true,
     thresholds,
-    surfaces: surfaceReports.map(({ verify, ...surface }) => surface),
+    surfaces: surfaceReports,
     passed: surfaceReports.every((surface) => surface.passed),
   };
 
