@@ -1,7 +1,6 @@
 @import './styles.css';
 @import './product-assignment.css';
 @import './agent-statistics.css';
-@import './month-picker.css';
 @import './cloud-service-ui.css';
 @import './agent-editor.css';
 @import './agent-avatar.css';
@@ -11,4 +10,3 @@
 @import './admin-layout.css';
 @import './commercial-polish.css';
 @import './admin-design-system.css';
-@import './no-agent-message.css';
