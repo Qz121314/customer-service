@@ -17,6 +17,7 @@ function installAgentVisualViewportSync() {
   if (!root) return;
 
   let frame = 0;
+  let activeShell: HTMLElement | null = null;
 
   const clearGeometry = (shell: HTMLElement) => {
     for (const property of [
@@ -29,17 +30,11 @@ function installAgentVisualViewportSync() {
     ]) {
       shell.style.removeProperty(property);
     }
-    shell
-      .querySelector<HTMLElement>('.conversation-pane')
-      ?.style.removeProperty('height');
-    shell
-      .querySelector<HTMLElement>('.thread-pane')
-      ?.style.removeProperty('height');
   };
 
   const applyGeometry = () => {
     frame = 0;
-    const shell = root.querySelector<HTMLElement>('.workspace-shell');
+    const shell = activeShell;
     if (!shell) return;
 
     if (!mobileAgentQuery.matches) {
@@ -59,24 +54,19 @@ function installAgentVisualViewportSync() {
     shell.style.width = `${Math.round(width)}px`;
     shell.style.maxWidth = 'none';
     shell.style.height = `${Math.round(height)}px`;
-
-    const conversationPane =
-      shell.querySelector<HTMLElement>('.conversation-pane');
-    if (conversationPane) {
-      const sidebarHeight =
-        shell
-          .querySelector<HTMLElement>('.workspace-sidebar')
-          ?.getBoundingClientRect().height || 52;
-      conversationPane.style.height = `calc(100% - ${Math.round(sidebarHeight)}px)`;
-    }
-
-    const threadPane = shell.querySelector<HTMLElement>('.thread-pane');
-    if (threadPane) threadPane.style.height = '100%';
   };
 
   const scheduleGeometry = () => {
     if (frame !== 0) window.cancelAnimationFrame(frame);
     frame = window.requestAnimationFrame(applyGeometry);
+  };
+
+  const bindShell = () => {
+    const shell = root.querySelector<HTMLElement>('.workspace-shell');
+    if (shell === activeShell) return;
+    if (activeShell) clearGeometry(activeShell);
+    activeShell = shell;
+    scheduleGeometry();
   };
 
   const viewport = window.visualViewport;
@@ -90,9 +80,9 @@ function installAgentVisualViewportSync() {
   document.addEventListener('focusout', scheduleGeometry, { passive: true });
   mobileAgentQuery.addEventListener('change', scheduleGeometry);
 
-  const observer = new MutationObserver(scheduleGeometry);
-  observer.observe(root, { childList: true, subtree: true });
-  scheduleGeometry();
+  const viewportRootObserver = new MutationObserver(bindShell);
+  viewportRootObserver.observe(root, { childList: true });
+  bindShell();
 }
 
 function installAgentHistoryNavigation() {
@@ -104,11 +94,10 @@ function installAgentHistoryNavigation() {
 
   let backPending = false;
   let wasThreadOpen = false;
+  let observedShell: HTMLElement | null = null;
 
   const threadIsOpen = () =>
-    root
-      .querySelector<HTMLElement>('.workspace-shell')
-      ?.classList.contains('is-thread-open') ?? false;
+    observedShell?.classList.contains('is-thread-open') ?? false;
 
   const clickThreadBack = () => {
     root.querySelector<HTMLButtonElement>('.thread-back-button')?.click();
@@ -162,13 +151,26 @@ function installAgentHistoryNavigation() {
     wasThreadOpen = threadOpen;
   };
 
-  const observer = new MutationObserver(reconcileThreadClosure);
-  observer.observe(root, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class'],
-  });
+  const threadStateObserver = new MutationObserver(reconcileThreadClosure);
+
+  const bindShell = () => {
+    const shell = root.querySelector<HTMLElement>('.workspace-shell');
+    if (shell === observedShell) return;
+
+    threadStateObserver.disconnect();
+    observedShell = shell;
+    if (shell) {
+      threadStateObserver.observe(shell, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    }
+    reconcileThreadClosure();
+  };
+
+  const historyRootObserver = new MutationObserver(bindShell);
+  historyRootObserver.observe(root, { childList: true });
+  bindShell();
 }
 
 function installAgentServiceWorker() {
