@@ -30,21 +30,39 @@ test('dashboard keeps admin and agent route entries isolated behind dynamic impo
   assert.doesNotMatch(mainEntry, /from ['"]\.\/admin-entry['"]/u);
 });
 
-test('optional dashboard surfaces keep their heavy implementations deferred', () => {
+test('optional dashboard surfaces keep runtime implementations deferred', () => {
   for (const [wrapperPath, implementationPath] of deferredSurfaces) {
     const wrapper = readFileSync(wrapperPath, 'utf8');
+    const escapedImplementationPath = escapeRegExp(implementationPath);
+
     assert.match(
       wrapper,
       new RegExp(
-        `lazy\\(\\(\\)\\s*=>\\s*import\\(['"]${escapeRegExp(implementationPath)}['"]\\)`,
+        `lazy\\(\\(\\)\\s*=>\\s*import\\(['"]${escapedImplementationPath}['"]\\)`,
         'u',
       ),
       `${wrapperPath} must lazily import ${implementationPath}`,
     );
-    assert.ok(
-      !wrapper.includes(`from '${implementationPath}'`) &&
-        !wrapper.includes(`from "${implementationPath}"`),
-      `${wrapperPath} must not statically import ${implementationPath}`,
+    assert.match(
+      wrapper,
+      new RegExp(
+        `import\\s+type\\s+[^;]+?from\\s+['"]${escapedImplementationPath}['"]`,
+        'u',
+      ),
+      `${wrapperPath} must import its Props contract as type-only`,
+    );
+    assert.doesNotMatch(
+      wrapper,
+      new RegExp(
+        `import\\s+(?!type\\b)[^;]+?from\\s+['"]${escapedImplementationPath}['"]`,
+        'u',
+      ),
+      `${wrapperPath} must not statically import ${implementationPath} at runtime`,
+    );
+    assert.doesNotMatch(
+      wrapper,
+      /\b(?:Parameters|ComponentProps)\s*</u,
+      `${wrapperPath} must use an explicit Props contract`,
     );
   }
 });

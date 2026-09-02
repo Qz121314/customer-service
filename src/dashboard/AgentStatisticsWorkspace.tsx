@@ -1,10 +1,5 @@
 import { Suspense, lazy } from 'react';
-
-type AgentStatisticsWorkspaceModule =
-  typeof import('./AgentStatisticsWorkspaceImpl');
-type AgentStatisticsModalProps = Parameters<
-  AgentStatisticsWorkspaceModule['AgentStatisticsModal']
->[0];
+import type { AgentStatisticsModalProps } from './AgentStatisticsWorkspaceImpl';
 
 const LazyAgentStatisticsModal = lazy(() =>
   import('./AgentStatisticsWorkspaceImpl').then(({ AgentStatisticsModal }) => ({

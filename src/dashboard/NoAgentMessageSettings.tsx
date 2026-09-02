@@ -1,10 +1,5 @@
 import { Suspense, lazy } from 'react';
-
-type NoAgentMessageSettingsModule =
-  typeof import('./NoAgentMessageSettingsImpl');
-type NoAgentMessageSettingsProps = Parameters<
-  NoAgentMessageSettingsModule['NoAgentMessageSettingsPanel']
->[0];
+import type { NoAgentMessageSettingsProps } from './NoAgentMessageSettingsImpl';
 
 const LazyNoAgentMessageSettingsPanel = lazy(() =>
   import('./NoAgentMessageSettingsImpl').then(

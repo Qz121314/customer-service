@@ -1,9 +1,5 @@
 import { Suspense, lazy } from 'react';
-
-type AgentAttachmentToolsModule = typeof import('./AgentAttachmentToolsImpl');
-type AgentComposerAttachmentMenuProps = Parameters<
-  AgentAttachmentToolsModule['AgentComposerAttachmentMenu']
->[0];
+import type { AgentComposerAttachmentMenuProps } from './AgentAttachmentToolsImpl';
 
 const LazyAgentComposerAttachmentMenu = lazy(() =>
   import('./AgentAttachmentToolsImpl').then(

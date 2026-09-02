@@ -1,10 +1,5 @@
 import { Suspense, lazy } from 'react';
-
-type AdminAgentStatisticsModalModule =
-  typeof import('./AdminAgentStatisticsModalImpl');
-type AdminAgentStatisticsModalProps = Parameters<
-  AdminAgentStatisticsModalModule['AdminAgentStatisticsModal']
->[0];
+import type { AdminAgentStatisticsModalProps } from './AdminAgentStatisticsModalImpl';
 
 const LazyAdminAgentStatisticsModal = lazy(() =>
   import('./AdminAgentStatisticsModalImpl').then(
