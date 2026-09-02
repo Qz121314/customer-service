@@ -202,6 +202,39 @@ async function mobileComposerGeometry(page) {
   });
 }
 
+async function swipeFromLeftEdge(page, selector, endX) {
+  return page.evaluate(
+    ({ selector, endX }) => {
+      const browser = globalThis;
+      const pointerId = 23;
+      const clientY = 350;
+      const dispatch = (type, clientX) => {
+        browser.dispatchEvent(
+          new browser.PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId,
+            pointerType: 'touch',
+            isPrimary: true,
+            button: 0,
+            clientX,
+            clientY,
+          }),
+        );
+      };
+
+      dispatch('pointerdown', 4);
+      dispatch('pointermove', endX);
+      const target = browser.document.querySelector(selector);
+      const transform =
+        target instanceof browser.HTMLElement ? target.style.transform : '';
+      dispatch('pointerup', endX);
+      return transform;
+    },
+    { selector, endX },
+  );
+}
+
 test('agent desktop and mobile interaction surfaces remain usable', async ({
   page,
 }) => {
@@ -410,7 +443,27 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   expect(typeof mobileNavigation.marker?.conversationId).toBe('string');
   expect(mobileNavigation.overscrollX).toBe('auto');
 
-  await page.evaluate(() => globalThis.history.back());
+  const cancelledThreadSwipe = await swipeFromLeftEdge(
+    page,
+    '.thread-pane',
+    64,
+  );
+  expect(cancelledThreadSwipe).toContain('translate3d');
+  await expect(mobileComposer).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('.thread-pane')
+        .evaluate((element) => element.style.transform),
+    )
+    .toBe('');
+
+  const committedThreadSwipe = await swipeFromLeftEdge(
+    page,
+    '.thread-pane',
+    150,
+  );
+  expect(committedThreadSwipe).toContain('translate3d');
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(backButton).toBeHidden();
   await expect(mobileComposer).toBeHidden();
