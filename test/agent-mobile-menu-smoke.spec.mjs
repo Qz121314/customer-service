@@ -63,12 +63,15 @@ async function swipeFromLeftEdge(page, endX) {
 
       dispatch('pointerdown', 4);
       dispatch('pointermove', endX);
-      const surface = browser.document
-        .elementsFromPoint(endX, clientY)
-        .map((element) =>
-          element.closest('[data-agent-swipe-back-surface="true"]'),
-        )
-        .find((element) => element instanceof browser.HTMLElement);
+      const surface = [
+        ...browser.document.querySelectorAll(
+          '[data-agent-swipe-back-surface="true"]',
+        ),
+      ].find(
+        (element) =>
+          element instanceof browser.HTMLElement &&
+          element.style.transform.includes('translate3d'),
+      );
       const transform =
         surface instanceof browser.HTMLElement ? surface.style.transform : '';
       const surfaceClass =
@@ -92,7 +95,7 @@ async function swipeFromLeftEdge(page, endX) {
   );
 }
 
-test('mobile agent surfaces share one edge-swipe back contract', async ({
+test('mobile agent back gesture follows actual navigation hierarchy', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -104,11 +107,11 @@ test('mobile agent surfaces share one edge-swipe back contract', async ({
   const profileDialog = page.getByRole('dialog', { name: '客服资料' });
   await expect(profileDialog).toBeVisible();
   const profileSwipe = await swipeFromLeftEdge(page, 150);
-  expect(profileSwipe.surfaceClass).toContain('agent-avatar-backdrop');
-  expect(profileSwipe.transform).toContain('translate3d');
-  expect(profileSwipe.revealedConversation).toBeTruthy();
+  expect(profileSwipe.surfaceClass).toBe('');
+  expect(profileSwipe.transform).toBe('');
+  await expect(profileDialog).toBeVisible();
+  await profileDialog.getByRole('button', { name: '关闭' }).click();
   await expect(profileDialog).toBeHidden();
-  await expect(page.getByText('我的会话')).toBeVisible();
 
   await page.getByRole('button', { name: '打开功能菜单' }).click();
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
@@ -158,9 +161,12 @@ test('mobile agent surfaces share one edge-swipe back contract', async ({
     'agent-overlay-sheet-in',
   );
   const cardSwipe = await swipeFromLeftEdge(page, 150);
-  expect(cardSwipe.surfaceClass).toContain('agent-attachment-manager-backdrop');
-  expect(cardSwipe.transform).toContain('translate3d');
-  expect(cardSwipe.revealedSettings).toBeTruthy();
+  expect(cardSwipe.surfaceClass).toBe('');
+  expect(cardSwipe.transform).toBe('');
+  await expect(cardSettingsDialog).toBeVisible();
+  await cardSettingsDialog
+    .getByRole('button', { name: '关闭名片设置' })
+    .click();
   await expect(cardSettingsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
@@ -201,10 +207,10 @@ test('mobile agent surfaces share one edge-swipe back contract', async ({
     ).toBeLessThanOrEqual(1);
   }
   const autoReplySwipe = await swipeFromLeftEdge(page, 150);
-  expect(autoReplySwipe.surfaceClass).toContain(
-    'agent-auto-reply-modal-backdrop',
-  );
-  expect(autoReplySwipe.revealedSettings).toBeTruthy();
+  expect(autoReplySwipe.surfaceClass).toBe('');
+  expect(autoReplySwipe.transform).toBe('');
+  await expect(autoReplyDialog).toBeVisible();
+  await autoReplyDialog.getByRole('button', { name: '关闭' }).click();
   await expect(autoReplyDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
@@ -212,7 +218,8 @@ test('mobile agent surfaces share one edge-swipe back contract', async ({
   const statsDialog = page.getByRole('dialog', { name: /接待数据/u });
   await expect(statsDialog).toBeVisible();
   const statsSwipe = await swipeFromLeftEdge(page, 150);
-  expect(statsSwipe.surfaceClass).toContain('statistics-modal-backdrop');
+  expect(statsSwipe.surfaceClass).toContain('agent-statistics-backdrop');
+  expect(statsSwipe.transform).toContain('translate3d');
   expect(statsSwipe.revealedSettings).toBeTruthy();
   await expect(statsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
