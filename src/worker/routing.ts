@@ -51,23 +51,33 @@ function assignmentResult(
 }
 
 /**
- * Assign one conversation to one enabled, online seat with matching routing
- * scope. Product/section/category routing decides eligibility only; all normal
- * new traffic for a site shares one circular round-robin cursor. Paid quota and
- * the daily reception limit are eligibility gates only and never change
- * candidate priority.
+ * Assign one conversation to one enabled, online, notification-capable seat
+ * with matching routing scope. Product/section/category routing decides
+ * eligibility only; all normal new traffic for a site shares one circular
+ * round-robin cursor. Paid quota, the daily reception limit, and a valid agent
+ * Push subscription are eligibility gates only and never change candidate
+ * priority.
+ *
+ * Business presence remains explicit: leaving the page, backgrounding the PWA,
+ * locking the phone, heartbeat freshness, and WebSocket lifecycle never rewrite
+ * online/busy/offline status. A Push subscription is required only to guarantee
+ * that an online seat selected for new automatic traffic remains reachable when
+ * its page is not active.
  *
  * CTA affinity is the only priority override. Busy/offline/disabled/exhausted
- * seats are skipped without receiving catch-up priority when they later become
- * eligible again. Candidate selection and assignment remain one D1 statement;
- * the site cursor advances through a database trigger in the same write path.
+ * or notification-unreachable seats are skipped without receiving catch-up
+ * priority when they later become eligible again. Candidate selection and
+ * assignment remain one D1 statement; the site cursor advances through a
+ * database trigger in the same write path.
  */
 export async function assignConversationAgent(
   db: D1Database,
   conversationId: string,
 ): Promise<AgentAssignmentResult | null> {
-  const now = new Date().toISOString();
-  const businessDate = routingBusinessDate(new Date(now));
+  const nowDate = new Date();
+  const now = nowDate.toISOString();
+  const nowMs = nowDate.getTime();
+  const businessDate = routingBusinessDate(nowDate);
   const assignment = await db
     .prepare(
       `WITH context AS (
@@ -135,6 +145,16 @@ export async function assignConversationAgent(
            AND a.username <> ''
            AND a.password_hash IS NOT NULL
            AND a.password_hash <> ''
+           AND EXISTS (
+             SELECT 1
+             FROM agent_push_subscriptions push
+             WHERE push.agent_id = a.id
+               AND (
+                 push.expiration_time IS NULL
+                 OR push.expiration_time > ?4
+               )
+             LIMIT 1
+           )
            AND (
              a.daily_conversation_limit <= 0
              OR COALESCE((
@@ -178,7 +198,7 @@ export async function assignConversationAgent(
        RETURNING assigned_agent AS id,
          (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
     )
-    .bind(conversationId, now, businessDate)
+    .bind(conversationId, now, businessDate, nowMs)
     .first<AgentAssignment>();
   if (!assignment) {
     return assignedAgent(db, conversationId);
