@@ -5,6 +5,7 @@ import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { listConversationMedia } from './media-api';
+import type { ConversationAttachmentPage } from './message-attachments';
 
 type Bindings = {
   DB: D1Database;
@@ -651,7 +652,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const messageBindings = pageCursor
     ? [c.req.param('id'), pageCursor.createdAt, pageCursor.id, queryLimit]
     : [c.req.param('id'), queryLimit];
-  const attachmentPage =
+  const attachmentPage: ConversationAttachmentPage =
     pageDirection === 'latest'
       ? { direction: pageDirection, limit: pageSize }
       : {
