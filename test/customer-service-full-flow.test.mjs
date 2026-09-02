@@ -1119,7 +1119,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     env,
   );
   assert.equal(mixedCursorResponse.status, 400);
-  assert.deepEqual(await json(mixedCursorResponse), {
+  assert.deepEqual(await mixedCursorResponse.json(), {
     error: 'INVALID_MESSAGE_CURSOR',
   });
 
