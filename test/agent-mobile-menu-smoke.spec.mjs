@@ -40,6 +40,38 @@ async function loginAgent(page) {
   await expect(page.getByText('我的会话')).toBeVisible();
 }
 
+async function swipeFromLeftEdge(page, endX) {
+  return page.evaluate(
+    ({ endX }) => {
+      const pointerId = 17;
+      const clientY = 420;
+      const dispatch = (type, clientX) => {
+        window.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId,
+            pointerType: 'touch',
+            isPrimary: true,
+            button: 0,
+            clientX,
+            clientY,
+          }),
+        );
+      };
+
+      dispatch('pointerdown', 4);
+      dispatch('pointermove', endX);
+      const target = document.querySelector('.mobile-agent-settings-page');
+      const transform =
+        target instanceof HTMLElement ? target.style.transform : '';
+      dispatch('pointerup', endX);
+      return transform;
+    },
+    { endX },
+  );
+}
+
 test('mobile settings keeps its navigation context after child dialogs close', async ({
   page,
 }) => {
@@ -77,6 +109,13 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   expect(
     settingsGeometry.cardRadii.every((radius) => radius >= 16),
   ).toBeTruthy();
+
+  const cancelledSwipeTransform = await swipeFromLeftEdge(page, 64);
+  expect(cancelledSwipeTransform).toContain('translate3d');
+  await expect(settingsPage).toBeVisible();
+  await expect
+    .poll(() => settingsPage.evaluate((element) => element.style.transform))
+    .toBe('');
 
   await settingsPage.getByRole('button', { name: /名片/u }).click();
   const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
@@ -136,7 +175,8 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(statsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
-  await settingsPage.getByRole('button', { name: '返回工作台' }).click();
+  const committedSwipeTransform = await swipeFromLeftEdge(page, 150);
+  expect(committedSwipeTransform).toContain('translate3d');
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
 });
