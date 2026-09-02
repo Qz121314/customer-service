@@ -27,7 +27,7 @@ function d1(database) {
         },
         async run() {
           const result = database.prepare(sql).run(...bindings);
-          return { meta: { changes: Number(result.changes) };
+          return { meta: { changes: Number(result.changes) } };
         },
       };
     },
