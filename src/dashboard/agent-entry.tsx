@@ -10,7 +10,10 @@ import {
 const mobileAgentQuery = window.matchMedia('(max-width: 760px)');
 
 async function loadAgentStyles() {
-  await import('./agent-route.css');
+  await Promise.all([
+    import('./agent-route.css'),
+    import('./agent-swipe-back.css'),
+  ]);
 }
 
 function installAgentVisualViewportSync() {
