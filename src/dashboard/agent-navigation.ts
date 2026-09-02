@@ -139,7 +139,9 @@ export function readAgentMobileView(): AgentMobileView {
 export function subscribeAgentNavigation(listener: AgentNavigationListener) {
   ensureNavigationListener();
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function navigateAgentSettings(view: AgentSettingsView) {
