@@ -66,10 +66,7 @@ type MessageWriteConversation = {
 
 type UpdatedConversationSnapshot = Omit<
   ConversationEventSnapshot,
-  | 'external_id'
-  | 'visitor_name'
-  | 'agent_name'
-  | 'agent_avatar_version'
+  'external_id' | 'visitor_name' | 'agent_name' | 'agent_avatar_version'
 >;
 
 const COOKIE = 'cs_agent_session';

@@ -58,10 +58,7 @@ test('agent text sends keep persistence on a bounded D1 path and reuse the updat
     broadcaster,
     /conversationSnapshot\?: ConversationEventSnapshot/u,
   );
-  assert.match(
-    broadcaster,
-    /options\.conversationSnapshot\s*\?\?/u,
-  );
+  assert.match(broadcaster, /options\.conversationSnapshot\s*\?\?/u);
 });
 
 test('visitor text sends keep duplicate reads off the normal write path', () => {
