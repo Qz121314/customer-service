@@ -176,6 +176,51 @@ jobs:
           BASE_URL: ${{ steps.deploy.outputs.url }}
         run: pnpm smoke:production
 
+      - name: Audit authenticated production performance
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        env:
+          BASE_URL: ${{ steps.deploy.outputs.url }}
+          PERF_AUDIT_ADMIN_PASSWORD: ${{ secrets.PERF_AUDIT_ADMIN_PASSWORD }}
+          PERF_AUDIT_AGENT_USERNAME: ${{ secrets.PERF_AUDIT_AGENT_USERNAME }}
+          PERF_AUDIT_AGENT_PASSWORD: ${{ secrets.PERF_AUDIT_AGENT_PASSWORD }}
+          PERF_AUDIT_RUNS: '3'
+          PERF_AUDIT_OUTPUT: /tmp/production-performance-audit.json
+          PERF_AUDIT_SUMMARY: /tmp/production-performance-audit.md
+          PERF_AUDIT_ENFORCE: '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "${PERF_AUDIT_ADMIN_PASSWORD}" ] || missing+=(PERF_AUDIT_ADMIN_PASSWORD)
+          [ -n "${PERF_AUDIT_AGENT_USERNAME}" ] || missing+=(PERF_AUDIT_AGENT_USERNAME)
+          [ -n "${PERF_AUDIT_AGENT_PASSWORD}" ] || missing+=(PERF_AUDIT_AGENT_PASSWORD)
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::warning::Production performance audit skipped; configure GitHub Actions secrets: ${missing[*]}"
+            {
+              echo '## Production performance audit'
+              echo
+              echo 'Skipped because the dedicated production audit credentials are not configured.'
+              echo
+              echo "Missing GitHub Actions secrets: \`${missing[*]}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          pnpm perf:audit:production
+          cat /tmp/production-performance-audit.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload production performance audit
+        if: always() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-performance-audit
+          path: |
+            /tmp/production-performance-audit.json
+            /tmp/production-performance-audit.md
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Publish deployment handoff
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
@@ -188,6 +233,7 @@ jobs:
             echo "- Worker: ${BASE_URL}"
             echo '- D1 migrations: applied'
             echo '- R2, Durable Object, Rate Limit, Cron and static assets: provisioned'
+            echo '- Authenticated production performance audit: runs automatically when PERF_AUDIT_* secrets are configured'
             echo '- Next: set `ADMIN_PASSWORD` and `INTEGRATION_VERIFY_TOKEN` as Worker secrets'
             echo '- Optional: attach a Worker custom domain; keep the private chat-media R2 bucket without a public domain'
           } >> "$GITHUB_STEP_SUMMARY"
