@@ -1,11 +1,7 @@
 const AGENT_NAVIGATION_KEY = '__customerServiceAgentView';
 
 export type AgentMobileView =
-  | 'workspace'
-  | 'menu'
-  | 'cards'
-  | 'autoReply'
-  | 'statistics';
+  'workspace' | 'menu' | 'cards' | 'autoReply' | 'statistics';
 
 type AgentSettingsView = Exclude<AgentMobileView, 'workspace'>;
 
@@ -19,8 +15,7 @@ type AgentSettingsNavigationMarker = {
 };
 
 export type AgentNavigationMarker =
-  | AgentThreadNavigationMarker
-  | AgentSettingsNavigationMarker;
+  AgentThreadNavigationMarker | AgentSettingsNavigationMarker;
 
 type AgentNavigationListener = () => void;
 
