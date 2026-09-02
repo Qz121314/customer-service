@@ -25,11 +25,7 @@ import {
 } from './AgentWorkspaceChrome';
 
 type AgentMobileView =
-  | 'workspace'
-  | 'menu'
-  | 'cards'
-  | 'autoReply'
-  | 'statistics';
+  'workspace' | 'menu' | 'cards' | 'autoReply' | 'statistics';
 
 export const AgentSidebar = memo(function AgentSidebar({
   identity,
@@ -55,8 +51,7 @@ export const AgentSidebar = memo(function AgentSidebar({
   onLogout: () => void;
 }) {
   const [desktopAutoReplyOpen, setDesktopAutoReplyOpen] = useState(false);
-  const [desktopCardSettingsOpen, setDesktopCardSettingsOpen] =
-    useState(false);
+  const [desktopCardSettingsOpen, setDesktopCardSettingsOpen] = useState(false);
   const [mobileView, setMobileView] = useState<AgentMobileView>('workspace');
 
   const closeCardSettings = () => {
