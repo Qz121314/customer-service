@@ -25,6 +25,9 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   );
   assert.match(delivery, /JOIN visitor_push_vapid vapid/u);
   assert.match(delivery, /sendDataLessPush/u);
+  assert.match(delivery, /AGENT_PUSH_TTL_SECONDS = 24 \* 60 \* 60/u);
+  assert.match(delivery, /ttlSeconds: AGENT_PUSH_TTL_SECONDS/u);
+  assert.match(delivery, /topic: 'agent-unread'/u);
   assert.match(entry, /sendAgentPushForConversation/u);
   assert.match(entry, /executionCtx\.waitUntil/u);
   assert.match(
