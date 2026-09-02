@@ -3,6 +3,7 @@ import type {
   AgentAccount,
   AgentRoutingScope,
   Conversation,
+  ConversationDetail,
   Message,
   Overview,
   ProductCatalogItem,
@@ -252,6 +253,25 @@ function compareMessages(left: Message, right: Message): number {
   return difference || left.id.localeCompare(right.id);
 }
 
+function mergeAgentConversationPage(
+  current: ConversationDetail,
+  incoming: ConversationDetail,
+  direction: 'before' | 'after',
+): ConversationDetail {
+  const messages = new Map(current.messages.map((item) => [item.id, item]));
+  for (const readState of incoming.readState ?? []) {
+    const existing = messages.get(readState.id);
+    if (existing) messages.set(readState.id, { ...existing, ...readState });
+  }
+  for (const item of incoming.messages) messages.set(item.id, item);
+
+  return {
+    ...incoming,
+    messages: [...messages.values()].sort(compareMessages),
+    page: direction === 'after' ? current.page : incoming.page,
+  };
+}
+
 type AgentScopeSummary = {
   tone: 'none' | 'section' | 'category' | 'product';
   title: string;
@@ -430,6 +450,7 @@ export {
   parseRealtimeEvent,
   sortedConversationList,
   compareMessages,
+  mergeAgentConversationPage,
   productsForScope,
   agentScopeSummary,
   presenceClass,

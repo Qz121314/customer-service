@@ -17,7 +17,10 @@ import {
   type MediaBindings,
   type MediaRow,
 } from './media-types';
-import { listConversationAttachments } from './message-attachments';
+import {
+  listConversationAttachments,
+  type ConversationAttachmentPage,
+} from './message-attachments';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
 import {
   normalizeVisitorId,
@@ -271,9 +274,9 @@ mediaApi.get('/api/agent/media/:id/content', async (c) => {
 export async function listConversationMedia(
   db: D1Database,
   conversationId: string,
-  after?: { id: string; createdAt: string } | null,
+  page?: ConversationAttachmentPage,
 ) {
-  return listConversationAttachments(db, conversationId, after);
+  return listConversationAttachments(db, conversationId, page);
 }
 
 async function authorizedVisitorMedia(

@@ -47,7 +47,7 @@ import {
   emitAgentMessageTone,
   parseRealtimeEvent,
   sortedConversationList,
-  compareMessages,
+  mergeAgentConversationPage,
   message,
 } from './dashboard-runtime';
 import {
@@ -280,6 +280,7 @@ function AgentWorkspace({
   const [inboxConnected, setInboxConnected] = useState(false);
   const [threadConnected, setThreadConnected] = useState(false);
   const [visitorTyping, setVisitorTyping] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -294,6 +295,10 @@ function AgentWorkspace({
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
   const lastScrolledConversationRef = useRef<string | null>(null);
+  const pendingHistoryScrollRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
   const baseTitleRef = useRef(document.title);
   const previousDraftConversationRef = useRef<string | null>(null);
   const draftSaveScheduler = useMemo(() => createAgentDraftSaveScheduler(), []);
@@ -704,8 +709,13 @@ function AgentWorkspace({
       return getConversation(
         selectedId,
         lastMessage
-          ? { id: lastMessage.id, createdAt: lastMessage.created_at }
-          : null,
+          ? {
+              after: {
+                id: lastMessage.id,
+                createdAt: lastMessage.created_at,
+              },
+            }
+          : undefined,
       )
         .then((value) => {
           if (active) {
@@ -717,19 +727,7 @@ function AgentWorkspace({
               ) {
                 return value;
               }
-              const messages = new Map(
-                currentDetail.messages.map((item) => [item.id, item]),
-              );
-              for (const readState of value.readState ?? []) {
-                const existing = messages.get(readState.id);
-                if (existing)
-                  messages.set(readState.id, { ...existing, ...readState });
-              }
-              for (const item of value.messages) messages.set(item.id, item);
-              return {
-                ...value,
-                messages: [...messages.values()].sort(compareMessages),
-              };
+              return mergeAgentConversationPage(currentDetail, value, 'after');
             });
             const deliveredClientIds = new Set(
               value.messages
@@ -993,10 +991,13 @@ function AgentWorkspace({
   }, [acknowledgeConversation, refresh, selectedId, sendAgentTyping]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
+  const messageCount = detail?.messages.length ?? 0;
   const selectedExpiresAt = detail?.conversation.expires_at ?? null;
 
   useEffect(() => {
     setAttachmentSending(false);
+    setLoadingEarlier(false);
+    pendingHistoryScrollRef.current = null;
     setMediaPendingFile(null);
     setMediaClientUploadId(null);
     setMediaFailed(false);
@@ -1028,6 +1029,16 @@ function AgentWorkspace({
   useLayoutEffect(() => {
     const timeline = messagesRef.current;
     if (!timeline || !selectedId) return;
+    const historyScroll = pendingHistoryScrollRef.current;
+    if (historyScroll) {
+      timeline.scrollTop =
+        timeline.scrollHeight -
+        historyScroll.scrollHeight +
+        historyScroll.scrollTop;
+      pendingHistoryScrollRef.current = null;
+      return;
+    }
+
     const isOpeningConversation =
       lastScrolledConversationRef.current !== selectedId;
     const scroll = () => {
@@ -1047,8 +1058,54 @@ function AgentWorkspace({
     currentPendingText?.status,
     lastMessageId,
     messageAttachments.length,
+    messageCount,
     selectedId,
   ]);
+
+  async function loadEarlierMessages() {
+    const before = detail?.page.before;
+    if (
+      !selectedId ||
+      !detail?.page.hasMoreBefore ||
+      !before ||
+      loadingEarlier
+    ) {
+      return;
+    }
+
+    const conversationId = selectedId;
+    const timeline = messagesRef.current;
+    const scrollSnapshot = timeline
+      ? {
+          scrollHeight: timeline.scrollHeight,
+          scrollTop: timeline.scrollTop,
+        }
+      : null;
+    setLoadingEarlier(true);
+    try {
+      const value = await getConversation(conversationId, { before });
+      if (detailRef.current?.conversation.id !== conversationId) return;
+      pendingHistoryScrollRef.current = scrollSnapshot;
+      setDetail((current) =>
+        current?.conversation.id === conversationId
+          ? mergeAgentConversationPage(current, value, 'before')
+          : current,
+      );
+      const incomingAttachments = (value.media as unknown[])
+        .map((item) => normalizeAgentMessageAttachment(item))
+        .filter((item): item is AgentMessageAttachment => Boolean(item));
+      setMessageAttachments((current) =>
+        mergeMessageAttachments(current, incomingAttachments),
+      );
+    } catch (reason) {
+      if (detailRef.current?.conversation.id === conversationId) {
+        setError(message(reason, '无法加载更早消息'));
+      }
+      pendingHistoryScrollRef.current = null;
+    } finally {
+      setLoadingEarlier(false);
+    }
+  }
 
   function updateDraft(value: string | ((current: string) => string)) {
     if (!selectedId) return;
@@ -1569,6 +1626,17 @@ function AgentWorkspace({
               </div>
             )}
             <div className="messages" ref={messagesRef}>
+              {detail.page.hasMoreBefore && (
+                <div className="message-history-loader">
+                  <button
+                    type="button"
+                    disabled={loadingEarlier}
+                    onClick={() => void loadEarlierMessages()}
+                  >
+                    {loadingEarlier ? '正在加载…' : '加载更早消息'}
+                  </button>
+                </div>
+              )}
               {(detail.messages as Message[]).map((item) => (
                 <Bubble
                   key={item.id}
