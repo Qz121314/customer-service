@@ -459,13 +459,16 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const mobileNavigation = await page.evaluate(() => {
     const browser = globalThis;
     return {
-      marker: browser.history.state?.__customerServiceAgentView ?? null,
+      marker: browser.history.state?.__customerServiceAgentNavigation ?? null,
       overscrollX: browser.getComputedStyle(browser.document.body)
         .overscrollBehaviorX,
     };
   });
-  expect(mobileNavigation.marker?.view).toBe('thread');
-  expect(typeof mobileNavigation.marker?.conversationId).toBe('string');
+  expect(mobileNavigation.marker?.workspace?.kind).toBe('thread');
+  expect(typeof mobileNavigation.marker?.workspace?.conversationId).toBe(
+    'string',
+  );
+  expect(mobileNavigation.marker?.overlay).toBe('none');
   expect(mobileNavigation.overscrollX).toBe('auto');
 
   await page.evaluate(() => globalThis.history.back());
@@ -496,8 +499,18 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(
     settingsPage.getByRole('button', { name: '退出客服账号' }),
   ).toBeVisible();
-  await settingsPage.getByRole('button', { name: '返回工作台' }).click();
+  await page.evaluate(() => globalThis.history.back());
   await expect(settingsPage).toBeHidden();
+  await expect(page.getByText('我的会话')).toBeVisible();
+
+  await page.evaluate(() => globalThis.history.forward());
+  await expect(settingsPage).toBeVisible();
+  await settingsPage.getByRole('button', { name: /名片/u }).click();
+  const menuCardSettingsDialog = page.getByRole('dialog', { name: '名片' });
+  await expect(menuCardSettingsDialog).toBeVisible();
+  await page.evaluate(() => globalThis.history.back());
+  await expect(menuCardSettingsDialog).toBeHidden();
+  await expect(settingsPage).toBeVisible();
 
   const inboxGeometry = await page.evaluate(() => {
     const browser = globalThis;
@@ -532,11 +545,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     );
   }
 
-  await page.evaluate(() => globalThis.history.forward());
-  await expect(mobileComposer).toBeVisible();
-  await expect(backButton).toBeVisible();
-
-  await backButton.click();
+  await settingsPage.getByRole('button', { name: '返回工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
   await expect(mobileComposer).toBeHidden();
 });
