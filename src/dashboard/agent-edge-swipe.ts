@@ -12,9 +12,11 @@ const COMMIT_DISTANCE_MAX = 132;
 const SETTLE_DURATION_MS = 180;
 const REBOUND_CURVE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const COMMIT_CURVE = 'cubic-bezier(0.32, 0.72, 0, 1)';
-const PAGE_BACK_TRIGGER_SELECTOR = 'button[aria-label^="返回"]';
-const MODAL_CLOSE_TRIGGER_SELECTOR =
-  'button[aria-label^="关闭"], button[aria-label^="返回"]';
+const DECLARED_SURFACE_SELECTOR = '[data-agent-swipe-back-surface="true"]';
+const DECLARED_TRIGGER_SELECTOR =
+  'button[data-agent-swipe-back-trigger="true"]';
+const PAGE_BACK_TRIGGER_SELECTOR =
+  'button[data-agent-swipe-back-trigger="true"], button[aria-label^="返回"]';
 
 type SwipeTarget = {
   element: HTMLElement;
@@ -62,7 +64,30 @@ function rememberSwipeContract(target: SwipeTarget) {
   target.backButton.dataset.agentSwipeBackTrigger = 'true';
 }
 
-function findVisibleModalTarget(hits: Element[]): SwipeTarget | null {
+function declaredTargetForSurface(
+  surface: HTMLElement,
+): SwipeTarget | null {
+  if (!elementIsVisible(surface)) return null;
+  const backButton = surface.querySelector<HTMLButtonElement>(
+    DECLARED_TRIGGER_SELECTOR,
+  );
+  if (!backButton || backButton.disabled || !elementIsVisible(backButton)) {
+    return null;
+  }
+  return { element: surface, backButton };
+}
+
+function findDeclaredTarget(hits: Element[]): SwipeTarget | null {
+  for (const hit of hits) {
+    const surface = hit.closest<HTMLElement>(DECLARED_SURFACE_SELECTOR);
+    if (!surface) continue;
+    const target = declaredTargetForSurface(surface);
+    if (target) return target;
+  }
+  return null;
+}
+
+function findTopmostModalLayer(hits: Element[]): HTMLElement | null {
   const dialogs = [
     ...document.querySelectorAll<HTMLElement>(
       '[role="dialog"][aria-modal="true"]',
@@ -71,18 +96,12 @@ function findVisibleModalTarget(hits: Element[]): SwipeTarget | null {
 
   for (const dialog of dialogs) {
     if (!elementIsVisible(dialog)) continue;
-    const surface =
+    const layer =
       dialog.parentElement instanceof HTMLElement
         ? dialog.parentElement
         : dialog;
-    if (!hits.some((hit) => surface.contains(hit))) continue;
-    const backButton = dialog.querySelector<HTMLButtonElement>(
-      MODAL_CLOSE_TRIGGER_SELECTOR,
-    );
-    if (!backButton || backButton.disabled || !elementIsVisible(backButton)) {
-      continue;
-    }
-    return { element: surface, backButton };
+    if (!elementIsVisible(layer)) continue;
+    if (hits.some((hit) => layer === hit || layer.contains(hit))) return layer;
   }
 
   return null;
@@ -90,15 +109,27 @@ function findVisibleModalTarget(hits: Element[]): SwipeTarget | null {
 
 function findVisiblePageTarget(hits: Element[]): SwipeTarget | null {
   for (const hit of hits) {
-    const surface = hit.closest<HTMLElement>('main, section');
-    if (!surface || !elementIsVisible(surface)) continue;
-    const backButton = surface.querySelector<HTMLButtonElement>(
-      PAGE_BACK_TRIGGER_SELECTOR,
-    );
-    if (!backButton || backButton.disabled || !elementIsVisible(backButton)) {
-      continue;
+    let surface: HTMLElement | null =
+      hit instanceof HTMLElement ? hit : hit.parentElement;
+
+    while (surface && surface !== document.body) {
+      if (
+        ['MAIN', 'SECTION'].includes(surface.tagName) &&
+        elementIsVisible(surface)
+      ) {
+        const backButton = surface.querySelector<HTMLButtonElement>(
+          PAGE_BACK_TRIGGER_SELECTOR,
+        );
+        if (
+          backButton &&
+          !backButton.disabled &&
+          elementIsVisible(backButton)
+        ) {
+          return { element: surface, backButton };
+        }
+      }
+      surface = surface.parentElement;
     }
-    return { element: surface, backButton };
   }
 
   return null;
@@ -108,7 +139,23 @@ function findSwipeTarget(clientX: number, clientY: number): SwipeTarget | null {
   if (!mobileAgentQuery.matches) return null;
 
   const hits = document.elementsFromPoint(clientX, clientY);
-  const target = findVisibleModalTarget(hits) ?? findVisiblePageTarget(hits);
+  const modalLayer = findTopmostModalLayer(hits);
+  if (modalLayer) {
+    const modalHits = hits.filter(
+      (hit) => modalLayer === hit || modalLayer.contains(hit),
+    );
+    const target = findDeclaredTarget(modalHits);
+    if (
+      !target ||
+      (target.element !== modalLayer && !modalLayer.contains(target.element))
+    ) {
+      return null;
+    }
+    rememberSwipeContract(target);
+    return target;
+  }
+
+  const target = findDeclaredTarget(hits) ?? findVisiblePageTarget(hits);
   if (!target) return null;
   rememberSwipeContract(target);
   return target;
