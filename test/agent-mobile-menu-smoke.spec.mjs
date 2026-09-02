@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
@@ -61,7 +62,7 @@ async function createConversation(page) {
     headers: { 'CF-Connecting-IP': '198.51.100.27' },
     data: {
       visitorId: 'UI-MOBILE-MENU-VISITOR',
-      sourceHandoffId: 'ui-mobile-menu-handoff',
+      sourceHandoffId: randomUUID(),
       clientMessageId: 'ui-mobile-menu-message',
       message: '测试移动端统一返回手势',
       product: {
@@ -76,7 +77,8 @@ async function createConversation(page) {
       },
     },
   });
-  expect(response.ok()).toBeTruthy();
+  const payload = await response.json();
+  expect(response.ok(), JSON.stringify(payload)).toBeTruthy();
 }
 
 async function loginAgent(page) {
