@@ -22,7 +22,7 @@ test('agent inbox returns overview, conversations, messages and media in two req
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
   assert.match(
     worker,
-    /messages: messages\.results \?\? \[\],[\s\S]*media,[\s\S]*readState/u,
+    /messages: pageMessages,[\s\S]*media,[\s\S]*readState/u,
   );
   assert.doesNotMatch(app, /getConversations\(filter/u);
   assert.doesNotMatch(app, /getAgentMedia\(selectedId\)/u);
