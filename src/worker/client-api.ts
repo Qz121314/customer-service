@@ -67,6 +67,11 @@ type ConversationRow = {
   last_message: string | null;
 };
 
+export type ConversationEventSnapshot = ConversationRow & {
+  external_id: string | null;
+  visitor_name: string | null;
+};
+
 type MessageRow = {
   id: string;
   conversation_id: string;
@@ -985,29 +990,27 @@ export async function broadcastClientConversationEvent(
   options: {
     includeOverview?: boolean;
     previousAgentId?: string | null;
+    conversationSnapshot?: ConversationEventSnapshot;
   } = {},
 ): Promise<ConversationRow | null> {
-  const conversation = await env.DB.prepare(
-    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
-       c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
-       c.last_message_at, c.created_at, c.last_message_preview AS last_message,
-       v.external_id, v.display_name AS visitor_name
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
-     WHERE c.id = ?1
-     LIMIT 1`,
-  )
-    .bind(conversationId)
-    .first<
-      ConversationRow & {
-        external_id: string | null;
-        visitor_name: string | null;
-      }
-    >();
+  const conversation =
+    options.conversationSnapshot ??
+    (await env.DB.prepare(
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+         a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+         c.last_message_at, c.created_at, c.last_message_preview AS last_message,
+         v.external_id, v.display_name AS visitor_name
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       WHERE c.id = ?1
+       LIMIT 1`,
+    )
+      .bind(conversationId)
+      .first<ConversationEventSnapshot>());
   if (!conversation) return null;
 
   if (conversation.external_id) {
