@@ -5,12 +5,36 @@ const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 const agentUsername = 'ui-mobile-menu-agent';
 const agentPassword = 'ui-mobile-menu-pass';
+const productId = 'ui-mobile-menu-product';
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
 async function seedAgent(page) {
+  const syncProduct = await page.request.post(url('/integration/v1/verify'), {
+    headers: {
+      authorization: 'Bearer ui-smoke-integration-token',
+    },
+    data: {
+      productCatalog: {
+        products: [
+          {
+            id: productId,
+            sectionId: 'ui-mobile-menu-section',
+            sectionName: 'Mobile Menu Section',
+            categoryId: 'ui-mobile-menu-category',
+            categoryName: 'Mobile Menu Category',
+            title: 'Mobile Swipe Product',
+            href: 'https://example.com/mobile-swipe-product',
+            coverUrl: null,
+          },
+        ],
+      },
+    },
+  });
+  expect(syncProduct.ok()).toBeTruthy();
+
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -21,7 +45,7 @@ async function seedAgent(page) {
       name: 'Mobile Menu Agent',
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'none' },
+      routingScope: { type: 'product', productIds: [productId] },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,
@@ -32,12 +56,41 @@ async function seedAgent(page) {
   expect(createAgent.ok()).toBeTruthy();
 }
 
+async function createConversation(page) {
+  const response = await page.request.post(url('/client/v1/conversations'), {
+    headers: { 'CF-Connecting-IP': '198.51.100.27' },
+    data: {
+      visitorId: 'UI-MOBILE-MENU-VISITOR',
+      sourceHandoffId: 'ui-mobile-menu-handoff',
+      clientMessageId: 'ui-mobile-menu-message',
+      message: '测试移动端统一返回手势',
+      product: {
+        id: productId,
+        sectionId: 'ui-mobile-menu-section',
+        sectionName: 'Mobile Menu Section',
+        categoryId: 'ui-mobile-menu-category',
+        categoryName: 'Mobile Menu Category',
+        title: 'Mobile Swipe Product',
+        href: 'https://example.com/mobile-swipe-product',
+        coverUrl: null,
+      },
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
 async function loginAgent(page) {
   await page.goto(url('/agent'));
   await page.getByLabel('客服账号').fill(agentUsername);
   await page.getByLabel('登录密码').fill(agentPassword);
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
+  await createConversation(page);
+  await page.reload();
+  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Mobile Swipe Product/u }),
+  ).toBeVisible();
 }
 
 async function swipeFromLeftEdge(page, endX) {
@@ -230,4 +283,28 @@ test('mobile agent back gesture follows actual navigation hierarchy', async ({
   expect(committedSwipe.revealedConversation).toBeTruthy();
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
+
+  await page.getByRole('button', { name: /Mobile Swipe Product/u }).click();
+  const composer = page.getByPlaceholder('输入回复内容…');
+  await expect(composer).toBeVisible();
+
+  const cancelledThreadSwipe = await swipeFromLeftEdge(page, 64);
+  expect(cancelledThreadSwipe.surfaceClass).toContain('thread-pane');
+  expect(cancelledThreadSwipe.transform).toContain('translate3d');
+  expect(cancelledThreadSwipe.revealedConversation).toBeTruthy();
+  await expect(composer).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('.thread-pane')
+        .evaluate((element) => element.style.transform),
+    )
+    .toBe('');
+
+  const committedThreadSwipe = await swipeFromLeftEdge(page, 150);
+  expect(committedThreadSwipe.surfaceClass).toContain('thread-pane');
+  expect(committedThreadSwipe.transform).toContain('translate3d');
+  expect(committedThreadSwipe.revealedConversation).toBeTruthy();
+  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(composer).toBeHidden();
 });
