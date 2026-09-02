@@ -3,6 +3,7 @@ import type {
   AgentAccount,
   AgentRoutingScope,
   Conversation,
+  ConversationDetail,
   Message,
   Overview,
   ProductCatalogItem,
@@ -115,6 +116,64 @@ function saveAgentConversationDrafts(
   }
 }
 
+type AgentDraftSaveTimers = {
+  set(callback: () => void, delay: number): number;
+  clear(timerId: number): void;
+};
+
+function createAgentDraftSaveScheduler(
+  save: (
+    agentId: string,
+    drafts: AgentConversationDrafts,
+  ) => void = saveAgentConversationDrafts,
+  delayMs = 400,
+  timers: AgentDraftSaveTimers = {
+    set: (callback, delay) => window.setTimeout(callback, delay),
+    clear: (timerId) => window.clearTimeout(timerId),
+  },
+) {
+  let pending: {
+    agentId: string;
+    drafts: AgentConversationDrafts;
+  } | null = null;
+  let timerId: number | null = null;
+
+  const clearTimer = () => {
+    if (timerId === null) return;
+    timers.clear(timerId);
+    timerId = null;
+  };
+
+  const flush = () => {
+    clearTimer();
+    const current = pending;
+    pending = null;
+    if (current) save(current.agentId, current.drafts);
+  };
+
+  return {
+    schedule(agentId: string, drafts: AgentConversationDrafts) {
+      if (pending && pending.agentId !== agentId) flush();
+      pending = { agentId, drafts };
+      clearTimer();
+      timerId = timers.set(() => {
+        timerId = null;
+        const current = pending;
+        pending = null;
+        if (current) save(current.agentId, current.drafts);
+      }, delayMs);
+    },
+    flush,
+    cancel() {
+      clearTimer();
+      pending = null;
+    },
+    hasPending() {
+      return pending !== null;
+    },
+  };
+}
+
 function loadAgentSoundEnabled(agentId: string): boolean {
   try {
     return window.localStorage.getItem(`cs-agent-sound:${agentId}`) !== 'off';
@@ -138,7 +197,7 @@ function emitAgentMessageTone(context: AudioContext): void {
   const now = context.currentTime;
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.11, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(1, now + 0.012);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
   gain.connect(context.destination);
 
@@ -192,6 +251,25 @@ function sortedConversationList(items: Conversation[]): Conversation[] {
 function compareMessages(left: Message, right: Message): number {
   const difference = Date.parse(left.created_at) - Date.parse(right.created_at);
   return difference || left.id.localeCompare(right.id);
+}
+
+function mergeAgentConversationPage(
+  current: ConversationDetail,
+  incoming: ConversationDetail,
+  direction: 'before' | 'after',
+): ConversationDetail {
+  const messages = new Map(current.messages.map((item) => [item.id, item]));
+  for (const readState of incoming.readState ?? []) {
+    const existing = messages.get(readState.id);
+    if (existing) messages.set(readState.id, { ...existing, ...readState });
+  }
+  for (const item of incoming.messages) messages.set(item.id, item);
+
+  return {
+    ...incoming,
+    messages: [...messages.values()].sort(compareMessages),
+    page: direction === 'after' ? current.page : incoming.page,
+  };
 }
 
 type AgentScopeSummary = {
@@ -365,12 +443,14 @@ export {
   REMOTE_TYPING_STALE_MS,
   loadAgentConversationDrafts,
   saveAgentConversationDrafts,
+  createAgentDraftSaveScheduler,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
   emitAgentMessageTone,
   parseRealtimeEvent,
   sortedConversationList,
   compareMessages,
+  mergeAgentConversationPage,
   productsForScope,
   agentScopeSummary,
   presenceClass,

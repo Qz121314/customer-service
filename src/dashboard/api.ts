@@ -174,6 +174,15 @@ export type Message = {
   created_at: string;
 };
 
+export type ConversationMessageCursor = {
+  id: string;
+  createdAt: string;
+};
+
+export type ConversationMessageQuery =
+  | { after: ConversationMessageCursor; before?: never }
+  | { before: ConversationMessageCursor; after?: never };
+
 export type ConversationDetail = {
   conversation: Conversation & Record<string, unknown>;
   messages: Message[];
@@ -181,6 +190,10 @@ export type ConversationDetail = {
   readState?: Array<
     Pick<Message, 'id' | 'read_by_visitor_at' | 'read_by_agent_at'>
   >;
+  page: {
+    hasMoreBefore: boolean;
+    before: ConversationMessageCursor | null;
+  };
 };
 
 export type ConversationMediaItem = {
@@ -448,13 +461,19 @@ export async function getAgentInbox(): Promise<AgentInbox> {
 
 export async function getConversation(
   id: string,
-  after?: { id: string; createdAt: string } | null,
+  query?: ConversationMessageQuery,
 ): Promise<ConversationDetail> {
-  const query = after
-    ? `?afterId=${encodeURIComponent(after.id)}&afterCreatedAt=${encodeURIComponent(after.createdAt)}`
-    : '';
+  const parameters = new URLSearchParams();
+  if (query?.after) {
+    parameters.set('afterId', query.after.id);
+    parameters.set('afterCreatedAt', query.after.createdAt);
+  } else if (query?.before) {
+    parameters.set('beforeId', query.before.id);
+    parameters.set('beforeCreatedAt', query.before.createdAt);
+  }
+  const suffix = parameters.toString();
   return request(
-    `/api/agent/conversations/${encodeURIComponent(id)}/messages${query}`,
+    `/api/agent/conversations/${encodeURIComponent(id)}/messages${suffix ? `?${suffix}` : ''}`,
   );
 }
 

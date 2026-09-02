@@ -53,6 +53,19 @@ type AgentContactCard = Extract<
   { kind: AgentContactCardKind }
 >;
 
+export function groupAgentMessageAttachments(
+  attachments: readonly AgentMessageAttachment[],
+): Map<string, AgentMessageAttachment[]> {
+  const grouped = new Map<string, AgentMessageAttachment[]>();
+  for (const attachment of attachments) {
+    if (!attachment.messageId) continue;
+    const current = grouped.get(attachment.messageId);
+    if (current) current.push(attachment);
+    else grouped.set(attachment.messageId, [attachment]);
+  }
+  return grouped;
+}
+
 export function agentContactCardHref(card: AgentContactCard): string {
   const message = card.presetMessage?.trim() || '';
   const encodedMessage = encodeURIComponent(message);

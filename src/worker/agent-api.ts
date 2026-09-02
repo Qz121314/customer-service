@@ -5,6 +5,7 @@ import { broadcastClientConversationEvent } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { listConversationMedia } from './media-api';
+import type { ConversationAttachmentPage } from './message-attachments';
 
 type Bindings = {
   DB: D1Database;
@@ -488,19 +489,35 @@ agentApi.get('/api/agent/conversations', async (c) => {
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
+
   const afterIdValue = c.req.query('afterId');
   const afterCreatedAtValue = c.req.query('afterCreatedAt');
+  const beforeIdValue = c.req.query('beforeId');
+  const beforeCreatedAtValue = c.req.query('beforeCreatedAt');
+  const hasAfterCursor =
+    afterIdValue !== undefined || afterCreatedAtValue !== undefined;
+  const hasBeforeCursor =
+    beforeIdValue !== undefined || beforeCreatedAtValue !== undefined;
   const afterId = normalizeMessageId(afterIdValue);
   const afterCreatedAt = normalizeCursorDateTime(afterCreatedAtValue);
+  const beforeId = normalizeMessageId(beforeIdValue);
+  const beforeCreatedAt = normalizeCursorDateTime(beforeCreatedAtValue);
+
   if (
-    (afterIdValue !== undefined || afterCreatedAtValue !== undefined) &&
-    (!afterId || !afterCreatedAt)
+    (hasAfterCursor && (!afterId || !afterCreatedAt)) ||
+    (hasBeforeCursor && (!beforeId || !beforeCreatedAt)) ||
+    (hasAfterCursor && hasBeforeCursor)
   ) {
     return c.json({ error: 'INVALID_MESSAGE_CURSOR' }, 400);
   }
+
   const after =
     afterId && afterCreatedAt
       ? { id: afterId, createdAt: afterCreatedAt }
+      : null;
+  const before =
+    beforeId && beforeCreatedAt
+      ? { id: beforeId, createdAt: beforeCreatedAt }
       : null;
   const conversation = await assignedConversation(
     c.env.DB,
@@ -508,6 +525,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
     agent.id,
   );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+
   const readStateRequest = after
     ? c.env.DB.prepare(
         `SELECT m.id,
@@ -576,9 +594,22 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
         .bind(c.req.param('id'))
         .all<MessageReadState>()
     : Promise.resolve({ results: [] as MessageReadState[] });
-  const [messages, media, readState] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
+
+  const pageDirection = after ? 'after' : before ? 'before' : 'latest';
+  const pageCursor = after ?? before;
+  const pageSize = after ? 500 : 100;
+  const queryLimit = after ? pageSize : pageSize + 1;
+  const cursorOperator = after ? '>' : '<';
+  const sortOrder = after ? 'ASC' : 'DESC';
+  const cursorClause = pageCursor
+    ? `AND (
+         m.created_at ${cursorOperator} ?2
+         OR (m.created_at = ?2 AND m.id ${cursorOperator} ?3)
+       )`
+    : '';
+  const limitParameter = pageCursor ? '?4' : '?2';
+  const messageRequest = c.env.DB.prepare(
+    `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
        m.client_message_id,
        COALESCE(
          m.read_by_visitor_at,
@@ -614,24 +645,49 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
      FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
      WHERE m.conversation_id = ?1
-       AND (
-         ?2 IS NULL
-         OR m.created_at > ?2
-         OR (m.created_at = ?2 AND m.id > ?3)
-       )
-     ORDER BY m.created_at ASC, m.id ASC
-     LIMIT 500`,
-    )
-      .bind(c.req.param('id'), after?.createdAt ?? null, after?.id ?? null)
-      .all<MessageRow>(),
-    listConversationMedia(c.env.DB, c.req.param('id'), after),
+       ${cursorClause}
+     ORDER BY m.created_at ${sortOrder}, m.id ${sortOrder}
+     LIMIT ${limitParameter}`,
+  );
+  const messageBindings = pageCursor
+    ? [c.req.param('id'), pageCursor.createdAt, pageCursor.id, queryLimit]
+    : [c.req.param('id'), queryLimit];
+  const attachmentPage: ConversationAttachmentPage =
+    pageDirection === 'latest'
+      ? { direction: pageDirection, limit: pageSize }
+      : {
+          direction: pageDirection,
+          cursor: pageCursor!,
+          limit: pageSize,
+        };
+
+  const [messages, media, readState] = await Promise.all([
+    messageRequest.bind(...messageBindings).all<MessageRow>(),
+    listConversationMedia(c.env.DB, c.req.param('id'), attachmentPage),
     readStateRequest,
   ]);
+  const rawMessages = messages.results ?? [];
+  const hasMoreBefore = !after && rawMessages.length > pageSize;
+  const pageMessages = after
+    ? rawMessages
+    : rawMessages.slice(0, pageSize).reverse();
+  const oldestMessage = pageMessages[0] ?? null;
+
   return c.json({
     conversation,
-    messages: messages.results ?? [],
+    messages: pageMessages,
     media,
     readState: readState.results ?? [],
+    page: {
+      hasMoreBefore,
+      before:
+        hasMoreBefore && oldestMessage
+          ? {
+              id: oldestMessage.id,
+              createdAt: oldestMessage.created_at,
+            }
+          : null,
+    },
   });
 });
 
