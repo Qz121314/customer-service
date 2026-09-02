@@ -8,6 +8,8 @@ const COMMIT_DISTANCE_RATIO = 0.28;
 const COMMIT_DISTANCE_MIN = 88;
 const COMMIT_DISTANCE_MAX = 132;
 const SETTLE_DURATION_MS = 180;
+const REBOUND_CURVE = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const COMMIT_CURVE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 
 type SwipeTargetKind = 'thread' | 'settings';
 
@@ -91,6 +93,22 @@ function restoreInlineGestureStyles(
   element.style.boxShadow = styles.boxShadow;
 }
 
+function translateX(distanceX: number): string {
+  return `translate3d(${Math.round(distanceX)}px, 0, 0)`;
+}
+
+function settleTransition(curve: string): string {
+  return [
+    `transform ${SETTLE_DURATION_MS}ms ${curve}`,
+    `box-shadow ${SETTLE_DURATION_MS}ms ease`,
+  ].join(', ');
+}
+
+function dragShadow(progress: number): string {
+  const alpha = Math.min(0.16, 0.05 + progress * 0.11);
+  return `-12px 0 30px rgba(15, 23, 42, ${alpha})`;
+}
+
 function applyDrag(gesture: ActiveGesture, distanceX: number) {
   const width = Math.max(
     1,
@@ -101,8 +119,8 @@ function applyDrag(gesture: ActiveGesture, distanceX: number) {
   gesture.distanceX = clampedDistance;
   gesture.target.element.style.transition = 'none';
   gesture.target.element.style.willChange = 'transform';
-  gesture.target.element.style.transform = `translate3d(${Math.round(clampedDistance)}px, 0, 0)`;
-  gesture.target.element.style.boxShadow = `-12px 0 30px rgba(15, 23, 42, ${Math.min(0.16, 0.05 + progress * 0.11)})`;
+  gesture.target.element.style.transform = translateX(clampedDistance);
+  gesture.target.element.style.boxShadow = dragShadow(progress);
 }
 
 function commitDistance(width: number): number {
@@ -127,8 +145,8 @@ export function installAgentEdgeSwipeBack() {
 
   const settleBack = (current: ActiveGesture) => {
     const { element } = current.target;
-    element.style.transition = `transform ${SETTLE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow ${SETTLE_DURATION_MS}ms ease`;
-    element.style.transform = 'translate3d(0, 0, 0)';
+    element.style.transition = settleTransition(REBOUND_CURVE);
+    element.style.transform = translateX(0);
     element.style.boxShadow = 'none';
     clearSettleTimer();
     settleTimer = window.setTimeout(() => {
@@ -143,9 +161,9 @@ export function installAgentEdgeSwipeBack() {
       1,
       element.getBoundingClientRect().width || window.innerWidth,
     );
-    element.style.transition = `transform ${SETTLE_DURATION_MS}ms cubic-bezier(0.32, 0.72, 0, 1), box-shadow ${SETTLE_DURATION_MS}ms ease`;
+    element.style.transition = settleTransition(COMMIT_CURVE);
     element.style.willChange = 'transform';
-    element.style.transform = `translate3d(${Math.ceil(width)}px, 0, 0)`;
+    element.style.transform = translateX(Math.ceil(width));
     element.style.boxShadow = '-14px 0 34px rgba(15, 23, 42, 0.16)';
 
     clearSettleTimer();
@@ -158,7 +176,9 @@ export function installAgentEdgeSwipeBack() {
             32,
           );
         };
-        window.addEventListener('popstate', restoreAfterHistory, { once: true });
+        window.addEventListener('popstate', restoreAfterHistory, {
+          once: true,
+        });
         backButton.click();
         window.setTimeout(
           () => restoreInlineGestureStyles(element, current.styles),
