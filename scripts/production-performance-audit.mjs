@@ -28,7 +28,8 @@ if (!Number.isInteger(runCount) || runCount < 1 || runCount > 9) {
   throw new Error('PERF_AUDIT_RUNS must be an integer between 1 and 9.');
 }
 
-const absoluteUrl = (path) => new URL(path, `${baseUrl.replace(/\/$/, '')}/`).toString();
+const absoluteUrl = (path) =>
+  new URL(path, `${baseUrl.replace(/\/$/, '')}/`).toString();
 
 const thresholds = {
   lcpMs: 2000,
@@ -98,9 +99,12 @@ function calculateDependencyDepth(requests) {
 async function adminStorageState(browser) {
   const context = await browser.newContext({ serviceWorkers: 'block' });
   try {
-    const response = await context.request.post(absoluteUrl('/api/auth/login'), {
-      data: { password: adminPassword },
-    });
+    const response = await context.request.post(
+      absoluteUrl('/api/auth/login'),
+      {
+        data: { password: adminPassword },
+      },
+    );
     if (!response.ok()) {
       throw new Error(`Admin login failed with HTTP ${response.status()}.`);
     }
@@ -121,7 +125,9 @@ async function agentStorageState(browser) {
     await page.getByLabel('客服账号').fill(agentUsername);
     await page.getByLabel('登录密码').fill(agentPassword);
     await page.getByRole('button', { name: '进入工作台' }).click();
-    await page.getByText('我的会话').waitFor({ state: 'visible', timeout: 30_000 });
+    await page
+      .getByText('我的会话')
+      .waitFor({ state: 'visible', timeout: 30_000 });
     return await context.storageState();
   } finally {
     await context.close();
@@ -244,7 +250,7 @@ function summarize(surface, runs) {
       : thresholds.agentTotalRequests;
 
   const checks = {
-    lcp: summary.lcpMs < thresholds.lcpMs,
+    lcp: summary.lcpMs > 0 && summary.lcpMs < thresholds.lcpMs,
     load: summary.loadMs < thresholds.loadMs,
     cssRequests: summary.cssRequests <= thresholds.cssRequests,
     jsRequests: summary.jsRequests <= thresholds.jsRequests,
