@@ -172,10 +172,7 @@ function useEventCallback<Arguments extends unknown[], Result>(
   useLayoutEffect(() => {
     callbackRef.current = callback;
   });
-  return useCallback(
-    (...args: Arguments) => callbackRef.current(...args),
-    [],
-  );
+  return useCallback((...args: Arguments) => callbackRef.current(...args), []);
 }
 
 const AgentThreadMessageTree = memo(function AgentThreadMessageTree({
@@ -243,9 +240,7 @@ const AgentComposer = memo(function AgentComposer({
         disabled={conversationStatus === 'closed'}
         onChange={(event) => onDraftChange(event.target.value)}
         placeholder={
-          conversationStatus === 'closed'
-            ? '会话已关闭'
-            : '输入回复内容…'
+          conversationStatus === 'closed' ? '会话已关闭' : '输入回复内容…'
         }
         onKeyDown={(event) => {
           if (
@@ -1619,19 +1614,15 @@ function AgentWorkspace({
   const handleToggleAvailability = useEventCallback(() => {
     void toggleAvailability();
   });
-  const handleSubmit = useEventCallback(
-    (event: FormEvent<HTMLFormElement>) => {
-      void submit(event);
-    },
-  );
+  const handleSubmit = useEventCallback((event: FormEvent<HTMLFormElement>) => {
+    void submit(event);
+  });
   const handleSendImage = useEventCallback((file: File) => {
     void submitImage(file);
   });
-  const handleSendPreset = useEventCallback(
-    (preset: QuickAttachmentPreset) => {
-      void submitPresetAttachment(preset);
-    },
-  );
+  const handleSendPreset = useEventCallback((preset: QuickAttachmentPreset) => {
+    void submitPresetAttachment(preset);
+  });
   const handleDraftChange = useEventCallback((value: string) => {
     updateDraft(value);
     updateAgentTyping(value);
