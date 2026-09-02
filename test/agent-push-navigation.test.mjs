@@ -7,11 +7,19 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
+function surfaceSource(paths) {
+  return paths.map(source).join('\n');
+}
+
 test('agent push opens the latest unread thread without reloading the workspace', () => {
   const serviceWorker = source('../public/agent-sw.js');
   const pushClient = source('../src/dashboard/agent-push.ts');
   const inbox = source('../src/dashboard/AgentWorkspacePanels.tsx');
-  const statistics = source('../src/dashboard/AgentStatisticsWorkspace.tsx');
+  const statistics = surfaceSource([
+    '../src/dashboard/AgentStatisticsWorkspace.tsx',
+    '../src/dashboard/AgentStatisticsWorkspaceImpl.tsx',
+    '../src/dashboard/AgentStatisticsWorkspaceRuntime.tsx',
+  ]);
 
   for (const contract of [
     "const AGENT_NOTIFICATION_URL = '/agent?notification=latest-unread';",
