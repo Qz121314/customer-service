@@ -41,7 +41,7 @@ import {
   AGENT_TYPING_IDLE_MS,
   REMOTE_TYPING_STALE_MS,
   loadAgentConversationDrafts,
-  saveAgentConversationDrafts,
+  createAgentDraftSaveScheduler,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
   emitAgentMessageTone,
@@ -60,6 +60,7 @@ import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { AgentInboxPane, AgentSidebar } from './AgentWorkspacePanels';
 import { AgentComposerAttachmentMenu } from './AgentAttachmentTools';
 import {
+  groupAgentMessageAttachments,
   sendAgentPresetAttachments,
   type AgentAttachmentPreset,
   type AgentContactCardKind,
@@ -294,6 +295,12 @@ function AgentWorkspace({
   const unreadCountRef = useRef(new Map<string, number>());
   const lastScrolledConversationRef = useRef<string | null>(null);
   const baseTitleRef = useRef(document.title);
+  const previousDraftConversationRef = useRef<string | null>(null);
+  const draftSaveScheduler = useMemo(() => createAgentDraftSaveScheduler(), []);
+  const attachmentsByMessageId = useMemo(
+    () => groupAgentMessageAttachments(messageAttachments),
+    [messageAttachments],
+  );
   const draft = selectedId ? (drafts[selectedId]?.body ?? '') : '';
   const currentPendingText = selectedId
     ? (pendingTextMessages[selectedId] ?? null)
@@ -363,8 +370,33 @@ function AgentWorkspace({
   }, [identity.id]);
 
   useEffect(() => {
-    saveAgentConversationDrafts(identity.id, drafts);
-  }, [drafts, identity.id]);
+    draftSaveScheduler.schedule(identity.id, drafts);
+  }, [draftSaveScheduler, drafts, identity.id]);
+
+  useEffect(() => {
+    const flushDrafts = () => draftSaveScheduler.flush();
+    const flushHiddenDrafts = () => {
+      if (document.visibilityState === 'hidden') flushDrafts();
+    };
+    window.addEventListener('pagehide', flushDrafts);
+    document.addEventListener('visibilitychange', flushHiddenDrafts);
+    return () => {
+      window.removeEventListener('pagehide', flushDrafts);
+      document.removeEventListener('visibilitychange', flushHiddenDrafts);
+      flushDrafts();
+    };
+  }, [draftSaveScheduler]);
+
+  useEffect(() => {
+    const previousConversationId = previousDraftConversationRef.current;
+    if (
+      previousConversationId !== null &&
+      previousConversationId !== selectedId
+    ) {
+      draftSaveScheduler.flush();
+    }
+    previousDraftConversationRef.current = selectedId;
+  }, [draftSaveScheduler, selectedId]);
 
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -1541,9 +1573,7 @@ function AgentWorkspace({
                 <Bubble
                   key={item.id}
                   message={item}
-                  attachments={messageAttachments.filter(
-                    (attachment) => attachment.messageId === item.id,
-                  )}
+                  attachments={attachmentsByMessageId.get(item.id) ?? []}
                 />
               ))}
               {currentPendingText ? (
