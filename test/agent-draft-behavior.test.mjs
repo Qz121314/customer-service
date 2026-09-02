@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  createAgentDraftSaveScheduler,
   loadAgentConversationDrafts,
   saveAgentConversationDrafts,
 } from '../src/dashboard/dashboard-runtime.ts';
@@ -116,4 +117,64 @@ test('invalid or unavailable local storage never interrupts agent reception', ()
   } finally {
     restoreUnavailableWindow();
   }
+});
+
+
+test('draft persistence debounces typing, flushes seat changes and supports lifecycle flush', () => {
+  const saves = [];
+  const cleared = [];
+  let nextTimerId = 0;
+  let pendingTimer = null;
+  let pendingDelay = null;
+  const scheduler = createAgentDraftSaveScheduler(
+    (agentId, drafts) => saves.push({ agentId, drafts }),
+    400,
+    {
+      set(callback, delay) {
+        nextTimerId += 1;
+        pendingTimer = callback;
+        pendingDelay = delay;
+        return nextTimerId;
+      },
+      clear(timerId) {
+        cleared.push(timerId);
+      },
+    },
+  );
+
+  const first = {
+    conversation: { body: 'H', updatedAt: 1 },
+  };
+  const latest = {
+    conversation: { body: 'Hello', updatedAt: 2 },
+  };
+  scheduler.schedule('agent-a', first);
+  scheduler.schedule('agent-a', latest);
+
+  assert.equal(pendingDelay, 400);
+  assert.deepEqual(saves, []);
+  assert.deepEqual(cleared, [1]);
+
+  pendingTimer();
+  assert.deepEqual(saves, [{ agentId: 'agent-a', drafts: latest }]);
+
+  const beforeSeatChange = {
+    conversation: { body: 'Before logout', updatedAt: 3 },
+  };
+  const nextSeat = {
+    conversation: { body: 'Next seat', updatedAt: 4 },
+  };
+  scheduler.schedule('agent-a', beforeSeatChange);
+  scheduler.schedule('agent-b', nextSeat);
+  assert.deepEqual(saves.at(-1), {
+    agentId: 'agent-a',
+    drafts: beforeSeatChange,
+  });
+
+  scheduler.flush();
+  assert.deepEqual(saves.at(-1), {
+    agentId: 'agent-b',
+    drafts: nextSeat,
+  });
+  assert.equal(scheduler.hasPending(), false);
 });
