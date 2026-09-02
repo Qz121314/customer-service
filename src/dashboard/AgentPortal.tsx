@@ -31,6 +31,10 @@ import {
   setConversationStatus,
   updateAgentNickname,
 } from './api';
+import {
+  expiredConversationIds,
+  nextConversationExpiryAt,
+} from './agent-conversation-expiry';
 import { Button } from './ui';
 import {
   LoadState,
@@ -634,6 +638,36 @@ function AgentWorkspace({
     const inbox = await getAgentInbox();
     applyInbox(inbox);
   }, [applyInbox]);
+
+  const removeExpiredConversations = useCallback(
+    (now = Date.now()) => {
+      const expiredIds = expiredConversationIds(conversations, now);
+      if (expiredIds.size === 0) return false;
+
+      setConversations((current) =>
+        current.filter((conversation) => !expiredIds.has(conversation.id)),
+      );
+      if (selectedId && expiredIds.has(selectedId)) {
+        setSelectedId(null);
+        setDetail(null);
+        setMessageAttachments([]);
+      }
+      void refresh().catch(() => undefined);
+      return true;
+    },
+    [conversations, refresh, selectedId],
+  );
+
+  useEffect(() => {
+    if (removeExpiredConversations()) return;
+    const expiresAt = nextConversationExpiryAt(conversations);
+    if (expiresAt === null) return;
+    const timer = window.setTimeout(
+      () => removeExpiredConversations(),
+      Math.max(0, expiresAt - Date.now()) + 100,
+    );
+    return () => window.clearTimeout(timer);
+  }, [conversations, removeExpiredConversations]);
 
   useEffect(() => {
     setBusy(true);
