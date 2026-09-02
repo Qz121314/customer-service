@@ -496,7 +496,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
       site_id, id, title, href, section_id, section_name,
       category_id, category_name, is_enabled
     ) VALUES ('default', 'product-e2e', 'Product E2E',
-      '/sections/west/products/product-e2e/', 'west', 'West',
+      'https://storefront.example/sections/west/products/product-e2e/', 'west', 'West',
       'massage', 'Massage', 1);
   `);
 
@@ -552,7 +552,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
           categoryId: 'massage',
           categoryName: 'Massage',
           title: 'Product E2E',
-          href: '/sections/west/products/product-e2e/',
+          href: 'https://storefront.example/sections/west/products/product-e2e/',
           coverUrl: null,
         },
       }),
@@ -585,7 +585,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
           categoryId: 'massage',
           categoryName: 'Massage',
           title: 'Product E2E',
-          href: '/sections/west/products/product-e2e/',
+          href: 'https://storefront.example/sections/west/products/product-e2e/',
           coverUrl: null,
         },
       }),
@@ -1203,7 +1203,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
       site_id, id, title, href, section_id, section_name,
       category_id, category_name, is_enabled
     ) VALUES ('default', 'product-after-disable', 'Product After Disable',
-      '/sections/west/products/product-after-disable/', 'west', 'West',
+      'https://storefront.example/sections/west/products/product-after-disable/', 'west', 'West',
       'massage', 'Massage', 1);
   `);
   database
@@ -1310,7 +1310,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
             categoryId: 'massage',
             categoryName: 'Massage',
             title: 'Product After Disable',
-            href: '/sections/west/products/product-after-disable/',
+            href: 'https://storefront.example/sections/west/products/product-after-disable/',
             coverUrl: null,
           },
         }),
@@ -1441,7 +1441,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
       .run(
         productId,
         `Quota ${sectionId} ${handoffIndex}`,
-        `/quota/${sectionId}/${handoffIndex}`,
+        `https://storefront.example/quota/${sectionId}/${handoffIndex}`,
         sectionId,
         sectionId,
       );
@@ -1462,7 +1462,7 @@ test('consultation quota commercial lifecycle remains consistent end to end', as
             categoryId: 'quota-test',
             categoryName: 'Quota test',
             title: `Quota ${sectionId} ${handoffIndex}`,
-            href: `/quota/${sectionId}/${handoffIndex}`,
+            href: `https://storefront.example/quota/${sectionId}/${handoffIndex}`,
             coverUrl: null,
           },
         }),
@@ -1981,7 +1981,7 @@ test('visitor APIs hide and never recover an unassigned legacy conversation', as
       `INSERT INTO product_catalog (
          site_id, id, title, href, section_id, section_name, is_enabled
        ) VALUES ('default', 'product-no-wait', 'No-wait product',
-         '/products/no-wait', 'west', 'West', 1)`,
+         'https://storefront.example/products/no-wait', 'west', 'West', 1)`,
     )
     .run();
 
@@ -1999,7 +1999,7 @@ test('visitor APIs hide and never recover an unassigned legacy conversation', as
          section_name, product_title, product_href, source_handoff_id,
          expires_at
        ) VALUES (?, 'default', ?, 'open', 'product-no-wait', 'west',
-         'West', 'No-wait product', '/products/no-wait', ?, ?)`,
+       'West', 'No-wait product', 'https://storefront.example/products/no-wait', ?, ?)`,
     )
     .run(conversationId, visitorRowId, sourceHandoffId, expiresAt);
   database
@@ -2137,7 +2137,7 @@ test('visitor APIs hide and never recover an unassigned legacy conversation', as
       categoryId: null,
       categoryName: null,
       title: 'No-wait product',
-      href: '/products/no-wait',
+      href: 'https://storefront.example/products/no-wait',
       coverUrl: null,
     },
   };
@@ -2215,7 +2215,7 @@ test('visitor APIs hide and never recover an unassigned legacy conversation', as
        ) VALUES (
          'assigned-open-conversation', 'default', ?, 'open', 'admin',
          'product-no-wait', 'west', 'West', 'No-wait product',
-         '/products/no-wait', ?
+         'https://storefront.example/products/no-wait', ?
        )`,
     )
     .run(visitorRowId, expiresAt);

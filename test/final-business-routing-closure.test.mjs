@@ -135,7 +135,7 @@ function seedProduct(database, id) {
        ) VALUES ('default', ?, ?, ?, NULL,
          'west', 'West', 'category-1', 'Category 1', 1)`,
     )
-    .run(id, id, `/products/${id}`);
+    .run(id, id, `https://storefront.example/products/${id}`);
 }
 
 function setup() {

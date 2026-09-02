@@ -26,17 +26,15 @@ The request requires the existing visitor, handoff and product context but does 
   "visitorId": "ABC123",
   "sourceHandoffId": "11111111-1111-4111-8111-111111111111",
   "product": {
-    "id": "product-1",
-    "sectionId": "west",
-    "sectionName": "West",
-    "categoryId": "category-1",
-    "categoryName": "Category 1",
-    "title": "Product 1",
-    "href": "/sections/west/products/product-1/",
-    "coverUrl": null
+    "id": "product-1"
   }
 }
 ```
+
+The product ID is resolved against the Site-synchronized product catalog. That
+catalog owns the canonical public detail URL; Customer Service snapshots it into
+the new conversation. CTA callers must not send product URLs or other catalog
+fields.
 
 `sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing conversation and must not create a second conversation, traffic receipt, quota charge or greeting.
 
