@@ -385,7 +385,9 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const runtimeGeometry = await page.evaluate(() => {
     const browser = globalThis;
     const shell = browser.document.querySelector('.workspace-shell');
-    const conversationPane = browser.document.querySelector('.conversation-pane');
+    const conversationPane = browser.document.querySelector(
+      '.conversation-pane',
+    );
     const threadPane = browser.document.querySelector('.thread-pane');
     if (
       !(shell instanceof browser.HTMLElement) ||
