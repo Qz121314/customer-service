@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { emitAgentMessageTone } from '../src/dashboard/dashboard-runtime.ts';
 import {
   enableAgentNotifications,
   prepareAgentNotifications,
@@ -140,4 +141,51 @@ test('iOS browser tabs ask for Home Screen installation before notification perm
   } finally {
     for (const restoreGlobal of restore.reverse()) restoreGlobal();
   }
+});
+
+test('agent message tone uses maximum in-app gain', () => {
+  const gainEvents = [];
+  const frequencies = [];
+  const context = {
+    currentTime: 5,
+    destination: {},
+    createGain() {
+      return {
+        gain: {
+          setValueAtTime(value, time) {
+            gainEvents.push({ type: 'set', value, time });
+          },
+          exponentialRampToValueAtTime(value, time) {
+            gainEvents.push({ type: 'ramp', value, time });
+          },
+        },
+        connect() {},
+      };
+    },
+    createOscillator() {
+      return {
+        type: 'sine',
+        frequency: {
+          setValueAtTime(value, time) {
+            frequencies.push({ value, time });
+          },
+        },
+        connect() {},
+        start() {},
+        stop() {},
+      };
+    },
+  };
+
+  emitAgentMessageTone(context);
+
+  assert.deepEqual(gainEvents, [
+    { type: 'set', value: 0.0001, time: 5 },
+    { type: 'ramp', value: 1, time: 5.012 },
+    { type: 'ramp', value: 0.0001, time: 5.24 },
+  ]);
+  assert.deepEqual(
+    frequencies.map((item) => item.value),
+    [660, 880],
+  );
 });
