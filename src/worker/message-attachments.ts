@@ -200,14 +200,56 @@ export async function listAgentAttachmentPresets(
   return result.results ?? [];
 }
 
+export type ConversationAttachmentPage =
+  | {
+      direction: 'latest';
+      limit: number;
+    }
+  | {
+      direction: 'after' | 'before';
+      cursor: { id: string; createdAt: string };
+      limit: number;
+    };
+
 export async function listConversationAttachments(
   db: D1Database,
   conversationId: string,
-  after?: { id: string; createdAt: string } | null,
+  page?: ConversationAttachmentPage,
 ) {
+  let pageMessagesSql = `SELECT id
+    FROM messages
+    WHERE conversation_id = ?1`;
+  let bindings: Array<string | number> = [conversationId];
+
+  if (page?.direction === 'latest') {
+    pageMessagesSql += `
+      ORDER BY created_at DESC, id DESC
+      LIMIT ?2`;
+    bindings = [conversationId, page.limit];
+  } else if (page) {
+    const operator = page.direction === 'after' ? '>' : '<';
+    const order = page.direction === 'after' ? 'ASC' : 'DESC';
+    pageMessagesSql += `
+      AND (
+        created_at ${operator} ?2
+        OR (created_at = ?2 AND id ${operator} ?3)
+      )
+      ORDER BY created_at ${order}, id ${order}
+      LIMIT ?4`;
+    bindings = [
+      conversationId,
+      page.cursor.createdAt,
+      page.cursor.id,
+      page.limit,
+    ];
+  }
+
   const result = await db
     .prepare(
-      `SELECT
+      `WITH page_messages AS (
+         ${pageMessagesSql}
+       )
+       SELECT
          mi.id AS id,
          mi.message_id AS message_id,
          'image' AS kind,
@@ -224,15 +266,9 @@ export async function listConversationAttachments(
          0 AS sort_order,
          'media' AS source
        FROM media_items mi
-       JOIN messages m ON m.id = mi.message_id
-       WHERE mi.conversation_id = ?1
-         AND mi.status = 'ready'
+       JOIN page_messages page ON page.id = mi.message_id
+       WHERE mi.status = 'ready'
          AND mi.message_id IS NOT NULL
-         AND (
-           ?2 IS NULL
-           OR m.created_at > ?2
-           OR (m.created_at = ?2 AND m.id > ?3)
-         )
        UNION ALL
        SELECT
          attachment.id,
@@ -251,16 +287,10 @@ export async function listConversationAttachments(
          attachment.sort_order,
          'snapshot' AS source
        FROM message_attachments attachment
-       JOIN messages m ON m.id = attachment.message_id
-       WHERE m.conversation_id = ?1
-         AND (
-           ?2 IS NULL
-           OR m.created_at > ?2
-           OR (m.created_at = ?2 AND m.id > ?3)
-         )
+       JOIN page_messages page ON page.id = attachment.message_id
        ORDER BY message_id ASC, sort_order ASC, id ASC`,
     )
-    .bind(conversationId, after?.createdAt ?? null, after?.id ?? null)
+    .bind(...bindings)
     .all<UnifiedAttachmentRow>();
 
   return (result.results ?? []).map((row) => ({
