@@ -4,6 +4,12 @@ import test from 'node:test';
 import { URL } from 'node:url';
 import { calendarMonthPeriod } from '../src/shared/calendar-month.ts';
 
+function surfaceSource(paths) {
+  return paths
+    .map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+    .join('\n');
+}
+
 test('statistics period covers every day in the selected calendar month', () => {
   assert.deepEqual(calendarMonthPeriod('2026-01'), {
     start: '2026-01-01',
@@ -43,9 +49,17 @@ test('statistics surfaces use the shared controlled month picker', () => {
     'utf8',
   );
   const surfaces = [
-    '../src/dashboard/AdminAgentStatisticsModal.tsx',
-    '../src/dashboard/AgentStatisticsWorkspace.tsx',
-  ].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'));
+    [
+      '../src/dashboard/AdminAgentStatisticsModal.tsx',
+      '../src/dashboard/AdminAgentStatisticsModalImpl.tsx',
+      '../src/dashboard/AdminAgentStatisticsModalRuntime.tsx',
+    ],
+    [
+      '../src/dashboard/AgentStatisticsWorkspace.tsx',
+      '../src/dashboard/AgentStatisticsWorkspaceImpl.tsx',
+      '../src/dashboard/AgentStatisticsWorkspaceRuntime.tsx',
+    ],
+  ].map(surfaceSource);
 
   for (const source of surfaces) {
     assert.ok(source.includes('<MonthPicker'));
