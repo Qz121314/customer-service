@@ -4,6 +4,8 @@ const EDGE_START_MAX_X = 28;
 const DIRECTION_LOCK_DISTANCE = 8;
 const FAST_SWIPE_MIN_DISTANCE = 48;
 const FAST_SWIPE_MIN_VELOCITY = 0.45;
+const FAST_SWIPE_MIN_DURATION_MS = 16;
+const FAST_SWIPE_MAX_DURATION_MS = 240;
 const COMMIT_DISTANCE_RATIO = 0.28;
 const COMMIT_DISTANCE_MIN = 88;
 const COMMIT_DISTANCE_MAX = 132;
@@ -30,9 +32,7 @@ type ActiveGesture = {
   pointerId: number;
   startX: number;
   startY: number;
-  lastX: number;
-  lastAt: number;
-  velocityX: number;
+  startAt: number;
   distanceX: number;
   direction: 'pending' | 'horizontal';
   target: SwipeTarget;
@@ -130,6 +130,18 @@ function commitDistance(width: number): number {
   );
 }
 
+function isFastSwipe(current: ActiveGesture, endAt: number): boolean {
+  const duration = endAt - current.startAt;
+  if (
+    duration < FAST_SWIPE_MIN_DURATION_MS ||
+    duration > FAST_SWIPE_MAX_DURATION_MS
+  ) {
+    return false;
+  }
+  if (current.distanceX < FAST_SWIPE_MIN_DISTANCE) return false;
+  return current.distanceX / duration >= FAST_SWIPE_MIN_VELOCITY;
+}
+
 export function installAgentEdgeSwipeBack() {
   const root = document.getElementById('root');
   if (!root) return;
@@ -213,9 +225,7 @@ export function installAgentEdgeSwipeBack() {
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      lastX: event.clientX,
-      lastAt: event.timeStamp,
-      velocityX: 0,
+      startAt: event.timeStamp,
       distanceX: 0,
       direction: 'pending',
       target,
@@ -244,16 +254,6 @@ export function installAgentEdgeSwipeBack() {
     }
 
     if (event.cancelable) event.preventDefault();
-
-    const elapsed = event.timeStamp - gesture.lastAt;
-    if (elapsed > 0) {
-      gesture.velocityX = Math.max(
-        0,
-        (event.clientX - gesture.lastX) / elapsed,
-      );
-    }
-    gesture.lastX = event.clientX;
-    gesture.lastAt = event.timeStamp;
     applyDrag(gesture, deltaX);
   };
 
@@ -270,8 +270,7 @@ export function installAgentEdgeSwipeBack() {
     );
     const shouldCommit =
       current.distanceX >= commitDistance(width) ||
-      (current.distanceX >= FAST_SWIPE_MIN_DISTANCE &&
-        current.velocityX >= FAST_SWIPE_MIN_VELOCITY);
+      isFastSwipe(current, event.timeStamp);
 
     if (shouldCommit) {
       finishBack(current);
