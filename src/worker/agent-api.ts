@@ -1,7 +1,10 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { routingBusinessDate } from './routing';
-import { broadcastClientConversationEvent } from './client-api';
+import {
+  broadcastClientConversationEvent,
+  type ConversationEventSnapshot,
+} from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { listConversationMedia } from './media-api';
@@ -51,6 +54,23 @@ type ReadBoundary = {
   id: string;
   created_at: string;
 };
+
+type MessageWriteConversation = {
+  id: string;
+  status: ConversationStatus;
+  external_id: string | null;
+  visitor_name: string | null;
+  agent_name: string | null;
+  agent_avatar_version: string | null;
+};
+
+type UpdatedConversationSnapshot = Omit<
+  ConversationEventSnapshot,
+  | 'external_id'
+  | 'visitor_name'
+  | 'agent_name'
+  | 'agent_avatar_version'
+>;
 
 const COOKIE = 'cs_agent_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -828,7 +848,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
   }
 
-  await c.env.DB.prepare(
+  const updatedConversation = await c.env.DB.prepare(
     `UPDATE conversations
      SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
          visitor_unread_count = visitor_unread_count + 1,
@@ -837,10 +857,25 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
          last_message_preview = ?2,
          updated_at = ?1
      WHERE id = ?3 AND assigned_agent = ?4
-       AND expires_at > CURRENT_TIMESTAMP`,
+       AND expires_at > CURRENT_TIMESTAMP
+     RETURNING id, site_id, visitor_id, status, assigned_agent, subject,
+       product_id, section_id, section_name, category_id, category_name,
+       product_title, product_cover_url, product_href, expires_at,
+       visitor_unread_count, agent_unread_count, last_message_at, created_at,
+       last_message_preview AS last_message`,
   )
     .bind(now, text, id, agent.id)
-    .run();
+    .first<UpdatedConversationSnapshot>();
+  const conversationSnapshot: ConversationEventSnapshot | undefined =
+    updatedConversation
+      ? {
+          ...updatedConversation,
+          external_id: conversation.external_id,
+          visitor_name: conversation.visitor_name,
+          agent_name: conversation.agent_name,
+          agent_avatar_version: conversation.agent_avatar_version,
+        }
+      : undefined;
   const message: MessageRow = {
     id: messageId,
     conversation_id: id,
@@ -852,16 +887,22 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     read_by_agent_at: null,
     created_at: now,
   };
-  await Promise.allSettled([
-    broadcastConversationRoom(c.env, id, { type: 'message', message }),
-    broadcastClientConversationEvent(
-      c.env,
-      id,
-      'message.created',
-      { message: clientRealtimeMessage(message) },
-      { includeOverview: conversation.status === 'open' },
-    ),
-  ]);
+  await deferAgentRealtime(
+    c,
+    Promise.allSettled([
+      broadcastConversationRoom(c.env, id, { type: 'message', message }),
+      broadcastClientConversationEvent(
+        c.env,
+        id,
+        'message.created',
+        { message: clientRealtimeMessage(message) },
+        {
+          includeOverview: conversation.status === 'open',
+          conversationSnapshot,
+        },
+      ),
+    ]),
+  );
   return c.json({ message }, 201);
 });
 
@@ -953,14 +994,20 @@ async function assignedConversationForMessageWrite(
 ) {
   return db
     .prepare(
-      `SELECT id, status
-       FROM conversations
-       WHERE id = ?1 AND assigned_agent = ?2
-         AND expires_at > CURRENT_TIMESTAMP
+      `SELECT c.id, c.status,
+         v.external_id,
+         v.display_name AS visitor_name,
+         a.name AS agent_name,
+         a.avatar_version AS agent_avatar_version
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       WHERE c.id = ?1 AND c.assigned_agent = ?2
+         AND c.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(id, agentId)
-    .first<{ id: string; status: ConversationStatus }>();
+    .first<MessageWriteConversation>();
 }
 
 async function assignedConversation(
@@ -1134,6 +1181,17 @@ async function broadcastConversationRoom(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+async function deferAgentRealtime(
+  c: Context<Env>,
+  task: Promise<unknown>,
+): Promise<void> {
+  try {
+    c.executionCtx.waitUntil(task);
+  } catch {
+    await task;
+  }
 }
 
 function unauthorized(c: Context<Env>) {
