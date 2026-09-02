@@ -18,7 +18,7 @@ function section(source, start, end) {
   return source.slice(from, to);
 }
 
-test('agent text sends use a slim ownership read and do not reread inserted messages', () => {
+test('agent text sends keep persistence on a bounded D1 path and reuse the updated conversation snapshot', () => {
   const route = section(
     agentSource,
     "agentApi.post('/api/agent/conversations/:id/messages'",
@@ -29,15 +29,36 @@ test('agent text sends use a slim ownership read and do not reread inserted mess
     'async function assignedConversationForMessageWrite(',
     'async function assignedConversation(',
   );
+  const broadcaster = section(
+    clientSource,
+    'export async function broadcastClientConversationEvent(',
+    'async function loadAgentOverview(',
+  );
 
   assert.match(route, /assignedConversationForMessageWrite\(/u);
   assert.doesNotMatch(route, /assignedConversation\(c\.env\.DB/u);
   assert.match(route, /client_message_id, created_at/u);
   assert.match(route, /const message: MessageRow = \{/u);
   assert.doesNotMatch(route, /FROM messages WHERE id = \?1/u);
-  assert.match(helper, /SELECT id, status\s+FROM conversations/u);
-  assert.doesNotMatch(helper, /JOIN visitors/u);
+  assert.match(route, /UPDATE conversations[\s\S]*RETURNING/u);
+  assert.match(route, /conversationSnapshot/u);
+  assert.match(route, /await deferAgentRealtime\(/u);
+  assert.doesNotMatch(route, /await Promise\.allSettled\(/u);
+
+  assert.match(helper, /SELECT c\.id, c\.status/u);
+  assert.match(helper, /v\.external_id/u);
+  assert.match(helper, /v\.display_name AS visitor_name/u);
+  assert.match(helper, /a\.name AS agent_name/u);
+  assert.match(helper, /a\.avatar_version AS agent_avatar_version/u);
   assert.doesNotMatch(helper, /SELECT c\.\*/u);
+  assert.doesNotMatch(helper, /c\.product_title/u);
+  assert.doesNotMatch(helper, /c\.last_message_preview/u);
+
+  assert.match(
+    broadcaster,
+    /conversationSnapshot\?: ConversationEventSnapshot/u,
+  );
+  assert.match(broadcaster, /options\.conversationSnapshot\s*\?\?/u);
 });
 
 test('visitor text sends keep duplicate reads off the normal write path', () => {
@@ -114,7 +135,7 @@ test('realtime overview scans run only when assignment or status counts can chan
 
   assert.match(
     broadcaster,
-    /options: \{[\s\S]*includeOverview\?: boolean;[\s\S]*previousAgentId\?: string \| null;[\s\S]*\} = \{\}/u,
+    /options: \{[\s\S]*includeOverview\?: boolean;[\s\S]*previousAgentId\?: string \| null;[\s\S]*conversationSnapshot\?: ConversationEventSnapshot;[\s\S]*\} = \{\}/u,
   );
   assert.match(
     broadcaster,

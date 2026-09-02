@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   FormEvent,
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -47,7 +48,7 @@ import {
   emitAgentMessageTone,
   parseRealtimeEvent,
   sortedConversationList,
-  compareMessages,
+  mergeAgentConversationPage,
   message,
 } from './dashboard-runtime';
 import {
@@ -163,6 +164,126 @@ function mergeMessageAttachments(
   for (const item of incoming) merged.set(item.id, item);
   return [...merged.values()];
 }
+
+function useEventCallback<Arguments extends unknown[], Result>(
+  callback: (...args: Arguments) => Result,
+): (...args: Arguments) => Result {
+  const callbackRef = useRef(callback);
+  useLayoutEffect(() => {
+    callbackRef.current = callback;
+  });
+  return useCallback((...args: Arguments) => callbackRef.current(...args), []);
+}
+
+const AgentThreadMessageTree = memo(function AgentThreadMessageTree({
+  messages,
+  attachmentsByMessageId,
+}: {
+  messages: Message[];
+  attachmentsByMessageId: ReadonlyMap<string, AgentMessageAttachment[]>;
+}) {
+  return messages.map((item) => (
+    <Bubble
+      key={item.id}
+      message={item}
+      attachments={attachmentsByMessageId.get(item.id) ?? []}
+    />
+  ));
+});
+
+const AgentComposer = memo(function AgentComposer({
+  conversationStatus,
+  draft,
+  mediaProgress,
+  attachmentSending,
+  hasPendingText,
+  networkOnline,
+  threadConnected,
+  onSubmit,
+  onSendImage,
+  onSendPreset,
+  onDraftChange,
+  onStopTyping,
+}: {
+  conversationStatus: Conversation['status'];
+  draft: string;
+  mediaProgress: number | null;
+  attachmentSending: boolean;
+  hasPendingText: boolean;
+  networkOnline: boolean;
+  threadConnected: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSendImage: (file: File) => void;
+  onSendPreset: (preset: QuickAttachmentPreset) => void;
+  onDraftChange: (value: string) => void;
+  onStopTyping: () => void;
+}) {
+  return (
+    <form className="composer" onSubmit={onSubmit}>
+      <div className="composer-tools">
+        <AgentComposerAttachmentMenu
+          disabled={
+            conversationStatus === 'closed' ||
+            mediaProgress !== null ||
+            attachmentSending ||
+            hasPendingText ||
+            !networkOnline ||
+            !threadConnected
+          }
+          onSendImage={onSendImage}
+          onSendPreset={onSendPreset}
+        />
+      </div>
+      <textarea
+        value={draft}
+        rows={3}
+        disabled={conversationStatus === 'closed'}
+        onChange={(event) => onDraftChange(event.target.value)}
+        placeholder={
+          conversationStatus === 'closed' ? '会话已关闭' : '输入回复内容…'
+        }
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Enter' &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing
+          ) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }
+        }}
+        onBlur={onStopTyping}
+      />
+      <div className="composer-foot">
+        <span
+          className={`media-upload-progress${networkOnline && threadConnected ? '' : ' is-connection-warning'}`}
+        >
+          {!networkOnline
+            ? '网络已断开，当前草稿已保存在本机'
+            : !threadConnected
+              ? '实时连接恢复后即可发送'
+              : attachmentSending
+                ? '附件发送中…'
+                : 'Enter 发送 · Shift + Enter 换行'}
+        </span>
+        <Button
+          aria-label="发送"
+          disabled={
+            hasPendingText ||
+            attachmentSending ||
+            !draft.trim() ||
+            conversationStatus === 'closed' ||
+            !networkOnline ||
+            !threadConnected
+          }
+        >
+          <UiIcon name="send" />
+          <span>发送</span>
+        </Button>
+      </div>
+    </form>
+  );
+});
 
 export function AgentPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -280,6 +401,7 @@ function AgentWorkspace({
   const [inboxConnected, setInboxConnected] = useState(false);
   const [threadConnected, setThreadConnected] = useState(false);
   const [visitorTyping, setVisitorTyping] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -294,6 +416,10 @@ function AgentWorkspace({
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
   const lastScrolledConversationRef = useRef<string | null>(null);
+  const pendingHistoryScrollRef = useRef<{
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
   const baseTitleRef = useRef(document.title);
   const previousDraftConversationRef = useRef<string | null>(null);
   const draftSaveScheduler = useMemo(() => createAgentDraftSaveScheduler(), []);
@@ -704,8 +830,13 @@ function AgentWorkspace({
       return getConversation(
         selectedId,
         lastMessage
-          ? { id: lastMessage.id, createdAt: lastMessage.created_at }
-          : null,
+          ? {
+              after: {
+                id: lastMessage.id,
+                createdAt: lastMessage.created_at,
+              },
+            }
+          : undefined,
       )
         .then((value) => {
           if (active) {
@@ -717,19 +848,7 @@ function AgentWorkspace({
               ) {
                 return value;
               }
-              const messages = new Map(
-                currentDetail.messages.map((item) => [item.id, item]),
-              );
-              for (const readState of value.readState ?? []) {
-                const existing = messages.get(readState.id);
-                if (existing)
-                  messages.set(readState.id, { ...existing, ...readState });
-              }
-              for (const item of value.messages) messages.set(item.id, item);
-              return {
-                ...value,
-                messages: [...messages.values()].sort(compareMessages),
-              };
+              return mergeAgentConversationPage(currentDetail, value, 'after');
             });
             const deliveredClientIds = new Set(
               value.messages
@@ -993,10 +1112,13 @@ function AgentWorkspace({
   }, [acknowledgeConversation, refresh, selectedId, sendAgentTyping]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
+  const messageCount = detail?.messages.length ?? 0;
   const selectedExpiresAt = detail?.conversation.expires_at ?? null;
 
   useEffect(() => {
     setAttachmentSending(false);
+    setLoadingEarlier(false);
+    pendingHistoryScrollRef.current = null;
     setMediaPendingFile(null);
     setMediaClientUploadId(null);
     setMediaFailed(false);
@@ -1028,6 +1150,16 @@ function AgentWorkspace({
   useLayoutEffect(() => {
     const timeline = messagesRef.current;
     if (!timeline || !selectedId) return;
+    const historyScroll = pendingHistoryScrollRef.current;
+    if (historyScroll) {
+      timeline.scrollTop =
+        timeline.scrollHeight -
+        historyScroll.scrollHeight +
+        historyScroll.scrollTop;
+      pendingHistoryScrollRef.current = null;
+      return;
+    }
+
     const isOpeningConversation =
       lastScrolledConversationRef.current !== selectedId;
     const scroll = () => {
@@ -1047,8 +1179,54 @@ function AgentWorkspace({
     currentPendingText?.status,
     lastMessageId,
     messageAttachments.length,
+    messageCount,
     selectedId,
   ]);
+
+  async function loadEarlierMessages() {
+    const before = detail?.page.before;
+    if (
+      !selectedId ||
+      !detail?.page.hasMoreBefore ||
+      !before ||
+      loadingEarlier
+    ) {
+      return;
+    }
+
+    const conversationId = selectedId;
+    const timeline = messagesRef.current;
+    const scrollSnapshot = timeline
+      ? {
+          scrollHeight: timeline.scrollHeight,
+          scrollTop: timeline.scrollTop,
+        }
+      : null;
+    setLoadingEarlier(true);
+    try {
+      const value = await getConversation(conversationId, { before });
+      if (detailRef.current?.conversation.id !== conversationId) return;
+      pendingHistoryScrollRef.current = scrollSnapshot;
+      setDetail((current) =>
+        current?.conversation.id === conversationId
+          ? mergeAgentConversationPage(current, value, 'before')
+          : current,
+      );
+      const incomingAttachments = (value.media as unknown[])
+        .map((item) => normalizeAgentMessageAttachment(item))
+        .filter((item): item is AgentMessageAttachment => Boolean(item));
+      setMessageAttachments((current) =>
+        mergeMessageAttachments(current, incomingAttachments),
+      );
+    } catch (reason) {
+      if (detailRef.current?.conversation.id === conversationId) {
+        setError(message(reason, '无法加载更早消息'));
+      }
+      pendingHistoryScrollRef.current = null;
+    } finally {
+      setLoadingEarlier(false);
+    }
+  }
 
   function updateDraft(value: string | ((current: string) => string)) {
     if (!selectedId) return;
@@ -1416,6 +1594,43 @@ function AgentWorkspace({
     await onLogout();
   }
 
+  const handleNicknameChange = useEventCallback(async (nickname: string) => {
+    const updated = await updateAgentNickname(nickname);
+    onIdentityChange(updated);
+  });
+  const handleToggleNotifications = useEventCallback(() => {
+    void toggleNotifications();
+  });
+  const handleToggleSound = useEventCallback(toggleSound);
+  const handleOpenStatistics = useEventCallback(() => {
+    setStatisticsOpen(true);
+  });
+  const handleLogout = useEventCallback(() => {
+    void logoutFromWorkspace();
+  });
+  const handleToggleUnreadFirst = useEventCallback(() => {
+    setUnreadFirst((current) => !current);
+  });
+  const handleToggleAvailability = useEventCallback(() => {
+    void toggleAvailability();
+  });
+  const handleSubmit = useEventCallback((event: FormEvent<HTMLFormElement>) => {
+    void submit(event);
+  });
+  const handleSendImage = useEventCallback((file: File) => {
+    void submitImage(file);
+  });
+  const handleSendPreset = useEventCallback((preset: QuickAttachmentPreset) => {
+    void submitPresetAttachment(preset);
+  });
+  const handleDraftChange = useEventCallback((value: string) => {
+    updateDraft(value);
+    updateAgentTyping(value);
+  });
+  const handleStopTyping = useEventCallback(() => {
+    sendAgentTyping(false);
+  });
+
   return (
     <div className={`workspace-shell${selectedId ? ' is-thread-open' : ''}`}>
       <AgentSidebar
@@ -1424,14 +1639,11 @@ function AgentWorkspace({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
-        onNicknameChange={async (nickname) => {
-          const updated = await updateAgentNickname(nickname);
-          onIdentityChange(updated);
-        }}
-        onToggleNotifications={() => void toggleNotifications()}
-        onToggleSound={toggleSound}
-        onOpenStatistics={() => setStatisticsOpen(true)}
-        onLogout={() => void logoutFromWorkspace()}
+        onNicknameChange={handleNicknameChange}
+        onToggleNotifications={handleToggleNotifications}
+        onToggleSound={handleToggleSound}
+        onOpenStatistics={handleOpenStatistics}
+        onLogout={handleLogout}
       />
 
       <AgentInboxPane
@@ -1451,8 +1663,8 @@ function AgentWorkspace({
         selectedId={selectedId}
         onFilterChange={setFilter}
         onSearchChange={setSearchQuery}
-        onToggleUnreadFirst={() => setUnreadFirst((current) => !current)}
-        onToggleAvailability={() => void toggleAvailability()}
+        onToggleUnreadFirst={handleToggleUnreadFirst}
+        onToggleAvailability={handleToggleAvailability}
         onSelectConversation={setSelectedId}
       />
 
@@ -1569,13 +1781,21 @@ function AgentWorkspace({
               </div>
             )}
             <div className="messages" ref={messagesRef}>
-              {(detail.messages as Message[]).map((item) => (
-                <Bubble
-                  key={item.id}
-                  message={item}
-                  attachments={attachmentsByMessageId.get(item.id) ?? []}
-                />
-              ))}
+              {detail.page.hasMoreBefore && (
+                <div className="message-history-loader">
+                  <button
+                    type="button"
+                    disabled={loadingEarlier}
+                    onClick={() => void loadEarlierMessages()}
+                  >
+                    {loadingEarlier ? '正在加载…' : '加载更早消息'}
+                  </button>
+                </div>
+              )}
+              <AgentThreadMessageTree
+                messages={detail.messages as Message[]}
+                attachmentsByMessageId={attachmentsByMessageId}
+              />
               {currentPendingText ? (
                 <div
                   className={`message mine pending-text-message${currentPendingText.status === 'failed' ? ' is-failed' : ''}`}
@@ -1666,74 +1886,20 @@ function AgentWorkspace({
                 </div>
               ) : null}
             </div>
-            <form className="composer" onSubmit={(event) => void submit(event)}>
-              <div className="composer-tools">
-                <AgentComposerAttachmentMenu
-                  disabled={
-                    detail.conversation.status === 'closed' ||
-                    mediaProgress !== null ||
-                    attachmentSending ||
-                    Boolean(currentPendingText) ||
-                    !networkOnline ||
-                    !threadConnected
-                  }
-                  onSendImage={(file) => void submitImage(file)}
-                  onSendPreset={(preset) => void submitPresetAttachment(preset)}
-                />
-              </div>
-              <textarea
-                value={draft}
-                rows={3}
-                disabled={detail.conversation.status === 'closed'}
-                onChange={(event) => {
-                  updateDraft(event.target.value);
-                  updateAgentTyping(event.target.value);
-                }}
-                placeholder={
-                  detail.conversation.status === 'closed'
-                    ? '会话已关闭'
-                    : '输入回复内容…'
-                }
-                onKeyDown={(event) => {
-                  if (
-                    event.key === 'Enter' &&
-                    !event.shiftKey &&
-                    !event.nativeEvent.isComposing
-                  ) {
-                    event.preventDefault();
-                    event.currentTarget.form?.requestSubmit();
-                  }
-                }}
-                onBlur={() => sendAgentTyping(false)}
-              />
-              <div className="composer-foot">
-                <span
-                  className={`media-upload-progress${networkOnline && threadConnected ? '' : ' is-connection-warning'}`}
-                >
-                  {!networkOnline
-                    ? '网络已断开，当前草稿已保存在本机'
-                    : !threadConnected
-                      ? '实时连接恢复后即可发送'
-                      : attachmentSending
-                        ? '附件发送中…'
-                        : 'Enter 发送 · Shift + Enter 换行'}
-                </span>
-                <Button
-                  aria-label="发送"
-                  disabled={
-                    Boolean(currentPendingText) ||
-                    attachmentSending ||
-                    !draft.trim() ||
-                    detail.conversation.status === 'closed' ||
-                    !networkOnline ||
-                    !threadConnected
-                  }
-                >
-                  <UiIcon name="send" />
-                  <span>发送</span>
-                </Button>
-              </div>
-            </form>
+            <AgentComposer
+              conversationStatus={detail.conversation.status}
+              draft={draft}
+              mediaProgress={mediaProgress}
+              attachmentSending={attachmentSending}
+              hasPendingText={Boolean(currentPendingText)}
+              networkOnline={networkOnline}
+              threadConnected={threadConnected}
+              onSubmit={handleSubmit}
+              onSendImage={handleSendImage}
+              onSendPreset={handleSendPreset}
+              onDraftChange={handleDraftChange}
+              onStopTyping={handleStopTyping}
+            />
           </>
         )}
       </main>

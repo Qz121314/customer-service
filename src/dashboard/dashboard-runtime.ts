@@ -3,6 +3,7 @@ import type {
   AgentAccount,
   AgentRoutingScope,
   Conversation,
+  ConversationDetail,
   Message,
   Overview,
   ProductCatalogItem,
@@ -196,7 +197,7 @@ function emitAgentMessageTone(context: AudioContext): void {
   const now = context.currentTime;
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.11, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(1, now + 0.012);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
   gain.connect(context.destination);
 
@@ -250,6 +251,25 @@ function sortedConversationList(items: Conversation[]): Conversation[] {
 function compareMessages(left: Message, right: Message): number {
   const difference = Date.parse(left.created_at) - Date.parse(right.created_at);
   return difference || left.id.localeCompare(right.id);
+}
+
+function mergeAgentConversationPage(
+  current: ConversationDetail,
+  incoming: ConversationDetail,
+  direction: 'before' | 'after',
+): ConversationDetail {
+  const messages = new Map(current.messages.map((item) => [item.id, item]));
+  for (const readState of incoming.readState ?? []) {
+    const existing = messages.get(readState.id);
+    if (existing) messages.set(readState.id, { ...existing, ...readState });
+  }
+  for (const item of incoming.messages) messages.set(item.id, item);
+
+  return {
+    ...incoming,
+    messages: [...messages.values()].sort(compareMessages),
+    page: direction === 'after' ? current.page : incoming.page,
+  };
 }
 
 type AgentScopeSummary = {
@@ -430,6 +450,7 @@ export {
   parseRealtimeEvent,
   sortedConversationList,
   compareMessages,
+  mergeAgentConversationPage,
   productsForScope,
   agentScopeSummary,
   presenceClass,

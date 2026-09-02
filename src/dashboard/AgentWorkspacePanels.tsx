@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AgentAvailability,
   AgentIdentity,
@@ -23,7 +23,7 @@ import {
   AgentMobileSettingsPage,
 } from './AgentWorkspaceChrome';
 
-export function AgentSidebar({
+export const AgentSidebar = memo(function AgentSidebar({
   identity,
   availability,
   notificationState,
@@ -105,9 +105,9 @@ export function AgentSidebar({
       />
     </>
   );
-}
+});
 
-export function AgentInboxPane({
+export const AgentInboxPane = memo(function AgentInboxPane({
   filter,
   searchQuery,
   unreadFirst,
@@ -381,4 +381,4 @@ export function AgentInboxPane({
       </div>
     </section>
   );
-}
+});

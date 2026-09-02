@@ -475,6 +475,7 @@ test('concurrent no-agent starts leave no reusable claim or handoff', async () =
     'conversations',
     'conversation_creation_quota_receipts',
     'conversation_source_handoffs',
+    'conversation_traffic_receipts',
   ]) {
     assert.equal(
       scalar(database, `SELECT COUNT(*) AS count FROM ${table}`, 'count'),

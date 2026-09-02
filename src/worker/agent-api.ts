@@ -1,10 +1,14 @@
 import { Hono, type Context } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { routingBusinessDate } from './routing';
-import { broadcastClientConversationEvent } from './client-api';
+import {
+  broadcastClientConversationEvent,
+  type ConversationEventSnapshot,
+} from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
 import { listConversationMedia } from './media-api';
+import type { ConversationAttachmentPage } from './message-attachments';
 
 type Bindings = {
   DB: D1Database;
@@ -50,6 +54,20 @@ type ReadBoundary = {
   id: string;
   created_at: string;
 };
+
+type MessageWriteConversation = {
+  id: string;
+  status: ConversationStatus;
+  external_id: string | null;
+  visitor_name: string | null;
+  agent_name: string | null;
+  agent_avatar_version: string | null;
+};
+
+type UpdatedConversationSnapshot = Omit<
+  ConversationEventSnapshot,
+  'external_id' | 'visitor_name' | 'agent_name' | 'agent_avatar_version'
+>;
 
 const COOKIE = 'cs_agent_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
@@ -488,19 +506,35 @@ agentApi.get('/api/agent/conversations', async (c) => {
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const agent = await authenticateAgent(c);
   if (!agent) return unauthorized(c);
+
   const afterIdValue = c.req.query('afterId');
   const afterCreatedAtValue = c.req.query('afterCreatedAt');
+  const beforeIdValue = c.req.query('beforeId');
+  const beforeCreatedAtValue = c.req.query('beforeCreatedAt');
+  const hasAfterCursor =
+    afterIdValue !== undefined || afterCreatedAtValue !== undefined;
+  const hasBeforeCursor =
+    beforeIdValue !== undefined || beforeCreatedAtValue !== undefined;
   const afterId = normalizeMessageId(afterIdValue);
   const afterCreatedAt = normalizeCursorDateTime(afterCreatedAtValue);
+  const beforeId = normalizeMessageId(beforeIdValue);
+  const beforeCreatedAt = normalizeCursorDateTime(beforeCreatedAtValue);
+
   if (
-    (afterIdValue !== undefined || afterCreatedAtValue !== undefined) &&
-    (!afterId || !afterCreatedAt)
+    (hasAfterCursor && (!afterId || !afterCreatedAt)) ||
+    (hasBeforeCursor && (!beforeId || !beforeCreatedAt)) ||
+    (hasAfterCursor && hasBeforeCursor)
   ) {
     return c.json({ error: 'INVALID_MESSAGE_CURSOR' }, 400);
   }
+
   const after =
     afterId && afterCreatedAt
       ? { id: afterId, createdAt: afterCreatedAt }
+      : null;
+  const before =
+    beforeId && beforeCreatedAt
+      ? { id: beforeId, createdAt: beforeCreatedAt }
       : null;
   const conversation = await assignedConversation(
     c.env.DB,
@@ -508,6 +542,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
     agent.id,
   );
   if (!conversation) return c.json({ error: 'NOT_FOUND' }, 404);
+
   const readStateRequest = after
     ? c.env.DB.prepare(
         `SELECT m.id,
@@ -576,9 +611,22 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
         .bind(c.req.param('id'))
         .all<MessageReadState>()
     : Promise.resolve({ results: [] as MessageReadState[] });
-  const [messages, media, readState] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
+
+  const pageDirection = after ? 'after' : before ? 'before' : 'latest';
+  const pageCursor = after ?? before;
+  const pageSize = after ? 500 : 100;
+  const queryLimit = after ? pageSize : pageSize + 1;
+  const cursorOperator = after ? '>' : '<';
+  const sortOrder = after ? 'ASC' : 'DESC';
+  const cursorClause = pageCursor
+    ? `AND (
+         m.created_at ${cursorOperator} ?2
+         OR (m.created_at = ?2 AND m.id ${cursorOperator} ?3)
+       )`
+    : '';
+  const limitParameter = pageCursor ? '?4' : '?2';
+  const messageRequest = c.env.DB.prepare(
+    `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
        m.client_message_id,
        COALESCE(
          m.read_by_visitor_at,
@@ -614,24 +662,49 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
      FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
      WHERE m.conversation_id = ?1
-       AND (
-         ?2 IS NULL
-         OR m.created_at > ?2
-         OR (m.created_at = ?2 AND m.id > ?3)
-       )
-     ORDER BY m.created_at ASC, m.id ASC
-     LIMIT 500`,
-    )
-      .bind(c.req.param('id'), after?.createdAt ?? null, after?.id ?? null)
-      .all<MessageRow>(),
-    listConversationMedia(c.env.DB, c.req.param('id'), after),
+       ${cursorClause}
+     ORDER BY m.created_at ${sortOrder}, m.id ${sortOrder}
+     LIMIT ${limitParameter}`,
+  );
+  const messageBindings = pageCursor
+    ? [c.req.param('id'), pageCursor.createdAt, pageCursor.id, queryLimit]
+    : [c.req.param('id'), queryLimit];
+  const attachmentPage: ConversationAttachmentPage =
+    pageDirection === 'latest'
+      ? { direction: pageDirection, limit: pageSize }
+      : {
+          direction: pageDirection,
+          cursor: pageCursor!,
+          limit: pageSize,
+        };
+
+  const [messages, media, readState] = await Promise.all([
+    messageRequest.bind(...messageBindings).all<MessageRow>(),
+    listConversationMedia(c.env.DB, c.req.param('id'), attachmentPage),
     readStateRequest,
   ]);
+  const rawMessages = messages.results ?? [];
+  const hasMoreBefore = !after && rawMessages.length > pageSize;
+  const pageMessages = after
+    ? rawMessages
+    : rawMessages.slice(0, pageSize).reverse();
+  const oldestMessage = pageMessages[0] ?? null;
+
   return c.json({
     conversation,
-    messages: messages.results ?? [],
+    messages: pageMessages,
     media,
     readState: readState.results ?? [],
+    page: {
+      hasMoreBefore,
+      before:
+        hasMoreBefore && oldestMessage
+          ? {
+              id: oldestMessage.id,
+              createdAt: oldestMessage.created_at,
+            }
+          : null,
+    },
   });
 });
 
@@ -772,7 +845,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
   }
 
-  await c.env.DB.prepare(
+  const updatedConversation = await c.env.DB.prepare(
     `UPDATE conversations
      SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
          visitor_unread_count = visitor_unread_count + 1,
@@ -781,10 +854,25 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
          last_message_preview = ?2,
          updated_at = ?1
      WHERE id = ?3 AND assigned_agent = ?4
-       AND expires_at > CURRENT_TIMESTAMP`,
+       AND expires_at > CURRENT_TIMESTAMP
+     RETURNING id, site_id, visitor_id, status, assigned_agent, subject,
+       product_id, section_id, section_name, category_id, category_name,
+       product_title, product_cover_url, product_href, expires_at,
+       visitor_unread_count, agent_unread_count, last_message_at, created_at,
+       last_message_preview AS last_message`,
   )
     .bind(now, text, id, agent.id)
-    .run();
+    .first<UpdatedConversationSnapshot>();
+  const conversationSnapshot: ConversationEventSnapshot | undefined =
+    updatedConversation
+      ? {
+          ...updatedConversation,
+          external_id: conversation.external_id,
+          visitor_name: conversation.visitor_name,
+          agent_name: conversation.agent_name,
+          agent_avatar_version: conversation.agent_avatar_version,
+        }
+      : undefined;
   const message: MessageRow = {
     id: messageId,
     conversation_id: id,
@@ -796,16 +884,22 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     read_by_agent_at: null,
     created_at: now,
   };
-  await Promise.allSettled([
-    broadcastConversationRoom(c.env, id, { type: 'message', message }),
-    broadcastClientConversationEvent(
-      c.env,
-      id,
-      'message.created',
-      { message: clientRealtimeMessage(message) },
-      { includeOverview: conversation.status === 'open' },
-    ),
-  ]);
+  await deferAgentRealtime(
+    c,
+    Promise.allSettled([
+      broadcastConversationRoom(c.env, id, { type: 'message', message }),
+      broadcastClientConversationEvent(
+        c.env,
+        id,
+        'message.created',
+        { message: clientRealtimeMessage(message) },
+        {
+          includeOverview: conversation.status === 'open',
+          conversationSnapshot,
+        },
+      ),
+    ]),
+  );
   return c.json({ message }, 201);
 });
 
@@ -897,14 +991,20 @@ async function assignedConversationForMessageWrite(
 ) {
   return db
     .prepare(
-      `SELECT id, status
-       FROM conversations
-       WHERE id = ?1 AND assigned_agent = ?2
-         AND expires_at > CURRENT_TIMESTAMP
+      `SELECT c.id, c.status,
+         v.external_id,
+         v.display_name AS visitor_name,
+         a.name AS agent_name,
+         a.avatar_version AS agent_avatar_version
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       WHERE c.id = ?1 AND c.assigned_agent = ?2
+         AND c.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
     .bind(id, agentId)
-    .first<{ id: string; status: ConversationStatus }>();
+    .first<MessageWriteConversation>();
 }
 
 async function assignedConversation(
@@ -1078,6 +1178,17 @@ async function broadcastConversationRoom(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+async function deferAgentRealtime(
+  c: Context<Env>,
+  task: Promise<unknown>,
+): Promise<void> {
+  try {
+    c.executionCtx.waitUntil(task);
+  } catch {
+    await task;
+  }
 }
 
 function unauthorized(c: Context<Env>) {

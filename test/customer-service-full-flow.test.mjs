@@ -1019,6 +1019,147 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   );
   assert.equal(rooms.events.has('admin-inbox'), false);
 
+  const insertPagedMessage = database.prepare(
+    `INSERT INTO messages (
+       id, conversation_id, sender_type, sender_id, body, created_at
+     ) VALUES (?, ?, 'agent', 'agent-e2e', ?, ?)`,
+  );
+  const paginationBase = Date.now() + 60_000;
+  for (let index = 1; index <= 105; index += 1) {
+    const id = `page-message-${String(index).padStart(3, '0')}`;
+    insertPagedMessage.run(
+      id,
+      conversationId,
+      `History message ${index}`,
+      new Date(paginationBase + index * 1_000).toISOString(),
+    );
+  }
+  database
+    .prepare(
+      `INSERT INTO message_attachments (
+         id, message_id, kind, label, value, sort_order, created_at
+       ) VALUES (?, ?, 'sms', ?, ?, 0, ?)`,
+    )
+    .run(
+      'page-attachment-initial',
+      'page-message-006',
+      'Initial page card',
+      '+12135550006',
+      new Date(paginationBase + 6_000).toISOString(),
+    );
+  database
+    .prepare(
+      `INSERT INTO message_attachments (
+         id, message_id, kind, label, value, sort_order, created_at
+       ) VALUES (?, ?, 'sms', ?, ?, 0, ?)`,
+    )
+    .run(
+      'page-attachment-older',
+      'page-message-001',
+      'Older page card',
+      '+12135550001',
+      new Date(paginationBase + 1_000).toISOString(),
+    );
+
+  const initialPageResponse = await agentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages`,
+    { headers: { cookie } },
+    env,
+  );
+  assert.equal(initialPageResponse.status, 200);
+  const initialPage = await json(initialPageResponse);
+  assert.equal(initialPage.messages.length, 100);
+  assert.equal(initialPage.messages[0].id, 'page-message-006');
+  assert.equal(initialPage.messages.at(-1).id, 'page-message-105');
+  assert.deepEqual(initialPage.page, {
+    hasMoreBefore: true,
+    before: {
+      id: 'page-message-006',
+      createdAt: initialPage.messages[0].created_at,
+    },
+  });
+  assert.deepEqual(
+    initialPage.media.map((item) => item.id),
+    ['page-attachment-initial'],
+  );
+
+  const olderPageResponse = await agentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages?beforeId=${encodeURIComponent(initialPage.page.before.id)}&beforeCreatedAt=${encodeURIComponent(initialPage.page.before.createdAt)}`,
+    { headers: { cookie } },
+    env,
+  );
+  assert.equal(olderPageResponse.status, 200);
+  const olderPage = await json(olderPageResponse);
+  assert.equal(olderPage.messages.length, 9);
+  assert.deepEqual(
+    olderPage.messages.slice(-5).map((item) => item.id),
+    [
+      'page-message-001',
+      'page-message-002',
+      'page-message-003',
+      'page-message-004',
+      'page-message-005',
+    ],
+  );
+  assert.deepEqual(olderPage.page, {
+    hasMoreBefore: false,
+    before: null,
+  });
+  assert.ok(
+    olderPage.media.some((item) => item.id === 'page-attachment-older'),
+  );
+  assert.equal(
+    olderPage.media.some((item) => item.id === 'page-attachment-initial'),
+    false,
+  );
+
+  const mixedCursorResponse = await agentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages?afterId=page-message-105&afterCreatedAt=${encodeURIComponent(initialPage.messages.at(-1).created_at)}&beforeId=page-message-006&beforeCreatedAt=${encodeURIComponent(initialPage.messages[0].created_at)}`,
+    { headers: { cookie } },
+    env,
+  );
+  assert.equal(mixedCursorResponse.status, 400);
+  assert.deepEqual(await mixedCursorResponse.json(), {
+    error: 'INVALID_MESSAGE_CURSOR',
+  });
+
+  const newestCreatedAt = new Date(paginationBase + 106_000).toISOString();
+  insertPagedMessage.run(
+    'page-message-106',
+    conversationId,
+    'Incremental message 106',
+    newestCreatedAt,
+  );
+  database
+    .prepare(
+      `INSERT INTO message_attachments (
+         id, message_id, kind, label, value, sort_order, created_at
+       ) VALUES (?, ?, 'sms', ?, ?, 0, ?)`,
+    )
+    .run(
+      'page-attachment-after',
+      'page-message-106',
+      'Incremental card',
+      '+12135550106',
+      newestCreatedAt,
+    );
+
+  const incrementalPageResponse = await agentApi.request(
+    `/api/agent/conversations/${encodeURIComponent(conversationId)}/messages?afterId=page-message-105&afterCreatedAt=${encodeURIComponent(initialPage.messages.at(-1).created_at)}`,
+    { headers: { cookie } },
+    env,
+  );
+  assert.equal(incrementalPageResponse.status, 200);
+  const incrementalPage = await json(incrementalPageResponse);
+  assert.deepEqual(
+    incrementalPage.messages.map((item) => item.id),
+    ['page-message-106'],
+  );
+  assert.deepEqual(
+    incrementalPage.media.map((item) => item.id),
+    ['page-attachment-after'],
+  );
+
   const paused = await json(
     await agentApi.request(
       '/api/agent/auth/status',

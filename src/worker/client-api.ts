@@ -67,6 +67,11 @@ type ConversationRow = {
   last_message: string | null;
 };
 
+export type ConversationEventSnapshot = ConversationRow & {
+  external_id: string | null;
+  visitor_name: string | null;
+};
+
 type MessageRow = {
   id: string;
   conversation_id: string;
@@ -459,6 +464,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
         site.id,
         sourceHandoffId,
         conversation.id,
+        visitorId,
       );
       if (handoffOwner.externalId !== visitorId) {
         return error(
@@ -619,6 +625,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       site.id,
       sourceHandoffId,
       conversation.id,
+      visitorId,
     );
     if (handoffOwner.externalId !== visitorId) {
       return error(
@@ -665,6 +672,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     site.id,
     sourceHandoffId,
     conversationId,
+    visitorId,
   );
   if (
     handoffOwner.externalId !== visitorId ||
@@ -985,29 +993,27 @@ export async function broadcastClientConversationEvent(
   options: {
     includeOverview?: boolean;
     previousAgentId?: string | null;
+    conversationSnapshot?: ConversationEventSnapshot;
   } = {},
 ): Promise<ConversationRow | null> {
-  const conversation = await env.DB.prepare(
-    `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
-       a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
-       c.product_id, c.section_id, c.section_name, c.category_id,
-       c.category_name, c.product_title, c.product_cover_url, c.product_href,
-       c.expires_at, c.visitor_unread_count, c.agent_unread_count,
-       c.last_message_at, c.created_at, c.last_message_preview AS last_message,
-       v.external_id, v.display_name AS visitor_name
-     FROM conversations c
-     JOIN visitors v ON v.id = c.visitor_id
-     LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
-     WHERE c.id = ?1
-     LIMIT 1`,
-  )
-    .bind(conversationId)
-    .first<
-      ConversationRow & {
-        external_id: string | null;
-        visitor_name: string | null;
-      }
-    >();
+  const conversation =
+    options.conversationSnapshot ??
+    (await env.DB.prepare(
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+         a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+         c.last_message_at, c.created_at, c.last_message_preview AS last_message,
+         v.external_id, v.display_name AS visitor_name
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       WHERE c.id = ?1
+       LIMIT 1`,
+    )
+      .bind(conversationId)
+      .first<ConversationEventSnapshot>());
   if (!conversation) return null;
 
   if (conversation.external_id) {
@@ -1256,6 +1262,17 @@ async function discardUnassignedConversation(
   },
 ): Promise<void> {
   await db.batch([
+    db
+      .prepare(
+        `DELETE FROM conversation_traffic_receipts
+         WHERE conversation_id = ?1 AND site_id = ?2
+           AND EXISTS (
+             SELECT 1
+             FROM conversations
+             WHERE id = ?1 AND site_id = ?2 AND assigned_agent IS NULL
+           )`,
+      )
+      .bind(input.conversationId, input.siteId),
     db
       .prepare(
         `DELETE FROM conversation_creation_quota_receipts
@@ -1644,15 +1661,21 @@ async function rememberSourceHandoff(
   siteId: string,
   sourceHandoffId: string,
   conversationId: string,
+  externalId: string,
 ): Promise<SourceHandoffOwner> {
-  await db
+  const inserted = await db
     .prepare(
       `INSERT OR IGNORE INTO conversation_source_handoffs (
          site_id, source_handoff_id, conversation_id
-       ) VALUES (?1, ?2, ?3)`,
+       ) VALUES (?1, ?2, ?3)
+       RETURNING conversation_id AS conversationId`,
     )
     .bind(siteId, sourceHandoffId, conversationId)
-    .run();
+    .first<{ conversationId: string }>();
+
+  if (inserted?.conversationId === conversationId) {
+    return { conversationId, externalId };
+  }
 
   const owner = await sourceHandoffOwner(db, siteId, sourceHandoffId);
   if (!owner) throw new Error('Source handoff persistence failed');
@@ -1746,14 +1769,17 @@ async function continueConversationStart(
       )) ?? conversation;
   }
 
-  return (
-    (await ownedConversation(
-      env.DB,
-      conversation.id,
-      input.siteId,
-      input.visitorId,
-    )) ?? conversation
-  );
+  if (assignment && !conversation.assigned_agent) {
+    conversation =
+      (await ownedConversation(
+        env.DB,
+        conversation.id,
+        input.siteId,
+        input.visitorId,
+      )) ?? conversation;
+  }
+
+  return conversation;
 }
 
 function conversationSummary(conversation: ConversationRow) {

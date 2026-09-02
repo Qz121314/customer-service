@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { emitAgentMessageTone } from '../src/dashboard/dashboard-runtime.ts';
 import {
   enableAgentNotifications,
   prepareAgentNotifications,
@@ -18,7 +19,11 @@ function replaceGlobal(name, value) {
   };
 }
 
-function browserEnvironment({ ios = false, standalone = false } = {}) {
+function browserEnvironment({
+  ios = false,
+  standalone = false,
+  subscribed = true,
+} = {}) {
   const storage = new Map();
   const subscription = {
     endpoint: 'https://push.example.test/subscription',
@@ -29,11 +34,13 @@ function browserEnvironment({ ios = false, standalone = false } = {}) {
       return true;
     },
   };
+  let currentSubscription = subscribed ? subscription : null;
   const pushManager = {
     async getSubscription() {
-      return subscription;
+      return currentSubscription;
     },
     async subscribe() {
+      currentSubscription = subscription;
       return subscription;
     },
   };
@@ -75,7 +82,13 @@ function browserEnvironment({ ios = false, standalone = false } = {}) {
       },
     },
   };
-  return { navigatorValue, notification, subscription, windowValue };
+  return {
+    navigatorValue,
+    notification,
+    pushManager,
+    subscription,
+    windowValue,
+  };
 }
 
 test('an existing mobile push subscription is rebound to the current agent once', async () => {
@@ -118,6 +131,46 @@ test('an existing mobile push subscription is rebound to the current agent once'
   }
 });
 
+test('granted notification permission repairs a missing push subscription', async () => {
+  const environment = browserEnvironment({ subscribed: false });
+  const requests = [];
+  let subscribeAttempts = 0;
+  const originalSubscribe = environment.pushManager.subscribe.bind(
+    environment.pushManager,
+  );
+  environment.pushManager.subscribe = async (...args) => {
+    subscribeAttempts += 1;
+    return originalSubscribe(...args);
+  };
+  const restore = [
+    replaceGlobal('window', environment.windowValue),
+    replaceGlobal('navigator', environment.navigatorValue),
+    replaceGlobal('Notification', environment.notification),
+    replaceGlobal('fetch', async (path, init) => {
+      requests.push({ path, init });
+      if (path === '/api/agent/push/config') {
+        return Response.json({
+          enabled: true,
+          applicationServerKey:
+            'BEl6XoKJ9jFQ8PVv7n5vJQHw0ThmMZL2lqf0mvtRlVhpyQ',
+        });
+      }
+      return Response.json({ ok: true });
+    }),
+  ];
+
+  try {
+    assert.equal(await prepareAgentNotifications('agent-a'), 'enabled');
+    assert.equal(subscribeAttempts, 1);
+    assert.deepEqual(
+      requests.map((request) => request.path),
+      ['/api/agent/push/config', '/api/agent/push/subscriptions'],
+    );
+  } finally {
+    for (const restoreGlobal of restore.reverse()) restoreGlobal();
+  }
+});
+
 test('iOS browser tabs ask for Home Screen installation before notification permission', async () => {
   const environment = browserEnvironment({ ios: true, standalone: false });
   let registrationAttempts = 0;
@@ -140,4 +193,51 @@ test('iOS browser tabs ask for Home Screen installation before notification perm
   } finally {
     for (const restoreGlobal of restore.reverse()) restoreGlobal();
   }
+});
+
+test('agent message tone uses maximum in-app gain', () => {
+  const gainEvents = [];
+  const frequencies = [];
+  const context = {
+    currentTime: 5,
+    destination: {},
+    createGain() {
+      return {
+        gain: {
+          setValueAtTime(value, time) {
+            gainEvents.push({ type: 'set', value, time });
+          },
+          exponentialRampToValueAtTime(value, time) {
+            gainEvents.push({ type: 'ramp', value, time });
+          },
+        },
+        connect() {},
+      };
+    },
+    createOscillator() {
+      return {
+        type: 'sine',
+        frequency: {
+          setValueAtTime(value, time) {
+            frequencies.push({ value, time });
+          },
+        },
+        connect() {},
+        start() {},
+        stop() {},
+      };
+    },
+  };
+
+  emitAgentMessageTone(context);
+
+  assert.deepEqual(gainEvents, [
+    { type: 'set', value: 0.0001, time: 5 },
+    { type: 'ramp', value: 1, time: 5.012 },
+    { type: 'ramp', value: 0.0001, time: 5.24 },
+  ]);
+  assert.deepEqual(
+    frequencies.map((item) => item.value),
+    [660, 880],
+  );
 });

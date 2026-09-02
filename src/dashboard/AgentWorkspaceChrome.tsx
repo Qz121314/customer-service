@@ -262,7 +262,7 @@ export function AgentMobileSettingsPage({
                   {notificationBusy
                     ? '正在设置…'
                     : notificationState === 'enabled'
-                      ? '已开启 · 切换应用或锁屏也会提醒'
+                      ? '已开启 · 切后台、锁屏或离开页面也会提醒'
                       : notificationState === 'install-required'
                         ? 'iPhone/iPad 请先添加到主屏幕'
                         : notificationState === 'blocked'
