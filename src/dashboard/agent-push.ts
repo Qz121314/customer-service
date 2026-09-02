@@ -1,9 +1,5 @@
 export type AgentNotificationState =
-  | 'unsupported'
-  | 'install-required'
-  | 'disabled'
-  | 'blocked'
-  | 'enabled';
+  'unsupported' | 'install-required' | 'disabled' | 'blocked' | 'enabled';
 
 const AGENT_NOTIFICATION_PARAM = 'notification';
 const AGENT_NOTIFICATION_TARGET = 'latest-unread';
