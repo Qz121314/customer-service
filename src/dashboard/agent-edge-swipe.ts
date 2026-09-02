@@ -12,16 +12,19 @@ const COMMIT_DISTANCE_MAX = 132;
 const SETTLE_DURATION_MS = 180;
 const REBOUND_CURVE = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const COMMIT_CURVE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+const SWIPE_SURFACE_SELECTOR = '[data-agent-swipe-back-surface]';
+const SWIPE_TRIGGER_SELECTOR = '[data-agent-swipe-back-trigger]';
 
-type SwipeTargetKind = 'thread' | 'settings';
+type SwipeBackMode = 'direct' | 'history';
 
 type SwipeTarget = {
-  kind: SwipeTargetKind;
   element: HTMLElement;
   backButton: HTMLButtonElement;
+  mode: SwipeBackMode;
 };
 
 type InlineGestureStyles = {
+  animation: string;
   transform: string;
   transition: string;
   willChange: string;
@@ -41,34 +44,92 @@ type ActiveGesture = {
 
 function elementIsVisible(element: HTMLElement): boolean {
   const style = window.getComputedStyle(element);
-  return style.display !== 'none' && style.visibility !== 'hidden';
+  const rect = element.getBoundingClientRect();
+  return (
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    rect.width > 0 &&
+    rect.height > 0
+  );
 }
 
-function findSwipeTarget(root: HTMLElement): SwipeTarget | null {
-  if (!mobileAgentQuery.matches) return null;
-  if (document.querySelector('[role="dialog"][aria-modal="true"]')) return null;
+function registerSwipeSurface(
+  element: HTMLElement,
+  backButton: HTMLButtonElement,
+  mode: SwipeBackMode = 'direct',
+) {
+  element.dataset.agentSwipeBackSurface = 'true';
+  if (!element.dataset.agentSwipeBackMode) {
+    element.dataset.agentSwipeBackMode = mode;
+  }
+  backButton.dataset.agentSwipeBackTrigger = 'true';
+}
 
+function registerExistingAgentSurfaces(root: HTMLElement) {
   const settingsPage = root.querySelector<HTMLElement>(
     '.mobile-agent-settings-page',
   );
-  if (settingsPage && elementIsVisible(settingsPage)) {
-    const backButton = settingsPage.querySelector<HTMLButtonElement>(
-      'button[aria-label="返回工作台"]',
-    );
-    if (backButton) {
-      return { kind: 'settings', element: settingsPage, backButton };
-    }
+  const settingsBack = settingsPage?.querySelector<HTMLButtonElement>(
+    'button[aria-label="返回工作台"]',
+  );
+  if (settingsPage && settingsBack) {
+    registerSwipeSurface(settingsPage, settingsBack);
   }
 
-  const shell = root.querySelector<HTMLElement>(
-    '.workspace-shell.is-thread-open',
-  );
-  const threadPane = shell?.querySelector<HTMLElement>('.thread-pane');
-  const backButton = shell?.querySelector<HTMLButtonElement>(
+  const threadPane = root.querySelector<HTMLElement>('.thread-pane');
+  const threadBack = threadPane?.querySelector<HTMLButtonElement>(
     '.thread-back-button',
   );
-  if (threadPane && backButton && elementIsVisible(threadPane)) {
-    return { kind: 'thread', element: threadPane, backButton };
+  if (threadPane && threadBack) {
+    registerSwipeSurface(threadPane, threadBack, 'history');
+  }
+
+  for (const dialog of document.querySelectorAll<HTMLElement>(
+    '[role="dialog"][aria-modal="true"]',
+  )) {
+    const backButton = dialog.querySelector<HTMLButtonElement>(
+      'button[aria-label^="关闭"], button[aria-label^="返回"]',
+    );
+    if (!backButton) continue;
+    const surface =
+      dialog.parentElement instanceof HTMLElement ? dialog.parentElement : dialog;
+    registerSwipeSurface(surface, backButton);
+  }
+}
+
+function readSwipeBackMode(element: HTMLElement): SwipeBackMode {
+  return element.dataset.agentSwipeBackMode === 'history'
+    ? 'history'
+    : 'direct';
+}
+
+function findSwipeTarget(
+  root: HTMLElement,
+  clientX: number,
+  clientY: number,
+): SwipeTarget | null {
+  if (!mobileAgentQuery.matches) return null;
+
+  registerExistingAgentSurfaces(root);
+
+  for (const hit of document.elementsFromPoint(clientX, clientY)) {
+    const surface = hit.closest<HTMLElement>(SWIPE_SURFACE_SELECTOR);
+    if (!surface || !elementIsVisible(surface)) continue;
+    const backButton = surface.querySelector<HTMLButtonElement>(
+      SWIPE_TRIGGER_SELECTOR,
+    );
+    if (
+      !backButton ||
+      backButton.disabled ||
+      !elementIsVisible(backButton)
+    ) {
+      continue;
+    }
+    return {
+      element: surface,
+      backButton,
+      mode: readSwipeBackMode(surface),
+    };
   }
 
   return null;
@@ -76,6 +137,7 @@ function findSwipeTarget(root: HTMLElement): SwipeTarget | null {
 
 function readInlineGestureStyles(element: HTMLElement): InlineGestureStyles {
   return {
+    animation: element.style.animation,
     transform: element.style.transform,
     transition: element.style.transition,
     willChange: element.style.willChange,
@@ -87,6 +149,7 @@ function restoreInlineGestureStyles(
   element: HTMLElement,
   styles: InlineGestureStyles,
 ) {
+  element.style.animation = styles.animation;
   element.style.transform = styles.transform;
   element.style.transition = styles.transition;
   element.style.willChange = styles.willChange;
@@ -117,6 +180,7 @@ function applyDrag(gesture: ActiveGesture, distanceX: number) {
   const clampedDistance = Math.min(Math.max(distanceX, 0), width);
   const progress = Math.min(clampedDistance / width, 1);
   gesture.distanceX = clampedDistance;
+  gesture.target.element.style.animation = 'none';
   gesture.target.element.style.transition = 'none';
   gesture.target.element.style.willChange = 'transform';
   gesture.target.element.style.transform = translateX(clampedDistance);
@@ -157,6 +221,7 @@ export function installAgentEdgeSwipeBack() {
 
   const settleBack = (current: ActiveGesture) => {
     const { element } = current.target;
+    element.style.animation = 'none';
     element.style.transition = settleTransition(REBOUND_CURVE);
     element.style.transform = translateX(0);
     element.style.boxShadow = 'none';
@@ -168,11 +233,12 @@ export function installAgentEdgeSwipeBack() {
   };
 
   const finishBack = (current: ActiveGesture) => {
-    const { element, backButton, kind } = current.target;
+    const { element, backButton, mode } = current.target;
     const width = Math.max(
       1,
       element.getBoundingClientRect().width || window.innerWidth,
     );
+    element.style.animation = 'none';
     element.style.transition = settleTransition(COMMIT_CURVE);
     element.style.willChange = 'transform';
     element.style.transform = translateX(Math.ceil(width));
@@ -181,7 +247,12 @@ export function installAgentEdgeSwipeBack() {
     clearSettleTimer();
     settleTimer = window.setTimeout(() => {
       settleTimer = null;
-      if (kind === 'thread') {
+      if (backButton.disabled) {
+        settleBack(current);
+        return;
+      }
+
+      if (mode === 'history') {
         const restoreAfterHistory = () => {
           window.setTimeout(
             () => restoreInlineGestureStyles(element, current.styles),
@@ -217,7 +288,7 @@ export function installAgentEdgeSwipeBack() {
     if (!event.isPrimary || event.button !== 0) return;
     if (event.clientX < 0 || event.clientX > EDGE_START_MAX_X) return;
 
-    const target = findSwipeTarget(root);
+    const target = findSwipeTarget(root, event.clientX, event.clientY);
     if (!target) return;
 
     clearSettleTimer();
@@ -278,6 +349,12 @@ export function installAgentEdgeSwipeBack() {
     }
     settleBack(current);
   };
+
+  const refreshContracts = () => registerExistingAgentSurfaces(root);
+  const observer = new MutationObserver(refreshContracts);
+  observer.observe(root, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, subtree: false });
+  refreshContracts();
 
   window.addEventListener('pointerdown', onPointerDown, { capture: true });
   window.addEventListener('pointermove', onPointerMove, {
