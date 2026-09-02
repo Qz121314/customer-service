@@ -1,16 +1,16 @@
-import { randomUUID } from 'node:crypto';
-import { test, expect } from '@playwright/test';
+import { randomUUID } from "node:crypto";
+import { test, expect } from "@playwright/test";
 
-const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
+const baseUrl = process.env.UI_SMOKE_BASE_URL ?? "http://127.0.0.1:8787";
 const adminPassword =
-  process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
-const smokeRunId = randomUUID().replaceAll('-', '');
+  process.env.UI_SMOKE_ADMIN_PASSWORD ?? "ui-smoke-admin-password";
+const smokeRunId = randomUUID().replaceAll("-", "");
 const agentUsername = `ui-smoke-agent-${smokeRunId.slice(0, 16)}`;
-const agentPassword = 'ui-smoke-pass';
+const agentPassword = "ui-smoke-pass";
 const productId = `ui-smoke-product-${smokeRunId}`;
 const smokeVisitorDigits = String(
   Number.parseInt(smokeRunId.slice(0, 8), 16) % 1000,
-).padStart(3, '0');
+).padStart(3, "0");
 const primeVisitorId = `UIT${smokeVisitorDigits}`;
 const visitorId = `UIV${smokeVisitorDigits}`;
 const primeSourceHandoffId = randomUUID();
@@ -25,31 +25,31 @@ function conversationData({ visitorId, sourceHandoffId, clientMessageId }) {
     visitorId,
     sourceHandoffId,
     clientMessageId,
-    message: '你好，这是 UI smoke 会话',
+    message: "你好，这是 UI smoke 会话",
     product: {
       id: productId,
-      sectionId: 'ui-smoke-section',
-      sectionName: 'Smoke Section',
-      categoryId: 'ui-smoke-category',
-      categoryName: 'Smoke Category',
-      title: 'UI Smoke Product',
-      href: 'https://example.com/ui-smoke-product',
+      sectionId: "ui-smoke-section",
+      sectionName: "Smoke Section",
+      categoryId: "ui-smoke-category",
+      categoryName: "Smoke Category",
+      title: "UI Smoke Product",
+      href: "https://example.com/ui-smoke-product",
       coverUrl: null,
     },
   };
 }
 
 async function requestConversation(page, identifiers, sourceIp) {
-  return page.request.post(url('/client/v1/conversations'), {
-    headers: sourceIp ? { 'CF-Connecting-IP': sourceIp } : undefined,
+  return page.request.post(url("/client/v1/conversations"), {
+    headers: sourceIp ? { "CF-Connecting-IP": sourceIp } : undefined,
     data: conversationData(identifiers),
   });
 }
 
 async function seedAgent(page) {
-  const syncProduct = await page.request.post(url('/integration/v1/verify'), {
+  const syncProduct = await page.request.post(url("/integration/v1/verify"), {
     headers: {
-      authorization: 'Bearer ui-smoke-integration-token',
+      authorization: "Bearer ui-smoke-integration-token",
     },
     data: {
       productCatalog: {
@@ -66,25 +66,25 @@ async function seedAgent(page) {
       sourceHandoffId: primeSourceHandoffId,
       clientMessageId: `ui-smoke-prime-${smokeRunId}`,
     },
-    '198.51.100.10',
+    "198.51.100.10",
   );
   expect([200, 503]).toContain(noAgentResponse.status());
 
-  const adminLogin = await page.request.post(url('/api/auth/login'), {
+  const adminLogin = await page.request.post(url("/api/auth/login"), {
     data: { password: adminPassword },
   });
   expect(adminLogin.ok()).toBeTruthy();
 
-  const createAgent = await page.request.post(url('/api/admin/agents'), {
+  const createAgent = await page.request.post(url("/api/admin/agents"), {
     data: {
-      name: 'UI Smoke Agent',
+      name: "UI Smoke Agent",
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'product', productIds: [productId] },
+      routingScope: { type: "product", productIds: [productId] },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,
-      trafficQuotaRequestId: '',
+      trafficQuotaRequestId: "",
       isEnabled: true,
     },
   });
@@ -100,27 +100,27 @@ async function createConversation(page) {
       sourceHandoffId,
       clientMessageId: `ui-smoke-message-${smokeRunId}`,
     },
-    '198.51.100.11',
+    "198.51.100.11",
   );
   expect(conversation.ok()).toBeTruthy();
 }
 
 async function loginAgent(page) {
-  await page.goto(url('/agent'));
-  await page.getByLabel('客服账号').fill(agentUsername);
-  await page.getByLabel('登录密码').fill(agentPassword);
-  await page.getByRole('button', { name: '进入工作台' }).click();
-  await expect(page.getByText('我的会话')).toBeVisible();
+  await page.goto(url("/agent"));
+  await page.getByLabel("客服账号").fill(agentUsername);
+  await page.getByLabel("登录密码").fill(agentPassword);
+  await page.getByRole("button", { name: "进入工作台" }).click();
+  await expect(page.getByText("我的会话")).toBeVisible();
   await createConversation(page);
   await page.reload();
-  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(page.getByText("我的会话")).toBeVisible();
   await expect(
-    page.getByRole('button', { name: /UI Smoke Product/u }),
+    page.getByRole("button", { name: /UI Smoke Product/u }),
   ).toBeVisible();
 }
 
 async function expectCenteredDialog(page) {
-  const dialog = page.getByRole('dialog', { name: '客服资料' });
+  const dialog = page.getByRole("dialog", { name: "客服资料" });
   await expect(dialog).toBeVisible();
   const box = await dialog.boundingBox();
   const viewport = page.viewportSize();
@@ -141,12 +141,12 @@ async function expectMobileThreadGeometry(page) {
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
 
-  const primaryAction = page.locator('.thread-status-action');
+  const primaryAction = page.locator(".thread-status-action");
   await expect(primaryAction).toBeVisible();
   const primaryActionBox = await primaryAction.boundingBox();
   expect(primaryActionBox?.height ?? 0).toBeGreaterThanOrEqual(38);
 
-  const productContext = page.locator('.conversation-context-card');
+  const productContext = page.locator(".conversation-context-card");
   await expect(productContext).toBeVisible();
   const productContextBox = await productContext.boundingBox();
   expect(productContextBox).not.toBeNull();
@@ -190,19 +190,19 @@ async function mobileComposerGeometry(page) {
       documentScrollWidth: browser.document.documentElement.scrollWidth,
       bodyClientWidth: browser.document.body.clientWidth,
       bodyScrollWidth: browser.document.body.scrollWidth,
-      workspace: snapshot('.workspace-shell'),
-      thread: snapshot('.thread-pane'),
-      composer: snapshot('.composer'),
-      tools: snapshot('.composer-tools'),
-      textarea: snapshot('.composer textarea'),
-      foot: snapshot('.composer-foot'),
-      warning: snapshot('.composer-foot .media-upload-progress'),
-      send: snapshot('.composer-foot .primary-button'),
+      workspace: snapshot(".workspace-shell"),
+      thread: snapshot(".thread-pane"),
+      composer: snapshot(".composer"),
+      tools: snapshot(".composer-tools"),
+      textarea: snapshot(".composer textarea"),
+      foot: snapshot(".composer-foot"),
+      warning: snapshot(".composer-foot .media-upload-progress"),
+      send: snapshot(".composer-foot .primary-button"),
     };
   });
 }
 
-test('agent desktop and mobile interaction surfaces remain usable', async ({
+test("agent desktop and mobile interaction surfaces remain usable", async ({
   page,
 }) => {
   await seedAgent(page);
@@ -221,7 +221,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     };
   });
   expect(serviceWorker).not.toBeNull();
-  expect(serviceWorker?.scope).toBe(url('/agent'));
+  expect(serviceWorker?.scope).toBe(url("/agent"));
   await expect
     .poll(
       () =>
@@ -231,13 +231,13 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
         }),
       { timeout: 10_000 },
     )
-    .toBe('activated');
+    .toBe("activated");
 
   const desktopVisuals = await page.evaluate(() => {
     const browser = globalThis;
-    const shell = browser.document.querySelector('.workspace-shell');
-    const sidebar = browser.document.querySelector('.workspace-sidebar');
-    const row = browser.document.querySelector('.conversation-row');
+    const shell = browser.document.querySelector(".workspace-shell");
+    const sidebar = browser.document.querySelector(".workspace-sidebar");
+    const row = browser.document.querySelector(".conversation-row");
     if (
       !(shell instanceof browser.HTMLElement) ||
       !(sidebar instanceof browser.HTMLElement) ||
@@ -256,90 +256,90 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   expect(desktopVisuals).not.toBeNull();
   if (desktopVisuals) {
     expect(desktopVisuals.shellRadius).toBeGreaterThanOrEqual(20);
-    expect(desktopVisuals.sidebarBackground).toBe('rgb(23, 25, 31)');
+    expect(desktopVisuals.sidebarBackground).toBe("rgb(23, 25, 31)");
     expect(desktopVisuals.rowRadius).toBeGreaterThanOrEqual(10);
   }
 
-  const cardSettingsButton = page.getByRole('button', {
-    name: '打开名片设置',
+  const cardSettingsButton = page.getByRole("button", {
+    name: "打开名片设置",
   });
   await expect(cardSettingsButton).toBeVisible();
   await cardSettingsButton.click();
-  const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
+  const cardSettingsDialog = page.getByRole("dialog", { name: "名片" });
   await expect(cardSettingsDialog).toBeVisible();
-  await expect(cardSettingsDialog.getByText('正在读取名片…')).toBeHidden();
-  const cardTypeSelect = cardSettingsDialog.getByRole('combobox', {
-    name: '名片类型',
+  await expect(cardSettingsDialog.getByText("正在读取名片…")).toBeHidden();
+  const cardTypeSelect = cardSettingsDialog.getByRole("combobox", {
+    name: "名片类型",
   });
-  await expect(cardTypeSelect).toContainText('SMS');
+  await expect(cardTypeSelect).toContainText("SMS");
   await expect(cardTypeSelect.locator('[data-brand="imessage"]')).toBeVisible();
-  await expect(cardSettingsDialog.getByText('SMS 官方图标')).toBeVisible();
-  await cardSettingsDialog.getByLabel('名称').fill('短信联系');
-  await cardSettingsDialog.getByLabel('短信号码').fill('+1 213 555 1234');
+  await expect(cardSettingsDialog.getByText("SMS 官方图标")).toBeVisible();
+  await cardSettingsDialog.getByLabel("名称").fill("短信联系");
+  await cardSettingsDialog.getByLabel("短信号码").fill("+1 213 555 1234");
   await cardSettingsDialog
-    .getByLabel('预设话术（可选）')
-    .fill('您好，我想了解更多信息');
-  await cardSettingsDialog.getByRole('button', { name: '添加' }).click();
-  await expect(cardSettingsDialog.getByText('短信联系')).toBeVisible();
+    .getByLabel("预设话术（可选）")
+    .fill("您好，我想了解更多信息");
+  await cardSettingsDialog.getByRole("button", { name: "添加" }).click();
+  await expect(cardSettingsDialog.getByText("短信联系")).toBeVisible();
   await cardTypeSelect.click();
-  const typeOptions = cardSettingsDialog.getByRole('listbox', {
-    name: '名片类型选项',
+  const typeOptions = cardSettingsDialog.getByRole("listbox", {
+    name: "名片类型选项",
   });
   await expect(
-    typeOptions.getByRole('option', { name: /WhatsApp/u }),
-  ).toContainText('号码与可选预设话术');
+    typeOptions.getByRole("option", { name: /WhatsApp/u }),
+  ).toContainText("号码与可选预设话术");
   await expect(typeOptions.locator('[data-brand="whatsapp"]')).toBeVisible();
   await expect(typeOptions.locator('[data-brand="telegram"]')).toBeVisible();
-  await typeOptions.getByRole('option', { name: /网站/u }).click();
-  await expect(cardSettingsDialog.getByLabel('预设话术（可选）')).toHaveCount(
+  await typeOptions.getByRole("option", { name: /网站/u }).click();
+  await expect(cardSettingsDialog.getByLabel("预设话术（可选）")).toHaveCount(
     0,
   );
-  await cardSettingsDialog.getByLabel('名称').fill('付款链接');
+  await cardSettingsDialog.getByLabel("名称").fill("付款链接");
   await cardSettingsDialog
-    .getByLabel('网站 URL')
-    .fill('https://example.com/pay');
-  await cardSettingsDialog.getByRole('button', { name: '添加' }).click();
-  await expect(cardSettingsDialog.getByText('付款链接')).toBeVisible();
+    .getByLabel("网站 URL")
+    .fill("https://example.com/pay");
+  await cardSettingsDialog.getByRole("button", { name: "添加" }).click();
+  await expect(cardSettingsDialog.getByText("付款链接")).toBeVisible();
   await cardSettingsDialog
-    .getByRole('button', { name: '关闭名片设置' })
+    .getByRole("button", { name: "关闭名片设置" })
     .click();
   await expect(cardSettingsDialog).toBeHidden();
 
-  const autoReplyButton = page.getByRole('button', {
-    name: '打开自动回复设置',
+  const autoReplyButton = page.getByRole("button", {
+    name: "打开自动回复设置",
   });
   await expect(autoReplyButton).toBeVisible();
   await autoReplyButton.click();
-  const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
+  const autoReplyDialog = page.getByRole("dialog", { name: "首次问候语" });
   await expect(autoReplyDialog).toBeVisible();
-  await expect(autoReplyDialog.getByText('短信联系')).toBeVisible();
-  await expect(autoReplyDialog.getByText('付款链接')).toBeVisible();
-  const autoReplyToggle = autoReplyDialog.getByRole('checkbox', {
+  await expect(autoReplyDialog.getByText("短信联系")).toBeVisible();
+  await expect(autoReplyDialog.getByText("付款链接")).toBeVisible();
+  const autoReplyToggle = autoReplyDialog.getByRole("checkbox", {
     name: /自动发送首次问候/u,
   });
   await expect(autoReplyToggle).not.toBeChecked();
   await autoReplyToggle.check();
   await autoReplyDialog
-    .getByLabel('问候文案')
-    .fill('您好，我来为您服务，请问有什么可以帮您？');
-  await autoReplyDialog.getByRole('button', { name: '保存设置' }).click();
+    .getByLabel("问候文案")
+    .fill("您好，我来为您服务，请问有什么可以帮您？");
+  await autoReplyDialog.getByRole("button", { name: "保存设置" }).click();
   await expect(
-    autoReplyDialog.getByRole('button', { name: '已保存' }),
+    autoReplyDialog.getByRole("button", { name: "已保存" }),
   ).toBeVisible();
   await autoReplyDialog
-    .getByRole('button', { name: '关闭', exact: true })
+    .getByRole("button", { name: "关闭", exact: true })
     .click();
   await expect(autoReplyDialog).toBeHidden();
 
-  const avatarButton = page.getByRole('button', { name: '客服资料' });
+  const avatarButton = page.getByRole("button", { name: "客服资料" });
   await expect(avatarButton).toBeVisible();
   await avatarButton.click();
   await expectCenteredDialog(page);
   await expect(
-    page.getByText('访客端只显示对外昵称和客服头像。'),
+    page.getByText("访客端只显示对外昵称和客服头像。"),
   ).toBeVisible();
-  await expect(page.getByLabel('对外昵称')).toBeVisible();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await expect(page.getByLabel("对外昵称")).toBeVisible();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(avatarButton).toBeVisible();
@@ -348,24 +348,24 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   expect(mobileAvatarBox?.height ?? 0).toBeGreaterThanOrEqual(34);
   await avatarButton.click();
   await expectCenteredDialog(page);
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
 
   await page.setViewportSize({ width: 1366, height: 768 });
-  await page.goto(url('/agent?notification=latest-unread'));
-  const composer = page.getByPlaceholder('输入回复内容…');
+  await page.goto(url("/agent?notification=latest-unread"));
+  const composer = page.getByPlaceholder("输入回复内容…");
   await expect(composer).toBeVisible();
-  await expect(page).toHaveURL(url('/agent'));
-  await expect(page.getByLabel('会话状态')).toBeVisible();
+  await expect(page).toHaveURL(url("/agent"));
+  await expect(page.getByLabel("会话状态")).toBeVisible();
 
-  const attachmentButton = page.getByRole('button', { name: '添加附件' });
+  const attachmentButton = page.getByRole("button", { name: "添加附件" });
   await attachmentButton.click();
-  const attachmentMenu = page.getByRole('menu');
-  await expect(attachmentMenu.getByText('短信联系')).toBeVisible();
-  await expect(attachmentMenu.getByText('付款链接')).toBeVisible();
+  const attachmentMenu = page.getByRole("menu");
+  await expect(attachmentMenu.getByText("短信联系")).toBeVisible();
+  await expect(attachmentMenu.getByText("付款链接")).toBeVisible();
   await attachmentButton.click();
 
   await page.setViewportSize({ width: 390, height: 700 });
-  const mobileComposer = page.getByPlaceholder('输入回复内容…');
+  const mobileComposer = page.getByPlaceholder("输入回复内容…");
   await mobileComposer.focus();
   await expectMobileThreadGeometry(page);
   const composerBox = await mobileComposer.boundingBox();
@@ -384,11 +384,10 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
 
   const runtimeGeometry = await page.evaluate(() => {
     const browser = globalThis;
-    const shell = browser.document.querySelector('.workspace-shell');
-    const conversationPane = browser.document.querySelector(
-      '.conversation-pane',
-    );
-    const threadPane = browser.document.querySelector('.thread-pane');
+    const shell = browser.document.querySelector(".workspace-shell");
+    const conversationPane =
+      browser.document.querySelector(".conversation-pane");
+    const threadPane = browser.document.querySelector(".thread-pane");
     if (
       !(shell instanceof browser.HTMLElement) ||
       !(conversationPane instanceof browser.HTMLElement) ||
@@ -403,17 +402,17 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     };
   });
   expect(runtimeGeometry).toEqual({
-    shellPosition: 'fixed',
-    conversationInlineHeight: '',
-    threadInlineHeight: '',
+    shellPosition: "fixed",
+    conversationInlineHeight: "",
+    threadInlineHeight: "",
   });
 
   await page.setViewportSize({ width: 390, height: 620 });
   await expectMobileThreadGeometry(page);
   const compactGeometry = await page.evaluate(() => {
     const browser = globalThis;
-    const shell = browser.document.querySelector('.workspace-shell');
-    const composer = browser.document.querySelector('.composer');
+    const shell = browser.document.querySelector(".workspace-shell");
+    const composer = browser.document.querySelector(".composer");
     if (
       !(shell instanceof browser.HTMLElement) ||
       !(composer instanceof browser.HTMLElement)
@@ -441,7 +440,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   }
   await page.setViewportSize({ width: 390, height: 700 });
 
-  const sendButton = page.getByRole('button', { name: '发送' });
+  const sendButton = page.getByRole("button", { name: "发送" });
   const sendButtonBox = await sendButton.boundingBox();
   expect(sendButtonBox).not.toBeNull();
   if (sendButtonBox && viewport) {
@@ -452,7 +451,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     ).toBeLessThanOrEqual(viewport.width + 1);
   }
 
-  const backButton = page.getByRole('button', { name: '返回会话列表' });
+  const backButton = page.getByRole("button", { name: "返回会话列表" });
   const backBox = await backButton.boundingBox();
   expect(backBox?.width ?? 0).toBeGreaterThanOrEqual(38);
   expect(backBox?.height ?? 0).toBeGreaterThanOrEqual(38);
@@ -465,20 +464,20 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
         .overscrollBehaviorX,
     };
   });
-  expect(mobileNavigation.marker?.view).toBe('thread');
-  expect(typeof mobileNavigation.marker?.conversationId).toBe('string');
-  expect(mobileNavigation.overscrollX).toBe('auto');
+  expect(mobileNavigation.marker?.view).toBe("thread");
+  expect(typeof mobileNavigation.marker?.conversationId).toBe("string");
+  expect(mobileNavigation.overscrollX).toBe("auto");
 
   await page.evaluate(() => globalThis.history.back());
-  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(page.getByText("我的会话")).toBeVisible();
   await expect(backButton).toBeHidden();
   await expect(mobileComposer).toBeHidden();
 
-  const settingsButton = page.getByRole('button', { name: '打开功能菜单' });
+  const settingsButton = page.getByRole("button", { name: "打开功能菜单" });
   await expect(settingsButton).toBeVisible();
-  const settingsIcon = settingsButton.locator('svg.ui-icon');
+  const settingsIcon = settingsButton.locator("svg.ui-icon");
   await expect(settingsIcon).toBeVisible();
-  await expect(settingsIcon).toHaveAttribute('viewBox', '0 0 24 24');
+  await expect(settingsIcon).toHaveAttribute("viewBox", "0 0 24 24");
   const settingsButtonBox = await settingsButton.boundingBox();
   const settingsIconBox = await settingsIcon.boundingBox();
   expect(settingsButtonBox?.width ?? 0).toBeGreaterThanOrEqual(40);
@@ -486,24 +485,24 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   expect(settingsIconBox?.width ?? 0).toBeGreaterThanOrEqual(19);
   expect(settingsIconBox?.height ?? 0).toBeGreaterThanOrEqual(19);
   await settingsButton.click();
-  const settingsPage = page.getByRole('region', { name: '功能菜单' });
+  const settingsPage = page.getByRole("region", { name: "功能菜单" });
   await expect(settingsPage).toBeVisible();
   await expect(
-    settingsPage.getByRole('button', { name: '安装到手机' }),
+    settingsPage.getByRole("button", { name: "安装到手机" }),
   ).toBeVisible();
-  await expect(settingsPage.getByText('名片')).toBeVisible();
-  await expect(settingsPage.getByText('首次问候语')).toBeVisible();
-  await expect(settingsPage.getByText('接待流量')).toBeVisible();
+  await expect(settingsPage.getByText("名片")).toBeVisible();
+  await expect(settingsPage.getByText("首次问候语")).toBeVisible();
+  await expect(settingsPage.getByText("接待流量")).toBeVisible();
   await expect(
-    settingsPage.getByRole('button', { name: '退出客服账号' }),
+    settingsPage.getByRole("button", { name: "退出客服账号" }),
   ).toBeVisible();
-  await settingsPage.getByRole('button', { name: '返回工作台' }).click();
+  await settingsPage.getByRole("button", { name: "返回工作台" }).click();
   await expect(settingsPage).toBeHidden();
 
   const inboxGeometry = await page.evaluate(() => {
     const browser = globalThis;
-    const sidebar = browser.document.querySelector('.workspace-sidebar');
-    const pane = browser.document.querySelector('.conversation-pane');
+    const sidebar = browser.document.querySelector(".workspace-sidebar");
+    const pane = browser.document.querySelector(".conversation-pane");
     if (
       !(sidebar instanceof browser.HTMLElement) ||
       !(pane instanceof browser.HTMLElement)
@@ -538,6 +537,6 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   await expect(backButton).toBeVisible();
 
   await backButton.click();
-  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(page.getByText("我的会话")).toBeVisible();
   await expect(mobileComposer).toBeHidden();
 });
