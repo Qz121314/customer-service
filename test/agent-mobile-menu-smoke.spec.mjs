@@ -43,11 +43,12 @@ async function loginAgent(page) {
 async function swipeFromLeftEdge(page, endX) {
   return page.evaluate(
     ({ endX }) => {
+      const browser = globalThis;
       const pointerId = 17;
       const clientY = 420;
       const dispatch = (type, clientX) => {
-        window.dispatchEvent(
-          new PointerEvent(type, {
+        browser.dispatchEvent(
+          new browser.PointerEvent(type, {
             bubbles: true,
             cancelable: true,
             pointerId,
@@ -62,9 +63,11 @@ async function swipeFromLeftEdge(page, endX) {
 
       dispatch('pointerdown', 4);
       dispatch('pointermove', endX);
-      const target = document.querySelector('.mobile-agent-settings-page');
+      const target = browser.document.querySelector(
+        '.mobile-agent-settings-page',
+      );
       const transform =
-        target instanceof HTMLElement ? target.style.transform : '';
+        target instanceof browser.HTMLElement ? target.style.transform : '';
       dispatch('pointerup', endX);
       return transform;
     },
