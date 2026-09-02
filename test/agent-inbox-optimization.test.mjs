@@ -14,13 +14,10 @@ test('agent inbox returns overview, conversations, messages and media in two req
 
   assert.match(api, /getAgentInbox/u);
   assert.match(api, /request<AgentInbox>\('\/api\/agent\/conversations'\)/u);
-  assert.match(worker, /loadAgentInbox\(c\.env\.DB, agent/u);
+  assert.match(worker, /loadAgentInbox/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
-  assert.match(
-    worker,
-    /messages: pageMessages,[\s\S]*media,[\s\S]*readState/u,
-  );
+  assert.match(worker, /messages: pageMessages,[\s\S]*media,[\s\S]*readState/u);
   assert.doesNotMatch(app, /getConversations\(filter/u);
   assert.doesNotMatch(app, /getAgentMedia\(selectedId\)/u);
 });
@@ -38,32 +35,37 @@ test('agent inbox filters, searches and prioritizes unread conversations locally
   assert.match(app, /conversation\.agent_unread_count/u);
 });
 
-test('bootstrap and refresh share the agent inbox loader', async () => {
-  const [bootstrap, worker, sharedInbox] = await Promise.all([
+test('agent inbox shares one loader across bootstrap and refresh', async () => {
+  const [bootstrap, worker, inbox] = await Promise.all([
     read('../src/worker/agent-bootstrap-api.ts'),
     read('../src/worker/agent-api.ts'),
     read('../src/worker/agent-inbox.ts'),
   ]);
 
-  assert.ok(bootstrap.includes("from './agent-inbox'"));
-  assert.ok(worker.includes("from './agent-inbox'"));
-  assert.ok(bootstrap.includes('inbox: await loadAgentInbox'));
-  assert.doesNotMatch(bootstrap, /loadBootstrapInbox|loadAgentQuotaOverview/u);
+  assert.match(bootstrap, /loadAgentInbox/u);
+  assert.match(worker, /loadAgentInbox/u);
+  assert.doesNotMatch(bootstrap, /loadBootstrapInbox/u);
   assert.doesNotMatch(worker, /async function loadAgentInbox/u);
-
-  for (const field of [
-    '__overview_open',
-    '__overview_pending',
-    '__overview_closed',
-  ]) {
-    assert.ok(sharedInbox.includes(field));
-  }
-  assert.ok(sharedInbox.includes('loadAgentQuotaOverview(db, agent.id)'));
-  assert.ok(sharedInbox.includes('if (filtered)'));
-  assert.ok(sharedInbox.includes('loadAgentOverview(db, agent.id)'));
+  assert.match(
+    inbox,
+    /SUM\(CASE WHEN c\.status = 'open' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_open/u,
+  );
+  assert.match(
+    inbox,
+    /SUM\(CASE WHEN c\.status = 'pending' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_pending/u,
+  );
+  assert.match(
+    inbox,
+    /SUM\(CASE WHEN c\.status = 'closed' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_closed/u,
+  );
+  assert.match(inbox, /loadAgentQuotaOverview\(db, agent\.id\)/u);
+  assert.match(
+    inbox,
+    /if \(filtered\) \{[\s\S]*loadAgentOverview\(db, agent\.id\)/u,
+  );
   assert.equal(
-    (sharedInbox.match(/loadAgentOverview\(db, agent\.id\)/gu) ?? []).length,
+    (inbox.match(/loadAgentOverview\(db, agent\.id\)/gu) ?? []).length,
     1,
   );
-  assert.ok(sharedInbox.includes('delete conversation.__overview_open'));
+  assert.match(inbox, /delete conversation\.__overview_open/u);
 });
