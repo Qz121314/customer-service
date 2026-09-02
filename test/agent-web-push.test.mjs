@@ -47,7 +47,7 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   assert.match(dashboard, /Promise\.race\(\[/u);
   assert.match(dashboard, /通知服务启动超时，请刷新页面后重试/u);
   assert.match(chrome, /新会话通知/u);
-  assert.match(chrome, /切换应用或锁屏也会提醒/u);
+  assert.match(chrome, /切后台、锁屏或离开页面也会提醒/u);
   assert.match(chrome, /工作台提示音/u);
   assert.doesNotMatch(chrome, /前台提示音/u);
   assert.doesNotMatch(chrome, /后台可接收系统通知/u);
