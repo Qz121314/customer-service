@@ -52,14 +52,14 @@ export function AgentActionToolbar({
           }
           title={
             notificationState === 'unsupported'
-              ? '当前浏览器不支持系统通知'
+              ? '当前浏览器不支持通知，无法接收新的自动分流'
               : notificationState === 'install-required'
                 ? '请先添加到主屏幕，再从桌面打开并开启通知'
                 : notificationState === 'blocked'
-                  ? '通知已被浏览器阻止'
+                  ? '通知已被浏览器阻止，当前暂停新会话分流'
                   : notificationState === 'enabled'
-                    ? '新会话通知已开启'
-                    : '开启新会话通知'
+                    ? '新会话通知已开启，可接收新的自动分流'
+                    : '开启新会话通知后参与自动分流'
           }
           disabled={notificationBusy || notificationState === 'unsupported'}
           onClick={onToggleNotifications}
@@ -262,14 +262,14 @@ export function AgentMobileSettingsPage({
                   {notificationBusy
                     ? '正在设置…'
                     : notificationState === 'enabled'
-                      ? '已开启 · 切换应用或锁屏也会提醒'
+                      ? '已开启 · 可接收新分流，切换应用或锁屏也会提醒'
                       : notificationState === 'install-required'
-                        ? 'iPhone/iPad 请先添加到主屏幕'
+                        ? 'iPhone/iPad 请先添加到主屏幕并开启通知'
                         : notificationState === 'blocked'
-                          ? '已被浏览器阻止'
+                          ? '已被浏览器阻止 · 当前暂停新会话分流'
                           : notificationState === 'unsupported'
-                            ? '当前浏览器不支持'
-                            : '接到新会话时显示系统通知'}
+                            ? '当前浏览器不支持 · 无法接收新会话分流'
+                            : '开启后参与新会话自动分流'}
                 </small>
               </span>
               <b aria-hidden="true" />
