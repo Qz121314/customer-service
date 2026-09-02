@@ -1,9 +1,9 @@
-import { Suspense, lazy, type ComponentProps } from 'react';
+import { Suspense, lazy } from 'react';
 
 type AdminStatisticsPageModule = typeof import('./AdminStatisticsPageImpl');
-type AdminStatisticsPageProps = ComponentProps<
+type AdminStatisticsPageProps = Parameters<
   AdminStatisticsPageModule['AdminStatisticsPage']
->;
+>[0];
 
 const LazyAdminStatisticsPage = lazy(() =>
   import('./AdminStatisticsPageImpl').then(({ AdminStatisticsPage }) => ({

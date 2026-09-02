@@ -1,9 +1,9 @@
-import { Suspense, lazy, type ComponentProps } from 'react';
+import { Suspense, lazy } from 'react';
 
 type AgentEditorModalModule = typeof import('./AgentEditorModalImpl');
-type AgentEditorModalProps = ComponentProps<
+type AgentEditorModalProps = Parameters<
   AgentEditorModalModule['AgentEditorModal']
->;
+>[0];
 
 const LazyAgentEditorModal = lazy(() =>
   import('./AgentEditorModalImpl').then(({ AgentEditorModal }) => ({

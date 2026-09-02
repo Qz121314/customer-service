@@ -1,10 +1,10 @@
-import { Suspense, lazy, type ComponentProps } from 'react';
+import { Suspense, lazy } from 'react';
 
 type AdminAgentStatisticsModalModule =
   typeof import('./AdminAgentStatisticsModalImpl');
-type AdminAgentStatisticsModalProps = ComponentProps<
+type AdminAgentStatisticsModalProps = Parameters<
   AdminAgentStatisticsModalModule['AdminAgentStatisticsModal']
->;
+>[0];
 
 const LazyAdminAgentStatisticsModal = lazy(() =>
   import('./AdminAgentStatisticsModalImpl').then(
