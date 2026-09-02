@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { agentContactCardHref } from '../src/dashboard/agent-attachments-client.ts';
+import {
+  agentContactCardHref,
+  groupAgentMessageAttachments,
+} from '../src/dashboard/agent-attachments-client.ts';
 import {
   decodeContactCardIconRef,
   encodeContactCardIconRef,
@@ -103,4 +106,49 @@ test('contact card icon references expose only validated internal R2 objects', (
     null,
   );
   assert.equal(decodeContactCardIconRef('not-a-card-icon'), null);
+});
+
+test('message attachments group once by message while preserving attachment order', () => {
+  const first = {
+    id: 'attachment-1',
+    messageId: 'message-1',
+    kind: 'sms',
+    label: 'Messages',
+    value: '+12135551234',
+    presetMessage: null,
+  };
+  const second = {
+    id: 'attachment-2',
+    messageId: 'message-1',
+    kind: 'telegram',
+    label: 'Telegram',
+    value: 'support_team',
+    presetMessage: 'Hello',
+  };
+  const third = {
+    id: 'attachment-3',
+    messageId: 'message-2',
+    kind: 'website',
+    label: 'Website',
+    value: 'https://example.com',
+    presetMessage: null,
+  };
+  const pendingWithoutMessage = {
+    id: 'attachment-pending',
+    kind: 'whatsapp',
+    label: 'WhatsApp',
+    value: '+12135550000',
+    presetMessage: null,
+  };
+
+  const grouped = groupAgentMessageAttachments([
+    first,
+    second,
+    third,
+    pendingWithoutMessage,
+  ]);
+
+  assert.deepEqual(grouped.get('message-1'), [first, second]);
+  assert.deepEqual(grouped.get('message-2'), [third]);
+  assert.equal(grouped.size, 2);
 });

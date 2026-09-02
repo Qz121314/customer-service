@@ -115,6 +115,64 @@ function saveAgentConversationDrafts(
   }
 }
 
+type AgentDraftSaveTimers = {
+  set(callback: () => void, delay: number): number;
+  clear(timerId: number): void;
+};
+
+function createAgentDraftSaveScheduler(
+  save: (
+    agentId: string,
+    drafts: AgentConversationDrafts,
+  ) => void = saveAgentConversationDrafts,
+  delayMs = 400,
+  timers: AgentDraftSaveTimers = {
+    set: (callback, delay) => window.setTimeout(callback, delay),
+    clear: (timerId) => window.clearTimeout(timerId),
+  },
+) {
+  let pending: {
+    agentId: string;
+    drafts: AgentConversationDrafts;
+  } | null = null;
+  let timerId: number | null = null;
+
+  const clearTimer = () => {
+    if (timerId === null) return;
+    timers.clear(timerId);
+    timerId = null;
+  };
+
+  const flush = () => {
+    clearTimer();
+    const current = pending;
+    pending = null;
+    if (current) save(current.agentId, current.drafts);
+  };
+
+  return {
+    schedule(agentId: string, drafts: AgentConversationDrafts) {
+      if (pending && pending.agentId !== agentId) flush();
+      pending = { agentId, drafts };
+      clearTimer();
+      timerId = timers.set(() => {
+        timerId = null;
+        const current = pending;
+        pending = null;
+        if (current) save(current.agentId, current.drafts);
+      }, delayMs);
+    },
+    flush,
+    cancel() {
+      clearTimer();
+      pending = null;
+    },
+    hasPending() {
+      return pending !== null;
+    },
+  };
+}
+
 function loadAgentSoundEnabled(agentId: string): boolean {
   try {
     return window.localStorage.getItem(`cs-agent-sound:${agentId}`) !== 'off';
@@ -365,6 +423,7 @@ export {
   REMOTE_TYPING_STALE_MS,
   loadAgentConversationDrafts,
   saveAgentConversationDrafts,
+  createAgentDraftSaveScheduler,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
   emitAgentMessageTone,
