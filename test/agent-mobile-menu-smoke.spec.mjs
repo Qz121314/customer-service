@@ -63,28 +63,52 @@ async function swipeFromLeftEdge(page, endX) {
 
       dispatch('pointerdown', 4);
       dispatch('pointermove', endX);
-      const target = browser.document.querySelector(
-        '.mobile-agent-settings-page',
-      );
+      const surface = browser.document
+        .elementsFromPoint(endX, clientY)
+        .map((element) =>
+          element.closest('[data-agent-swipe-back-surface="true"]'),
+        )
+        .find((element) => element instanceof browser.HTMLElement);
       const transform =
-        target instanceof browser.HTMLElement ? target.style.transform : '';
+        surface instanceof browser.HTMLElement ? surface.style.transform : '';
+      const surfaceClass =
+        surface instanceof browser.HTMLElement ? surface.className : '';
       const revealedElement = browser.document.elementFromPoint(16, clientY);
-      const conversationPaneRevealed = Boolean(
+      const revealedConversation = Boolean(
         revealedElement?.closest('.conversation-pane'),
       );
+      const revealedSettings = Boolean(
+        revealedElement?.closest('.mobile-agent-settings-page'),
+      );
       dispatch('pointerup', endX);
-      return { transform, conversationPaneRevealed };
+      return {
+        transform,
+        surfaceClass,
+        revealedConversation,
+        revealedSettings,
+      };
     },
     { endX },
   );
 }
 
-test('mobile settings keeps its navigation context after child dialogs close', async ({
+test('mobile agent surfaces share one edge-swipe back contract', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedAgent(page);
   await loginAgent(page);
+
+  const avatarButton = page.getByRole('button', { name: '客服资料' });
+  await avatarButton.click();
+  const profileDialog = page.getByRole('dialog', { name: '客服资料' });
+  await expect(profileDialog).toBeVisible();
+  const profileSwipe = await swipeFromLeftEdge(page, 150);
+  expect(profileSwipe.surfaceClass).toContain('agent-avatar-backdrop');
+  expect(profileSwipe.transform).toContain('translate3d');
+  expect(profileSwipe.revealedConversation).toBeTruthy();
+  await expect(profileDialog).toBeHidden();
+  await expect(page.getByText('我的会话')).toBeVisible();
 
   await page.getByRole('button', { name: '打开功能菜单' }).click();
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
@@ -118,8 +142,9 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   ).toBeTruthy();
 
   const cancelledSwipe = await swipeFromLeftEdge(page, 64);
+  expect(cancelledSwipe.surfaceClass).toContain('mobile-agent-settings-page');
   expect(cancelledSwipe.transform).toContain('translate3d');
-  expect(cancelledSwipe.conversationPaneRevealed).toBeTruthy();
+  expect(cancelledSwipe.revealedConversation).toBeTruthy();
   await expect(settingsPage).toBeVisible();
   await expect
     .poll(() => settingsPage.evaluate((element) => element.style.transform))
@@ -132,7 +157,10 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     'animation-name',
     'agent-overlay-sheet-in',
   );
-  await page.getByRole('button', { name: '关闭名片设置' }).click();
+  const cardSwipe = await swipeFromLeftEdge(page, 150);
+  expect(cardSwipe.surfaceClass).toContain('agent-attachment-manager-backdrop');
+  expect(cardSwipe.transform).toContain('translate3d');
+  expect(cardSwipe.revealedSettings).toBeTruthy();
   await expect(cardSettingsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
@@ -172,20 +200,27 @@ test('mobile settings keeps its navigation context after child dialogs close', a
       ),
     ).toBeLessThanOrEqual(1);
   }
-  await page.getByRole('button', { name: '关闭自动回复设置' }).click();
+  const autoReplySwipe = await swipeFromLeftEdge(page, 150);
+  expect(autoReplySwipe.surfaceClass).toContain(
+    'agent-auto-reply-modal-backdrop',
+  );
+  expect(autoReplySwipe.revealedSettings).toBeTruthy();
   await expect(autoReplyDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
   await settingsPage.getByRole('button', { name: /接待流量/u }).click();
   const statsDialog = page.getByRole('dialog', { name: /接待数据/u });
   await expect(statsDialog).toBeVisible();
-  await page.getByRole('button', { name: '关闭接待流量' }).click();
+  const statsSwipe = await swipeFromLeftEdge(page, 150);
+  expect(statsSwipe.surfaceClass).toContain('statistics-modal-backdrop');
+  expect(statsSwipe.revealedSettings).toBeTruthy();
   await expect(statsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
   const committedSwipe = await swipeFromLeftEdge(page, 150);
+  expect(committedSwipe.surfaceClass).toContain('mobile-agent-settings-page');
   expect(committedSwipe.transform).toContain('translate3d');
-  expect(committedSwipe.conversationPaneRevealed).toBeTruthy();
+  expect(committedSwipe.revealedConversation).toBeTruthy();
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
 });
