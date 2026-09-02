@@ -55,7 +55,8 @@ export const AgentSidebar = memo(function AgentSidebar({
   onLogout: () => void;
 }) {
   const [desktopAutoReplyOpen, setDesktopAutoReplyOpen] = useState(false);
-  const [desktopCardSettingsOpen, setDesktopCardSettingsOpen] = useState(false);
+  const [desktopCardSettingsOpen, setDesktopCardSettingsOpen] =
+    useState(false);
   const [mobileView, setMobileView] = useState<AgentMobileView>('workspace');
 
   const closeCardSettings = () => {
