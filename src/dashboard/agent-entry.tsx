@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AgentPortal } from './AgentPortal';
+import { installAgentEdgeSwipeBack } from './agent-edge-swipe';
 import {
   clearAgentThreadHistoryMarker,
   readAgentThreadHistoryMarker,
@@ -196,4 +197,5 @@ export async function bootstrap() {
   );
   installAgentVisualViewportSync();
   installAgentHistoryNavigation();
+  installAgentEdgeSwipeBack();
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
@@ -5,12 +6,36 @@ const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 const agentUsername = 'ui-mobile-menu-agent';
 const agentPassword = 'ui-mobile-menu-pass';
+const productId = 'ui-mobile-menu-product';
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
 async function seedAgent(page) {
+  const syncProduct = await page.request.post(url('/integration/v1/verify'), {
+    headers: {
+      authorization: 'Bearer ui-smoke-integration-token',
+    },
+    data: {
+      productCatalog: {
+        products: [
+          {
+            id: productId,
+            sectionId: 'ui-mobile-menu-section',
+            sectionName: 'Mobile Menu Section',
+            categoryId: 'ui-mobile-menu-category',
+            categoryName: 'Mobile Menu Category',
+            title: 'Mobile Swipe Product',
+            href: 'https://example.com/mobile-swipe-product',
+            coverUrl: null,
+          },
+        ],
+      },
+    },
+  });
+  expect(syncProduct.ok()).toBeTruthy();
+
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -21,7 +46,7 @@ async function seedAgent(page) {
       name: 'Mobile Menu Agent',
       username: agentUsername,
       password: agentPassword,
-      routingScope: { type: 'none' },
+      routingScope: { type: 'product', productIds: [productId] },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
       trafficQuotaTopUp: 0,
@@ -32,20 +57,116 @@ async function seedAgent(page) {
   expect(createAgent.ok()).toBeTruthy();
 }
 
+async function createConversation(page) {
+  const response = await page.request.post(url('/client/v1/conversations'), {
+    headers: { 'CF-Connecting-IP': '198.51.100.27' },
+    data: {
+      visitorId: 'UI-MOBILE-MENU-VISITOR',
+      sourceHandoffId: randomUUID(),
+      clientMessageId: 'ui-mobile-menu-message',
+      message: '测试移动端统一返回手势',
+      product: {
+        id: productId,
+        sectionId: 'ui-mobile-menu-section',
+        sectionName: 'Mobile Menu Section',
+        categoryId: 'ui-mobile-menu-category',
+        categoryName: 'Mobile Menu Category',
+        title: 'Mobile Swipe Product',
+        href: 'https://example.com/mobile-swipe-product',
+        coverUrl: null,
+      },
+    },
+  });
+  const payload = await response.json();
+  expect(response.ok(), JSON.stringify(payload)).toBeTruthy();
+}
+
 async function loginAgent(page) {
   await page.goto(url('/agent'));
   await page.getByLabel('客服账号').fill(agentUsername);
   await page.getByLabel('登录密码').fill(agentPassword);
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
+  await createConversation(page);
+  await page.reload();
+  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Mobile Swipe Product/u }),
+  ).toBeVisible();
 }
 
-test('mobile settings keeps its navigation context after child dialogs close', async ({
+async function swipeFromLeftEdge(page, endX) {
+  return page.evaluate(
+    ({ endX }) => {
+      const browser = globalThis;
+      const pointerId = 17;
+      const clientY = 420;
+      const dispatch = (type, clientX) => {
+        browser.dispatchEvent(
+          new browser.PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId,
+            pointerType: 'touch',
+            isPrimary: true,
+            button: 0,
+            clientX,
+            clientY,
+          }),
+        );
+      };
+
+      dispatch('pointerdown', 4);
+      dispatch('pointermove', endX);
+      const surface = [
+        ...browser.document.querySelectorAll(
+          '[data-agent-swipe-back-surface="true"]',
+        ),
+      ].find(
+        (element) =>
+          element instanceof browser.HTMLElement &&
+          element.style.transform.includes('translate3d'),
+      );
+      const transform =
+        surface instanceof browser.HTMLElement ? surface.style.transform : '';
+      const surfaceClass =
+        surface instanceof browser.HTMLElement ? surface.className : '';
+      const revealedElement = browser.document.elementFromPoint(16, clientY);
+      const revealedConversation = Boolean(
+        revealedElement?.closest('.conversation-pane'),
+      );
+      const revealedSettings = Boolean(
+        revealedElement?.closest('.mobile-agent-settings-page'),
+      );
+      dispatch('pointerup', endX);
+      return {
+        transform,
+        surfaceClass,
+        revealedConversation,
+        revealedSettings,
+      };
+    },
+    { endX },
+  );
+}
+
+test('mobile agent back gesture follows actual navigation hierarchy', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedAgent(page);
   await loginAgent(page);
+
+  const avatarButton = page.getByRole('button', { name: '客服资料' });
+  await avatarButton.click();
+  const profileDialog = page.getByRole('dialog', { name: '客服资料' });
+  await expect(profileDialog).toBeVisible();
+  const profileSwipe = await swipeFromLeftEdge(page, 150);
+  expect(profileSwipe.surfaceClass).toBe('');
+  expect(profileSwipe.transform).toBe('');
+  await expect(profileDialog).toBeVisible();
+  await profileDialog.getByRole('button', { name: '关闭' }).click();
+  await expect(profileDialog).toBeHidden();
 
   await page.getByRole('button', { name: '打开功能菜单' }).click();
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
@@ -78,6 +199,15 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     settingsGeometry.cardRadii.every((radius) => radius >= 16),
   ).toBeTruthy();
 
+  const cancelledSwipe = await swipeFromLeftEdge(page, 64);
+  expect(cancelledSwipe.surfaceClass).toContain('mobile-agent-settings-page');
+  expect(cancelledSwipe.transform).toContain('translate3d');
+  expect(cancelledSwipe.revealedConversation).toBeTruthy();
+  await expect(settingsPage).toBeVisible();
+  await expect
+    .poll(() => settingsPage.evaluate((element) => element.style.transform))
+    .toBe('');
+
   await settingsPage.getByRole('button', { name: /名片/u }).click();
   const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
   await expect(cardSettingsDialog).toBeVisible();
@@ -85,7 +215,13 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     'animation-name',
     'agent-overlay-sheet-in',
   );
-  await page.getByRole('button', { name: '关闭名片设置' }).click();
+  const cardSwipe = await swipeFromLeftEdge(page, 150);
+  expect(cardSwipe.surfaceClass).toBe('');
+  expect(cardSwipe.transform).toBe('');
+  await expect(cardSettingsDialog).toBeVisible();
+  await cardSettingsDialog
+    .getByRole('button', { name: '关闭名片设置' })
+    .click();
   await expect(cardSettingsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
@@ -125,18 +261,52 @@ test('mobile settings keeps its navigation context after child dialogs close', a
       ),
     ).toBeLessThanOrEqual(1);
   }
-  await page.getByRole('button', { name: '关闭自动回复设置' }).click();
+  const autoReplySwipe = await swipeFromLeftEdge(page, 150);
+  expect(autoReplySwipe.surfaceClass).toBe('');
+  expect(autoReplySwipe.transform).toBe('');
+  await expect(autoReplyDialog).toBeVisible();
+  await autoReplyDialog.getByRole('button', { name: '关闭' }).click();
   await expect(autoReplyDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
   await settingsPage.getByRole('button', { name: /接待流量/u }).click();
   const statsDialog = page.getByRole('dialog', { name: /接待数据/u });
   await expect(statsDialog).toBeVisible();
-  await page.getByRole('button', { name: '关闭接待流量' }).click();
+  const statsSwipe = await swipeFromLeftEdge(page, 150);
+  expect(statsSwipe.surfaceClass).toContain('agent-statistics-backdrop');
+  expect(statsSwipe.transform).toContain('translate3d');
+  expect(statsSwipe.revealedSettings).toBeTruthy();
   await expect(statsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
-  await settingsPage.getByRole('button', { name: '返回工作台' }).click();
+  const committedSwipe = await swipeFromLeftEdge(page, 150);
+  expect(committedSwipe.surfaceClass).toContain('mobile-agent-settings-page');
+  expect(committedSwipe.transform).toContain('translate3d');
+  expect(committedSwipe.revealedConversation).toBeTruthy();
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
+
+  await page.getByRole('button', { name: /Mobile Swipe Product/u }).click();
+  const composer = page.getByPlaceholder('输入回复内容…');
+  await expect(composer).toBeVisible();
+
+  const cancelledThreadSwipe = await swipeFromLeftEdge(page, 64);
+  expect(cancelledThreadSwipe.surfaceClass).toContain('thread-pane');
+  expect(cancelledThreadSwipe.transform).toContain('translate3d');
+  expect(cancelledThreadSwipe.revealedConversation).toBeTruthy();
+  await expect(composer).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator('.thread-pane')
+        .evaluate((element) => element.style.transform),
+    )
+    .toBe('');
+
+  const committedThreadSwipe = await swipeFromLeftEdge(page, 150);
+  expect(committedThreadSwipe.surfaceClass).toContain('thread-pane');
+  expect(committedThreadSwipe.transform).toContain('translate3d');
+  expect(committedThreadSwipe.revealedConversation).toBeTruthy();
+  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(composer).toBeHidden();
 });
