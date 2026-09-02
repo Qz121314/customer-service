@@ -1240,16 +1240,39 @@ async function findEnabledProduct(
   if (!row || row.is_enabled !== 1 || !row.section_id || !row.title) {
     return null;
   }
+  const href = normalizeCatalogProductHref(row.href);
+  if (!href) return null;
   return {
     id: row.id,
     title: row.title,
-    href: row.href ?? '',
+    href,
     coverUrl: row.cover_url,
     sectionId: row.section_id,
     sectionName: row.section_name,
     categoryId: row.category_id,
     categoryName: row.category_name,
   };
+}
+
+function normalizeCatalogProductHref(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    const localHttp =
+      url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    if (
+      (url.protocol !== 'https:' && !localHttp) ||
+      url.username ||
+      url.password
+    ) {
+      return null;
+    }
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 async function discardUnassignedConversation(

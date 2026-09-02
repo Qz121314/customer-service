@@ -49,7 +49,7 @@ const product = {
   categoryId: 'category-1',
   categoryName: 'Category 1',
   title: 'Product 1',
-  href: '/sections/west/products/product-1/',
+  href: 'https://storefront.example/sections/west/products/product-1/',
   coverUrl: null,
 };
 
@@ -155,7 +155,7 @@ function setup({ greetingEnabled, greetingText = null }) {
       section_id, section_name, category_id, category_name, is_enabled
     ) VALUES (
       'default', 'product-1', 'Product 1',
-      '/sections/west/products/product-1/', NULL,
+      'https://storefront.example/sections/west/products/product-1/', NULL,
       'west', 'West', 'category-1', 'Category 1', 1
     );
     INSERT INTO agent_routing_scopes (
@@ -223,7 +223,7 @@ test('visitor product fields cannot override the Site-synchronized catalog', asy
         sectionId: 'east',
         sectionName: 'East',
         title: 'Forged Product',
-        href: '/forged',
+        href: 'https://storefront.example/forged',
       },
     },
   );
@@ -578,7 +578,7 @@ test('different products keep independent conversations', async () => {
     ...product,
     id: 'product-2',
     title: 'Product 2',
-    href: '/sections/west/products/product-2/',
+    href: 'https://storefront.example/sections/west/products/product-2/',
   };
 
   const first = await startConversation(

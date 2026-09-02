@@ -64,7 +64,7 @@ function product(index) {
   return {
     id: `product-${index}`,
     title: `Product ${index}`,
-    href: `/products/${index}`,
+    href: `https://storefront.example/products/${index}`,
     coverUrl: null,
     sectionId: `section-${index % 8}`,
     sectionName: `Section ${index % 8}`,
@@ -91,6 +91,18 @@ async function syncRequest(db, products) {
     },
   );
 }
+
+test('product sync rejects relative detail URLs', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const response = await syncRequest(d1(database), [
+    { ...product(1), href: '/products/1' },
+  ]);
+
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, 'INVALID_PRODUCT_CATALOG');
+  database.close();
+});
 
 function scalar(database, sql, column) {
   return database.prepare(sql).get()[column];

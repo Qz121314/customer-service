@@ -11,7 +11,8 @@ type IntegrationEnv = { Bindings: IntegrationBindings };
 type ProductCatalogItem = {
   id: string;
   title: string;
-  href: string | null;
+  /** Canonical public product-detail URL supplied by Site. */
+  href: string;
   coverUrl: string | null;
   sectionId: string | null;
   sectionName: string | null;
@@ -134,14 +135,14 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
     if (!id || !title || seen.has(id)) return null;
     seen.add(id);
 
-    const href = normalizeNullableText(rawProduct.href, 1000);
+    const href = normalizePublicProductHref(rawProduct.href);
     const coverUrl = normalizeNullableText(rawProduct.coverUrl, 2000);
     const sectionId = normalizeNullableText(rawProduct.sectionId, 100);
     const sectionName = normalizeNullableText(rawProduct.sectionName, 120);
     const categoryId = normalizeNullableText(rawProduct.categoryId, 100);
     const categoryName = normalizeNullableText(rawProduct.categoryName, 120);
     if (
-      href === undefined ||
+      !href ||
       coverUrl === undefined ||
       sectionId === undefined ||
       sectionName === undefined ||
@@ -164,6 +165,28 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
     });
   }
   return { products };
+}
+
+function normalizePublicProductHref(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim() || value.length > 1000)
+    return null;
+  try {
+    const url = new URL(value);
+    const localHttp =
+      url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    if (
+      (url.protocol !== 'https:' && !localHttp) ||
+      url.username ||
+      url.password
+    ) {
+      return null;
+    }
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 /**
