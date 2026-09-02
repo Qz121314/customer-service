@@ -14,10 +14,7 @@ test('agent inbox returns overview, conversations, messages and media in two req
 
   assert.match(api, /getAgentInbox/u);
   assert.match(api, /request<AgentInbox>\('\/api\/agent\/conversations'\)/u);
-  assert.match(
-    worker,
-    /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
-  );
+  assert.match(worker, /loadAgentInbox\(c\.env\.DB, agent/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
   assert.match(worker, /messages: pageMessages,[\s\S]*media,[\s\S]*readState/u);
@@ -38,33 +35,39 @@ test('agent inbox filters, searches and prioritizes unread conversations locally
   assert.match(app, /conversation\.agent_unread_count/u);
 });
 
-test('agent inbox folds unfiltered overview counts into the conversation scan', async () => {
-  const worker = await read('../src/worker/agent-api.ts');
-  const start = worker.indexOf('async function loadAgentInbox');
-  const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
-  assert.ok(start >= 0 && end > start);
-  const inbox = worker.slice(start, end);
+test('bootstrap and refresh share one agent inbox loader without adding a request', async () => {
+  const [bootstrap, worker, sharedInbox] = await Promise.all([
+    read('../src/worker/agent-bootstrap-api.ts'),
+    read('../src/worker/agent-api.ts'),
+    read('../src/worker/agent-inbox.ts'),
+  ]);
+
+  assert.match(bootstrap, /import \{ loadAgentInbox \} from '\.\/agent-inbox';/u);
+  assert.match(worker, /import \{[\s\S]*loadAgentInbox[\s\S]*\} from '\.\/agent-inbox';/u);
+  assert.match(bootstrap, /inbox: await loadAgentInbox\(c\.env\.DB, agent\)/u);
+  assert.doesNotMatch(bootstrap, /loadBootstrapInbox|loadAgentQuotaOverview/u);
+  assert.doesNotMatch(worker, /async function loadAgentInbox/u);
 
   assert.match(
-    inbox,
+    sharedInbox,
     /SUM\(CASE WHEN c\.status = 'open' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_open/u,
   );
   assert.match(
-    inbox,
+    sharedInbox,
     /SUM\(CASE WHEN c\.status = 'pending' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_pending/u,
   );
   assert.match(
-    inbox,
+    sharedInbox,
     /SUM\(CASE WHEN c\.status = 'closed' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_closed/u,
   );
-  assert.match(inbox, /loadAgentQuotaOverview\(db, agent\.id\)/u);
+  assert.match(sharedInbox, /loadAgentQuotaOverview\(db, agent\.id\)/u);
   assert.match(
-    inbox,
+    sharedInbox,
     /if \(filtered\) \{[\s\S]*loadAgentOverview\(db, agent\.id\)/u,
   );
   assert.equal(
-    (inbox.match(/loadAgentOverview\(db, agent\.id\)/gu) ?? []).length,
+    (sharedInbox.match(/loadAgentOverview\(db, agent\.id\)/gu) ?? []).length,
     1,
   );
-  assert.match(inbox, /delete conversation\.__overview_open/u);
+  assert.match(sharedInbox, /delete conversation\.__overview_open/u);
 });
