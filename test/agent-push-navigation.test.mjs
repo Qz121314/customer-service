@@ -48,7 +48,7 @@ test('agent push opens the latest unread thread without reloading the workspace'
     "onFilterChange('all')",
     "onSearchChange('')",
     'clearAgentNotificationOpenIntent();',
-    'selectConversation(target.id)',
+    "selectConversation(target.id, 'notification')",
   ]) {
     assert.ok(inbox.includes(contract), contract);
   }
