@@ -75,3 +75,35 @@ test('assigned conversation start reuses the assignment lifecycle snapshot', () 
   assert.doesNotMatch(assignedBranch, /ownedConversation\(/u);
   assert.doesNotMatch(assignedBranch, /broadcastClientConversationEvent\(/u);
 });
+
+test('new source handoff ownership avoids a read-after-write D1 round trip', () => {
+  const helper = section(
+    clientSource,
+    'async function rememberSourceHandoff',
+    'async function ownedConversationByReuseKey',
+  );
+
+  assert.match(helper, /RETURNING conversation_id AS conversationId/u);
+  assert.match(helper, /if \(inserted\?\.conversationId === conversationId\)/u);
+  assert.match(helper, /return \{ conversationId, externalId \}/u);
+  assert.match(helper, /const owner = await sourceHandoffOwner/u);
+});
+
+test('conversation start only refreshes a snapshot after a concurrent assignment', () => {
+  const helper = section(
+    clientSource,
+    'async function continueConversationStart',
+    'function conversationSummary',
+  );
+
+  assert.match(
+    helper,
+    /else if \(assignment && !conversation\.assigned_agent\)/u,
+  );
+  assert.match(helper, /return conversation;/u);
+  assert.doesNotMatch(
+    helper,
+    /return \(\s*\(await ownedConversation[\s\S]*\?\? conversation\s*\);/u,
+  );
+});
+
