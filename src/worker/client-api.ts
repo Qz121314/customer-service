@@ -464,6 +464,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
         site.id,
         sourceHandoffId,
         conversation.id,
+        visitorId,
       );
       if (handoffOwner.externalId !== visitorId) {
         return error(
@@ -670,6 +671,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     site.id,
     sourceHandoffId,
     conversationId,
+    visitorId,
   );
   if (
     handoffOwner.externalId !== visitorId ||
@@ -1647,15 +1649,21 @@ async function rememberSourceHandoff(
   siteId: string,
   sourceHandoffId: string,
   conversationId: string,
+  externalId: string,
 ): Promise<SourceHandoffOwner> {
-  await db
+  const inserted = await db
     .prepare(
       `INSERT OR IGNORE INTO conversation_source_handoffs (
          site_id, source_handoff_id, conversation_id
-       ) VALUES (?1, ?2, ?3)`,
+       ) VALUES (?1, ?2, ?3)
+       RETURNING conversation_id AS conversationId`,
     )
     .bind(siteId, sourceHandoffId, conversationId)
-    .run();
+    .first<{ conversationId: string }>();
+
+  if (inserted?.conversationId === conversationId) {
+    return { conversationId, externalId };
+  }
 
   const owner = await sourceHandoffOwner(db, siteId, sourceHandoffId);
   if (!owner) throw new Error('Source handoff persistence failed');
@@ -1749,14 +1757,17 @@ async function continueConversationStart(
       )) ?? conversation;
   }
 
-  return (
-    (await ownedConversation(
-      env.DB,
-      conversation.id,
-      input.siteId,
-      input.visitorId,
-    )) ?? conversation
-  );
+  if (assignment && !conversation.assigned_agent) {
+    conversation =
+      (await ownedConversation(
+        env.DB,
+        conversation.id,
+        input.siteId,
+        input.visitorId,
+      )) ?? conversation;
+  }
+
+  return conversation;
 }
 
 function conversationSummary(conversation: ConversationRow) {
