@@ -108,7 +108,6 @@ test('contact card icon references expose only validated internal R2 objects', (
   assert.equal(decodeContactCardIconRef('not-a-card-icon'), null);
 });
 
-
 test('message attachments group once by message while preserving attachment order', () => {
   const first = {
     id: 'attachment-1',
