@@ -17,11 +17,15 @@ import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentCardSettingsModal } from './AgentAttachmentTools';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
+import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { UiIcon } from './icons';
 import {
   AgentActionToolbar,
   AgentMobileSettingsPage,
 } from './AgentWorkspaceChrome';
+
+type AgentMobileView =
+  'workspace' | 'menu' | 'cards' | 'autoReply' | 'statistics';
 
 export const AgentSidebar = memo(function AgentSidebar({
   identity,
@@ -46,9 +50,26 @@ export const AgentSidebar = memo(function AgentSidebar({
   onOpenStatistics: () => void;
   onLogout: () => void;
 }) {
-  const [autoReplyOpen, setAutoReplyOpen] = useState(false);
-  const [cardSettingsOpen, setCardSettingsOpen] = useState(false);
-  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
+  const [desktopAutoReplyOpen, setDesktopAutoReplyOpen] = useState(false);
+  const [desktopCardSettingsOpen, setDesktopCardSettingsOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<AgentMobileView>('workspace');
+
+  const closeCardSettings = () => {
+    if (mobileView === 'cards') {
+      setMobileView('menu');
+      return;
+    }
+    setDesktopCardSettingsOpen(false);
+  };
+
+  const closeAutoReply = () => {
+    if (mobileView === 'autoReply') {
+      setMobileView('menu');
+      return;
+    }
+    setDesktopAutoReplyOpen(false);
+  };
+
   return (
     <>
       <aside className="workspace-sidebar">
@@ -75,34 +96,42 @@ export const AgentSidebar = memo(function AgentSidebar({
           soundEnabled={soundEnabled}
           onToggleNotifications={onToggleNotifications}
           onToggleSound={onToggleSound}
-          onOpenCardSettings={() => setCardSettingsOpen(true)}
-          onOpenAutoReply={() => setAutoReplyOpen(true)}
+          onOpenCardSettings={() => setDesktopCardSettingsOpen(true)}
+          onOpenAutoReply={() => setDesktopAutoReplyOpen(true)}
           onOpenStatistics={onOpenStatistics}
           onLogout={onLogout}
-          onOpenMobileSettings={() => setMobileSettingsOpen(true)}
+          onOpenMobileSettings={() => setMobileView('menu')}
         />
       </aside>
       <AgentMobileSettingsPage
-        open={mobileSettingsOpen}
+        open={mobileView === 'menu'}
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
-        onClose={() => setMobileSettingsOpen(false)}
+        onClose={() => setMobileView('workspace')}
         onToggleNotifications={onToggleNotifications}
         onToggleSound={onToggleSound}
-        onOpenCardSettings={() => setCardSettingsOpen(true)}
-        onOpenAutoReply={() => setAutoReplyOpen(true)}
-        onOpenStatistics={onOpenStatistics}
+        onOpenCardSettings={() => setMobileView('cards')}
+        onOpenAutoReply={() => setMobileView('autoReply')}
+        onOpenStatistics={() => setMobileView('statistics')}
         onLogout={onLogout}
       />
       <AgentAutoReplySettingsModal
-        open={autoReplyOpen}
-        onClose={() => setAutoReplyOpen(false)}
+        open={desktopAutoReplyOpen || mobileView === 'autoReply'}
+        onClose={closeAutoReply}
       />
       <AgentCardSettingsModal
-        open={cardSettingsOpen}
-        onClose={() => setCardSettingsOpen(false)}
+        open={desktopCardSettingsOpen || mobileView === 'cards'}
+        onClose={closeCardSettings}
       />
+      {mobileView === 'statistics' && (
+        <AgentStatisticsModal
+          identity={identity}
+          onClose={(reason) =>
+            setMobileView(reason === 'notification' ? 'workspace' : 'menu')
+          }
+        />
+      )}
     </>
   );
 });

@@ -2,7 +2,7 @@ import type { AgentIdentity } from './api';
 
 export type AgentStatisticsModalProps = {
   identity: AgentIdentity;
-  onClose: () => void;
+  onClose: (reason?: 'dismiss' | 'notification') => void;
 };
 
 export * from './AgentStatisticsWorkspaceRuntime';
