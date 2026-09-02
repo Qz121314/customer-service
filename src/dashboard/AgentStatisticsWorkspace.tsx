@@ -74,7 +74,11 @@ export function AgentStatisticsModal({
     stats?.month === month ? stats.days : calendarMonthPeriod(month).days;
 
   return (
-    <div className="agent-statistics-backdrop" onMouseDown={onClose}>
+    <div
+      className="agent-statistics-backdrop"
+      data-agent-swipe-back-surface="true"
+      onMouseDown={onClose}
+    >
       <section
         className="agent-statistics-dialog"
         role="dialog"
@@ -94,6 +98,7 @@ export function AgentStatisticsModal({
               type="button"
               className="modal-close"
               aria-label="关闭接待流量"
+              data-agent-swipe-back-trigger="true"
               onClick={onClose}
             >
               <UiIcon name="close" />
