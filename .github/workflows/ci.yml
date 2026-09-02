@@ -36,7 +36,13 @@ jobs:
         run: pnpm guardrails
 
       - name: Format
-        run: pnpm format
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write scripts/check-repository-guardrails.mjs scripts/production-performance-audit.mjs
+          pnpm format
+          git diff -- scripts/check-repository-guardrails.mjs scripts/production-performance-audit.mjs
+          exit 1
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
