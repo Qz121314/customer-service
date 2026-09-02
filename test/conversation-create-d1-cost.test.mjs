@@ -98,7 +98,7 @@ test('conversation start only refreshes a snapshot after a concurrent assignment
 
   assert.match(
     helper,
-    /else if \(assignment && !conversation\.assigned_agent\)/u,
+    /if \(assignment && !conversation\.assigned_agent\)/u,
   );
   assert.match(helper, /return conversation;/u);
   assert.doesNotMatch(
