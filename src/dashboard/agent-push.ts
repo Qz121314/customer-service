@@ -52,8 +52,17 @@ export async function prepareAgentNotifications(
   if (prerequisite) return prerequisite;
   const registration = await agentServiceWorkerRegistration();
   if (Notification.permission === 'denied') return 'blocked';
-  const subscription = await registration.pushManager.getSubscription();
+
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription && Notification.permission === 'granted') {
+    try {
+      subscription = await createAgentPushSubscription(registration);
+    } catch (error) {
+      console.warn('Agent push subscription repair failed.', error);
+    }
+  }
   if (!subscription) return 'disabled';
+
   await bindAgentSubscription(subscription, agentId);
   return 'enabled';
 }
@@ -69,15 +78,9 @@ export async function enableAgentNotifications(
   }
 
   const registration = await agentServiceWorkerRegistration();
-  const config = await request<PushConfig>('/api/agent/push/config');
-  if (!config.enabled || !config.applicationServerKey) {
-    throw new Error('通知服务尚未就绪');
-  }
-  let subscription = await registration.pushManager.getSubscription();
-  subscription ??= await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: base64UrlBytes(config.applicationServerKey),
-  });
+  const subscription =
+    (await registration.pushManager.getSubscription()) ??
+    (await createAgentPushSubscription(registration));
   await bindAgentSubscription(subscription, agentId, true);
   return 'enabled';
 }
@@ -157,6 +160,19 @@ async function agentServiceWorkerRegistration(): Promise<ServiceWorkerRegistrati
   } finally {
     if (timeoutId !== undefined) window.clearTimeout(timeoutId);
   }
+}
+
+async function createAgentPushSubscription(
+  registration: ServiceWorkerRegistration,
+): Promise<PushSubscription> {
+  const config = await request<PushConfig>('/api/agent/push/config');
+  if (!config.enabled || !config.applicationServerKey) {
+    throw new Error('通知服务尚未就绪');
+  }
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: base64UrlBytes(config.applicationServerKey),
+  });
 }
 
 async function bindAgentSubscription(

@@ -92,17 +92,18 @@ self.addEventListener('push', (event) => {
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
-        if (clients.some((client) => client.visibilityState === 'visible')) {
-          return undefined;
-        }
+        const foreground = clients.some(
+          (client) => client.visibilityState === 'visible',
+        );
         return self.registration.showNotification('客服坐席有新消息', {
           body: '有新的访客消息等待处理',
           icon: '/icons/customer-service-192.svg',
           badge: '/icons/customer-service-192.svg',
-          tag: 'agent-new-message',
-          renotify: true,
-          silent: false,
-          vibrate: [200, 100, 200],
+          tag: foreground
+            ? 'agent-foreground-message'
+            : `agent-new-message-${Date.now()}`,
+          silent: foreground,
+          vibrate: foreground ? undefined : [200, 100, 200],
           data: { url: AGENT_NOTIFICATION_URL },
         });
       }),

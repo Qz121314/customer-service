@@ -68,7 +68,7 @@ test('agent shell exposes mobile standalone metadata and registers an agent-only
   assert.match(mobileCss, /\.mobile-agent-settings-page/u);
 });
 
-test('agent service worker stays inside agent navigation and handles background messages', async () => {
+test('agent service worker keeps every push user-visible and alerts in the background', async () => {
   const source = await readFile(
     new URL('../public/agent-sw.js', import.meta.url),
     'utf8',
@@ -83,10 +83,15 @@ test('agent service worker stays inside agent navigation and handles background 
   assert.match(source, /caches\.match\(AGENT_SHELL_URL\)/u);
   assert.match(source, /!url\.pathname\.startsWith\('\/agent'\)/u);
   assert.match(source, /addEventListener\('push'/u);
-  assert.match(source, /visibilityState === 'visible'/u);
-  assert.match(source, /showNotification\('客服坐席有新消息'/u);
-  assert.match(source, /silent: false/u);
-  assert.match(source, /vibrate: \[200, 100, 200\]/u);
+  assert.match(source, /const foreground = clients\.some/u);
+  assert.match(source, /return self\.registration\.showNotification/u);
+  assert.match(source, /silent: foreground/u);
+  assert.match(source, /vibrate: foreground \? undefined : \[200, 100, 200\]/u);
+  assert.match(source, /tag: foreground/u);
+  assert.doesNotMatch(
+    source,
+    /if \(clients\.some\([\s\S]{0,140}visibilityState === 'visible'[\s\S]{0,80}\)\) \{\s*return undefined;/u,
+  );
   assert.match(source, /addEventListener\('notificationclick'/u);
   assert.match(source, /'\/agent'/u);
 });

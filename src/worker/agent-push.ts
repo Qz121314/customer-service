@@ -8,6 +8,8 @@ type AgentPushRow = VapidRow & {
   endpoint: string;
 };
 
+const AGENT_PUSH_TTL_SECONDS = 24 * 60 * 60;
+
 export async function sendAgentPushForConversation(
   env: AgentPushBindings,
   conversationId: string,
@@ -59,7 +61,10 @@ async function deliverAgentPush(
   config: VapidRow,
 ): Promise<boolean> {
   try {
-    const response = await sendDataLessPush(endpoint, config);
+    const response = await sendDataLessPush(endpoint, config, {
+      ttlSeconds: AGENT_PUSH_TTL_SECONDS,
+      topic: 'agent-unread',
+    });
     if (response.status === 404 || response.status === 410) return true;
     if (!response.ok) {
       console.warn('Agent push delivery failed.', response.status);

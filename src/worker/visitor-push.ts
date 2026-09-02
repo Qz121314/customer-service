@@ -12,6 +12,11 @@ type VisitorPushRow = VapidRow & {
   endpoint: string;
 };
 
+type PushDeliveryOptions = {
+  ttlSeconds?: number;
+  topic?: string;
+};
+
 const VAPID_ID = 'default';
 const VAPID_TOKEN_TTL_SECONDS = 12 * 60 * 60;
 const PUSH_TTL_SECONDS = 60;
@@ -152,6 +157,7 @@ export async function readVapidConfig(
 export async function sendDataLessPush(
   endpoint: string,
   config: VapidRow,
+  options: PushDeliveryOptions = {},
 ): Promise<Response> {
   const endpointUrl = new URL(endpoint);
   const header = base64UrlJson({ typ: 'JWT', alg: 'ES256' });
@@ -174,14 +180,16 @@ export async function sendDataLessPush(
     new TextEncoder().encode(unsignedToken),
   );
   const token = `${unsignedToken}.${base64UrlEncode(new Uint8Array(signature))}`;
+  const headers: Record<string, string> = {
+    Authorization: `vapid t=${token}, k=${config.public_key}`,
+    TTL: String(options.ttlSeconds ?? PUSH_TTL_SECONDS),
+    Urgency: 'high',
+  };
+  if (options.topic) headers.Topic = options.topic;
 
   return fetch(endpointUrl, {
     method: 'POST',
-    headers: {
-      Authorization: `vapid t=${token}, k=${config.public_key}`,
-      TTL: String(PUSH_TTL_SECONDS),
-      Urgency: 'high',
-    },
+    headers,
   });
 }
 
