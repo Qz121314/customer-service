@@ -98,6 +98,11 @@ async function createDatabase() {
     CREATE TABLE agent_traffic_receipts (
       conversation_id TEXT PRIMARY KEY
     );
+    CREATE TABLE agent_push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      expiration_time INTEGER
+    );
   `);
   database.exec(
     await read('../migrations/0042_simple_round_robin_routing.sql'),
@@ -120,6 +125,8 @@ function addAgent(
     lastAssignedAt = null,
     usernameConfigured = true,
     passwordConfigured = true,
+    notificationsEnabled = true,
+    notificationExpirationTime = null,
   },
 ) {
   database
@@ -144,6 +151,19 @@ function addAgent(
       quotaUsed,
       lastAssignedAt,
     );
+  if (notificationsEnabled) {
+    database
+      .prepare(
+        `INSERT INTO agent_push_subscriptions (
+           endpoint, agent_id, expiration_time
+         ) VALUES (?, ?, ?)`,
+      )
+      .run(
+        `https://push.example.test/${id}`,
+        id,
+        notificationExpirationTime,
+      );
+  }
 }
 
 function addScope(
@@ -305,6 +325,30 @@ test('only seats with complete base eligibility receive automatic traffic', asyn
 
   assert.equal(await assigned(database, 'conversation-1'), 'agent-online');
   assert.equal(await assigned(database, 'conversation-2'), 'agent-online');
+  database.close();
+});
+
+test('online seats need a valid push subscription for new automatic traffic', async () => {
+  const database = await createDatabase();
+  addAgent(database, {
+    id: 'agent-no-push',
+    notificationsEnabled: false,
+  });
+  addAgent(database, {
+    id: 'agent-expired-push',
+    notificationExpirationTime: Date.now() - 60_000,
+  });
+  addAgent(database, { id: 'agent-reachable' });
+  for (const id of ['agent-no-push', 'agent-expired-push', 'agent-reachable']) {
+    addScope(database, id, { type: 'section', sectionId: 'west' });
+  }
+  addConversation(database, 'conversation-1', 'product-a');
+
+  assert.equal(await assigned(database, 'conversation-1'), 'agent-reachable');
+
+  database.exec(`DELETE FROM agent_push_subscriptions`);
+  addConversation(database, 'conversation-2', 'product-a');
+  assert.equal(await assigned(database, 'conversation-2'), null);
   database.close();
 });
 
