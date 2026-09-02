@@ -68,8 +68,12 @@ async function swipeFromLeftEdge(page, endX) {
       );
       const transform =
         target instanceof browser.HTMLElement ? target.style.transform : '';
+      const revealedElement = browser.document.elementFromPoint(16, clientY);
+      const conversationPaneRevealed = Boolean(
+        revealedElement?.closest('.conversation-pane'),
+      );
       dispatch('pointerup', endX);
-      return transform;
+      return { transform, conversationPaneRevealed };
     },
     { endX },
   );
@@ -113,8 +117,9 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     settingsGeometry.cardRadii.every((radius) => radius >= 16),
   ).toBeTruthy();
 
-  const cancelledSwipeTransform = await swipeFromLeftEdge(page, 64);
-  expect(cancelledSwipeTransform).toContain('translate3d');
+  const cancelledSwipe = await swipeFromLeftEdge(page, 64);
+  expect(cancelledSwipe.transform).toContain('translate3d');
+  expect(cancelledSwipe.conversationPaneRevealed).toBeTruthy();
   await expect(settingsPage).toBeVisible();
   await expect
     .poll(() => settingsPage.evaluate((element) => element.style.transform))
@@ -178,8 +183,9 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(statsDialog).toBeHidden();
   await expect(settingsPage).toBeVisible();
 
-  const committedSwipeTransform = await swipeFromLeftEdge(page, 150);
-  expect(committedSwipeTransform).toContain('translate3d');
+  const committedSwipe = await swipeFromLeftEdge(page, 150);
+  expect(committedSwipe.transform).toContain('translate3d');
+  expect(committedSwipe.conversationPaneRevealed).toBeTruthy();
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
 });
