@@ -153,13 +153,51 @@ for (const requiredStep of [
     `deploy:cloudflare must include: ${requiredStep}`,
   );
 }
-const cloudflareSecretReferences = [
-  ...ciWorkflow.matchAll(/secrets\.([A-Z0-9_]+)/gu),
+
+const deployStep =
+  ciWorkflow.match(
+    /- name: Deploy production to Cloudflare[\s\S]*?(?=\n\s+- name:)/u,
+  )?.[0] ?? '';
+const deploymentSecretReferences = [
+  ...deployStep.matchAll(/secrets\.([A-Z0-9_]+)/gu),
 ].map((match) => match[1]);
 assert.deepEqual(
-  [...new Set(cloudflareSecretReferences)].toSorted(),
+  [...new Set(deploymentSecretReferences)].toSorted(),
   ['CLOUDFLARE_ACCOUNT_ID', 'CLOUDFLARE_API_TOKEN'],
-  'CI deployment must depend on only the two Cloudflare GitHub Secrets',
+  'Production deployment must depend on only the two Cloudflare GitHub Secrets',
+);
+
+const performanceAuditStep =
+  ciWorkflow.match(
+    /- name: Audit authenticated production performance[\s\S]*?(?=\n\s+- name:)/u,
+  )?.[0] ?? '';
+const performanceAuditSecretReferences = [
+  ...performanceAuditStep.matchAll(/secrets\.([A-Z0-9_]+)/gu),
+].map((match) => match[1]);
+assert.deepEqual(
+  [...new Set(performanceAuditSecretReferences)].toSorted(),
+  [
+    'PERF_AUDIT_ADMIN_PASSWORD',
+    'PERF_AUDIT_AGENT_PASSWORD',
+    'PERF_AUDIT_AGENT_USERNAME',
+  ],
+  'Production performance audit must use only its dedicated GitHub Secrets',
+);
+
+const allowedCiSecrets = [
+  'CLOUDFLARE_ACCOUNT_ID',
+  'CLOUDFLARE_API_TOKEN',
+  'PERF_AUDIT_ADMIN_PASSWORD',
+  'PERF_AUDIT_AGENT_PASSWORD',
+  'PERF_AUDIT_AGENT_USERNAME',
+];
+const ciSecretReferences = [...ciWorkflow.matchAll(/secrets\.([A-Z0-9_]+)/gu)].map(
+  (match) => match[1],
+);
+assert.deepEqual(
+  [...new Set(ciSecretReferences)].toSorted(),
+  allowedCiSecrets.toSorted(),
+  'CI may use only Cloudflare deployment secrets and dedicated performance-audit credentials',
 );
 
 assert.match(
