@@ -40,17 +40,17 @@ async function loginAgent(page) {
   await expect(page.getByText('我的会话')).toBeVisible();
 }
 
-async function expectHistoryView(page, view) {
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () => globalThis.history.state?.__customerServiceAgentView?.view ?? null,
-      ),
-    )
-    .toBe(view);
+async function readHistoryView(page) {
+  return page.evaluate(
+    () => globalThis.history.state?.__customerServiceAgentView?.view ?? null,
+  );
 }
 
-test('mobile settings uses one browser history stack for buttons and system back', async ({
+async function expectHistoryView(page, view) {
+  await expect.poll(() => readHistoryView(page)).toBe(view);
+}
+
+test('mobile settings uses browser history for back navigation', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
