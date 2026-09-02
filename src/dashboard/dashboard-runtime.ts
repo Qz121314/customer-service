@@ -197,7 +197,7 @@ function emitAgentMessageTone(context: AudioContext): void {
   const now = context.currentTime;
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.11, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(1, now + 0.012);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
   gain.connect(context.destination);
 
