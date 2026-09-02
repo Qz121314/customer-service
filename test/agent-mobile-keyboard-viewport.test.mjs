@@ -10,6 +10,7 @@ function source(path) {
 test('mobile agent follows the visual viewport without subtree layout work', () => {
   const main = source('../src/dashboard/main.tsx');
   const agentEntry = source('../src/dashboard/agent-entry.tsx');
+  const navigation = source('../src/dashboard/agent-navigation.ts');
   const mobileLayout = source('../src/dashboard/agent-mobile-layout.css');
 
   assert.ok(main.includes("import('./agent-entry')"));
@@ -24,8 +25,6 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
     'viewport?.offsetTop ?? 0',
     'viewport?.height ?? window.innerHeight',
     'viewportRootObserver.observe(root, { childList: true })',
-    'historyRootObserver.observe(root, { childList: true })',
-    'threadStateObserver.observe(shell',
   ]) {
     assert.ok(agentEntry.includes(contract), contract);
   }
@@ -36,6 +35,8 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
     'conversationPane.style.height',
     'threadPane.style.height',
     'subtree: true',
+    'historyRootObserver',
+    'threadStateObserver',
   ]) {
     assert.equal(
       agentEntry.includes(forbidden),
@@ -43,6 +44,8 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
       `mobile runtime must avoid per-message layout work: ${forbidden}`,
     );
   }
+
+  assert.ok(navigation.includes("window.addEventListener('popstate'"));
 
   assert.match(
     mobileLayout,
