@@ -1,5 +1,8 @@
 import { Suspense, lazy } from 'react';
-import type { AgentComposerAttachmentMenuProps } from './AgentAttachmentToolsImpl';
+import type {
+  AgentCardSettingsModalProps,
+  AgentComposerAttachmentMenuProps,
+} from './AgentAttachmentToolsImpl';
 
 const LazyAgentComposerAttachmentMenu = lazy(() =>
   import('./AgentAttachmentToolsImpl').then(
@@ -9,12 +12,26 @@ const LazyAgentComposerAttachmentMenu = lazy(() =>
   ),
 );
 
+const LazyAgentCardSettingsModal = lazy(() =>
+  import('./AgentAttachmentToolsImpl').then(({ AgentCardSettingsModal }) => ({
+    default: AgentCardSettingsModal,
+  })),
+);
+
 export function AgentComposerAttachmentMenu(
   props: AgentComposerAttachmentMenuProps,
 ) {
   return (
     <Suspense fallback={null}>
       <LazyAgentComposerAttachmentMenu {...props} />
+    </Suspense>
+  );
+}
+
+export function AgentCardSettingsModal(props: AgentCardSettingsModalProps) {
+  return (
+    <Suspense fallback={null}>
+      <LazyAgentCardSettingsModal {...props} />
     </Suspense>
   );
 }
