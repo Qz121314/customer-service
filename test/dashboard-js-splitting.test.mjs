@@ -19,6 +19,10 @@ const deferredSurfaces = [
   ['src/dashboard/AgentAttachmentTools.tsx', './AgentAttachmentToolsImpl'],
 ];
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
 test('dashboard keeps admin and agent route entries isolated behind dynamic imports', () => {
   assert.match(mainEntry, /import\('\.\/agent-entry'\)/u);
   assert.match(mainEntry, /import\('\.\/admin-entry'\)/u);
@@ -29,9 +33,13 @@ test('dashboard keeps admin and agent route entries isolated behind dynamic impo
 test('optional dashboard surfaces keep their heavy implementations deferred', () => {
   for (const [wrapperPath, implementationPath] of deferredSurfaces) {
     const wrapper = readFileSync(wrapperPath, 'utf8');
-    assert.ok(
-      wrapper.includes(`import('${implementationPath}')`),
-      `${wrapperPath} must dynamically import ${implementationPath}`,
+    assert.match(
+      wrapper,
+      new RegExp(
+        `lazy\\(\\(\\)\\s*=>\\s*import\\(['"]${escapeRegExp(implementationPath)}['"]\\)`,
+        'u',
+      ),
+      `${wrapperPath} must lazily import ${implementationPath}`,
     );
     assert.ok(
       !wrapper.includes(`from '${implementationPath}'`) &&

@@ -1,5 +1,11 @@
 import { Suspense, lazy, type ComponentProps } from 'react';
 
+type AdminAgentStatisticsModalModule =
+  typeof import('./AdminAgentStatisticsModalImpl');
+type AdminAgentStatisticsModalProps = ComponentProps<
+  AdminAgentStatisticsModalModule['AdminAgentStatisticsModal']
+>;
+
 const LazyAdminAgentStatisticsModal = lazy(() =>
   import('./AdminAgentStatisticsModalImpl').then(
     ({ AdminAgentStatisticsModal }) => ({
@@ -9,7 +15,7 @@ const LazyAdminAgentStatisticsModal = lazy(() =>
 );
 
 export function AdminAgentStatisticsModal(
-  props: ComponentProps<typeof LazyAdminAgentStatisticsModal>,
+  props: AdminAgentStatisticsModalProps,
 ) {
   return (
     <Suspense fallback={null}>

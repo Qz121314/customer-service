@@ -1,5 +1,10 @@
 import { Suspense, lazy, type ComponentProps } from 'react';
 
+type AgentAttachmentToolsModule = typeof import('./AgentAttachmentToolsImpl');
+type AgentComposerAttachmentMenuProps = ComponentProps<
+  AgentAttachmentToolsModule['AgentComposerAttachmentMenu']
+>;
+
 const LazyAgentComposerAttachmentMenu = lazy(() =>
   import('./AgentAttachmentToolsImpl').then(
     ({ AgentComposerAttachmentMenu }) => ({
@@ -9,7 +14,7 @@ const LazyAgentComposerAttachmentMenu = lazy(() =>
 );
 
 export function AgentComposerAttachmentMenu(
-  props: ComponentProps<typeof LazyAgentComposerAttachmentMenu>,
+  props: AgentComposerAttachmentMenuProps,
 ) {
   return (
     <Suspense fallback={null}>
