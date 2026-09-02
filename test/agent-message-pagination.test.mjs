@@ -60,8 +60,7 @@ test('older conversation pages merge chronologically and retain updated read sta
     ['message-1', 'message-2', 'message-3', 'message-4'],
   );
   assert.equal(
-    merged.messages.find((item) => item.id === 'message-3')
-      ?.read_by_visitor_at,
+    merged.messages.find((item) => item.id === 'message-3')?.read_by_visitor_at,
     '2026-01-01T00:01:00.000Z',
   );
   assert.deepEqual(merged.page, {
