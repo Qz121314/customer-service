@@ -119,7 +119,6 @@ test('invalid or unavailable local storage never interrupts agent reception', ()
   }
 });
 
-
 test('draft persistence debounces typing, flushes seat changes and supports lifecycle flush', () => {
   const saves = [];
   const cleared = [];
