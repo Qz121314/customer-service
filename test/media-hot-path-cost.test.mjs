@@ -12,6 +12,10 @@ const mediaApi = readFileSync(
   new URL('../src/worker/media-api.ts', import.meta.url),
   'utf8',
 );
+const mediaTypes = readFileSync(
+  new URL('../src/worker/media-types.ts', import.meta.url),
+  'utf8',
+);
 
 test('new media reservations avoid a post-insert read and scan limits once', () => {
   const reserveSource = topLevelDeclaration(
@@ -61,4 +65,16 @@ test('media completion keeps R2 verification while skipping stable overview scan
     /media\.sender_type === 'agent' &&\s*context\.conversationStatus === 'open'/u,
   );
   assert.match(mediaApi, /c\.status AS conversation_status/u);
+});
+
+test('media completion reuses one signed URL in response and realtime payloads', () => {
+  assert.match(
+    mediaStore,
+    /const signedUrl = await mediaDownloadUrl\(env, media\)/u,
+  );
+  assert.equal(
+    (mediaStore.match(/publicMedia\([\s\S]*?signedUrl/gu) ?? []).length >= 3,
+    true,
+  );
+  assert.match(mediaTypes, /url\?: string \| null/u);
 });

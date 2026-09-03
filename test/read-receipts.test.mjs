@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { URL } from 'node:url';
+import { clientConversationFanoutPlan } from '../src/worker/conversation-fanout-plan.ts';
 import { routeRegistration } from './helpers/source-contract.mjs';
 
 const migration = await readFile(
@@ -134,6 +135,39 @@ test('read APIs preserve payload fields while updating only conversation cursors
   assert.match(visitorRead, /visitor_read_through_at/u);
   assert.match(agent, /AS read_by_agent_at/u);
   assert.match(client, /AS read_by_visitor_at/u);
+});
+
+test('visitor read fake DO runtime budget skips only the agent inbox room', async () => {
+  const calls = [];
+  const namespace = {
+    idFromName(name) {
+      return { name };
+    },
+    get(id) {
+      return {
+        async fetch() {
+          calls.push(id.name);
+          return new Response('ok');
+        },
+      };
+    },
+  };
+  const rooms = clientConversationFanoutPlan({
+    conversationId: 'conversation-1',
+    siteId: 'site-1',
+    visitorId: 'ABC123',
+    assignedAgentId: 'agent-1',
+    includeAgentInbox: false,
+  });
+  for (const roomName of rooms) {
+    await namespace.get(namespace.idFromName(roomName)).fetch('https://test/');
+  }
+
+  assert.deepEqual(calls.sort(), ['client:site-1:ABC123', 'conversation-1']);
+  assert.equal(
+    calls.some((name) => name.startsWith('agent-inbox:')),
+    false,
+  );
 });
 
 test('visitor read resource budget keeps conversation and visitor rooms only', async () => {

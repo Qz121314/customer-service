@@ -46,6 +46,7 @@ export type AgentMessageAttachment =
       originalName: string | null;
       source?: 'media' | 'snapshot';
       url?: string;
+      fallbackUrl?: string;
     };
 
 type AgentContactCard = Extract<

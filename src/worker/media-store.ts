@@ -1,4 +1,5 @@
 import { broadcastClientConversationEvent } from './client-api';
+import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 import {
   MIME_EXTENSIONS,
   publicMedia,
@@ -143,10 +144,13 @@ export async function findMedia(
 ): Promise<MediaRow | null> {
   return db
     .prepare(
-      `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
-         sender_id, object_key, mime_type, byte_size, width, height, original_name,
-         client_upload_id, status, is_initial, reserved_created_at
-       FROM media_items WHERE id = ?1 LIMIT 1`,
+      `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id, mi.sender_type,
+         mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size, mi.width, mi.height, mi.original_name,
+         mi.client_upload_id, mi.status, mi.is_initial, mi.reserved_created_at,
+         c.expires_at AS conversation_expires_at
+       FROM media_items mi
+       JOIN conversations c ON c.id = mi.conversation_id
+       WHERE mi.id = ?1 LIMIT 1`,
     )
     .bind(id)
     .first<MediaRow>();
@@ -163,12 +167,14 @@ async function findMediaByClientUploadId(
 ): Promise<MediaRow | null> {
   return db
     .prepare(
-      `SELECT id, conversation_id, message_id, reserved_message_id, sender_type,
-         sender_id, object_key, mime_type, byte_size, width, height, original_name,
-         client_upload_id, status, is_initial, reserved_created_at
-       FROM media_items
-       WHERE conversation_id = ?1 AND sender_type = ?2 AND sender_id = ?3
-         AND client_upload_id = ?4
+      `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id, mi.sender_type,
+         mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size, mi.width, mi.height, mi.original_name,
+         mi.client_upload_id, mi.status, mi.is_initial, mi.reserved_created_at,
+         c.expires_at AS conversation_expires_at
+       FROM media_items mi
+       JOIN conversations c ON c.id = mi.conversation_id
+       WHERE mi.conversation_id = ?1 AND mi.sender_type = ?2 AND mi.sender_id = ?3
+         AND mi.client_upload_id = ?4
        LIMIT 1`,
     )
     .bind(
@@ -222,7 +228,7 @@ export async function completeMedia(
   | { ok: false; status: 400 | 404 | 409; code: string }
 > {
   if (media.status === 'ready' && media.message_id) {
-    return completedMedia(media);
+    return completedMedia(env, media);
   }
   if (media.status !== 'pending')
     return { ok: false, status: 409, code: 'MEDIA_NOT_PENDING' };
@@ -310,11 +316,12 @@ export async function completeMedia(
   if (!readyResult?.meta.changes) {
     const current = await findMedia(env.DB, media.id);
     if (current?.status === 'ready' && current.message_id) {
-      return completedMedia(current);
+      return completedMedia(env, current);
     }
     return { ok: false, status: 409, code: 'MEDIA_NOT_PENDING' };
   }
 
+  const signedUrl = await mediaDownloadUrl(env, media);
   await Promise.allSettled([
     broadcastRoom(env, media.conversation_id, {
       type: 'message',
@@ -329,7 +336,10 @@ export async function completeMedia(
       },
       media: {
         messageId,
-        ...publicMedia({ ...media, message_id: messageId, status: 'ready' }),
+        ...publicMedia(
+          { ...media, message_id: messageId, status: 'ready' },
+          signedUrl,
+        ),
       },
     }),
     broadcastClientConversationEvent(
@@ -347,7 +357,10 @@ export async function completeMedia(
         },
         media: {
           messageId,
-          ...publicMedia({ ...media, message_id: messageId, status: 'ready' }),
+          ...publicMedia(
+            { ...media, message_id: messageId, status: 'ready' },
+            signedUrl,
+          ),
         },
       },
       {
@@ -366,15 +379,22 @@ export async function completeMedia(
       messageId,
       createdAt,
       duplicate: false,
-      media: publicMedia({ ...media, message_id: messageId, status: 'ready' }),
+      media: publicMedia(
+        { ...media, message_id: messageId, status: 'ready' },
+        signedUrl,
+      ),
     },
   };
 }
 
-function completedMedia(media: MediaRow): {
+async function completedMedia(
+  env: MediaBindings,
+  media: MediaRow,
+): Promise<{
   ok: true;
   value: Record<string, unknown>;
-} {
+}> {
+  const signedUrl = await mediaDownloadUrl(env, media);
   return {
     ok: true,
     value: {
@@ -383,9 +403,20 @@ function completedMedia(media: MediaRow): {
       messageId: media.message_id,
       createdAt: media.reserved_created_at,
       duplicate: true,
-      media: publicMedia(media),
+      media: publicMedia(media, signedUrl),
     },
   };
+}
+
+export async function mediaDownloadUrl(
+  env: MediaBindings,
+  media: MediaRow,
+): Promise<string | null> {
+  const context = await createDownloadSigningContext(
+    env,
+    media.conversation_expires_at ?? null,
+  );
+  return context ? presignGet(context, media.object_key) : null;
 }
 
 export async function readMediaObject(bucket: R2Bucket, media: MediaRow) {

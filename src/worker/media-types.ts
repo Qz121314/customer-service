@@ -28,6 +28,7 @@ export type MediaRow = {
   status: 'pending' | 'ready' | 'failed';
   is_initial: number;
   reserved_created_at: string;
+  conversation_expires_at?: string | null;
 };
 
 export type MediaInput = {
@@ -77,7 +78,7 @@ export function normalizeMediaInput(
   };
 }
 
-export function publicMedia(media: MediaRow) {
+export function publicMedia(media: MediaRow, url?: string | null) {
   return {
     id: media.id,
     kind: 'image' as const,
@@ -87,6 +88,7 @@ export function publicMedia(media: MediaRow) {
     height: media.height,
     originalName: media.original_name,
     status: media.status,
+    ...(url ? { url } : {}),
   };
 }
 
