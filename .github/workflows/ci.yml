@@ -38,15 +38,13 @@ jobs:
       - name: Repository guardrails
         run: pnpm guardrails
 
-      - name: Format
-        run: pnpm format
-
-      - name: Prepare validation lanes in parallel
+      - name: Run validation lanes
         shell: bash
         run: |
           set -uo pipefail
 
           static_lane() {
+            pnpm format
             pnpm lint
             pnpm typecheck:ui
           }
@@ -93,53 +91,55 @@ jobs:
           browser_lane > /tmp/ci-browser-runtime.log 2>&1 &
           browser_pid=$!
 
-          static_status=0
           database_status=0
+          wait "$database_pid" || database_status=$?
+
+          test_status=1
+          worker_status=1
+          if [ "$database_status" -eq 0 ]; then
+            pnpm test > /tmp/ci-test.log 2>&1 &
+            test_pid=$!
+            pnpm typecheck:worker > /tmp/ci-worker.log 2>&1 &
+            worker_pid=$!
+          else
+            : > /tmp/ci-test.log
+            : > /tmp/ci-worker.log
+          fi
+
           build_status=0
+          wait "$build_pid" || build_status=$?
+
+          if [ "$database_status" -eq 0 ]; then
+            worker_status=0
+            wait "$worker_pid" || worker_status=$?
+            if [ "$worker_status" -eq 0 ] && [ "$build_status" -eq 0 ]; then
+              pnpm cf:check:bundle >> /tmp/ci-worker.log 2>&1 || worker_status=$?
+            fi
+
+            test_status=0
+            wait "$test_pid" || test_status=$?
+          fi
+
+          static_status=0
           browser_status=0
           wait "$static_pid" || static_status=$?
-          wait "$database_pid" || database_status=$?
-          wait "$build_pid" || build_status=$?
           wait "$browser_pid" || browser_status=$?
 
           echo '--- static lane ---'
           cat /tmp/ci-static.log
           echo '--- database lane ---'
           cat /tmp/ci-database.log
+          echo '--- test lane ---'
+          cat /tmp/ci-test.log
           echo '--- build lane ---'
           cat /tmp/ci-build.log
+          echo '--- worker lane ---'
+          cat /tmp/ci-worker.log
           echo '--- browser runtime lane ---'
           cat /tmp/ci-browser-runtime.log
 
-          if [ "$static_status" -ne 0 ] || [ "$database_status" -ne 0 ] || [ "$build_status" -ne 0 ] || [ "$browser_status" -ne 0 ]; then
-            echo "::error::Parallel validation setup failed (static=$static_status database=$database_status build=$build_status browser=$browser_status)."
-            exit 1
-          fi
-
-      - name: Validate Worker and tests in parallel
-        shell: bash
-        run: |
-          set -uo pipefail
-
-          pnpm test > /tmp/ci-test.log 2>&1 &
-          test_pid=$!
-
-          worker_status=0
-          {
-            pnpm typecheck:worker
-            pnpm cf:check:bundle
-          } > /tmp/ci-worker.log 2>&1 || worker_status=$?
-
-          test_status=0
-          wait "$test_pid" || test_status=$?
-
-          echo '--- test lane ---'
-          cat /tmp/ci-test.log
-          echo '--- worker lane ---'
-          cat /tmp/ci-worker.log
-
-          if [ "$test_status" -ne 0 ] || [ "$worker_status" -ne 0 ]; then
-            echo "::error::Worker/test validation failed (tests=$test_status worker=$worker_status)."
+          if [ "$static_status" -ne 0 ] || [ "$database_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$build_status" -ne 0 ] || [ "$worker_status" -ne 0 ] || [ "$browser_status" -ne 0 ]; then
+            echo "::error::Validation failed (static=$static_status database=$database_status tests=$test_status build=$build_status worker=$worker_status browser=$browser_status)."
             exit 1
           fi
 
