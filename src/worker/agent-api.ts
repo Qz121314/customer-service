@@ -611,17 +611,26 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
     : null;
 
   if (readResult?.meta.changes) {
-    await Promise.allSettled([
-      broadcastConversationRoom(c.env, id, {
-        type: 'message.read',
-        reader: 'agent',
-        lastMessageId: boundary?.id ?? null,
+    await deferAgentRealtime(
+      c,
+      Promise.allSettled([
+        broadcastConversationRoom(c.env, id, {
+          type: 'message.read',
+          reader: 'agent',
+          lastMessageId: boundary?.id ?? null,
+        }),
+        broadcastClientConversationEvent(c.env, id, 'message.read', {
+          reader: 'agent',
+          lastMessageId: boundary?.id ?? null,
+        }),
+      ]).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.warn('agent read realtime delivery failed', result.reason);
+          }
+        }
       }),
-      broadcastClientConversationEvent(c.env, id, 'message.read', {
-        reader: 'agent',
-        lastMessageId: boundary?.id ?? null,
-      }),
-    ]);
+    );
   }
   return c.json({ ok: true });
 });

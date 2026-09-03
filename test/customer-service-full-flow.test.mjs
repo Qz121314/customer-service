@@ -1099,6 +1099,175 @@ test('invalid media completion fails before persistence or realtime', async () =
   database.close();
 });
 
+test('visitor and agent read responses return after cursor durability but before realtime', async (t) => {
+  for (const reader of ['visitor', 'agent']) {
+    await t.test(reader, async () => {
+      const database = new DatabaseSync(':memory:');
+      applyMigrations(database);
+      const rooms = blockingRooms();
+      const token = `read-${reader}-session-token`;
+      const visitorExternalId = reader === 'visitor' ? 'RED123' : 'RDA123';
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const credentials = await hashAgentPassword('unused-password', 1_000);
+      database
+        .prepare(
+          `INSERT INTO agents (
+             id, site_id, name, username, password_hash, password_salt,
+             password_iterations, status, is_enabled, last_seen_at
+           ) VALUES ('agent-read-realtime', 'default', 'Read Agent',
+             'agent-read-realtime', ?1, ?2, ?3, 'online', 1, CURRENT_TIMESTAMP)`,
+        )
+        .run(credentials.hash, credentials.salt, credentials.iterations);
+      database
+        .prepare(
+          `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+           VALUES ('agent-read-realtime-session', 'agent-read-realtime', ?1, ?2)`,
+        )
+        .run(sha256(token), expiresAt);
+      database
+        .prepare(
+          `INSERT INTO visitors (
+             id, site_id, external_id, token_hash, display_name, expires_at
+           ) VALUES ('visitor-read-realtime', 'default', ?1,
+             'unused-read-token', 'Read Visitor', ?2)`,
+        )
+        .run(visitorExternalId, expiresAt);
+      database
+        .prepare(
+          `INSERT INTO conversations (
+             id, site_id, visitor_id, status, assigned_agent,
+             visitor_unread_count, agent_unread_count, expires_at,
+             last_message_at, created_at, updated_at, last_message_preview
+           ) VALUES ('conversation-read-realtime', 'default',
+             'visitor-read-realtime', 'pending', 'agent-read-realtime',
+             ?1, ?2, ?3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+             CURRENT_TIMESTAMP, 'Unread message')`,
+        )
+        .run(
+          reader === 'visitor' ? 1 : 0,
+          reader === 'agent' ? 1 : 0,
+          expiresAt,
+        );
+      const messageId = `message-read-by-${reader}`;
+      database
+        .prepare(
+          `INSERT INTO messages (
+             id, conversation_id, sender_type, sender_id, body, created_at
+           ) VALUES (?1, 'conversation-read-realtime', ?2, ?3,
+             'Unread message', CURRENT_TIMESTAMP)`,
+        )
+        .run(
+          messageId,
+          reader === 'visitor' ? 'agent' : 'visitor',
+          reader === 'visitor'
+            ? 'agent-read-realtime'
+            : 'visitor-read-realtime',
+        );
+
+      const pendingTasks = [];
+      const executionCtx = {
+        waitUntil(task) {
+          pendingTasks.push(task);
+        },
+      };
+      const env = {
+        DB: d1(database),
+        CONVERSATION_ROOMS: rooms.namespace,
+      };
+      const request = () =>
+        reader === 'agent'
+          ? agentApi.request(
+              '/api/agent/conversations/conversation-read-realtime/read',
+              {
+                method: 'POST',
+                headers: {
+                  cookie: `cs_agent_session=${token}`,
+                  'content-type': 'application/json',
+                },
+                body: JSON.stringify({ lastMessageId: messageId }),
+              },
+              env,
+              executionCtx,
+            )
+          : clientApi.request(
+              '/client/v1/conversations/conversation-read-realtime/read',
+              {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  visitorId: visitorExternalId,
+                  projectId: 'default',
+                  lastMessageId: messageId,
+                }),
+              },
+              env,
+              executionCtx,
+            );
+
+      const response = await Promise.race([
+        request(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`${reader} read response waited for DO`)),
+            250,
+          ),
+        ),
+      ]);
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { ok: true });
+      const state = database
+        .prepare(
+          `SELECT visitor_read_through_id, visitor_unread_count,
+             agent_read_through_id, agent_unread_count
+           FROM conversations WHERE id = 'conversation-read-realtime'`,
+        )
+        .get();
+      assert.equal(
+        reader === 'visitor'
+          ? state.visitor_read_through_id
+          : state.agent_read_through_id,
+        messageId,
+      );
+      assert.equal(
+        reader === 'visitor'
+          ? state.visitor_unread_count
+          : state.agent_unread_count,
+        0,
+      );
+      assert.equal(pendingTasks.length, 1);
+      assert.deepEqual(rooms.completed, []);
+
+      rooms.release();
+      await Promise.all(pendingTasks);
+      const expectedRooms = [
+        `client:default:${visitorExternalId}`,
+        'conversation-read-realtime',
+        ...(reader === 'agent' ? ['agent-inbox:agent-read-realtime'] : []),
+      ];
+      assert.deepEqual(rooms.completed.sort(), expectedRooms.sort());
+      const threadEvent = rooms.events
+        .get('conversation-read-realtime')
+        ?.find((event) => event.type === 'message.read');
+      assert.deepEqual(threadEvent, {
+        type: 'message.read',
+        reader,
+        lastMessageId: messageId,
+      });
+      const visitorEvent = rooms.events
+        .get(`client:default:${visitorExternalId}`)
+        ?.find((event) => event.type === 'message.read');
+      assert.equal(visitorEvent?.reader, reader);
+      assert.equal(visitorEvent?.lastMessageId, messageId);
+
+      const stale = await request();
+      assert.equal(stale.status, 200);
+      assert.equal(pendingTasks.length, 1);
+      assert.equal(rooms.calls.length, expectedRooms.length);
+      database.close();
+    });
+  }
+});
+
 test('isolated client -> routing -> agent -> client flow works through real Hono handlers', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);

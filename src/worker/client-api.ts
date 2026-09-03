@@ -936,23 +936,35 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
     : null;
 
   if (readResult?.meta.changes) {
-    await Promise.all([
-      broadcastRoomSafely(c.env, conversation.id, {
-        type: 'message.read',
-        reader: 'visitor',
-        lastMessageId: boundary?.id ?? null,
-      }),
-      broadcastClientConversationEvent(
-        c.env,
-        conversation.id,
-        'message.read',
-        {
+    await deferClientRealtime(
+      c,
+      Promise.allSettled([
+        broadcastRoomSafely(c.env, conversation.id, {
+          type: 'message.read',
           reader: 'visitor',
           lastMessageId: boundary?.id ?? null,
-        },
-        { includeAgentInbox: false },
-      ),
-    ]);
+        }),
+        broadcastClientConversationEvent(
+          c.env,
+          conversation.id,
+          'message.read',
+          {
+            reader: 'visitor',
+            lastMessageId: boundary?.id ?? null,
+          },
+          { includeAgentInbox: false },
+        ),
+      ]).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.warn(
+              'visitor read realtime delivery failed',
+              result.reason,
+            );
+          }
+        }
+      }),
+    );
   }
   return c.json({ ok: true });
 });
@@ -2150,7 +2162,7 @@ async function broadcastRoomSafely(
 
 async function deferClientRealtime(
   c: Context<ClientEnv>,
-  task: Promise<PromiseSettledResult<unknown>[]>,
+  task: Promise<unknown>,
 ): Promise<void> {
   try {
     c.executionCtx.waitUntil(task);
