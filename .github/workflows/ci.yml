@@ -139,14 +139,17 @@ jobs:
 
           browser_status=1
           for attempt in 1 2; do
-            if timeout --kill-after=30s 180s \
-              pnpm add -Dw --ignore-scripts @playwright/test@1.55.0; then
+            if timeout --kill-after=30s 240s bash -c '
+              set -euo pipefail
+              pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
+              pnpm exec playwright install chromium
+            '; then
               browser_status=0
               break
             fi
 
             if [ "$attempt" -eq 1 ]; then
-              echo "::warning::Playwright smoke package installation timed out or failed; retrying once."
+              echo "::warning::Playwright Chromium runtime installation timed out or failed; retrying once."
               sleep 5
             fi
           done
@@ -162,16 +165,9 @@ jobs:
           fi
 
           if [ "$browser_status" -ne 0 ]; then
-            echo "::error::Playwright smoke package installation failed after two bounded attempts."
+            echo "::error::Playwright Chromium runtime installation failed after two bounded attempts."
             exit 1
           fi
-
-          chromium_path="$(command -v chromium || command -v google-chrome || true)"
-          if [ -z "$chromium_path" ]; then
-            echo "::error::The GitHub runner does not provide a Chromium-compatible browser."
-            exit 1
-          fi
-          echo "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$chromium_path" >> "$GITHUB_ENV"
 
       - name: Smoke test Agent and Admin UI in Chromium
         env:
@@ -203,7 +199,6 @@ jobs:
           fi
 
           pnpm exec playwright test \
-            --config=test/playwright.config.mjs \
             test/agent-browser-smoke.spec.mjs \
             test/agent-card-icon-browser-smoke.spec.mjs \
             test/agent-mobile-menu-smoke.spec.mjs \
@@ -211,7 +206,6 @@ jobs:
             --reporter=github
 
           pnpm exec playwright test \
-            --config=test/playwright.config.mjs \
             test/admin-browser-smoke.spec.mjs \
             --workers=1 \
             --reporter=github
