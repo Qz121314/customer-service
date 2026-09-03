@@ -829,15 +829,20 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   }
   const createdMessage = persistedMessage.message;
 
-  await broadcastRoomSafely(c.env, conversation.id, {
-    type: 'message',
-    message: adminMessage(createdMessage),
-  });
-  await broadcastClientConversationEvent(
-    c.env,
-    conversation.id,
-    'message.created',
-    { message: clientMessage(createdMessage) },
+  await deferClientRealtime(
+    c,
+    Promise.allSettled([
+      broadcastRoomSafely(c.env, conversation.id, {
+        type: 'message',
+        message: adminMessage(createdMessage),
+      }),
+      broadcastClientConversationEvent(
+        c.env,
+        conversation.id,
+        'message.created',
+        { message: clientMessage(createdMessage) },
+      ),
+    ]),
   );
 
   return c.json({ message: clientMessage(createdMessage) }, 201);
@@ -2180,6 +2185,17 @@ async function broadcastRoomSafely(
     await broadcastRoom(env, name, payload);
   } catch (error) {
     console.warn('conversation room broadcast failed', error);
+  }
+}
+
+async function deferClientRealtime(
+  c: Context<ClientEnv>,
+  task: Promise<PromiseSettledResult<unknown>[]>,
+): Promise<void> {
+  try {
+    c.executionCtx.waitUntil(task);
+  } catch {
+    await task;
   }
 }
 
