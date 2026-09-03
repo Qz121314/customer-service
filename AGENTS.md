@@ -47,7 +47,7 @@ confirm repo / branch / HEAD
 → edit
 ```
 
-Do **not** start a new session with this workflow:
+Do **not** use this workflow, including at the start of a new session:
 
 ```text
 open target source file
