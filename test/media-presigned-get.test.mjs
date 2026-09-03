@@ -46,6 +46,19 @@ test('presigned GET reuses one signing context for a page of images', async () =
   }
 });
 
+test('expired conversation signing context is rejected instead of becoming a one-second URL', async () => {
+  const context = await createDownloadSigningContext(
+    {
+      R2_ACCOUNT_ID: 'account',
+      R2_ACCESS_KEY_ID: 'access-key',
+      R2_SECRET_ACCESS_KEY: 'secret-key',
+      R2_BUCKET_NAME: 'media',
+    },
+    new Date(Date.now() - 1_000).toISOString(),
+  );
+  assert.equal(context, null);
+});
+
 test('missing R2 signing credentials select the authenticated proxy fallback', async () => {
   assert.equal(
     await createDownloadSigningContext(
