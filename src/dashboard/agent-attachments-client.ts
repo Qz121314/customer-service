@@ -182,6 +182,11 @@ export async function uploadAgentAttachmentImage(
   const form = new FormData();
   form.set('file', file);
   form.set('label', label);
+  const dimensions = await readGreetingImageDimensions(file);
+  if (dimensions) {
+    form.set('width', String(dimensions.width));
+    form.set('height', String(dimensions.height));
+  }
   const response = await fetch('/api/agent/attachments/presets/image', {
     method: 'POST',
     body: form,
@@ -226,6 +231,29 @@ export function agentAttachmentContentUrl(
 
 export function agentPresetImageUrl(presetId: string): string {
   return `/api/agent/attachments/presets/${encodeURIComponent(presetId)}/content`;
+}
+
+async function readGreetingImageDimensions(
+  file: File,
+): Promise<{ width: number; height: number } | null> {
+  if (file.type.trim().toLowerCase() === 'image/gif') return null;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file, {
+      imageOrientation: 'from-image',
+    });
+  } catch {
+    throw new Error(attachmentError('INVALID_ATTACHMENT_IMAGE'));
+  }
+  try {
+    if (bitmap.width < 1 || bitmap.height < 1) {
+      throw new Error(attachmentError('INVALID_ATTACHMENT_IMAGE'));
+    }
+    return { width: bitmap.width, height: bitmap.height };
+  } finally {
+    bitmap.close();
+  }
 }
 
 async function attachmentRequest<T = { ok: boolean }>(
