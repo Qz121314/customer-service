@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { authenticateAgentSession } from './agent-session';
+import { authenticateAgentSession, publicAgentSession } from './agent-session';
 import { loadAgentInbox } from './agent-inbox';
 
 type Bindings = {
@@ -25,7 +25,7 @@ agentBootstrapApi.get('/api/agent/bootstrap', async (c) => {
 
   return c.json({
     authenticated: true,
-    agent,
+    agent: publicAgentSession(agent),
     inbox: await loadAgentInbox(c.env.DB, agent),
   });
 });

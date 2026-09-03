@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-const COOKIE = 'cs_agent_session';
+export const AGENT_SESSION_COOKIE = 'cs_agent_session';
 
 export type AgentSessionIdentity = {
   id: string;
@@ -8,17 +8,21 @@ export type AgentSessionIdentity = {
   username: string;
   status: 'online' | 'busy' | 'offline';
   is_enabled: number;
+  avatar_version: string | null;
+  auto_greeting_enabled: number;
+  auto_greeting_text: string | null;
 };
 
 export async function authenticateAgentSession(
   db: D1Database,
   cookieHeader?: string,
 ): Promise<AgentSessionIdentity | null> {
-  const token = cookieValue(cookieHeader, COOKIE);
+  const token = cookieValue(cookieHeader, AGENT_SESSION_COOKIE);
   if (!token) return null;
   return db
     .prepare(
-      `SELECT a.id, a.name, a.username, a.status, a.is_enabled
+      `SELECT a.id, a.name, a.username, a.status, a.is_enabled,
+         a.avatar_version, a.auto_greeting_enabled, a.auto_greeting_text
        FROM agent_sessions s
        JOIN agents a ON a.id = s.agent_id
        WHERE s.token_hash = ?1
@@ -26,8 +30,18 @@ export async function authenticateAgentSession(
          AND a.username IS NOT NULL
        LIMIT 1`,
     )
-    .bind(await sha256(token))
+    .bind(await hashAgentSessionToken(token))
     .first<AgentSessionIdentity>();
+}
+
+export function publicAgentSession(agent: AgentSessionIdentity) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    username: agent.username,
+    status: agent.status,
+    is_enabled: agent.is_enabled,
+  };
 }
 
 export async function requireAgentSession<
@@ -47,7 +61,7 @@ function cookieValue(header: string | undefined, name: string): string | null {
   );
 }
 
-async function sha256(value: string): Promise<string> {
+export async function hashAgentSessionToken(value: string): Promise<string> {
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(value),
