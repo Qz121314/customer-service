@@ -3,7 +3,7 @@ const ROUTE_REGISTRATION =
 const TOP_LEVEL_DECLARATION =
   /\n(?:export\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+/u;
 const CLASS_METHOD_DECLARATION =
-  /\n  (?:(?:public|protected|private|static|abstract|override|readonly|async|get|set)\s+)*(?:constructor|[A-Za-z_$][\w$]*)\s*(?:<[^>\n]+>)?\(/u;
+  /\n {2}(?:(?:public|protected|private|static|abstract|override|readonly|async|get|set)\s+)*(?:constructor|[A-Za-z_$][\w$]*)\s*(?:<[^>\n]+>)?\(/u;
 
 /**
  * Scope a source-level cost/architecture guardrail to one stable API route.
