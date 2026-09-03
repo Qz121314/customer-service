@@ -127,6 +127,8 @@ test('unified conversation history exposes channel cards and immutable metadata'
       },
     },
     'conversation-1',
+    undefined,
+    async (objectKey) => `https://r2.example/${encodeURIComponent(objectKey)}`,
   );
 
   assert.deepEqual(
@@ -142,6 +144,10 @@ test('unified conversation history exposes channel cards and immutable metadata'
   assert.equal(
     attachments.find((item) => item.id === 'legacy-image')?.source,
     'media',
+  );
+  assert.equal(
+    attachments.find((item) => item.id === 'legacy-image')?.url,
+    'https://r2.example/chat%2Fconversation-1%2Flegacy-image.png',
   );
   assert.equal(
     attachments.find((item) => item.id === 'sms-1')?.presetMessage,

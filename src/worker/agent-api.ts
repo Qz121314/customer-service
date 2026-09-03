@@ -8,12 +8,19 @@ import {
 } from './client-api';
 import { verifyAgentPassword } from './agent-password';
 import { calendarMonthPeriod } from '../shared/calendar-month';
-import { listConversationMedia } from './media-api';
-import type { ConversationAttachmentPage } from './message-attachments';
+import {
+  listConversationAttachments,
+  type ConversationAttachmentPage,
+} from './message-attachments';
+import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 
 type Bindings = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
 };
 
 type Env = { Bindings: Bindings };
@@ -499,10 +506,19 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
           cursor: pageCursor!,
           limit: pageSize,
         };
+  const signer = await createDownloadSigningContext(
+    c.env,
+    conversation.expires_at as string | null,
+  );
 
   const [messages, media, readState] = await Promise.all([
     messageRequest.bind(...messageBindings).all<MessageRow>(),
-    listConversationMedia(c.env.DB, c.req.param('id'), attachmentPage),
+    listConversationAttachments(
+      c.env.DB,
+      c.req.param('id'),
+      attachmentPage,
+      signer ? (objectKey) => presignGet(signer, objectKey) : undefined,
+    ),
     readStateRequest,
   ]);
   const rawMessages = messages.results ?? [];

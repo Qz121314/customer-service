@@ -127,6 +127,11 @@ test('realtime overview scans run only when assignment or status counts can chan
     "clientApi.post('/client/v1/conversations/:id/messages'",
     "clientApi.post('/client/v1/conversations/:id/read'",
   );
+  const visitorReadRoute = section(
+    clientSource,
+    "clientApi.post('/client/v1/conversations/:id/read'",
+    "clientApi.get('/client/v1/realtime'",
+  );
   const agentRoute = section(
     agentSource,
     "agentApi.post('/api/agent/conversations/:id/messages'",
@@ -135,7 +140,7 @@ test('realtime overview scans run only when assignment or status counts can chan
 
   assert.match(
     broadcaster,
-    /options: \{[\s\S]*includeOverview\?: boolean;[\s\S]*previousAgentId\?: string \| null;[\s\S]*conversationSnapshot\?: ConversationEventSnapshot;[\s\S]*\} = \{\}/u,
+    /options: \{[\s\S]*includeOverview\?: boolean;[\s\S]*includeAgentInbox\?: boolean;[\s\S]*previousAgentId\?: string \| null;[\s\S]*conversationSnapshot\?: ConversationEventSnapshot;[\s\S]*\} = \{\}/u,
   );
   assert.match(
     broadcaster,
@@ -152,6 +157,7 @@ test('realtime overview scans run only when assignment or status counts can chan
   assert.doesNotMatch(clientRoute, /assignConversationAgent\(/u);
   assert.doesNotMatch(clientRoute, /broadcastAssignments\(/u);
   assert.match(clientRoute, /broadcastClientConversationEvent\(/u);
+  assert.match(visitorReadRoute, /includeAgentInbox: false/u);
   assert.doesNotMatch(clientRoute, /includeOverview:\s*true/u);
   assert.match(assignmentBroadcaster, /loadAgentOverview\(env\.DB, agentId\)/u);
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);

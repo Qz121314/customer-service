@@ -16,11 +16,20 @@ import {
   passesBurstLimit,
   requestSourceHash,
 } from './abuse-control';
+import {
+  listConversationAttachments,
+  type ConversationAttachmentPage,
+} from './message-attachments';
+import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 
 type ClientBindings = {
   DB: D1Database;
   CONVERSATION_ROOMS: DurableObjectNamespace;
   CONVERSATION_BURST_LIMITER?: RateLimit;
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
+  R2_BUCKET_NAME?: string;
 };
 
 type ClientEnv = { Bindings: ClientBindings };
@@ -188,7 +197,7 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
   const limit = clampLimit(c.req.query('limit'));
   return c.json({
     conversation: await conversationDetail(
-      c.env.DB,
+      c.env,
       identity.conversation,
       limit,
       before,
@@ -388,12 +397,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
         return noAgentResponse(c, site);
       }
       return c.json({
-        conversation: await conversationDetail(
-          c.env.DB,
-          conversation,
-          30,
-          null,
-        ),
+        conversation: await conversationDetail(c.env, conversation, 30, null),
       });
     }
   }
@@ -418,12 +422,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
         return noAgentResponse(c, site);
       }
       return c.json({
-        conversation: await conversationDetail(
-          c.env.DB,
-          conversation,
-          30,
-          null,
-        ),
+        conversation: await conversationDetail(c.env, conversation, 30, null),
       });
     }
   }
@@ -490,12 +489,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
           assignmentPolicy: 'preserve',
         });
         return c.json({
-          conversation: await conversationDetail(
-            c.env.DB,
-            conversation,
-            30,
-            null,
-          ),
+          conversation: await conversationDetail(c.env, conversation, 30, null),
         });
       }
     }
@@ -669,7 +663,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       return noAgentResponse(c, site);
     }
     return c.json({
-      conversation: await conversationDetail(c.env.DB, conversation, 30, null),
+      conversation: await conversationDetail(c.env, conversation, 30, null),
     });
   }
 
@@ -760,7 +754,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   return c.json(
     {
       ...(issuedVisitorToken ? { visitorToken: issuedVisitorToken } : {}),
-      conversation: await conversationDetail(c.env.DB, conversation, 30, null),
+      conversation: await conversationDetail(c.env, conversation, 30, null),
     },
     201,
   );
@@ -944,10 +938,16 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
         reader: 'visitor',
         lastMessageId: boundary?.id ?? null,
       }),
-      broadcastClientConversationEvent(c.env, conversation.id, 'message.read', {
-        reader: 'visitor',
-        lastMessageId: boundary?.id ?? null,
-      }),
+      broadcastClientConversationEvent(
+        c.env,
+        conversation.id,
+        'message.read',
+        {
+          reader: 'visitor',
+          lastMessageId: boundary?.id ?? null,
+        },
+        { includeAgentInbox: false },
+      ),
     ]);
   }
   return c.json({ ok: true });
@@ -1002,6 +1002,7 @@ export async function broadcastClientConversationEvent(
   } = {},
   options: {
     includeOverview?: boolean;
+    includeAgentInbox?: boolean;
     previousAgentId?: string | null;
     conversationSnapshot?: ConversationEventSnapshot;
   } = {},
@@ -1045,9 +1046,11 @@ export async function broadcastClientConversationEvent(
     options.previousAgentId !== conversation.assigned_agent
       ? options.previousAgentId
       : null;
+  const includeAgentInbox = options.includeAgentInbox ?? true;
   const includeOverview =
     options.includeOverview ??
-    (type === 'conversation.assigned' || type === 'conversation.closed');
+    (includeAgentInbox &&
+      (type === 'conversation.assigned' || type === 'conversation.closed'));
   const [overview, previousOverview] = await Promise.all([
     conversation.assigned_agent && includeOverview
       ? loadAgentOverview(env.DB, conversation.assigned_agent)
@@ -1057,7 +1060,7 @@ export async function broadcastClientConversationEvent(
       : Promise.resolve(null),
   ]);
   const inboxUpdates: Promise<void>[] = [];
-  if (conversation.assigned_agent) {
+  if (includeAgentInbox && conversation.assigned_agent) {
     inboxUpdates.push(
       broadcastRoomSafely(env, agentInboxRoom(conversation.assigned_agent), {
         type: 'conversation.changed',
@@ -1067,7 +1070,7 @@ export async function broadcastClientConversationEvent(
       }),
     );
   }
-  if (previousAgentId) {
+  if (includeAgentInbox && previousAgentId) {
     inboxUpdates.push(
       broadcastRoomSafely(env, agentInboxRoom(previousAgentId), {
         type: 'conversation.changed',
@@ -1892,11 +1895,12 @@ function conversationSummary(conversation: ConversationRow) {
 }
 
 async function conversationDetail(
-  db: D1Database,
+  env: ClientBindings,
   conversation: ConversationRow,
   limit: number,
   before: string | null,
 ) {
+  const db = env.DB;
   const result = await db
     .prepare(
       `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
@@ -1944,6 +1948,27 @@ async function conversationDetail(
   const rows = result.results ?? [];
   const hasMore = rows.length > limit;
   const page = rows.slice(0, limit).reverse();
+  const signer = await createDownloadSigningContext(
+    env,
+    conversation.expires_at,
+  );
+  const attachments = await listConversationAttachments(
+    db,
+    conversation.id,
+    {
+      direction: before ? 'before' : 'latest',
+      ...(before
+        ? { cursor: { id: page[0]?.id ?? '', createdAt: before }, limit }
+        : { limit }),
+    } as ConversationAttachmentPage,
+    signer ? (objectKey) => presignGet(signer, objectKey) : undefined,
+  );
+  const attachmentsByMessageId = new Map<string, typeof attachments>();
+  for (const attachment of attachments) {
+    const current = attachmentsByMessageId.get(attachment.messageId) ?? [];
+    current.push(attachment);
+    attachmentsByMessageId.set(attachment.messageId, current);
+  }
   return {
     ...conversationSummary(conversation),
     productHref: conversation.product_href,
@@ -1952,7 +1977,10 @@ async function conversationDetail(
       conversation.expires_at ??
         addHours(conversation.created_at, VISITOR_LIFETIME_HOURS),
     )!,
-    messages: page.map(clientMessage),
+    messages: page.map((message) => ({
+      ...clientMessage(message),
+      attachments: attachmentsByMessageId.get(message.id) ?? [],
+    })),
     nextMessageCursor: hasMore && page.length > 0 ? page[0].created_at : null,
   };
 }
