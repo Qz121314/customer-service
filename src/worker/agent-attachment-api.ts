@@ -6,6 +6,7 @@ import {
   normalizeVisitorId,
   normalizeVisitorToken,
   resolveVisitor,
+  type ConversationEventSnapshot,
 } from './client-api';
 import { hasContactCardIconRef } from './contact-card-icon';
 import {
@@ -48,7 +49,29 @@ type MessageRow = {
 
 type RequestedPresetRow = {
   request_order: number;
+  conversation_id: string;
+  site_id: string;
+  visitor_id: string;
   conversation_status: ConversationStatus;
+  assigned_agent: string;
+  agent_name: string | null;
+  agent_avatar_version: string | null;
+  subject: string | null;
+  product_id: string | null;
+  section_id: string | null;
+  section_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  product_title: string | null;
+  product_cover_url: string | null;
+  product_href: string | null;
+  expires_at: string | null;
+  visitor_unread_count: number;
+  agent_unread_count: number;
+  last_message_at: string;
+  conversation_created_at: string;
+  external_id: string;
+  visitor_name: string | null;
   id: string | null;
   agent_id: string | null;
   kind: AttachmentKind | null;
@@ -468,22 +491,64 @@ agentAttachmentApi.post(
             hasCustomIcon: hasContactCardIconRef(snapshot.iconRef),
           }),
     }));
-    await Promise.allSettled([
-      broadcastRoom(c.env, c.req.param('id'), {
-        type: 'message',
-        message,
-        attachments: publicAttachments,
+    const conversation = requested[0];
+    const conversationSnapshot: ConversationEventSnapshot = {
+      id: conversation.conversation_id,
+      site_id: conversation.site_id,
+      visitor_id: conversation.visitor_id,
+      status: conversationStatus === 'open' ? 'pending' : conversationStatus,
+      assigned_agent: conversation.assigned_agent,
+      agent_name: conversation.agent_name,
+      agent_avatar_version: conversation.agent_avatar_version,
+      subject: conversation.subject,
+      product_id: conversation.product_id,
+      section_id: conversation.section_id,
+      section_name: conversation.section_name,
+      category_id: conversation.category_id,
+      category_name: conversation.category_name,
+      product_title: conversation.product_title,
+      product_cover_url: conversation.product_cover_url,
+      product_href: conversation.product_href,
+      expires_at: conversation.expires_at,
+      visitor_unread_count: Number(conversation.visitor_unread_count || 0) + 1,
+      agent_unread_count: 0,
+      last_message_at: now,
+      created_at: conversation.conversation_created_at,
+      last_message: preview,
+      external_id: conversation.external_id,
+      visitor_name: conversation.visitor_name,
+    };
+    await deferAttachmentRealtime(
+      c,
+      Promise.allSettled([
+        broadcastRoom(c.env, c.req.param('id'), {
+          type: 'message',
+          message,
+          attachments: publicAttachments,
+        }),
+        broadcastClientConversationEvent(
+          c.env,
+          c.req.param('id'),
+          'message.created',
+          {
+            message: clientRealtimeMessage(message, publicAttachments),
+          },
+          {
+            includeOverview: conversationStatus === 'open',
+            conversationSnapshot,
+          },
+        ),
+      ]).then((results) => {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            console.warn(
+              'agent attachment realtime delivery failed',
+              result.reason,
+            );
+          }
+        }
       }),
-      broadcastClientConversationEvent(
-        c.env,
-        c.req.param('id'),
-        'message.created',
-        {
-          message: clientRealtimeMessage(message, publicAttachments),
-        },
-        { includeOverview: conversationStatus === 'open' },
-      ),
-    ]);
+    );
     return c.json({ message, attachments: publicAttachments }, 201);
   },
 );
@@ -594,7 +659,21 @@ async function loadRequestedPresets(
          FROM json_each(?3)
        )
        SELECT requested.request_order,
+         conversation.id AS conversation_id, conversation.site_id,
+         conversation.visitor_id,
          conversation.status AS conversation_status,
+         conversation.assigned_agent,
+         agent.name AS agent_name,
+         agent.avatar_version AS agent_avatar_version,
+         conversation.subject, conversation.product_id,
+         conversation.section_id, conversation.section_name,
+         conversation.category_id, conversation.category_name,
+         conversation.product_title, conversation.product_cover_url,
+         conversation.product_href, conversation.expires_at,
+         conversation.visitor_unread_count, conversation.agent_unread_count,
+         conversation.last_message_at,
+         conversation.created_at AS conversation_created_at,
+         visitor.external_id, visitor.display_name AS visitor_name,
          preset.id, preset.agent_id, preset.kind, preset.label, preset.value,
          preset.preset_message, preset.icon_ref, preset.object_key,
          preset.mime_type, preset.byte_size, preset.width, preset.height,
@@ -602,6 +681,10 @@ async function loadRequestedPresets(
          preset.updated_at
        FROM conversations conversation
        CROSS JOIN requested
+       JOIN visitors visitor ON visitor.id = conversation.visitor_id
+       LEFT JOIN agents agent
+         ON agent.id = conversation.assigned_agent
+         AND agent.site_id = conversation.site_id
        LEFT JOIN agent_attachment_presets preset
          ON preset.id = requested.preset_id AND preset.agent_id = ?2
        WHERE conversation.id = ?1
@@ -738,6 +821,17 @@ function broadcastRoom(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+async function deferAttachmentRealtime(
+  c: Context<Env>,
+  task: Promise<unknown>,
+): Promise<void> {
+  try {
+    c.executionCtx.waitUntil(task);
+  } catch {
+    await task;
+  }
 }
 
 function clientError(c: Context<Env>, status: 400 | 401 | 404, code: string) {
