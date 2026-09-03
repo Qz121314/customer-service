@@ -125,30 +125,49 @@ jobs:
           name: ui-build
           path: dist
 
-      - name: Prepare local D1 for browser smoke
-        run: pnpm db:migrate:local
-
-      - name: Install browser smoke runtime
+      - name: Prepare browser smoke dependencies
         shell: bash
         run: |
           set -euo pipefail
+
+          pnpm db:migrate:local > /tmp/browser-smoke-d1.log 2>&1 &
+          d1_pid=$!
+          cleanup() {
+            kill "$d1_pid" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          browser_status=1
           for attempt in 1 2; do
             if timeout --kill-after=30s 420s bash -c '
               set -euo pipefail
               pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
               pnpm exec playwright install --with-deps chromium
             '; then
-              exit 0
+              browser_status=0
+              break
             fi
 
-            if [ "$attempt" -eq 2 ]; then
-              echo "::error::Chromium smoke runtime installation failed after two bounded attempts."
-              exit 1
+            if [ "$attempt" -eq 1 ]; then
+              echo "::warning::Chromium smoke runtime installation timed out or failed; retrying once."
+              sleep 5
             fi
-
-            echo "::warning::Chromium smoke runtime installation timed out or failed; retrying once."
-            sleep 5
           done
+
+          d1_status=0
+          wait "$d1_pid" || d1_status=$?
+          trap - EXIT
+
+          if [ "$d1_status" -ne 0 ]; then
+            echo "::error::Local D1 preparation for browser smoke failed."
+            cat /tmp/browser-smoke-d1.log
+            exit "$d1_status"
+          fi
+
+          if [ "$browser_status" -ne 0 ]; then
+            echo "::error::Chromium smoke runtime installation failed after two bounded attempts."
+            exit 1
+          fi
 
       - name: Smoke test Agent and Admin UI in Chromium
         env:
