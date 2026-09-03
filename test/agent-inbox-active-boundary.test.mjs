@@ -6,11 +6,7 @@ import { URL } from 'node:url';
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('default agent inbox never hides active conversations behind a global row limit', async () => {
-  const worker = await read('../src/worker/agent-api.ts');
-  const start = worker.indexOf('async function loadAgentInbox');
-  const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
-  assert.ok(start >= 0 && end > start);
-  const inbox = worker.slice(start, end);
+  const inbox = await read('../src/worker/agent-inbox.ts');
 
   assert.match(inbox, /WITH ranked AS/u);
   assert.match(inbox, /WHERE status <> 'closed' OR __closed_rank <= \?2/u);
@@ -20,10 +16,7 @@ test('default agent inbox never hides active conversations behind a global row l
 });
 
 test('only closed conversations are bounded in explicit filtered inbox reads', async () => {
-  const worker = await read('../src/worker/agent-api.ts');
-  const start = worker.indexOf('async function loadAgentInbox');
-  const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
-  const inbox = worker.slice(start, end);
+  const inbox = await read('../src/worker/agent-inbox.ts');
 
   assert.match(
     inbox,
