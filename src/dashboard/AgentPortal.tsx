@@ -68,6 +68,7 @@ import {
   useAgentNavigation,
   withOverlay,
 } from './agent-navigation';
+import { createAgentInboxRecoveryCoordinator } from './agent-recovery-coordinator';
 import { AgentComposerAttachmentMenu } from './AgentAttachmentTools';
 import {
   groupAgentMessageAttachments,
@@ -693,12 +694,22 @@ function AgentWorkspace({
     replace(inboxRoute());
   }, [busy, conversations, replace, selectedId]);
 
+  const recoverAgentInbox = useMemo(
+    () =>
+      createAgentInboxRecoveryCoordinator(async () => {
+        try {
+          applyInbox(await heartbeat());
+        } catch {
+          await refresh().catch(() => undefined);
+        }
+      }).recover,
+    [applyInbox, refresh],
+  );
+
   useEffect(() => {
     const recover = () => {
       if (document.visibilityState !== 'visible') return;
-      void heartbeat()
-        .then(applyInbox)
-        .catch(() => void refresh().catch(() => undefined));
+      void recoverAgentInbox();
       if (selectedId && (unreadCountRef.current.get(selectedId) ?? 0) > 0) {
         void acknowledgeConversation(
           selectedId,
@@ -715,9 +726,8 @@ function AgentWorkspace({
     };
   }, [
     acknowledgeConversation,
-    applyInbox,
     lastVisibleVisitorMessageId,
-    refresh,
+    recoverAgentInbox,
     selectedId,
   ]);
 
@@ -739,9 +749,7 @@ function AgentWorkspace({
           retryAttempt = 0;
         }, 10_000);
         if (openedOnce) {
-          void heartbeat()
-            .then(applyInbox)
-            .catch(() => void refresh().catch(() => undefined));
+          void recoverAgentInbox();
         }
         openedOnce = true;
       });
@@ -810,7 +818,7 @@ function AgentWorkspace({
       if (timer !== null) window.clearTimeout(timer);
       if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
-  }, [applyInbox, identity.id, playIncomingTone, refresh]);
+  }, [identity.id, playIncomingTone, recoverAgentInbox, refresh]);
 
   const sendAgentTyping = useCallback((active: boolean) => {
     agentTypingDesiredRef.current = active;
