@@ -799,6 +799,306 @@ test('contact-card response returns after durable writes but before complete rea
   database.close();
 });
 
+test('visitor and agent media complete before blocked realtime and stay idempotent', async (t) => {
+  for (const senderType of ['visitor', 'agent']) {
+    await t.test(senderType, async () => {
+      const database = new DatabaseSync(':memory:');
+      applyMigrations(database);
+      const rooms = blockingRooms();
+      const mediaBucket = fakeMediaBucket();
+      const token = `media-${senderType}-session-token`;
+      const visitorExternalId = senderType === 'visitor' ? 'VIS123' : 'AGT123';
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      const credentials = await hashAgentPassword('unused-password', 1_000);
+      database
+        .prepare(
+          `INSERT INTO agents (
+             id, site_id, name, username, password_hash, password_salt,
+             password_iterations, status, is_enabled, last_seen_at
+           ) VALUES ('agent-media-realtime', 'default', 'Media Agent',
+             'agent-media-realtime', ?1, ?2, ?3, 'online', 1, CURRENT_TIMESTAMP)`,
+        )
+        .run(credentials.hash, credentials.salt, credentials.iterations);
+      database
+        .prepare(
+          `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+           VALUES ('agent-media-realtime-session', 'agent-media-realtime', ?1, ?2)`,
+        )
+        .run(sha256(token), expiresAt);
+      database
+        .prepare(
+          `INSERT INTO visitors (
+             id, site_id, external_id, token_hash, display_name, expires_at
+           ) VALUES ('visitor-media-realtime', 'default', ?1,
+             'unused-media-token', 'Media Visitor', ?2)`,
+        )
+        .run(visitorExternalId, expiresAt);
+      database
+        .prepare(
+          `INSERT INTO conversations (
+             id, site_id, visitor_id, status, assigned_agent, subject,
+             visitor_unread_count, agent_unread_count, expires_at,
+             last_message_at, created_at, updated_at, last_message_preview
+           ) VALUES ('conversation-media-realtime', 'default',
+             'visitor-media-realtime', 'open', 'agent-media-realtime', 'Image help',
+             2, 4, ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP,
+             'Before image')`,
+        )
+        .run(expiresAt);
+      const mediaId = `media-${senderType}-realtime`;
+      const messageId = `message-${senderType}-realtime`;
+      const objectKey = `chat/conversation-media-realtime/${mediaId}.png`;
+      const createdAt = new Date().toISOString();
+      database
+        .prepare(
+          `INSERT INTO media_items (
+             id, conversation_id, reserved_message_id, sender_type, sender_id,
+             object_key, mime_type, byte_size, width, height, original_name,
+             client_upload_id, status, is_initial, reserved_created_at,
+             created_at, updated_at
+           ) VALUES (?1, 'conversation-media-realtime', ?2, ?3, ?4, ?5,
+             'image/png', 4, 1, 1, 'image.png', ?6, 'pending', 0, ?7, ?7, ?7)`,
+        )
+        .run(
+          mediaId,
+          messageId,
+          senderType,
+          senderType === 'agent'
+            ? 'agent-media-realtime'
+            : 'visitor-media-realtime',
+          objectKey,
+          `upload-${senderType}-realtime`,
+          createdAt,
+        );
+      await mediaBucket.bucket.put(objectKey, new Uint8Array([1, 2, 3, 4]), {
+        httpMetadata: { contentType: 'image/png' },
+      });
+
+      const baseDb = d1(database);
+      const preparedSql = [];
+      const env = {
+        DB: {
+          ...baseDb,
+          prepare(sql) {
+            preparedSql.push(sql);
+            return baseDb.prepare(sql);
+          },
+        },
+        MEDIA: mediaBucket.bucket,
+        CONVERSATION_ROOMS: rooms.namespace,
+      };
+      const pendingTasks = [];
+      const executionCtx = {
+        waitUntil(task) {
+          pendingTasks.push(task);
+        },
+      };
+      const request = () =>
+        senderType === 'agent'
+          ? mediaApi.request(
+              `/api/agent/media/${mediaId}/complete`,
+              {
+                method: 'POST',
+                headers: { cookie: `cs_agent_session=${token}` },
+                body: '{}',
+              },
+              env,
+              executionCtx,
+            )
+          : mediaApi.request(
+              `/client/v1/media/${mediaId}/complete`,
+              {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({
+                  visitorId: visitorExternalId,
+                  projectId: 'default',
+                }),
+              },
+              env,
+              executionCtx,
+            );
+
+      const response = await Promise.race([
+        request(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(new Error(`${senderType} media response waited for DO`)),
+            250,
+          ),
+        ),
+      ]);
+      assert.equal(response.status, 200);
+      const completed = await json(response);
+      assert.equal(completed.duplicate, false);
+      assert.equal(completed.messageId, messageId);
+      assert.deepEqual(
+        {
+          ...database
+            .prepare(
+              `SELECT status, visitor_unread_count, agent_unread_count,
+                 last_message_preview
+               FROM conversations WHERE id = 'conversation-media-realtime'`,
+            )
+            .get(),
+        },
+        senderType === 'agent'
+          ? {
+              status: 'pending',
+              visitor_unread_count: 3,
+              agent_unread_count: 0,
+              last_message_preview: '',
+            }
+          : {
+              status: 'open',
+              visitor_unread_count: 2,
+              agent_unread_count: 5,
+              last_message_preview: '',
+            },
+      );
+      assert.deepEqual(
+        {
+          ...database
+            .prepare(`SELECT status, message_id FROM media_items WHERE id = ?1`)
+            .get(mediaId),
+        },
+        { status: 'ready', message_id: messageId },
+      );
+      assert.equal(
+        database
+          .prepare('SELECT COUNT(*) AS count FROM messages WHERE id = ?1')
+          .get(messageId).count,
+        1,
+      );
+      assert.equal(pendingTasks.length, 1);
+      assert.deepEqual(rooms.completed, []);
+
+      rooms.release();
+      await Promise.all(pendingTasks);
+      assert.deepEqual(rooms.completed.sort(), [
+        'agent-inbox:agent-media-realtime',
+        `client:default:${visitorExternalId}`,
+        'conversation-media-realtime',
+      ]);
+      const visitorEvent = rooms.events
+        .get(`client:default:${visitorExternalId}`)
+        ?.find((event) => event.media?.id === mediaId);
+      assert.equal(visitorEvent?.type, 'message.created');
+      assert.equal(
+        visitorEvent.message.direction,
+        senderType === 'agent' ? 'agent' : 'customer',
+      );
+      assert.equal(visitorEvent.media.status, 'ready');
+      assert.equal(
+        preparedSql.some((sql) => /SELECT c\.id, c\.site_id/u.test(sql)),
+        false,
+        'media realtime must use the durable conversation snapshot',
+      );
+
+      const duplicateResponse = await request();
+      assert.equal(duplicateResponse.status, 200);
+      assert.equal((await json(duplicateResponse)).duplicate, true);
+      assert.equal(pendingTasks.length, 1);
+      assert.equal(rooms.calls.length, 3);
+      assert.equal(
+        database
+          .prepare('SELECT COUNT(*) AS count FROM messages WHERE id = ?1')
+          .get(messageId).count,
+        1,
+      );
+      database.close();
+    });
+  }
+});
+
+test('invalid media completion fails before persistence or realtime', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const rooms = blockingRooms();
+  const mediaBucket = fakeMediaBucket();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  database
+    .prepare(
+      `INSERT INTO agents (id, site_id, name, status, is_enabled)
+       VALUES ('agent-invalid-media', 'default', 'Agent', 'online', 1)`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO visitors (
+         id, site_id, external_id, token_hash, display_name, expires_at
+       ) VALUES ('visitor-invalid-media', 'default', 'BAD123',
+         'unused-invalid-media-token', 'Visitor', ?1)`,
+    )
+    .run(expiresAt);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, expires_at,
+         last_message_at, created_at, updated_at
+       ) VALUES ('conversation-invalid-media', 'default',
+         'visitor-invalid-media', 'open', 'agent-invalid-media', ?1,
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+    .run(expiresAt);
+  const objectKey = 'chat/conversation-invalid-media/invalid.png';
+  database
+    .prepare(
+      `INSERT INTO media_items (
+         id, conversation_id, reserved_message_id, sender_type, sender_id,
+         object_key, mime_type, byte_size, width, height, status, is_initial,
+         reserved_created_at, created_at, updated_at
+       ) VALUES ('invalid-media', 'conversation-invalid-media',
+         'invalid-media-message', 'visitor', 'visitor-invalid-media', ?1,
+         'image/png', 4, 1, 1, 'pending', 0,
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+    .run(objectKey);
+  await mediaBucket.bucket.put(objectKey, new Uint8Array([1, 2, 3]), {
+    httpMetadata: { contentType: 'image/png' },
+  });
+  const pendingTasks = [];
+  const response = await mediaApi.request(
+    '/client/v1/media/invalid-media/complete',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ visitorId: 'BAD123', projectId: 'default' }),
+    },
+    {
+      DB: d1(database),
+      MEDIA: mediaBucket.bucket,
+      CONVERSATION_ROOMS: rooms.namespace,
+    },
+    {
+      waitUntil(task) {
+        pendingTasks.push(task);
+      },
+    },
+  );
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error.code, 'MEDIA_UPLOAD_INVALID');
+  assert.equal(
+    database
+      .prepare("SELECT status FROM media_items WHERE id = 'invalid-media'")
+      .get().status,
+    'failed',
+  );
+  assert.equal(
+    database
+      .prepare(
+        "SELECT COUNT(*) AS count FROM messages WHERE id = 'invalid-media-message'",
+      )
+      .get().count,
+    0,
+  );
+  assert.equal(mediaBucket.objects.has(objectKey), false);
+  assert.equal(pendingTasks.length, 0);
+  assert.equal(rooms.calls.length, 0);
+  database.close();
+});
+
 test('isolated client -> routing -> agent -> client flow works through real Hono handlers', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
