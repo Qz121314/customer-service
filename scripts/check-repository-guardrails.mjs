@@ -167,10 +167,47 @@ assert.deepEqual(
   'Production deployment must depend on only the two Cloudflare GitHub Secrets',
 );
 
+const productionHealthStep =
+  ciWorkflow.match(
+    /- name: Verify production health without D1[\s\S]*?(?=\n\s+- name:)/u,
+  )?.[0] ?? '';
+assert.match(
+  productionHealthStep,
+  /\/api\/health/u,
+  'Routine post-deploy verification must use the D1-free health endpoint',
+);
+assert.doesNotMatch(
+  productionHealthStep,
+  /smoke:production|perf:audit:production/u,
+  'Routine post-deploy health verification must not invoke production D1 smoke or performance audits',
+);
+
+const productionSmokeStep =
+  ciWorkflow.match(
+    /- name: Smoke test production protocols[\s\S]*?(?=\n\s+- name:)/u,
+  )?.[0] ?? '';
 const performanceAuditStep =
   ciWorkflow.match(
     /- name: Audit authenticated production performance[\s\S]*?(?=\n\s+- name:)/u,
   )?.[0] ?? '';
+const manualProductionVerificationGuard =
+  /if:\s*github\.event_name == 'workflow_dispatch' && inputs\.production_verification == true/u;
+for (const [label, step] of [
+  ['Production protocol smoke', productionSmokeStep],
+  ['Authenticated production performance audit', performanceAuditStep],
+]) {
+  assert.match(
+    step,
+    manualProductionVerificationGuard,
+    `${label} must require explicit workflow_dispatch production verification`,
+  );
+}
+assert.match(
+  performanceAuditStep,
+  /PERF_AUDIT_RUNS:\s*\$\{\{\s*inputs\.performance_runs\s*\|\|\s*'1'\s*\}\}/u,
+  'Manual production performance audit must default to one cold-cache run',
+);
+
 const performanceAuditSecretReferences = [
   ...performanceAuditStep.matchAll(/secrets\.([A-Z0-9_]+)/gu),
 ].map((match) => match[1]);
@@ -219,6 +256,11 @@ assert.match(
   engineeringContract,
   /Minimize Cloudflare Workers and D1 requests/u,
   'engineering contract must preserve the Worker/D1 request-budget principle',
+);
+assert.match(
+  engineeringContract,
+  /Routine pull requests and main pushes must not use production D1 for smoke, performance, bootstrap, or data validation/u,
+  'engineering contract must prohibit routine CI from consuming production D1 verification quota',
 );
 assert.match(
   engineeringContract,
