@@ -14,109 +14,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  static-checks:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.19.0
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Repository guardrails
-        run: pnpm guardrails
-
-      - name: Format
-        run: pnpm format
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-  database-tests:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.19.0
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Validate local D1 migrations
-        run: pnpm db:migrate:local
-
-      - name: Test
-        run: pnpm test
-
-  build-and-bundle:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.19.0
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Build UI
-        run: pnpm build:ui
-
-      - name: Validate Worker bundle
-        run: pnpm cf:check:bundle
-
-      - name: Upload UI build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ui-build
-          path: dist
-          if-no-files-found: error
-          retention-days: 1
-
-  browser-smoke:
-    needs: build-and-bundle
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -133,95 +31,136 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile
 
-      - name: Download UI build
-        uses: actions/download-artifact@v4
-        with:
-          name: ui-build
-          path: dist
+      - name: Repository guardrails
+        run: pnpm guardrails
 
-      - name: Restore Playwright Chromium cache
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ runner.arch }}-1.55.0
+      - name: Format
+        run: pnpm format
 
-      - name: Restore browser D1 schema cache
-        id: browser-d1-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: .wrangler/state
-          key: browser-d1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('migrations/**/*.sql', 'wrangler.jsonc', 'pnpm-lock.yaml') }}
+      - name: Prepare validation lanes in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
 
-      - name: Prepare browser smoke dependencies
-        env:
-          D1_CACHE_HIT: ${{ steps.browser-d1-cache.outputs.cache-hit }}
-          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+          static_lane() {
+            pnpm lint
+            pnpm typecheck:ui
+          }
+
+          database_lane() {
+            pnpm db:migrate:local
+            rm -rf /tmp/browser-d1-state
+            mkdir -p /tmp/browser-d1-state
+            cp -a .wrangler/state/. /tmp/browser-d1-state/
+          }
+
+          build_lane() {
+            pnpm build:ui
+          }
+
+          browser_lane() {
+            rm -rf /tmp/playwright-runtime
+            mkdir -p /tmp/playwright-runtime
+            printf '%s\n' '{"private":true}' > /tmp/playwright-runtime/package.json
+
+            for attempt in 1 2; do
+              if timeout --kill-after=30s 240s bash -c '
+                set -euo pipefail
+                pnpm --dir /tmp/playwright-runtime add --ignore-scripts --save-exact @playwright/test@1.55.0
+                pnpm --dir /tmp/playwright-runtime exec playwright install chromium
+              '; then
+                return 0
+              fi
+
+              if [ "$attempt" -eq 1 ]; then
+                echo "Playwright runtime preparation failed; retrying once."
+                sleep 5
+              fi
+            done
+            return 1
+          }
+
+          static_lane > /tmp/ci-static.log 2>&1 &
+          static_pid=$!
+          database_lane > /tmp/ci-database.log 2>&1 &
+          database_pid=$!
+          build_lane > /tmp/ci-build.log 2>&1 &
+          build_pid=$!
+          browser_lane > /tmp/ci-browser-runtime.log 2>&1 &
+          browser_pid=$!
+
+          static_status=0
+          database_status=0
+          build_status=0
+          browser_status=0
+          wait "$static_pid" || static_status=$?
+          wait "$database_pid" || database_status=$?
+          wait "$build_pid" || build_status=$?
+          wait "$browser_pid" || browser_status=$?
+
+          echo '--- static lane ---'
+          cat /tmp/ci-static.log
+          echo '--- database lane ---'
+          cat /tmp/ci-database.log
+          echo '--- build lane ---'
+          cat /tmp/ci-build.log
+          echo '--- browser runtime lane ---'
+          cat /tmp/ci-browser-runtime.log
+
+          if [ "$static_status" -ne 0 ] || [ "$database_status" -ne 0 ] || [ "$build_status" -ne 0 ] || [ "$browser_status" -ne 0 ]; then
+            echo "::error::Parallel validation setup failed (static=$static_status database=$database_status build=$build_status browser=$browser_status)."
+            exit 1
+          fi
+
+      - name: Validate Worker and tests in parallel
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          pnpm test > /tmp/ci-test.log 2>&1 &
+          test_pid=$!
+
+          worker_status=0
+          {
+            pnpm typecheck:worker
+            pnpm cf:check:bundle
+          } > /tmp/ci-worker.log 2>&1 || worker_status=$?
+
+          test_status=0
+          wait "$test_pid" || test_status=$?
+
+          echo '--- test lane ---'
+          cat /tmp/ci-test.log
+          echo '--- worker lane ---'
+          cat /tmp/ci-worker.log
+
+          if [ "$test_status" -ne 0 ] || [ "$worker_status" -ne 0 ]; then
+            echo "::error::Worker/test validation failed (tests=$test_status worker=$worker_status)."
+            exit 1
+          fi
+
+      - name: Restore clean D1 state and link Playwright runtime
         shell: bash
         run: |
           set -euo pipefail
 
-          d1_pid=''
-          if [ "$D1_CACHE_HIT" != 'true' ]; then
-            pnpm db:migrate:local > /tmp/browser-smoke-d1.log 2>&1 &
-            d1_pid=$!
-          fi
+          rm -rf .wrangler/state
+          mkdir -p .wrangler/state
+          cp -a /tmp/browser-d1-state/. .wrangler/state/
 
-          cleanup() {
-            if [ -n "$d1_pid" ]; then
-              kill "$d1_pid" >/dev/null 2>&1 || true
-            fi
-          }
-          trap cleanup EXIT
+          mkdir -p node_modules/@playwright
+          rm -rf node_modules/@playwright/test
+          playwright_test_path="$(readlink -f /tmp/playwright-runtime/node_modules/@playwright/test)"
+          test -n "$playwright_test_path"
+          ln -s "$playwright_test_path" node_modules/@playwright/test
 
-          browser_status=1
-          for attempt in 1 2; do
-            if timeout --kill-after=30s 240s bash -c '
-              set -euo pipefail
-              pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
-              if [ "$PLAYWRIGHT_CACHE_HIT" != "true" ]; then
-                pnpm exec playwright install chromium
-              fi
-            '; then
-              browser_status=0
-              break
-            fi
-
-            if [ "$attempt" -eq 1 ]; then
-              echo "::warning::Playwright Chromium runtime preparation timed out or failed; retrying once."
-              sleep 5
-            fi
-          done
-
-          d1_status=0
-          if [ -n "$d1_pid" ]; then
-            wait "$d1_pid" || d1_status=$?
-          fi
-          trap - EXIT
-
-          if [ "$d1_status" -ne 0 ]; then
-            echo "::error::Local D1 preparation for browser smoke failed."
-            cat /tmp/browser-smoke-d1.log
-            exit "$d1_status"
-          fi
-
-          if [ "$browser_status" -ne 0 ]; then
-            echo "::error::Playwright Chromium runtime preparation failed after two bounded attempts."
-            exit 1
-          fi
-
-      - name: Save browser D1 schema cache
-        if: steps.browser-d1-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .wrangler/state
-          key: browser-d1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('migrations/**/*.sql', 'wrangler.jsonc', 'pnpm-lock.yaml') }}
+          playwright_bin="/tmp/playwright-runtime/node_modules/.bin/playwright"
+          test -x "$playwright_bin"
+          echo "PLAYWRIGHT_BIN=$playwright_bin" >> "$GITHUB_ENV"
 
       - name: Smoke test Agent and Admin UI in Chromium
         env:
@@ -252,14 +191,14 @@ jobs:
             exit 1
           fi
 
-          pnpm exec playwright test \
+          "$PLAYWRIGHT_BIN" test \
             test/agent-browser-smoke.spec.mjs \
             test/agent-card-icon-browser-smoke.spec.mjs \
             test/agent-mobile-menu-smoke.spec.mjs \
             --workers=1 \
             --reporter=github
 
-          pnpm exec playwright test \
+          "$PLAYWRIGHT_BIN" test \
             test/admin-browser-smoke.spec.mjs \
             --workers=1 \
             --reporter=github
@@ -273,12 +212,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+      - name: Upload UI build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-build
+          path: dist
+          if-no-files-found: error
+          retention-days: 1
+
   deploy-production:
-    needs:
-      - static-checks
-      - database-tests
-      - build-and-bundle
-      - browser-smoke
+    needs: validate
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -296,11 +239,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile
 
       - name: Download UI build
         uses: actions/download-artifact@v4
