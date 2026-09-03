@@ -236,3 +236,4 @@ await assertClientWebSocket();
 console.log(
   `PROTOCOL_SMOKE=ready version=${health.version ?? 'unknown'} base=${baseUrl}`,
 );
+process.exit(0);
