@@ -1,4 +1,8 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
+import {
+  requireAgentSession,
+  type AgentSessionIdentity,
+} from './agent-session';
 
 type Bindings = {
   DB: D1Database;
@@ -7,13 +11,11 @@ type Bindings = {
 
 type Env = { Bindings: Bindings };
 
-type AgentAvatarSession = {
-  id: string;
-  avatar_version: string | null;
-  is_enabled: number;
-};
+type AgentAvatarSession = Pick<
+  AgentSessionIdentity,
+  'id' | 'avatar_version' | 'is_enabled'
+>;
 
-const COOKIE = 'cs_agent_session';
 const MAX_AVATAR_BYTES = 320 * 1024;
 const AVATAR_KEY_PREFIX = 'agent-avatars';
 const AVATAR_CONTENT_TYPES = new Set(['image/webp', 'image/jpeg', 'image/png']);
@@ -21,7 +23,7 @@ const AVATAR_CONTENT_TYPES = new Set(['image/webp', 'image/jpeg', 'image/png']);
 export const agentAvatarApi = new Hono<Env>();
 
 agentAvatarApi.get('/api/agent/avatar', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent: AgentAvatarSession | null = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
   return c.json({
     avatarUrl: avatarUrl(agent.id, agent.avatar_version),
@@ -29,7 +31,7 @@ agentAvatarApi.get('/api/agent/avatar', async (c) => {
 });
 
 agentAvatarApi.put('/api/agent/avatar', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent: AgentAvatarSession | null = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
   const contentType = normalizeContentType(c.req.header('content-type'));
@@ -97,7 +99,7 @@ agentAvatarApi.put('/api/agent/avatar', async (c) => {
 });
 
 agentAvatarApi.delete('/api/agent/avatar', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent: AgentAvatarSession | null = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
   const updated = await c.env.DB.prepare(
@@ -185,43 +187,4 @@ function matchesImageSignature(
 
 function ascii(bytes: Uint8Array, start: number, end: number): string {
   return String.fromCharCode(...bytes.slice(start, end));
-}
-
-async function authenticateAgent(
-  c: Context<Env>,
-): Promise<AgentAvatarSession | null> {
-  const token = cookieValue(c.req.header('Cookie'), COOKIE);
-  if (!token) return null;
-  return c.env.DB.prepare(
-    `SELECT a.id, a.avatar_version, a.is_enabled
-     FROM agent_sessions s
-     JOIN agents a ON a.id = s.agent_id
-     WHERE s.token_hash = ?1
-       AND datetime(s.expires_at) > CURRENT_TIMESTAMP
-       AND a.username IS NOT NULL
-     LIMIT 1`,
-  )
-    .bind(await sha256(token))
-    .first<AgentAvatarSession>();
-}
-
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
-}
-
-function cookieValue(header: string | undefined, name: string): string | null {
-  const prefix = `${name}=`;
-  return (
-    (header ?? '')
-      .split(';')
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(prefix))
-      ?.slice(prefix.length) ?? null
-  );
 }

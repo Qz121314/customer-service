@@ -2,36 +2,51 @@ import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { createHash, createHmac } from 'node:crypto';
 import {
-  existsSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
-  unlinkSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath, URL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import test from 'node:test';
-const workerDirectory = fileURLToPath(
-  new URL('../src/worker/', import.meta.url),
+
+const repositoryDirectory = fileURLToPath(new URL('../', import.meta.url));
+const runtimeDirectory = mkdtempSync(
+  join(tmpdir(), 'customer-service-full-flow-'),
 );
-const sharedDirectory = fileURLToPath(
-  new URL('../src/shared/', import.meta.url),
+symlinkSync(
+  join(repositoryDirectory, 'node_modules'),
+  join(runtimeDirectory, 'node_modules'),
+  'dir',
 );
-const moduleShims = [];
-for (const directory of [workerDirectory, sharedDirectory]) {
-  for (const name of readdirSync(directory)) {
-    if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
-    const shimPath = join(directory, name.slice(0, -3));
-    if (existsSync(shimPath)) continue;
-    symlinkSync(name, shimPath);
-    moduleShims.push(shimPath);
+for (const relativeDirectory of ['src/worker', 'src/shared']) {
+  const sourceDirectory = join(repositoryDirectory, relativeDirectory);
+  const targetDirectory = join(runtimeDirectory, relativeDirectory);
+  mkdirSync(targetDirectory, { recursive: true });
+  for (const name of readdirSync(sourceDirectory)) {
+    if (!name.endsWith('.ts')) continue;
+    copyFileSync(join(sourceDirectory, name), join(targetDirectory, name));
+    if (!name.endsWith('.d.ts')) {
+      symlinkSync(name, join(targetDirectory, name.slice(0, -3)));
+    }
   }
 }
+
+const workerModule = (name) =>
+  pathToFileURL(join(runtimeDirectory, 'src/worker', name)).href;
 
 let adminConfigApi;
 let agentApi;
 let agentAttachmentApi;
+let agentAutoReplyApi;
+let agentAvatarApi;
+let agentPushApi;
 let clientApi;
 let mediaApi;
 let pushApi;
@@ -41,21 +56,27 @@ try {
     { adminConfigApi },
     { agentApi },
     { agentAttachmentApi },
+    { agentAutoReplyApi },
+    { agentAvatarApi },
+    { agentPushApi },
     { clientApi },
     { mediaApi },
     { pushApi },
     { hashAgentPassword },
   ] = await Promise.all([
-    import('../src/worker/admin-config-api.ts'),
-    import('../src/worker/agent-api.ts'),
-    import('../src/worker/agent-attachment-api.ts'),
-    import('../src/worker/client-api.ts'),
-    import('../src/worker/media-api.ts'),
-    import('../src/worker/push-api.ts'),
-    import('../src/worker/agent-password.ts'),
+    import(workerModule('admin-config-api.ts')),
+    import(workerModule('agent-api.ts')),
+    import(workerModule('agent-attachment-api.ts')),
+    import(workerModule('agent-auto-reply-api.ts')),
+    import(workerModule('agent-avatar-api.ts')),
+    import(workerModule('agent-push-api.ts')),
+    import(workerModule('client-api.ts')),
+    import(workerModule('media-api.ts')),
+    import(workerModule('push-api.ts')),
+    import(workerModule('agent-password.ts')),
   ]);
 } finally {
-  for (const shimPath of moduleShims) unlinkSync(shimPath);
+  rmSync(runtimeDirectory, { recursive: true, force: true });
 }
 
 function applyMigrations(database) {
@@ -610,6 +631,150 @@ test('visitor text response returns before realtime fan-out and duplicate stays 
   assert.equal(duplicate.status, 200);
   assert.equal(pendingTasks.length, 1);
   assert.equal(rooms.calls.length, 3);
+  database.close();
+});
+
+test('agent surfaces share one session lookup and preserve disabled-agent access through logout', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const token = 'shared-agent-session-token';
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  database
+    .prepare(
+      `INSERT INTO agents (
+         id, site_id, name, username, status, is_enabled, last_seen_at
+       ) VALUES ('agent-shared-session', 'default', 'Shared Agent',
+         'shared-agent', 'offline', 0, CURRENT_TIMESTAMP)`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES ('shared-agent-session', 'agent-shared-session', ?1, ?2)`,
+    )
+    .run(sha256(token), expiresAt);
+
+  let sessionLookups = 0;
+  const baseDb = d1(database);
+  const env = {
+    DB: {
+      ...baseDb,
+      prepare(sql) {
+        if (/^\s*SELECT[\s\S]*FROM agent_sessions\s/u.test(sql)) {
+          sessionLookups += 1;
+        }
+        return baseDb.prepare(sql);
+      },
+    },
+    MEDIA: fakeMediaBucket().bucket,
+    CONVERSATION_ROOMS: fakeRooms().namespace,
+  };
+  const cookie = `cs_agent_session=${token}`;
+  const oneLookup = async (label, request) => {
+    const before = sessionLookups;
+    const response = await request();
+    assert.equal(response.status, 200, label);
+    assert.equal(sessionLookups - before, 1, `${label} session lookups`);
+    return response;
+  };
+
+  const session = await json(
+    await oneLookup('auth session', () =>
+      agentApi.request('/api/agent/auth/session', { headers: { cookie } }, env),
+    ),
+  );
+  assert.deepEqual(Object.keys(session.agent).sort(), [
+    'id',
+    'is_enabled',
+    'name',
+    'status',
+    'username',
+  ]);
+  assert.equal(session.agent.is_enabled, 0);
+
+  const heartbeat = await json(
+    await oneLookup('heartbeat', () =>
+      agentApi.request(
+        '/api/agent/auth/heartbeat',
+        { method: 'POST', headers: { cookie } },
+        env,
+      ),
+    ),
+  );
+  assert.equal(typeof heartbeat.availability, 'string');
+  assert.equal(
+    database
+      .prepare(`SELECT status FROM agents WHERE id = 'agent-shared-session'`)
+      .get().status,
+    'offline',
+  );
+
+  const settings = await json(
+    await oneLookup('auto reply', () =>
+      agentAutoReplyApi.request(
+        '/api/agent/settings/auto-reply',
+        { headers: { cookie } },
+        env,
+      ),
+    ),
+  );
+  assert.deepEqual(settings.settings, {
+    enabled: false,
+    text: '',
+    attachmentIds: [],
+  });
+
+  const presets = await json(
+    await oneLookup('attachment presets', () =>
+      agentAttachmentApi.request(
+        '/api/agent/attachments/presets',
+        { headers: { cookie } },
+        env,
+      ),
+    ),
+  );
+  assert.deepEqual(presets.presets, []);
+
+  await oneLookup('push subscription', () =>
+    agentPushApi.request(
+      '/api/agent/push/subscriptions',
+      {
+        method: 'POST',
+        headers: { cookie, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subscription: {
+            endpoint: 'https://push.example.test/shared-session',
+            expirationTime: null,
+          },
+        }),
+      },
+      env,
+    ),
+  );
+
+  const avatar = await json(
+    await oneLookup('avatar', () =>
+      agentAvatarApi.request('/api/agent/avatar', { headers: { cookie } }, env),
+    ),
+  );
+  assert.equal(avatar.avatarUrl, null);
+
+  await oneLookup('logout', () =>
+    agentApi.request(
+      '/api/agent/auth/logout',
+      { method: 'POST', headers: { cookie } },
+      env,
+    ),
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM agent_sessions
+         WHERE agent_id = 'agent-shared-session'`,
+      )
+      .get().count,
+    0,
+  );
   database.close();
 });
 

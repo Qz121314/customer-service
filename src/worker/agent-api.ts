@@ -13,6 +13,13 @@ import {
   type ConversationAttachmentPage,
 } from './message-attachments';
 import { createDownloadSigningContext, presignGet } from './media-signing.ts';
+import {
+  AGENT_SESSION_COOKIE,
+  hashAgentSessionToken,
+  publicAgentSession,
+  requireAgentSession,
+  type AgentSessionIdentity,
+} from './agent-session';
 
 type Bindings = {
   DB: D1Database;
@@ -27,13 +34,10 @@ type Env = { Bindings: Bindings };
 type ConversationStatus = 'open' | 'pending' | 'closed';
 type AgentAvailability = 'online' | 'busy';
 
-type AgentSession = {
-  id: string;
-  name: string;
-  username: string;
-  status: 'online' | 'busy' | 'offline';
-  is_enabled: number;
-};
+type AgentSession = Pick<
+  AgentSessionIdentity,
+  'id' | 'name' | 'username' | 'status' | 'is_enabled'
+>;
 
 type AgentCredentialRow = AgentSession & {
   password_hash: string;
@@ -77,19 +81,21 @@ type UpdatedConversationSnapshot = Omit<
   'external_id' | 'visitor_name' | 'agent_name' | 'agent_avatar_version'
 >;
 
-const COOKIE = 'cs_agent_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 12;
 const MESSAGE_LIMIT = 8000;
 
 export const agentApi = new Hono<Env>();
 
 agentApi.get('/api/agent/auth/session', async (c) => {
-  const agent = await authenticateAgent(c);
-  return c.json({ authenticated: Boolean(agent), agent: agent ?? null });
+  const agent = await requireAgentSession(c);
+  return c.json({
+    authenticated: Boolean(agent),
+    agent: agent ? publicAgentSession(agent) : null,
+  });
 });
 
 agentApi.patch('/api/agent/profile', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const body = await readJson<{ nickname?: string }>(c.req.raw);
   const nickname = body?.nickname?.trim() ?? '';
@@ -151,7 +157,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     c.env.DB.prepare(
       `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
        VALUES (?1, ?2, ?3, ?4)`,
-    ).bind(sessionId, agent.id, await sha256(token), expiresAt),
+    ).bind(sessionId, agent.id, await hashAgentSessionToken(token), expiresAt),
     c.env.DB.prepare(
       `UPDATE agents
        SET status = 'online', last_login_at = ?1, last_seen_at = ?1,
@@ -164,7 +170,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     ),
   ]);
 
-  setCookie(c, COOKIE, token, {
+  setCookie(c, AGENT_SESSION_COOKIE, token, {
     httpOnly: true,
     secure: new URL(c.req.url).protocol === 'https:',
     sameSite: 'Lax',
@@ -183,8 +189,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
 });
 
 agentApi.post('/api/agent/auth/logout', async (c) => {
-  const token = cookieValue(c.req.header('Cookie'), COOKIE);
-  const agent = token ? await authenticateAgentToken(c.env.DB, token) : null;
+  const agent = await requireAgentSession(c);
   if (agent) {
     const activeConversationIds = await activeConversationIdsForAgent(
       c.env.DB,
@@ -206,12 +211,12 @@ agentApi.post('/api/agent/auth/logout', async (c) => {
       console.warn('agent realtime disconnect failed during logout', error);
     }
   }
-  deleteCookie(c, COOKIE, { path: '/' });
+  deleteCookie(c, AGENT_SESSION_COOKIE, { path: '/' });
   return c.json({ ok: true });
 });
 
 agentApi.post('/api/agent/auth/heartbeat', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   await c.env.DB.prepare(
     `UPDATE agents
@@ -232,7 +237,7 @@ agentApi.post('/api/agent/auth/heartbeat', async (c) => {
 });
 
 agentApi.post('/api/agent/auth/status', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const body = await readJson<{ status?: AgentAvailability }>(c.req.raw);
   if (body?.status !== 'online' && body?.status !== 'busy') {
@@ -255,13 +260,13 @@ agentApi.post('/api/agent/auth/status', async (c) => {
 });
 
 agentApi.get('/api/agent/overview', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   return c.json(await loadAgentOverview(c.env.DB, agent.id));
 });
 
 agentApi.get('/api/agent/stats', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const month = normalizeMonth(c.req.query('month'));
   if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
@@ -327,13 +332,13 @@ agentApi.get('/api/agent/stats', async (c) => {
 });
 
 agentApi.get('/api/agent/conversations', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   return c.json(await loadAgentInbox(c.env.DB, agent, c.req.query('status')));
 });
 
 agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
 
   const afterIdValue = c.req.query('afterId');
@@ -547,7 +552,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
 });
 
 agentApi.post('/api/agent/conversations/:id/read', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const id = c.req.param('id');
   const body = await readJson<{ lastMessageId?: string | null }>(c.req.raw);
@@ -636,7 +641,7 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
 });
 
 agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const id = c.req.param('id');
   const conversation = await assignedConversationForMessageWrite(
@@ -751,7 +756,7 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
 });
 
 agentApi.post('/api/agent/conversations/:id/status', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const id = c.req.param('id');
   const body = await readJson<{ status?: ConversationStatus }>(c.req.raw);
@@ -784,7 +789,7 @@ agentApi.post('/api/agent/conversations/:id/status', async (c) => {
 });
 
 agentApi.get('/api/agent/realtime/inbox', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   return room(c.env, agentInboxRoom(agent.id)).fetch(
     authenticatedRealtimeRequest(c.req.raw, agent.id),
@@ -792,7 +797,7 @@ agentApi.get('/api/agent/realtime/inbox', async (c) => {
 });
 
 agentApi.get('/api/agent/realtime/:id', async (c) => {
-  const agent = await authenticateAgent(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return unauthorized(c);
   const conversation = await assignedConversation(
     c.env.DB,
@@ -804,32 +809,6 @@ agentApi.get('/api/agent/realtime/:id', async (c) => {
     authenticatedRealtimeRequest(c.req.raw, agent.id),
   );
 });
-
-async function authenticateAgent(
-  c: Context<Env>,
-): Promise<AgentSession | null> {
-  const token = cookieValue(c.req.header('Cookie'), COOKIE);
-  if (!token) return null;
-  return authenticateAgentToken(c.env.DB, token);
-}
-
-async function authenticateAgentToken(
-  db: D1Database,
-  token: string,
-): Promise<AgentSession | null> {
-  return db
-    .prepare(
-      `SELECT a.id, a.name, a.username, a.status, a.is_enabled
-       FROM agent_sessions s
-       JOIN agents a ON a.id = s.agent_id
-       WHERE s.token_hash = ?1
-         AND datetime(s.expires_at) > CURRENT_TIMESTAMP
-         AND a.username IS NOT NULL
-       LIMIT 1`,
-    )
-    .bind(await sha256(token))
-    .first<AgentSession>();
-}
 
 async function assignedConversationForMessageWrite(
   db: D1Database,
@@ -927,28 +906,9 @@ async function findAgentMessageByClientId(
     .first<MessageRow>();
 }
 
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  );
-  return toHex(new Uint8Array(digest));
-}
-
 function randomToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return toHex(bytes);
-}
-
-function cookieValue(header: string | undefined, name: string): string | null {
-  const prefix = `${name}=`;
-  return (
-    (header ?? '')
-      .split(';')
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(prefix))
-      ?.slice(prefix.length) ?? null
-  );
 }
 
 function normalizeMessageId(value?: string | null): string | null {

@@ -1,4 +1,8 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
+import {
+  requireAgentSession,
+  type AgentSessionIdentity,
+} from './agent-session';
 
 type Bindings = {
   DB: D1Database;
@@ -12,20 +16,18 @@ type AgentAutoReplySettings = {
   attachmentIds: string[];
 };
 
-type AgentSettingsRow = {
-  id: string;
-  auto_greeting_enabled: number;
-  auto_greeting_text: string | null;
-};
+type AgentSettingsRow = Pick<
+  AgentSessionIdentity,
+  'id' | 'auto_greeting_enabled' | 'auto_greeting_text'
+>;
 
-const COOKIE = 'cs_agent_session';
 const AUTO_GREETING_LIMIT = 1000;
 const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
 
 export const agentAutoReplyApi = new Hono<Env>();
 
 agentAutoReplyApi.get('/api/agent/settings/auto-reply', async (c) => {
-  const agent = await authenticateAgentSettings(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
   return c.json({
     settings: await settingsPayload(c.env.DB, agent),
@@ -33,7 +35,7 @@ agentAutoReplyApi.get('/api/agent/settings/auto-reply', async (c) => {
 });
 
 agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
-  const agent = await authenticateAgentSettings(c);
+  const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
 
   const body = await readJson<{
@@ -140,45 +142,6 @@ function normalizeAttachmentIds(value: unknown[]): string[] {
   if (ids.some((id) => !id || id.length > 200)) return [];
   const unique = [...new Set(ids)];
   return unique.length === ids.length ? unique : [];
-}
-
-async function authenticateAgentSettings(
-  c: Context<Env>,
-): Promise<AgentSettingsRow | null> {
-  const token = cookieValue(c.req.header('Cookie'), COOKIE);
-  if (!token) return null;
-  return c.env.DB.prepare(
-    `SELECT a.id, a.auto_greeting_enabled, a.auto_greeting_text
-     FROM agent_sessions session
-     JOIN agents a ON a.id = session.agent_id
-     WHERE session.token_hash = ?1
-       AND datetime(session.expires_at) > CURRENT_TIMESTAMP
-       AND a.username IS NOT NULL
-     LIMIT 1`,
-  )
-    .bind(await sha256(token))
-    .first<AgentSettingsRow>();
-}
-
-function cookieValue(header: string | undefined, name: string): string | null {
-  const prefix = `${name}=`;
-  return (
-    (header ?? '')
-      .split(';')
-      .map((part) => part.trim())
-      .find((part) => part.startsWith(prefix))
-      ?.slice(prefix.length) ?? null
-  );
-}
-
-async function sha256(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(value),
-  );
-  return Array.from(new Uint8Array(digest), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
 }
 
 async function readJson<T>(request: Request): Promise<T | null> {
