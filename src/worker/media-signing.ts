@@ -77,8 +77,15 @@ export async function createDownloadSigningContext(
   if (!accountId || !accessKeyId || !secretAccessKey) return null;
 
   const now = new Date();
+  const conversationExpiry = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (
+    Number.isFinite(conversationExpiry) &&
+    conversationExpiry <= now.getTime()
+  ) {
+    return null;
+  }
   const boundedExpiry = Math.min(
-    Date.parse(expiresAt ?? '') || now.getTime() + PRESIGNED_TTL_SECONDS * 1000,
+    conversationExpiry || now.getTime() + PRESIGNED_TTL_SECONDS * 1000,
     now.getTime() + PRESIGNED_TTL_SECONDS * 1000,
   );
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/gu, '');

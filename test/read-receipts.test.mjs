@@ -1,10 +1,34 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  symlinkSync,
+  unlinkSync,
+} from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { URL } from 'node:url';
-import { clientConversationFanoutPlan } from '../src/worker/conversation-fanout-plan.ts';
 import { routeRegistration } from './helpers/source-contract.mjs';
+
+const workerPath = new URL('../src/worker/', import.meta.url).pathname;
+const moduleShims = [];
+for (const name of readdirSync(workerPath)) {
+  if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
+  const shimPath = join(workerPath, name.slice(0, -3));
+  if (existsSync(shimPath)) continue;
+  symlinkSync(name, shimPath);
+  moduleShims.push(shimPath);
+}
+
+let clientApi;
+try {
+  ({ clientApi } = await import('../src/worker/client-api.ts'));
+} finally {
+  for (const shimPath of moduleShims) unlinkSync(shimPath);
+}
 
 const migration = await readFile(
   new URL('../migrations/0011_read_receipts.sql', import.meta.url),
@@ -17,6 +41,54 @@ const cursorMigration = await readFile(
   ),
   'utf8',
 );
+
+function applyMigrations(database) {
+  const migrationsDirectory = new URL('../migrations/', import.meta.url)
+    .pathname;
+  for (const name of readdirSync(migrationsDirectory)
+    .filter((value) => /^\d+.*\.sql$/u.test(value))
+    .sort()) {
+    database.exec(readFileSync(join(migrationsDirectory, name), 'utf8'));
+  }
+}
+
+function d1(database) {
+  function statement(sql) {
+    let bindings = [];
+    return {
+      bind(...values) {
+        bindings = values;
+        return this;
+      },
+      async first(column) {
+        const row = database.prepare(sql).get(...bindings) ?? null;
+        if (column === undefined || row === null) return row;
+        return row[column] ?? null;
+      },
+      async run() {
+        const result = database.prepare(sql).run(...bindings);
+        return { meta: { changes: Number(result.changes) } };
+      },
+    };
+  }
+  return { prepare: statement };
+}
+
+function fakeDoNamespace(calls) {
+  return {
+    idFromName(name) {
+      return { name };
+    },
+    get(id) {
+      return {
+        async fetch() {
+          calls.push(id.name);
+          return new Response('ok');
+        },
+      };
+    },
+  };
+}
 
 test('read receipt migration adds persistent agent read state', () => {
   const db = new DatabaseSync(':memory:');
@@ -137,37 +209,50 @@ test('read APIs preserve payload fields while updating only conversation cursors
   assert.match(client, /AS read_by_visitor_at/u);
 });
 
-test('visitor read fake DO runtime budget skips only the agent inbox room', async () => {
-  const calls = [];
-  const namespace = {
-    idFromName(name) {
-      return { name };
-    },
-    get(id) {
-      return {
-        async fetch() {
-          calls.push(id.name);
-          return new Response('ok');
-        },
-      };
-    },
-  };
-  const rooms = clientConversationFanoutPlan({
-    conversationId: 'conversation-1',
-    siteId: 'site-1',
-    visitorId: 'ABC123',
-    assignedAgentId: 'agent-1',
-    includeAgentInbox: false,
-  });
-  for (const roomName of rooms) {
-    await namespace.get(namespace.idFromName(roomName)).fetch('https://test/');
-  }
+test('visitor read handler runtime budget skips only the agent inbox room', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+  database
+    .prepare(
+      `INSERT INTO visitors (id, site_id, external_id, token_hash, expires_at)
+       VALUES ('visitor-1', 'default', 'ABC123', 'unused-token-hash', ?1)`,
+    )
+    .run(expiresAt);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, expires_at,
+         last_message_at, created_at, updated_at
+       ) VALUES ('conversation-1', 'default', 'visitor-1', 'open', 'agent-1', ?1,
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+    )
+    .run(expiresAt);
+  database
+    .prepare(
+      `INSERT INTO messages (id, conversation_id, sender_type, sender_id, body, created_at)
+       VALUES ('agent-message-1', 'conversation-1', 'agent', 'agent-1', 'Hello', CURRENT_TIMESTAMP)`,
+    )
+    .run();
 
-  assert.deepEqual(calls.sort(), ['client:site-1:ABC123', 'conversation-1']);
+  const calls = [];
+  const response = await clientApi.request(
+    '/client/v1/conversations/conversation-1/read',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ visitorId: 'ABC123', projectId: 'default' }),
+    },
+    { DB: d1(database), CONVERSATION_ROOMS: fakeDoNamespace(calls) },
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(calls.sort(), ['client:default:ABC123', 'conversation-1']);
   assert.equal(
     calls.some((name) => name.startsWith('agent-inbox:')),
     false,
   );
+  database.close();
 });
 
 test('visitor read resource budget keeps conversation and visitor rooms only', async () => {
