@@ -37,7 +37,10 @@ test('routing scope validation checks only requested identifiers', () => {
 
 test('routing scope writes use one bulk insert per scope', () => {
   const admin = source('../src/worker/admin-config-api.ts');
-  const routing = topLevelDeclaration(admin, 'function routingScopeStatements(');
+  const routing = topLevelDeclaration(
+    admin,
+    'function routingScopeStatements(',
+  );
 
   assert.doesNotMatch(
     routing,
