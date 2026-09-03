@@ -27,12 +27,34 @@ import {
   normalizeVisitorId,
   normalizeVisitorToken,
   resolveVisitor,
+  type ConversationEventSnapshot,
 } from './client-api';
 
 type Env = { Bindings: MediaBindings };
 
-type AuthorizedAgentMediaRow = MediaRow & {
+type AuthorizedMediaRow = MediaRow & {
+  site_id: string;
+  visitor_id: string;
   conversation_status: 'open' | 'pending' | 'closed';
+  assigned_agent: string;
+  agent_name: string | null;
+  agent_avatar_version: string | null;
+  subject: string | null;
+  product_id: string | null;
+  section_id: string | null;
+  section_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  product_title: string | null;
+  product_cover_url: string | null;
+  product_href: string | null;
+  visitor_unread_count: number;
+  agent_unread_count: number;
+  last_message_at: string;
+  conversation_created_at: string;
+  conversation_last_message: string | null;
+  external_id: string;
+  visitor_name: string | null;
 };
 
 export const mediaApi = new Hono<Env>();
@@ -166,7 +188,11 @@ mediaApi.post('/client/v1/media/:id/complete', async (c) => {
   }>(c.req.raw);
   const media = await authorizedVisitorMedia(c, false, body ?? undefined);
   if (!media.ok) return clientError(c, media.status, media.code);
-  const result = await completeMedia(c.env, media.value);
+  const result = await completeMedia(c.env, media.value, {
+    conversationStatus: media.value.conversation_status,
+    conversationSnapshot: mediaConversationSnapshot(media.value),
+    waitUntil: (task) => c.executionCtx.waitUntil(task),
+  });
   if (!result.ok) return clientError(c, result.status, result.code);
   return c.json(result.value);
 });
@@ -261,6 +287,8 @@ mediaApi.post('/api/agent/media/:id/complete', async (c) => {
   if (!media.ok) return c.json({ error: media.code }, media.status);
   const result = await completeMedia(c.env, media.value, {
     conversationStatus: media.value.conversation_status,
+    conversationSnapshot: mediaConversationSnapshot(media.value),
+    waitUntil: (task) => c.executionCtx.waitUntil(task),
   });
   if (!result.ok) return c.json({ error: result.code }, result.status);
   return c.json(result.value);
@@ -289,7 +317,7 @@ async function authorizedVisitorMedia(
     projectId?: string;
   },
 ): Promise<
-  | { ok: true; value: MediaRow }
+  | { ok: true; value: AuthorizedMediaRow }
   | { ok: false; status: 400 | 401 | 404; code: string }
 > {
   const visitorId = normalizeVisitorId(
@@ -318,11 +346,22 @@ async function authorizedVisitorMedia(
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.client_upload_id,
          mi.status, mi.is_initial, mi.reserved_created_at,
-         c.expires_at AS conversation_expires_at
+         c.site_id, c.visitor_id, c.status AS conversation_status,
+         c.assigned_agent, agent.name AS agent_name,
+         agent.avatar_version AS agent_avatar_version, c.subject,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
+         c.created_at AS conversation_created_at,
+         c.last_message_preview AS conversation_last_message,
+         c.expires_at AS conversation_expires_at,
+         v.external_id, v.display_name AS visitor_name
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
        JOIN visitors v ON v.id = c.visitor_id
        JOIN sites s ON s.id = c.site_id
+       LEFT JOIN agents agent
+         ON agent.id = c.assigned_agent AND agent.site_id = c.site_id
        WHERE mi.id = ?1
          AND (s.id = ?2 OR s.public_key = ?2) AND s.is_enabled = 1
          AND v.external_id = ?3
@@ -331,7 +370,7 @@ async function authorizedVisitorMedia(
        LIMIT 1`,
   )
     .bind(c.req.param('id'), projectId, visitor.external_id)
-    .first<MediaRow>();
+    .first<AuthorizedMediaRow>();
   if (!media) {
     return { ok: false, status: 404, code: 'MEDIA_NOT_FOUND' };
   }
@@ -344,7 +383,7 @@ async function authorizedAgentMedia(
   c: Context<Env>,
   readyOnly: boolean,
 ): Promise<
-  | { ok: true; value: AuthorizedAgentMediaRow }
+  | { ok: true; value: AuthorizedMediaRow }
   | { ok: false; status: 401 | 404; code: string }
 > {
   const agent = await requireAgentSession(c);
@@ -354,16 +393,28 @@ async function authorizedAgentMedia(
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.client_upload_id,
          mi.status, mi.is_initial, mi.reserved_created_at,
+         c.site_id, c.visitor_id,
          c.status AS conversation_status,
-         c.expires_at AS conversation_expires_at
+         c.assigned_agent, agent.name AS agent_name,
+         agent.avatar_version AS agent_avatar_version, c.subject,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.visitor_unread_count, c.agent_unread_count, c.last_message_at,
+         c.created_at AS conversation_created_at,
+         c.last_message_preview AS conversation_last_message,
+         c.expires_at AS conversation_expires_at,
+         visitor.external_id, visitor.display_name AS visitor_name
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
+       JOIN visitors visitor ON visitor.id = c.visitor_id
+       LEFT JOIN agents agent
+         ON agent.id = c.assigned_agent AND agent.site_id = c.site_id
        WHERE mi.id = ?1 AND c.assigned_agent = ?2
          AND COALESCE(c.expires_at, datetime(c.created_at, '+1 day')) > CURRENT_TIMESTAMP
        LIMIT 1`,
   )
     .bind(c.req.param('id'), agent.id)
-    .first<AuthorizedAgentMediaRow>();
+    .first<AuthorizedMediaRow>();
   if (!media || (readyOnly && media.status !== 'ready'))
     return { ok: false, status: 404, code: 'NOT_FOUND' };
   return { ok: true, value: media };
@@ -491,5 +542,36 @@ async function mediaReservationResponse(
       row.object_key,
       row.mime_type,
     ),
+  };
+}
+
+function mediaConversationSnapshot(
+  row: AuthorizedMediaRow,
+): ConversationEventSnapshot {
+  return {
+    id: row.conversation_id,
+    site_id: row.site_id,
+    visitor_id: row.visitor_id,
+    status: row.conversation_status,
+    assigned_agent: row.assigned_agent,
+    agent_name: row.agent_name,
+    agent_avatar_version: row.agent_avatar_version,
+    subject: row.subject,
+    product_id: row.product_id,
+    section_id: row.section_id,
+    section_name: row.section_name,
+    category_id: row.category_id,
+    category_name: row.category_name,
+    product_title: row.product_title,
+    product_cover_url: row.product_cover_url,
+    product_href: row.product_href,
+    expires_at: row.conversation_expires_at ?? null,
+    visitor_unread_count: row.visitor_unread_count,
+    agent_unread_count: row.agent_unread_count,
+    last_message_at: row.last_message_at,
+    created_at: row.conversation_created_at,
+    last_message: row.conversation_last_message,
+    external_id: row.external_id,
+    visitor_name: row.visitor_name,
   };
 }

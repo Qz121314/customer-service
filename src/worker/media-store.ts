@@ -1,4 +1,7 @@
-import { broadcastClientConversationEvent } from './client-api';
+import {
+  broadcastClientConversationEvent,
+  type ConversationEventSnapshot,
+} from './client-api';
 import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 import {
   MIME_EXTENSIONS,
@@ -222,7 +225,11 @@ export async function storeProxyUpload(
 export async function completeMedia(
   env: MediaBindings,
   media: MediaRow,
-  context: { conversationStatus?: 'open' | 'pending' | 'closed' } = {},
+  context: {
+    conversationStatus?: 'open' | 'pending' | 'closed';
+    conversationSnapshot?: ConversationEventSnapshot;
+    waitUntil?: (task: Promise<unknown>) => void;
+  } = {},
 ): Promise<
   | { ok: true; value: Record<string, unknown> }
   | { ok: false; status: 400 | 404 | 409; code: string }
@@ -322,7 +329,27 @@ export async function completeMedia(
   }
 
   const signedUrl = await mediaDownloadUrl(env, media);
-  await Promise.allSettled([
+  const conversationSnapshot = context.conversationSnapshot
+    ? {
+        ...context.conversationSnapshot,
+        status:
+          media.sender_type === 'agent' &&
+          context.conversationSnapshot.status === 'open'
+            ? ('pending' as const)
+            : context.conversationSnapshot.status,
+        visitor_unread_count:
+          media.sender_type === 'agent'
+            ? Number(context.conversationSnapshot.visitor_unread_count || 0) + 1
+            : context.conversationSnapshot.visitor_unread_count,
+        agent_unread_count:
+          media.sender_type === 'agent'
+            ? 0
+            : Number(context.conversationSnapshot.agent_unread_count || 0) + 1,
+        last_message_at: createdAt,
+        last_message: '',
+      }
+    : undefined;
+  const realtimeTask = Promise.allSettled([
     broadcastRoom(env, media.conversation_id, {
       type: 'message',
       message: {
@@ -367,9 +394,25 @@ export async function completeMedia(
         includeOverview:
           media.sender_type === 'agent' &&
           context.conversationStatus === 'open',
+        conversationSnapshot,
       },
     ),
-  ]);
+  ]).then((results) => {
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.warn('media realtime delivery failed', result.reason);
+      }
+    }
+  });
+  if (context.waitUntil) {
+    try {
+      context.waitUntil(realtimeTask);
+    } catch {
+      await realtimeTask;
+    }
+  } else {
+    await realtimeTask;
+  }
 
   return {
     ok: true,
