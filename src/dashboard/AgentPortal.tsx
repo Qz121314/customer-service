@@ -142,12 +142,11 @@ function normalizeAgentMessageAttachment(
   const byteSize = Number(raw.byteSize);
   if (!mimeType || !Number.isFinite(byteSize)) return null;
   const source = raw.source === 'snapshot' ? 'snapshot' : 'media';
-  const url =
-    typeof raw.url === 'string' && raw.url
-      ? raw.url
-      : source === 'snapshot'
-        ? `/api/agent/attachments/${encodeURIComponent(id)}/content`
-        : `/api/agent/media/${encodeURIComponent(id)}/content`;
+  const fallbackUrl =
+    source === 'snapshot'
+      ? `/api/agent/attachments/${encodeURIComponent(id)}/content`
+      : `/api/agent/media/${encodeURIComponent(id)}/content`;
+  const signedUrl = typeof raw.url === 'string' && raw.url ? raw.url : null;
   return {
     id,
     messageId,
@@ -161,7 +160,8 @@ function normalizeAgentMessageAttachment(
     originalName:
       typeof raw.originalName === 'string' ? raw.originalName : null,
     source,
-    url,
+    url: signedUrl ?? fallbackUrl,
+    ...(signedUrl ? { fallbackUrl } : {}),
   };
 }
 

@@ -16,11 +16,9 @@ import {
   passesBurstLimit,
   requestSourceHash,
 } from './abuse-control';
-import {
-  listConversationAttachments,
-  type ConversationAttachmentPage,
-} from './message-attachments';
+import { listConversationAttachmentsForMessageIds } from './message-attachments';
 import { createDownloadSigningContext, presignGet } from './media-signing.ts';
+import { clientConversationFanoutPlan } from './conversation-fanout-plan.ts';
 
 type ClientBindings = {
   DB: D1Database;
@@ -1059,10 +1057,20 @@ export async function broadcastClientConversationEvent(
       ? loadAgentOverview(env.DB, previousAgentId)
       : Promise.resolve(null),
   ]);
+  const fanoutRooms = clientConversationFanoutPlan({
+    conversationId,
+    siteId: conversation.site_id,
+    visitorId: conversation.external_id,
+    assignedAgentId: conversation.assigned_agent,
+    previousAgentId,
+    includeAgentInbox,
+  });
   const inboxUpdates: Promise<void>[] = [];
-  if (includeAgentInbox && conversation.assigned_agent) {
+  if (
+    fanoutRooms.includes(`agent-inbox:${conversation.assigned_agent ?? ''}`)
+  ) {
     inboxUpdates.push(
-      broadcastRoomSafely(env, agentInboxRoom(conversation.assigned_agent), {
+      broadcastRoomSafely(env, agentInboxRoom(conversation.assigned_agent!), {
         type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
@@ -1070,7 +1078,10 @@ export async function broadcastClientConversationEvent(
       }),
     );
   }
-  if (includeAgentInbox && previousAgentId) {
+  if (
+    previousAgentId &&
+    fanoutRooms.includes(`agent-inbox:${previousAgentId}`)
+  ) {
     inboxUpdates.push(
       broadcastRoomSafely(env, agentInboxRoom(previousAgentId), {
         type: 'conversation.changed',
@@ -1952,15 +1963,10 @@ async function conversationDetail(
     env,
     conversation.expires_at,
   );
-  const attachments = await listConversationAttachments(
+  const attachments = await listConversationAttachmentsForMessageIds(
     db,
     conversation.id,
-    {
-      direction: before ? 'before' : 'latest',
-      ...(before
-        ? { cursor: { id: page[0]?.id ?? '', createdAt: before }, limit }
-        : { limit }),
-    } as ConversationAttachmentPage,
+    page.map((message) => message.id),
     signer ? (objectKey) => presignGet(signer, objectKey) : undefined,
   );
   const attachmentsByMessageId = new Map<string, typeof attachments>();

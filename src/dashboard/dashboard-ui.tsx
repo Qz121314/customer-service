@@ -253,6 +253,15 @@ function Bubble({
                         '聊天图片'
                       }
                       loading="lazy"
+                      onError={(event) => {
+                        if (
+                          !attachment.fallbackUrl ||
+                          event.currentTarget.dataset.fallbackApplied === 'true'
+                        )
+                          return;
+                        event.currentTarget.dataset.fallbackApplied = 'true';
+                        event.currentTarget.src = attachment.fallbackUrl;
+                      }}
                     />
                   </a>
                 ) : null;

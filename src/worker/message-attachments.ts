@@ -249,6 +249,39 @@ export async function listConversationAttachments(
     ];
   }
 
+  return listAttachmentsForMessageQuery(
+    db,
+    pageMessagesSql,
+    bindings,
+    resolveImageUrl,
+  );
+}
+
+export async function listConversationAttachmentsForMessageIds(
+  db: D1Database,
+  conversationId: string,
+  messageIds: string[],
+  resolveImageUrl?: ConversationAttachmentUrlResolver,
+) {
+  const ids = [...new Set(messageIds.filter((id) => id.length > 0))];
+  if (ids.length === 0) return [];
+  return listAttachmentsForMessageQuery(
+    db,
+    `SELECT id FROM messages
+     WHERE conversation_id = ?1 AND id IN (${ids
+       .map((_, index) => `?${index + 2}`)
+       .join(', ')})`,
+    [conversationId, ...ids],
+    resolveImageUrl,
+  );
+}
+
+async function listAttachmentsForMessageQuery(
+  db: D1Database,
+  pageMessagesSql: string,
+  bindings: Array<string | number>,
+  resolveImageUrl?: ConversationAttachmentUrlResolver,
+) {
   const result = await db
     .prepare(
       `WITH page_messages AS (

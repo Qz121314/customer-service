@@ -5,6 +5,7 @@ import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
 import {
   listConversationAttachments,
+  listConversationAttachmentsForMessageIds,
   normalizeAttachmentLabel,
   normalizeLinkValue,
   normalizePhoneValue,
@@ -167,4 +168,58 @@ test('unified conversation history exposes channel cards and immutable metadata'
   );
 
   database.close();
+});
+
+test('page attachment lookup is restricted to the actual message ids', async () => {
+  let query = '';
+  let bindings = [];
+  const db = {
+    prepare(sql) {
+      query = sql;
+      return {
+        bind(...values) {
+          bindings = values;
+          return {
+            async all() {
+              return {
+                results: values.includes('page-message')
+                  ? [
+                      {
+                        id: 'page-media',
+                        message_id: 'page-message',
+                        kind: 'image',
+                        label: 'page.png',
+                        value: null,
+                        preset_message: null,
+                        icon_ref: null,
+                        object_key: 'chat/page/page.png',
+                        mime_type: 'image/png',
+                        byte_size: 10,
+                        width: 1,
+                        height: 1,
+                        original_name: 'page.png',
+                        sort_order: 0,
+                        source: 'media',
+                      },
+                    ]
+                  : [],
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const attachments = await listConversationAttachmentsForMessageIds(
+    db,
+    'conversation-page',
+    ['page-message'],
+  );
+  assert.deepEqual(
+    attachments.map((item) => item.id),
+    ['page-media'],
+  );
+  assert.match(query, /conversation_id = \?1/u);
+  assert.match(query, /id IN \(\?2\)/u);
+  assert.deepEqual(bindings, ['conversation-page', 'page-message']);
 });
