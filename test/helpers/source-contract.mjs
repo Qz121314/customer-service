@@ -1,4 +1,5 @@
-const ROUTE_REGISTRATION = /\n[A-Za-z_$][\w$]*Api\.(?:get|post|put|patch|delete)\(/u;
+const ROUTE_REGISTRATION =
+  /\n[A-Za-z_$][\w$]*Api\.(?:get|post|put|patch|delete)\(/u;
 
 /**
  * Scope a source-level cost/architecture guardrail to one stable API route.
