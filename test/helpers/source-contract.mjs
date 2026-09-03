@@ -2,6 +2,8 @@ const ROUTE_REGISTRATION =
   /\n[A-Za-z_$][\w$]*Api\.(?:get|post|put|patch|delete)\(/u;
 const TOP_LEVEL_DECLARATION =
   /\n(?:export\s+)?(?:declare\s+)?(?:abstract\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface|enum)\s+/u;
+const CLASS_METHOD_DECLARATION =
+  /\n  (?:(?:public|protected|private|static|abstract|override|readonly|async|get|set)\s+)*(?:constructor|[A-Za-z_$][\w$]*)\s*(?:<[^>\n]+>)?\(/u;
 
 /**
  * Scope a source-level cost/architecture guardrail to one stable API route.
@@ -26,6 +28,20 @@ export function topLevelDeclaration(source, marker) {
     marker,
     TOP_LEVEL_DECLARATION,
     'Top-level declaration',
+  );
+}
+
+/**
+ * Scope a source-level guardrail to one explicit class method without naming the
+ * method that happens to follow it. The marker must identify the method under
+ * test; missing markers fail instead of silently producing a partial slice.
+ */
+export function classMethodDeclaration(source, marker) {
+  return sourceContractBlock(
+    source,
+    marker,
+    CLASS_METHOD_DECLARATION,
+    'Class method',
   );
 }
 
