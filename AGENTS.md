@@ -157,7 +157,7 @@ Repository guardrails
 → Admin Chromium smoke
 ```
 
-On `main`, successful validation is followed by Cloudflare deployment, production protocol smoke, and the authenticated production performance audit when its credentials are configured.
+On `main`, successful validation is followed by Cloudflare deployment and a D1-free `/api/health` check. Production protocol smoke and the authenticated production performance audit are manual production-verification operations only and must never run automatically on routine pull requests or `main` pushes.
 
 Do not push merely to learn whether Prettier, ESLint, or TypeScript accepts the change.
 
@@ -261,6 +261,19 @@ Read package scripts before editing generated files. Worker type generation is p
 
 Keep exactly one workflow, `.github/workflows/ci.yml`. CI validates and deploys the checked-out revision; it must not generate patches, commit code, push branches, or become a substitute for local formatting/fixing.
 
+### 10. Routine CI consuming production D1
+
+Routine pull requests and `main` pushes must not use production D1 for smoke, performance, bootstrap, or data validation. Automated PR/main validation must use local D1. After a normal production deploy, the only automatic remote probe is a confirmed D1-free health endpoint such as `/api/health`.
+
+Production D1 access from GitHub Actions is allowed only for:
+
+- operations inherently required to deploy schema/configuration safely, such as `db:migrate:remote`;
+- an explicitly requested `workflow_dispatch` production verification.
+
+Never turn a production Admin/Agent page load, client conversation listing, authenticated/WebSocket bootstrap that touches D1, or performance audit into a routine CI gate. Repeated CI reads count against Cloudflare D1 Rows Read and can exhaust the Free Plan daily quota without serving users.
+
+When manual production performance data is needed, default to one cold-cache run per surface. Use three runs only for a deliberate final baseline or phase-acceptance measurement.
+
 ## Change levels
 
 ### S — local / presentation-only
@@ -318,6 +331,7 @@ These principles apply unless the user explicitly changes the product rule:
 - The system targets individuals and small teams. Prefer simple, stable solutions over enterprise-style complexity.
 - Minimize Cloudflare Workers and D1 requests. Prefer one query/request returning the data already needed, batched reads/writes, and client-side filtering/calculation where appropriate.
 - Do not add a D1 read on every message, heartbeat, render, or click merely to simplify frontend code.
+- Routine pull requests and main pushes must not use production D1 for smoke, performance, bootstrap, or data validation. Use local D1 in CI; production protocol/performance verification requires explicit `workflow_dispatch`. Actual remote migrations required by a production deploy are the only routine D1 exception.
 - Routing correctness and conversion availability are higher priority than cosmetic continuity; routing changes must be validated against assignment, no-agent, quota, and lifecycle contracts together.
 - Administrator responsibilities are operational: account/password, enable state, quota/capacity, and routing scope. Agent personal presentation such as avatar/profile belongs to the agent-side profile flow unless the product rule is explicitly changed.
 - Keep UI forms compact and commercially usable. Field width and grouping should reflect data semantics instead of making every control full-width by default.
@@ -345,7 +359,7 @@ For every performance PR:
 4. Update stale structural tests before production refactors when implementation can change without changing behavior.
 5. Keep one primary risk level per PR.
 6. Run the required full verification and browser smoke before merge.
-7. On `main`, confirm production deployment/protocol smoke/performance audit status before declaring the phase complete.
+7. On `main`, confirm production deployment and the D1-free health check before declaring the phase complete. Run production protocol smoke or authenticated performance audits only when explicitly requested through `workflow_dispatch`.
 
 ## Root-cause-first rule
 
