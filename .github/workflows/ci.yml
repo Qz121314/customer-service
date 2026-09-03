@@ -125,6 +125,9 @@ jobs:
           name: ui-build
           path: dist
 
+      - name: Prepare local D1 for browser smoke
+        run: pnpm db:migrate:local
+
       - name: Install browser smoke runtime
         shell: bash
         run: |
@@ -260,7 +263,7 @@ jobs:
           set -euo pipefail
           missing=()
           [ -n "${PERF_AUDIT_ADMIN_PASSWORD}" ] || missing+=(PERF_AUDIT_ADMIN_PASSWORD)
-          [ -n "${PERF_AUDIT_AGENT_USERNAME}" ] || missing+=(PERF_AUDIT_AGENT_USERNAME)
+          [ -n "${PERF_AUDIT_AGENT_USERNAME}" ] || missing+=(PERF_AUDIT_AGENT_AGENT_USERNAME)
           [ -n "${PERF_AUDIT_AGENT_PASSWORD}" ] || missing+=(PERF_AUDIT_AGENT_PASSWORD)
 
           if [ "${#missing[@]}" -gt 0 ]; then
