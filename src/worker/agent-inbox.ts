@@ -48,27 +48,60 @@ async function loadAgentQuotaOverview(db: D1Database, agentId: string) {
 }
 
 export async function loadAgentOverview(db: D1Database, agentId: string) {
-  const [statusResult, quotaOverview] = await Promise.all([
-    db
-      .prepare(
-        `SELECT status, COUNT(*) AS count
-       FROM conversations
-       WHERE assigned_agent = ?1
-         AND expires_at > CURRENT_TIMESTAMP
-       GROUP BY status`,
-      )
-      .bind(agentId)
-      .all<{ status: ConversationStatus; count: number }>(),
-    loadAgentQuotaOverview(db, agentId),
-  ]);
-  const counts = { open: 0, pending: 0, closed: 0 };
-  for (const row of statusResult.results ?? []) {
-    counts[row.status] = Number(row.count ?? 0);
-  }
+  const businessDate = routingBusinessDate();
+  const row = await db
+    .prepare(
+      `SELECT
+         COALESCE(SUM(CASE WHEN c.status = 'open' THEN 1 ELSE 0 END), 0) AS open_count,
+         COALESCE(SUM(CASE WHEN c.status = 'pending' THEN 1 ELSE 0 END), 0) AS pending_count,
+         COALESCE(SUM(CASE WHEN c.status = 'closed' THEN 1 ELSE 0 END), 0) AS closed_count,
+         a.daily_conversation_limit,
+         a.traffic_quota_enabled,
+         a.traffic_quota_total,
+         a.traffic_quota_used,
+         COALESCE(s.conversation_count, 0) AS today_count
+       FROM agents a
+       LEFT JOIN conversations c
+         ON c.assigned_agent = a.id
+        AND c.expires_at > CURRENT_TIMESTAMP
+       LEFT JOIN agent_daily_stats s
+         ON s.site_id = a.site_id
+        AND s.agent_id = a.id
+        AND s.business_date = ?2
+       WHERE a.id = ?1
+       GROUP BY a.daily_conversation_limit, a.traffic_quota_enabled,
+         a.traffic_quota_total, a.traffic_quota_used, s.conversation_count
+       LIMIT 1`,
+    )
+    .bind(agentId, businessDate)
+    .first<{
+      open_count: number;
+      pending_count: number;
+      closed_count: number;
+      daily_conversation_limit: number;
+      today_count: number;
+      traffic_quota_enabled: number;
+      traffic_quota_total: number;
+      traffic_quota_used: number;
+    }>();
+  const counts = {
+    open: Number(row?.open_count ?? 0),
+    pending: Number(row?.pending_count ?? 0),
+    closed: Number(row?.closed_count ?? 0),
+  };
   return {
     ...counts,
     total: counts.open + counts.pending + counts.closed,
-    ...quotaOverview,
+    todayAccepted: Number(row?.today_count ?? 0),
+    dailyLimit: Number(row?.daily_conversation_limit ?? 0),
+    trafficQuotaEnabled: row?.traffic_quota_enabled === 1,
+    trafficQuotaTotal: Number(row?.traffic_quota_total ?? 0),
+    trafficQuotaUsed: Number(row?.traffic_quota_used ?? 0),
+    trafficQuotaRemaining: Math.max(
+      0,
+      Number(row?.traffic_quota_total ?? 0) -
+        Number(row?.traffic_quota_used ?? 0),
+    ),
   };
 }
 

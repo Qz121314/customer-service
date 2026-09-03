@@ -272,6 +272,10 @@ function mergeAgentConversationPage(
   };
 }
 
+function mergeAgentOverview(current: Overview, realtime: Overview): Overview {
+  return { ...current, ...realtime };
+}
+
 type AgentScopeSummary = {
   tone: 'none' | 'section' | 'category' | 'product';
   title: string;
@@ -451,6 +455,7 @@ export {
   sortedConversationList,
   compareMessages,
   mergeAgentConversationPage,
+  mergeAgentOverview,
   productsForScope,
   agentScopeSummary,
   presenceClass,
