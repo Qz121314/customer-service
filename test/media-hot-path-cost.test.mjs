@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
 import test from 'node:test';
+import { topLevelDeclaration } from './helpers/source-contract.mjs';
 
 const mediaStore = readFileSync(
   new URL('../src/worker/media-store.ts', import.meta.url),
@@ -13,11 +14,10 @@ const mediaApi = readFileSync(
 );
 
 test('new media reservations avoid a post-insert read and scan limits once', () => {
-  const reserveStart = mediaStore.indexOf('export async function reserveMedia');
-  const reserveEnd = mediaStore.indexOf(
-    'export class MediaUploadIdConflictError',
+  const reserveSource = topLevelDeclaration(
+    mediaStore,
+    'export async function reserveMedia',
   );
-  const reserveSource = mediaStore.slice(reserveStart, reserveEnd);
 
   assert.match(
     reserveSource,
