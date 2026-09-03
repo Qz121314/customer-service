@@ -1,4 +1,9 @@
-import { sendDataLessPush, type VapidRow } from './visitor-push';
+import {
+  createVapidSigningContext,
+  sendDataLessPush,
+  type VapidRow,
+  type VapidSigningContext,
+} from './visitor-push';
 
 type AgentPushBindings = {
   DB: D1Database;
@@ -41,10 +46,13 @@ export async function sendAgentPushForConversation(
   if (!subscriptions.results?.length) return;
 
   const staleEndpoints = new Set<string>();
+  const signingContext = await createVapidSigningContext(
+    subscriptions.results[0],
+  );
   const deliveryResults = await Promise.all(
     subscriptions.results.map(async (subscription) => ({
       endpoint: subscription.endpoint,
-      gone: await deliverAgentPush(subscription.endpoint, subscription),
+      gone: await deliverAgentPush(subscription.endpoint, signingContext),
     })),
   );
   for (const result of deliveryResults) {
@@ -58,10 +66,10 @@ export async function sendAgentPushForConversation(
 
 async function deliverAgentPush(
   endpoint: string,
-  config: VapidRow,
+  signingContext: VapidSigningContext,
 ): Promise<boolean> {
   try {
-    const response = await sendDataLessPush(endpoint, config, {
+    const response = await sendDataLessPush(endpoint, signingContext, {
       ttlSeconds: AGENT_PUSH_TTL_SECONDS,
       topic: 'agent-unread',
     });

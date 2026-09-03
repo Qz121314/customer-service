@@ -17,6 +17,15 @@ type PushDeliveryOptions = {
   topic?: string;
 };
 
+export type VapidSigningContext = {
+  publicKey: string;
+  subject: string;
+  privateKey: CryptoKey;
+  header: string;
+  expiresAt: number;
+  tokensByOrigin: Map<string, Promise<string>>;
+};
+
 const VAPID_ID = 'default';
 const VAPID_TOKEN_TTL_SECONDS = 12 * 60 * 60;
 const PUSH_TTL_SECONDS = 60;
@@ -63,10 +72,13 @@ export async function sendVisitorPushForConversation(
   if (!subscriptions.results?.length) return;
 
   const staleEndpoints = new Set<string>();
+  const signingContext = await createVapidSigningContext(
+    subscriptions.results[0],
+  );
   const deliveryResults = await Promise.all(
     subscriptions.results.map(async (subscription) => ({
       endpoint: subscription.endpoint,
-      gone: await deliverVisitorPush(subscription.endpoint, subscription),
+      gone: await deliverVisitorPush(subscription.endpoint, signingContext),
     })),
   );
   for (const result of deliveryResults) {
@@ -80,10 +92,10 @@ export async function sendVisitorPushForConversation(
 
 async function deliverVisitorPush(
   endpoint: string,
-  config: VapidRow,
+  signingContext: VapidSigningContext,
 ): Promise<boolean> {
   try {
-    const response = await sendDataLessPush(endpoint, config);
+    const response = await sendDataLessPush(endpoint, signingContext);
     if (response.status === 404 || response.status === 410) return true;
     if (!response.ok) {
       console.warn('Visitor push delivery failed.', response.status);
@@ -156,32 +168,18 @@ export async function readVapidConfig(
 
 export async function sendDataLessPush(
   endpoint: string,
-  config: VapidRow,
+  signingContext: VapidSigningContext,
   options: PushDeliveryOptions = {},
 ): Promise<Response> {
   const endpointUrl = new URL(endpoint);
-  const header = base64UrlJson({ typ: 'JWT', alg: 'ES256' });
-  const payload = base64UrlJson({
-    aud: endpointUrl.origin,
-    exp: Math.floor(Date.now() / 1000) + VAPID_TOKEN_TTL_SECONDS,
-    sub: config.subject,
-  });
-  const unsignedToken = `${header}.${payload}`;
-  const privateKey = await crypto.subtle.importKey(
-    'jwk',
-    JSON.parse(config.private_jwk) as JsonWebKey,
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign(
-    { name: 'ECDSA', hash: 'SHA-256' },
-    privateKey,
-    new TextEncoder().encode(unsignedToken),
-  );
-  const token = `${unsignedToken}.${base64UrlEncode(new Uint8Array(signature))}`;
+  let tokenPromise = signingContext.tokensByOrigin.get(endpointUrl.origin);
+  if (!tokenPromise) {
+    tokenPromise = signVapidToken(signingContext, endpointUrl.origin);
+    signingContext.tokensByOrigin.set(endpointUrl.origin, tokenPromise);
+  }
+  const token = await tokenPromise;
   const headers: Record<string, string> = {
-    Authorization: `vapid t=${token}, k=${config.public_key}`,
+    Authorization: `vapid t=${token}, k=${signingContext.publicKey}`,
     TTL: String(options.ttlSeconds ?? PUSH_TTL_SECONDS),
     Urgency: 'high',
   };
@@ -191,6 +189,44 @@ export async function sendDataLessPush(
     method: 'POST',
     headers,
   });
+}
+
+export async function createVapidSigningContext(
+  config: VapidRow,
+): Promise<VapidSigningContext> {
+  const privateKey = await crypto.subtle.importKey(
+    'jwk',
+    JSON.parse(config.private_jwk) as JsonWebKey,
+    { name: 'ECDSA', namedCurve: 'P-256' },
+    false,
+    ['sign'],
+  );
+  return {
+    publicKey: config.public_key,
+    subject: config.subject,
+    privateKey,
+    header: base64UrlJson({ typ: 'JWT', alg: 'ES256' }),
+    expiresAt: Math.floor(Date.now() / 1000) + VAPID_TOKEN_TTL_SECONDS,
+    tokensByOrigin: new Map(),
+  };
+}
+
+async function signVapidToken(
+  context: VapidSigningContext,
+  origin: string,
+): Promise<string> {
+  const payload = base64UrlJson({
+    aud: origin,
+    exp: context.expiresAt,
+    sub: context.subject,
+  });
+  const unsignedToken = `${context.header}.${payload}`;
+  const signature = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' },
+    context.privateKey,
+    new TextEncoder().encode(unsignedToken),
+  );
+  return `${unsignedToken}.${base64UrlEncode(new Uint8Array(signature))}`;
 }
 
 function vapidSubject(requestOrigin: string): string {
