@@ -133,6 +133,7 @@ function fakeRooms() {
 function blockingRooms() {
   const calls = [];
   const completed = [];
+  const events = new Map();
   let release;
   const gate = new Promise((resolve) => {
     release = resolve;
@@ -140,6 +141,7 @@ function blockingRooms() {
   return {
     calls,
     completed,
+    events,
     release() {
       release();
     },
@@ -149,8 +151,11 @@ function blockingRooms() {
       },
       get(name) {
         return {
-          async fetch() {
+          async fetch(_input, init) {
             calls.push(name);
+            const current = events.get(name) ?? [];
+            current.push(JSON.parse(String(init?.body ?? '{}')));
+            events.set(name, current);
             await gate;
             completed.push(name);
             return { status: 204 };
@@ -605,6 +610,192 @@ test('visitor text response returns before realtime fan-out and duplicate stays 
   assert.equal(duplicate.status, 200);
   assert.equal(pendingTasks.length, 1);
   assert.equal(rooms.calls.length, 3);
+  database.close();
+});
+
+test('contact-card response returns after durable writes but before complete realtime fan-out', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const rooms = blockingRooms();
+  const token = 'agent-card-realtime-token';
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const credentials = await hashAgentPassword('unused-password', 1_000);
+  database
+    .prepare(
+      `INSERT INTO agents (
+         id, site_id, name, username, password_hash, password_salt,
+         password_iterations, status, is_enabled, last_seen_at
+       ) VALUES ('agent-card-realtime', 'default', 'Realtime Agent',
+         'agent-card-realtime', ?1, ?2, ?3, 'online', 1, CURRENT_TIMESTAMP)`,
+    )
+    .run(credentials.hash, credentials.salt, credentials.iterations);
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES ('agent-card-realtime-session', 'agent-card-realtime', ?1, ?2)`,
+    )
+    .run(sha256(token), expiresAt);
+  database
+    .prepare(
+      `INSERT INTO visitors (
+         id, site_id, external_id, token_hash, display_name, expires_at
+       ) VALUES ('visitor-card-realtime', 'default', 'CRD123', 'unused-card-token',
+         'Realtime Visitor', ?1)`,
+    )
+    .run(expiresAt);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, subject,
+         visitor_unread_count, agent_unread_count, expires_at,
+         last_message_at, created_at, updated_at, last_message_preview
+       ) VALUES ('conversation-card-realtime', 'default',
+         'visitor-card-realtime', 'open', 'agent-card-realtime', 'Card help',
+         2, 4, ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '')`,
+    )
+    .run(expiresAt);
+  database.exec(`
+    INSERT INTO agent_attachment_presets (
+      id, agent_id, kind, label, value, preset_message, sort_order
+    ) VALUES (
+      'preset-card-realtime', 'agent-card-realtime', 'whatsapp',
+      'WhatsApp', '+12135551234', 'Hello from support', 0
+    );
+  `);
+
+  const preparedSql = [];
+  const baseDb = d1(database);
+  const observedDb = {
+    ...baseDb,
+    prepare(sql) {
+      preparedSql.push(sql);
+      return baseDb.prepare(sql);
+    },
+  };
+  const pendingTasks = [];
+  const executionCtx = {
+    waitUntil(task) {
+      pendingTasks.push(task);
+    },
+  };
+  const env = {
+    DB: observedDb,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+  const request = () =>
+    agentAttachmentApi.request(
+      '/api/agent/conversations/conversation-card-realtime/attachments',
+      {
+        method: 'POST',
+        headers: {
+          cookie: `cs_agent_session=${token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          body: 'Contact us',
+          presetIds: ['preset-card-realtime'],
+          clientMessageId: 'agent-card-realtime-1',
+        }),
+      },
+      env,
+      executionCtx,
+    );
+
+  const response = await Promise.race([
+    request(),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('contact-card response waited for DO')),
+        250,
+      ),
+    ),
+  ]);
+  assert.equal(response.status, 201);
+  const delivery = await json(response);
+  assert.equal(delivery.attachments[0].kind, 'whatsapp');
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = 'conversation-card-realtime'
+           AND client_message_id = 'agent-card-realtime-1'`,
+      )
+      .get().count,
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM message_attachments
+         WHERE message_id = ?1`,
+      )
+      .get(delivery.message.id).count,
+    1,
+  );
+  assert.deepEqual(
+    {
+      ...database
+        .prepare(
+          `SELECT status, visitor_unread_count, agent_unread_count,
+             last_message_preview
+           FROM conversations WHERE id = 'conversation-card-realtime'`,
+        )
+        .get(),
+    },
+    {
+      status: 'pending',
+      visitor_unread_count: 3,
+      agent_unread_count: 0,
+      last_message_preview: 'Contact us',
+    },
+  );
+  assert.equal(pendingTasks.length, 1);
+  assert.deepEqual(rooms.completed, []);
+
+  rooms.release();
+  await Promise.all(pendingTasks);
+  assert.deepEqual(rooms.completed.sort(), [
+    'agent-inbox:agent-card-realtime',
+    'client:default:CRD123',
+    'conversation-card-realtime',
+  ]);
+  const visitorEvent = rooms.events
+    .get('client:default:CRD123')
+    ?.find((event) => event.message?.id === delivery.message.id);
+  assert.equal(visitorEvent?.type, 'message.created');
+  assert.equal(visitorEvent.message.attachments[0].kind, 'whatsapp');
+  assert.equal(visitorEvent.conversation.unreadCount, 3);
+  assert.equal(visitorEvent.conversation.status, 'active');
+  assert.equal(
+    preparedSql.some((sql) => /SELECT c\.id, c\.site_id/u.test(sql)),
+    false,
+    'realtime must use the persisted conversation snapshot instead of rereading it',
+  );
+
+  const duplicate = await request();
+  assert.equal(duplicate.status, 200);
+  assert.equal((await json(duplicate)).duplicate, true);
+  assert.equal(pendingTasks.length, 1);
+  assert.equal(rooms.calls.length, 3);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = 'conversation-card-realtime'
+           AND client_message_id = 'agent-card-realtime-1'`,
+      )
+      .get().count,
+    1,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM message_attachments
+         WHERE message_id = ?1`,
+      )
+      .get(delivery.message.id).count,
+    1,
+  );
   database.close();
 });
 
