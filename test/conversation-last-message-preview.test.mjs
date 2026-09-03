@@ -16,11 +16,7 @@ test('backfills latest message preview', async () => {
 });
 
 test('agent inbox reads cached previews', async () => {
-  const worker = await read('../src/worker/agent-api.ts');
-  const start = worker.indexOf('async function loadAgentInbox');
-  const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
-  assert.ok(start >= 0 && end > start);
-  const inbox = worker.slice(start, end);
+  const inbox = await read('../src/worker/agent-inbox.ts');
 
   assert.ok(inbox.includes(cachedSummary));
   assert.ok(!inbox.includes('SELECT body FROM messages'));
