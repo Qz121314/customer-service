@@ -2,40 +2,24 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
+import { routeRegistration } from './helpers/source-contract.mjs';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-function block(source, startMarker, endMarker) {
-  const start = source.indexOf(startMarker);
-  const end = source.indexOf(endMarker, start + startMarker.length);
-  assert.ok(start >= 0 && end > start);
-  return source.slice(start, end);
-}
-
 test('already-read detail loads skip the separate read request', async () => {
   const portal = await read('../src/dashboard/AgentPortal.tsx');
-  const load = block(
-    portal,
-    'const load = (incremental = false) => {',
-    'const connect = () => {',
-  );
 
   assert.match(
-    load,
-    /Number\(value\.conversation\.agent_unread_count \?\? 0\) > 0/u,
-  );
-  assert.match(
-    load,
-    /acknowledgeConversation\(\s*selectedId,\s*lastVisitorMessageId/u,
+    portal,
+    /document\.visibilityState === 'visible' &&\s*Number\(value\.conversation\.agent_unread_count \?\? 0\) > 0[\s\S]{0,600}?acknowledgeConversation\(\s*selectedId,\s*lastVisitorMessageId/u,
   );
 });
 
 test('agent read acknowledgement writes one conversation cursor instead of message rows', async () => {
   const worker = await read('../src/worker/agent-api.ts');
-  const route = block(
+  const route = routeRegistration(
     worker,
     "agentApi.post('/api/agent/conversations/:id/read', async (c) => {",
-    "agentApi.post('/api/agent/conversations/:id/messages', async (c) => {",
   );
 
   assert.doesNotMatch(route, /UPDATE messages/u);
@@ -52,10 +36,9 @@ test('conversation detail cursors remain index-compatible without binding SQL la
     read('../migrations/0001_initial.sql'),
     read('../migrations/0007_message_timestamp_order.sql'),
   ]);
-  const detail = block(
+  const detail = routeRegistration(
     worker,
     "agentApi.get('/api/agent/conversations/:id/messages', async (c) => {",
-    "agentApi.post('/api/agent/conversations/:id/read', async (c) => {",
   );
 
   assert.match(
