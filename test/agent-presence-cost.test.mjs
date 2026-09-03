@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
+import { classMethodDeclaration } from './helpers/source-contract.mjs';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -21,10 +22,11 @@ test('runtime heartbeats avoid Durable Object wakeups', async () => {
   assert.match(dashboardApi, /window\.setInterval\(ping, 60_000\)/u);
   assert.match(core, /setWebSocketAutoResponse/u);
   assert.match(core, /new WebSocketRequestResponsePair\(/u);
-  const messageHandler = core.slice(
-    core.indexOf('async webSocketMessage('),
-    core.indexOf('private async touchAgent('),
+
+  const messageHandler = classMethodDeclaration(
+    core,
+    '  async webSocketMessage(',
   );
   assert.doesNotMatch(messageHandler, /message === 'ping'/u);
-  assert.doesNotMatch(messageHandler, /touchAgent/u);
+  assert.doesNotMatch(messageHandler, /touchAgentActivity/u);
 });
