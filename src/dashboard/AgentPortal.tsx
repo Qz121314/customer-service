@@ -53,6 +53,7 @@ import {
   parseRealtimeEvent,
   sortedConversationList,
   mergeAgentConversationPage,
+  mergeAgentOverview,
   message,
 } from './dashboard-runtime';
 import {
@@ -786,7 +787,9 @@ function AgentWorkspace({
           return sortedConversationList([next, ...withoutCurrent]);
         });
         if (belongsToAgent && payload.overview) {
-          setOverview((current) => ({ ...current, ...payload.overview }));
+          setOverview((current) =>
+            mergeAgentOverview(current, payload.overview!),
+          );
         }
       });
       socket.addEventListener('close', () => {

@@ -32,7 +32,7 @@ test('agent text sends keep persistence on a bounded D1 path and reuse the updat
   const broadcaster = section(
     clientSource,
     'export async function broadcastClientConversationEvent(',
-    'async function loadAgentOverview(',
+    'function agentConversationSummary(',
   );
 
   assert.match(route, /assignedConversationForMessageWrite\(/u);
@@ -115,7 +115,7 @@ test('realtime overview scans run only when assignment or status counts can chan
   const broadcaster = section(
     clientSource,
     'export async function broadcastClientConversationEvent(',
-    'async function loadAgentOverview(',
+    'function agentConversationSummary(',
   );
   const assignmentBroadcaster = section(
     assignmentBroadcastSource,
@@ -160,6 +160,11 @@ test('realtime overview scans run only when assignment or status counts can chan
   assert.match(visitorReadRoute, /includeAgentInbox: false/u);
   assert.doesNotMatch(clientRoute, /includeOverview:\s*true/u);
   assert.match(assignmentBroadcaster, /loadAgentOverview\(env\.DB, agentId\)/u);
+  assert.doesNotMatch(
+    assignmentBroadcastSource,
+    /async function loadAgentOverview/u,
+  );
+  assert.doesNotMatch(clientSource, /async function loadAgentOverview/u);
   assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);
   assert.doesNotMatch(mediaSource, /\{ includeOverview: true \}/u);
   assert.match(

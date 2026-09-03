@@ -19,6 +19,7 @@ import {
 import { listConversationAttachmentsForMessageIds } from './message-attachments';
 import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 import { clientConversationFanoutPlan } from './conversation-fanout-plan.ts';
+import { loadAgentOverview } from './agent-inbox';
 
 type ClientBindings = {
   DB: D1Database;
@@ -1098,47 +1099,6 @@ export async function broadcastClientConversationEvent(
   }
   await Promise.all(inboxUpdates);
   return conversation;
-}
-
-async function loadAgentOverview(db: D1Database, agentId: string) {
-  const result = await db
-    .prepare(
-      `SELECT c.status, COUNT(c.id) AS count,
-         a.traffic_quota_enabled, a.traffic_quota_total,
-         a.traffic_quota_used
-       FROM agents a
-       LEFT JOIN conversations c
-         ON c.assigned_agent = a.id
-        AND c.expires_at > CURRENT_TIMESTAMP
-       WHERE a.id = ?1
-       GROUP BY c.status, a.traffic_quota_enabled,
-         a.traffic_quota_total, a.traffic_quota_used`,
-    )
-    .bind(agentId)
-    .all<{
-      status: ConversationStatus | null;
-      count: number;
-      traffic_quota_enabled: number;
-      traffic_quota_total: number;
-      traffic_quota_used: number;
-    }>();
-  const counts = { open: 0, pending: 0, closed: 0 };
-  for (const row of result.results ?? []) {
-    if (row.status) counts[row.status] = Number(row.count ?? 0);
-  }
-  const quota = result.results?.[0];
-  return {
-    ...counts,
-    total: counts.open + counts.pending + counts.closed,
-    trafficQuotaEnabled: quota?.traffic_quota_enabled === 1,
-    trafficQuotaTotal: Number(quota?.traffic_quota_total ?? 0),
-    trafficQuotaUsed: Number(quota?.traffic_quota_used ?? 0),
-    trafficQuotaRemaining: Math.max(
-      0,
-      Number(quota?.traffic_quota_total ?? 0) -
-        Number(quota?.traffic_quota_used ?? 0),
-    ),
-  };
 }
 
 function agentConversationSummary(

@@ -19,6 +19,7 @@ for (const name of [
   'conversation-retention.ts',
   'routing.ts',
   'assignment-broadcast.ts',
+  'agent-inbox.ts',
   'abuse-control.ts',
   'no-agent-message.ts',
   'message-attachments.ts',
@@ -30,8 +31,14 @@ for (const name of [
 }
 
 let clientApi;
+let broadcastClientConversationEvent;
+let loadAgentOverview;
+let routingBusinessDate;
 try {
-  ({ clientApi } = await import('../src/worker/client-api.ts'));
+  ({ clientApi, broadcastClientConversationEvent } =
+    await import('../src/worker/client-api.ts'));
+  ({ loadAgentOverview } = await import('../src/worker/agent-inbox.ts'));
+  ({ routingBusinessDate } = await import('../src/worker/routing.ts'));
 } catch (error) {
   for (const shimPath of shims) unlinkSync(shimPath);
   throw error;
@@ -69,8 +76,9 @@ function applyMigrations(database) {
   }
 }
 
-function d1(database) {
+function d1(database, onPrepare = () => undefined) {
   function statement(sql) {
+    onPrepare(sql);
     let bindings = [];
     return {
       bind(...values) {
@@ -132,7 +140,11 @@ function fakeRooms({ failName = null } = {}) {
   };
 }
 
-function setup({ greetingEnabled, greetingText = null }) {
+function setup({
+  greetingEnabled,
+  greetingText = null,
+  dailyConversationLimit = 0,
+}) {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   database
@@ -145,10 +157,10 @@ function setup({ greetingEnabled, greetingText = null }) {
          auto_greeting_enabled, auto_greeting_text
        ) VALUES (
          'cta-agent', 'default', 'CTA Agent', 'cta-agent', 'hash', 'salt',
-         'online', 1, CURRENT_TIMESTAMP, 0, 1, 10, 0, ?, ?
+         'online', 1, CURRENT_TIMESTAMP, ?, 1, 10, 0, ?, ?
        )`,
     )
-    .run(greetingEnabled ? 1 : 0, greetingText);
+    .run(dailyConversationLimit, greetingEnabled ? 1 : 0, greetingText);
   database.exec(`
     INSERT INTO product_catalog (
       site_id, id, title, href, cover_url,
@@ -204,7 +216,7 @@ async function startConversation(
       }),
     },
     {
-      DB: d1(database),
+      DB: d1(database, overrides.onPrepare),
       CONVERSATION_ROOMS: rooms.namespace,
     },
   );
@@ -297,12 +309,46 @@ test('new conversations require a UUID v4 source handoff id before any D1 work',
   }
 });
 
-test('CTA starts an assigned conversation without requiring a visitor message', async () => {
-  const database = setup({ greetingEnabled: false });
+test('CTA assignment realtime uses the canonical complete overview without an extra D1 statement', async () => {
+  const database = setup({
+    greetingEnabled: false,
+    dailyConversationLimit: 5,
+  });
   const rooms = fakeRooms();
   const handoff = '11111111-1111-4111-8111-111111111111';
+  database
+    .prepare(
+      `INSERT INTO agent_daily_stats (
+         site_id, agent_id, business_date, conversation_count, updated_at
+       ) VALUES ('default', 'cta-agent', ?, 2, CURRENT_TIMESTAMP)`,
+    )
+    .run(routingBusinessDate());
 
-  const response = await startConversation(database, rooms, handoff);
+  let overviewPrepareCount = 0;
+  const initialOverview = await loadAgentOverview(
+    d1(database, () => {
+      overviewPrepareCount += 1;
+    }),
+    'cta-agent',
+  );
+  assert.deepEqual(initialOverview, {
+    open: 0,
+    pending: 0,
+    closed: 0,
+    total: 0,
+    todayAccepted: 2,
+    dailyLimit: 5,
+    trafficQuotaEnabled: true,
+    trafficQuotaTotal: 10,
+    trafficQuotaUsed: 0,
+    trafficQuotaRemaining: 10,
+  });
+  assert.equal(overviewPrepareCount, 1);
+
+  const prepared = [];
+  const response = await startConversation(database, rooms, handoff, {
+    onPrepare: (sql) => prepared.push(sql),
+  });
   const value = await response.json();
 
   assert.equal(response.status, 201);
@@ -369,14 +415,65 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
     ),
     'skipped',
   );
-  assert.ok(
-    rooms.events.some(
-      (event) =>
-        event.name === 'agent-inbox:cta-agent' &&
-        event.payload.type === 'conversation.changed' &&
-        event.payload.cause === 'initial_assignment' &&
-        event.payload.conversation.agent_unread_count === 1,
-    ),
+  const assignmentEvent = rooms.events.find(
+    (event) =>
+      event.name === 'agent-inbox:cta-agent' &&
+      event.payload.type === 'conversation.changed' &&
+      event.payload.cause === 'initial_assignment',
+  );
+  assert.equal(assignmentEvent?.payload.conversation.agent_unread_count, 1);
+  assert.deepEqual(assignmentEvent?.payload.overview, {
+    open: 0,
+    pending: 1,
+    closed: 0,
+    total: 1,
+    todayAccepted: 3,
+    dailyLimit: 5,
+    trafficQuotaEnabled: true,
+    trafficQuotaTotal: 10,
+    trafficQuotaUsed: 1,
+    trafficQuotaRemaining: 9,
+  });
+  assert.equal(
+    prepared.filter((sql) => sql.includes('AS today_count')).length,
+    1,
+    'assignment realtime must load its complete overview in one D1 statement',
+  );
+
+  database
+    .prepare(`UPDATE conversations SET status = 'closed' WHERE id = ?`)
+    .run(value.conversation.id);
+  rooms.events.length = 0;
+  const statusPrepared = [];
+  await broadcastClientConversationEvent(
+    {
+      DB: d1(database, (sql) => statusPrepared.push(sql)),
+      CONVERSATION_ROOMS: rooms.namespace,
+    },
+    value.conversation.id,
+    'conversation.closed',
+  );
+  const statusEvent = rooms.events.find(
+    (event) =>
+      event.name === 'agent-inbox:cta-agent' &&
+      event.payload.type === 'conversation.changed',
+  );
+  assert.deepEqual(statusEvent?.payload.overview, {
+    open: 0,
+    pending: 0,
+    closed: 1,
+    total: 1,
+    todayAccepted: 3,
+    dailyLimit: 5,
+    trafficQuotaEnabled: true,
+    trafficQuotaTotal: 10,
+    trafficQuotaUsed: 1,
+    trafficQuotaRemaining: 9,
+  });
+  assert.equal(
+    statusPrepared.filter((sql) => sql.includes('AS today_count')).length,
+    1,
+    'generic realtime must load its complete overview in one D1 statement',
   );
 
   database.close();
