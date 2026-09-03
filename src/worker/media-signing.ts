@@ -14,6 +14,16 @@ export type UploadTarget = {
 const DEFAULT_BUCKET = 'customer-service-media';
 const PRESIGNED_TTL_SECONDS = 300;
 
+export type DownloadSigningContext = {
+  accessKeyId: string;
+  host: string;
+  bucket: string;
+  expiresAt: number;
+  signingKey: ArrayBuffer;
+  amzDate: string;
+  scope: string;
+};
+
 export async function createUploadTarget(
   env: DirectUploadEnv,
   proxyUrl: string,
@@ -56,6 +66,79 @@ type PresignInput = {
   mimeType: string;
   expiresIn: number;
 };
+
+export async function createDownloadSigningContext(
+  env: DirectUploadEnv,
+  expiresAt: string | null,
+): Promise<DownloadSigningContext | null> {
+  const accountId = env.R2_ACCOUNT_ID?.trim();
+  const accessKeyId = env.R2_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = env.R2_SECRET_ACCESS_KEY?.trim();
+  if (!accountId || !accessKeyId || !secretAccessKey) return null;
+
+  const now = new Date();
+  const boundedExpiry = Math.min(
+    Date.parse(expiresAt ?? '') || now.getTime() + PRESIGNED_TTL_SECONDS * 1000,
+    now.getTime() + PRESIGNED_TTL_SECONDS * 1000,
+  );
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/gu, '');
+  const dateStamp = amzDate.slice(0, 8);
+  const region = 'auto';
+  const service = 's3';
+  return {
+    accessKeyId,
+    host: `${accountId}.r2.cloudflarestorage.com`,
+    bucket: env.R2_BUCKET_NAME?.trim() || DEFAULT_BUCKET,
+    expiresAt: boundedExpiry,
+    signingKey: await signatureKey(secretAccessKey, dateStamp, region, service),
+    amzDate,
+    scope: `${dateStamp}/${region}/${service}/aws4_request`,
+  };
+}
+
+export async function presignGet(
+  context: DownloadSigningContext,
+  objectKey: string,
+): Promise<string> {
+  const expiresIn = Math.max(
+    1,
+    Math.min(
+      PRESIGNED_TTL_SECONDS,
+      Math.ceil((context.expiresAt - Date.now()) / 1000),
+    ),
+  );
+  const canonicalUri = `/${awsEncode(context.bucket)}/${objectKey
+    .split('/')
+    .map(awsEncode)
+    .join('/')}`;
+  const query = new Map<string, string>([
+    ['X-Amz-Algorithm', 'AWS4-HMAC-SHA256'],
+    ['X-Amz-Credential', `${context.accessKeyId}/${context.scope}`],
+    ['X-Amz-Date', context.amzDate],
+    ['X-Amz-Expires', String(expiresIn)],
+    ['X-Amz-SignedHeaders', 'host'],
+  ]);
+  const canonicalQuery = [...query.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${awsEncode(key)}=${awsEncode(value)}`)
+    .join('&');
+  const canonicalRequest = [
+    'GET',
+    canonicalUri,
+    canonicalQuery,
+    `host:${context.host}\n`,
+    'host',
+    'UNSIGNED-PAYLOAD',
+  ].join('\n');
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    context.amzDate,
+    context.scope,
+    await sha256Hex(canonicalRequest),
+  ].join('\n');
+  const signature = toHex(await hmac(context.signingKey, stringToSign));
+  return `https://${context.host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+}
 
 async function presignPut(input: PresignInput): Promise<string> {
   const now = new Date();

@@ -135,3 +135,17 @@ test('read APIs preserve payload fields while updating only conversation cursors
   assert.match(agent, /AS read_by_agent_at/u);
   assert.match(client, /AS read_by_visitor_at/u);
 });
+
+test('visitor read resource budget keeps conversation and visitor rooms only', async () => {
+  const client = await readFile(
+    new URL('../src/worker/client-api.ts', import.meta.url),
+    'utf8',
+  );
+  const visitorRead = routeRegistration(
+    client,
+    "clientApi.post('/client/v1/conversations/:id/read'",
+  );
+  assert.match(visitorRead, /broadcastRoomSafely\(c\.env, conversation\.id/u);
+  assert.match(visitorRead, /includeAgentInbox: false/u);
+  assert.doesNotMatch(visitorRead, /agentInboxRoom|conversation\.changed/u);
+});

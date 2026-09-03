@@ -211,10 +211,15 @@ export type ConversationAttachmentPage =
       limit: number;
     };
 
+export type ConversationAttachmentUrlResolver = (
+  objectKey: string,
+) => Promise<string | null>;
+
 export async function listConversationAttachments(
   db: D1Database,
   conversationId: string,
   page?: ConversationAttachmentPage,
+  resolveImageUrl?: ConversationAttachmentUrlResolver,
 ) {
   let pageMessagesSql = `SELECT id
     FROM messages
@@ -293,26 +298,31 @@ export async function listConversationAttachments(
     .bind(...bindings)
     .all<UnifiedAttachmentRow>();
 
-  return (result.results ?? []).map((row) => ({
-    messageId: row.message_id,
-    id: row.id,
-    kind: row.kind,
-    label: row.label ?? (row.kind === 'image' ? 'Image' : ''),
-    value: row.value,
-    ...(row.kind === 'image'
-      ? {
-          mimeType: row.mime_type,
-          byteSize: row.byte_size,
-          width: row.width,
-          height: row.height,
-          originalName: row.original_name,
-          source: row.source,
-        }
-      : {
-          presetMessage: row.preset_message,
-          hasCustomIcon: hasContactCardIconRef(row.icon_ref),
-        }),
-  }));
+  return Promise.all(
+    (result.results ?? []).map(async (row) => ({
+      messageId: row.message_id,
+      id: row.id,
+      kind: row.kind,
+      label: row.label ?? (row.kind === 'image' ? 'Image' : ''),
+      value: row.value,
+      ...(row.kind === 'image'
+        ? {
+            mimeType: row.mime_type,
+            byteSize: row.byte_size,
+            width: row.width,
+            height: row.height,
+            originalName: row.original_name,
+            source: row.source,
+            ...(resolveImageUrl && row.object_key
+              ? { url: await resolveImageUrl(row.object_key) }
+              : {}),
+          }
+        : {
+            presetMessage: row.preset_message,
+            hasCustomIcon: hasContactCardIconRef(row.icon_ref),
+          }),
+    })),
+  );
 }
 
 export async function loadMessageAttachments(
