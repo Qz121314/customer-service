@@ -663,6 +663,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
         conversationId: conversation.id,
         reuseKey: startClaimKey,
         sourceHandoffId,
+        visitorId,
+        sourceHash,
       });
       return noAgentResponse(c, site);
     }
@@ -687,6 +689,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
       conversationId,
       reuseKey: startClaimKey,
       sourceHandoffId,
+      visitorId,
+      sourceHash,
     });
     return error(
       c,
@@ -717,6 +721,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
       conversationId,
       reuseKey: startClaimKey,
       sourceHandoffId,
+      visitorId,
+      sourceHash,
     });
     return noAgentResponse(c, site);
   }
@@ -1286,6 +1292,8 @@ async function discardUnassignedConversation(
     conversationId: string;
     reuseKey: string;
     sourceHandoffId: string;
+    visitorId: string;
+    sourceHash: string;
   },
 ): Promise<void> {
   await db.batch([
@@ -1300,6 +1308,61 @@ async function discardUnassignedConversation(
            )`,
       )
       .bind(input.conversationId, input.siteId),
+    // The two creation-limit rows are reservations, not successful-creation
+    // history until this conversation has an assigned agent. Release each
+    // reservation only while its idempotency receipt and unassigned claim are
+    // both still present. D1 serializes this batch, so a duplicate cleanup
+    // cannot decrement either counter a second time.
+    db
+      .prepare(
+        `UPDATE conversation_creation_limits
+         SET accepted_count = accepted_count - 1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE site_id = ?1
+           AND subject_key = ?2
+           AND accepted_count > 0
+           AND EXISTS (
+             SELECT 1
+             FROM conversation_creation_quota_receipts receipt
+             WHERE receipt.site_id = ?1 AND receipt.reuse_key = ?3
+           )
+           AND EXISTS (
+             SELECT 1
+             FROM conversations
+             WHERE id = ?4 AND site_id = ?1 AND assigned_agent IS NULL
+           )`,
+      )
+      .bind(
+        input.siteId,
+        `visitor:${input.visitorId}`,
+        input.reuseKey,
+        input.conversationId,
+      ),
+    db
+      .prepare(
+        `UPDATE conversation_creation_limits
+         SET accepted_count = accepted_count - 1,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE site_id = ?1
+           AND subject_key = ?2
+           AND accepted_count > 0
+           AND EXISTS (
+             SELECT 1
+             FROM conversation_creation_quota_receipts receipt
+             WHERE receipt.site_id = ?1 AND receipt.reuse_key = ?3
+           )
+           AND EXISTS (
+             SELECT 1
+             FROM conversations
+             WHERE id = ?4 AND site_id = ?1 AND assigned_agent IS NULL
+           )`,
+      )
+      .bind(
+        input.siteId,
+        `source:${input.sourceHash}`,
+        input.reuseKey,
+        input.conversationId,
+      ),
     db
       .prepare(
         `DELETE FROM conversation_creation_quota_receipts
