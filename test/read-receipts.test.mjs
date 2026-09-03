@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { URL } from 'node:url';
+import { routeRegistration } from './helpers/source-contract.mjs';
 
 const migration = await readFile(
   new URL('../migrations/0011_read_receipts.sql', import.meta.url),
@@ -118,13 +119,13 @@ test('read APIs preserve payload fields while updating only conversation cursors
     readFile(new URL('../src/worker/agent-api.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/worker/client-api.ts', import.meta.url), 'utf8'),
   ]);
-  const agentRead = agent.slice(
-    agent.indexOf("agentApi.post('/api/agent/conversations/:id/read'"),
-    agent.indexOf("agentApi.post('/api/agent/conversations/:id/messages'"),
+  const agentRead = routeRegistration(
+    agent,
+    "agentApi.post('/api/agent/conversations/:id/read'",
   );
-  const visitorRead = client.slice(
-    client.indexOf("clientApi.post('/client/v1/conversations/:id/read'"),
-    client.indexOf("clientApi.get('/client/v1/realtime'"),
+  const visitorRead = routeRegistration(
+    client,
+    "clientApi.post('/client/v1/conversations/:id/read'",
   );
 
   assert.doesNotMatch(agentRead, /UPDATE messages/u);
