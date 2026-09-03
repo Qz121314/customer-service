@@ -183,13 +183,15 @@ test('first effective assignment sends one configured greeting as a normal agent
 
   const conversation = row(
     database,
-    `SELECT agent_unread_count, visitor_unread_count, last_message_preview
+    `SELECT agent_unread_count, visitor_unread_count, last_message_preview,
+       updated_at
      FROM conversations WHERE id = ?`,
     'greeting-conversation',
   );
   assert.equal(conversation.agent_unread_count, 1);
   assert.equal(conversation.visitor_unread_count, 1);
   assert.equal(conversation.last_message_preview, '您好，我来为您服务。');
+  assert.equal(conversation.updated_at, assignedAt);
 
   database.close();
 });
@@ -304,10 +306,11 @@ test('attachment-only greeting snapshots channel cards and image in configured o
 
   const conversation = row(
     database,
-    `SELECT visitor_unread_count, last_message_preview
+    `SELECT agent_unread_count, visitor_unread_count, last_message_preview
      FROM conversations WHERE id = ?`,
     'attachment-conversation',
   );
+  assert.equal(conversation.agent_unread_count, 1);
   assert.equal(conversation.visitor_unread_count, 1);
   assert.equal(conversation.last_message_preview, '短信联系');
 
@@ -418,6 +421,68 @@ test('greeting is optional and a disabled greeting never blocks first reception'
   assert.equal(conversation.assigned_agent, 'plain-agent');
   assert.equal(conversation.agent_unread_count, 1);
   assert.equal(conversation.visitor_unread_count, 0);
+
+  database.close();
+});
+
+test('assignment attention never lowers an existing agent unread count', () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  addAgent(database, 'unread-agent');
+  addConversation(database, 'unread-conversation');
+  database
+    .prepare(
+      `UPDATE conversations
+       SET agent_unread_count = 4
+       WHERE id = 'unread-conversation'`,
+    )
+    .run();
+
+  assign(
+    database,
+    'unread-conversation',
+    'unread-agent',
+    '2026-08-18T20:01:30.000Z',
+  );
+
+  assert.equal(
+    row(
+      database,
+      `SELECT agent_unread_count AS unread
+       FROM conversations WHERE id = 'unread-conversation'`,
+    ).unread,
+    4,
+  );
+  assert.equal(
+    row(
+      database,
+      `SELECT outcome FROM conversation_automation_receipts
+       WHERE conversation_id = 'unread-conversation'
+         AND automation_key = 'initial_greeting'`,
+    ).outcome,
+    'skipped',
+  );
+
+  database.close();
+});
+
+test('final schema has exactly one assignment unread writer', () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const attention = row(
+    database,
+    `SELECT sql FROM sqlite_master
+     WHERE type = 'trigger' AND name = 'trg_conversation_assignment_attention'`,
+  );
+  const greeting = row(
+    database,
+    `SELECT sql FROM sqlite_master
+     WHERE type = 'trigger' AND name = 'trg_initial_greeting_from_traffic_receipt'`,
+  );
+
+  assert.match(attention.sql, /agent_unread_count\s*=\s*MAX/u);
+  assert.doesNotMatch(greeting.sql, /agent_unread_count/u);
+  assert.doesNotMatch(greeting.sql, /UPDATE conversations/u);
 
   database.close();
 });
