@@ -6,6 +6,7 @@ import {
   completeMedia,
   MediaReservationLimitError,
   MediaUploadIdConflictError,
+  mediaDownloadUrl,
   readMediaObject,
   reserveMedia,
   storeProxyUpload,
@@ -316,7 +317,8 @@ async function authorizedVisitorMedia(
     `SELECT mi.id, mi.conversation_id, mi.message_id, mi.reserved_message_id,
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.client_upload_id,
-         mi.status, mi.is_initial, mi.reserved_created_at
+         mi.status, mi.is_initial, mi.reserved_created_at,
+         c.expires_at AS conversation_expires_at
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
        JOIN visitors v ON v.id = c.visitor_id
@@ -352,7 +354,8 @@ async function authorizedAgentMedia(
          mi.sender_type, mi.sender_id, mi.object_key, mi.mime_type, mi.byte_size,
          mi.width, mi.height, mi.original_name, mi.client_upload_id,
          mi.status, mi.is_initial, mi.reserved_created_at,
-         c.status AS conversation_status
+         c.status AS conversation_status,
+         c.expires_at AS conversation_expires_at
        FROM media_items mi
        JOIN conversations c ON c.id = mi.conversation_id
        WHERE mi.id = ?1 AND c.assigned_agent = ?2
@@ -472,7 +475,7 @@ async function mediaReservationResponse(
   if (row.status === 'ready' && row.message_id) {
     return {
       conversationId: row.conversation_id,
-      media: publicMedia(row),
+      media: publicMedia(row, await mediaDownloadUrl(env, row)),
       completed: {
         messageId: row.message_id,
         createdAt: row.reserved_created_at,

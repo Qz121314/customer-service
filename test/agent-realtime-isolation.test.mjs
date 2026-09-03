@@ -18,14 +18,8 @@ const adminConfigApi = readFileSync(
 
 test('agent inbox realtime events are isolated by authenticated agent id', () => {
   assert.match(agentApi, /room\(c\.env, agentInboxRoom\(agent\.id\)\)/u);
-  assert.match(
-    clientApi,
-    /broadcastRoomSafely\(env, agentInboxRoom\(conversation\.assigned_agent\)/u,
-  );
-  assert.match(
-    clientApi,
-    /broadcastRoomSafely\(env, agentInboxRoom\(previousAgentId\)/u,
-  );
+  assert.match(clientApi, /clientConversationFanoutPlan/u);
+  assert.match(clientApi, /fanoutRooms\.includes/u);
   assert.doesNotMatch(agentApi, /room\(c\.env, 'admin-inbox'\)/u);
   assert.doesNotMatch(clientApi, /broadcastRoom\(env, 'admin-inbox'/u);
 });

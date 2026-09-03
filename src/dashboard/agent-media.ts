@@ -12,12 +12,14 @@ export type AgentMediaItem = {
   originalName: string | null;
   status: 'ready';
   url: string;
+  fallbackUrl?: string;
 };
 
 type InitResponse = {
   conversationId: string;
   media: Omit<AgentMediaItem, 'messageId' | 'url' | 'status'> & {
     status: 'pending' | 'ready';
+    url?: string;
   };
   upload?: UploadTarget;
   completed?: { messageId: string; createdAt: string };
@@ -66,7 +68,14 @@ export async function sendAgentImage(
           ...init.media,
           status: 'ready',
           messageId: init.completed.messageId,
-          url: `/api/agent/media/${encodeURIComponent(init.media.id)}/content`,
+          url:
+            init.media.url ??
+            `/api/agent/media/${encodeURIComponent(init.media.id)}/content`,
+          ...(init.media.url
+            ? {
+                fallbackUrl: `/api/agent/media/${encodeURIComponent(init.media.id)}/content`,
+              }
+            : {}),
         },
       };
     }
@@ -75,7 +84,7 @@ export async function sendAgentImage(
     const complete = await request<{
       messageId: string;
       createdAt: string;
-      media: Omit<AgentMediaItem, 'messageId' | 'url'>;
+      media: Omit<AgentMediaItem, 'messageId' | 'url'> & { url?: string };
     }>(`/api/agent/media/${encodeURIComponent(init.media.id)}/complete`, {
       method: 'POST',
       body: '{}',
@@ -86,7 +95,14 @@ export async function sendAgentImage(
       media: {
         ...complete.media,
         messageId: complete.messageId,
-        url: `/api/agent/media/${encodeURIComponent(complete.media.id)}/content`,
+        url:
+          complete.media.url ??
+          `/api/agent/media/${encodeURIComponent(complete.media.id)}/content`,
+        ...(complete.media.url
+          ? {
+              fallbackUrl: `/api/agent/media/${encodeURIComponent(complete.media.id)}/content`,
+            }
+          : {}),
       },
     };
   } finally {
