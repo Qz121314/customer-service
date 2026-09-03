@@ -14,10 +14,7 @@ test('agent inbox returns overview, conversations, messages and media in two req
 
   assert.match(api, /getAgentInbox/u);
   assert.match(api, /request<AgentInbox>\('\/api\/agent\/conversations'\)/u);
-  assert.match(
-    worker,
-    /conversations: result\.results \?\? \[\],[\s\S]*overview/u,
-  );
+  assert.match(worker, /loadAgentInbox/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
   assert.match(worker, /messages: pageMessages,[\s\S]*media,[\s\S]*readState/u);
@@ -38,13 +35,17 @@ test('agent inbox filters, searches and prioritizes unread conversations locally
   assert.match(app, /conversation\.agent_unread_count/u);
 });
 
-test('agent inbox folds unfiltered overview counts into the conversation scan', async () => {
-  const worker = await read('../src/worker/agent-api.ts');
-  const start = worker.indexOf('async function loadAgentInbox');
-  const end = worker.indexOf("agentApi.get('/api/agent/stats'", start);
-  assert.ok(start >= 0 && end > start);
-  const inbox = worker.slice(start, end);
+test('agent inbox shares one loader across bootstrap and refresh', async () => {
+  const [bootstrap, worker, inbox] = await Promise.all([
+    read('../src/worker/agent-bootstrap-api.ts'),
+    read('../src/worker/agent-api.ts'),
+    read('../src/worker/agent-inbox.ts'),
+  ]);
 
+  assert.match(bootstrap, /loadAgentInbox/u);
+  assert.match(worker, /loadAgentInbox/u);
+  assert.doesNotMatch(bootstrap, /loadBootstrapInbox/u);
+  assert.doesNotMatch(worker, /async function loadAgentInbox/u);
   assert.match(
     inbox,
     /SUM\(CASE WHEN c\.status = 'open' THEN 1 ELSE 0 END\) OVER \(\) AS __overview_open/u,
