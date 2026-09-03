@@ -130,6 +130,37 @@ function fakeRooms() {
   };
 }
 
+function blockingRooms() {
+  const calls = [];
+  const completed = [];
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  return {
+    calls,
+    completed,
+    release() {
+      release();
+    },
+    namespace: {
+      idFromName(name) {
+        return name;
+      },
+      get(name) {
+        return {
+          async fetch() {
+            calls.push(name);
+            await gate;
+            completed.push(name);
+            return { status: 204 };
+          },
+        };
+      },
+    },
+  };
+}
+
 function fakeMediaBucket() {
   const objects = new Map();
   return {
@@ -477,6 +508,105 @@ async function json(response, { allowError = false } = {}) {
   }
   return value;
 }
+
+test('visitor text response returns before realtime fan-out and duplicate stays side-effect free', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const rooms = blockingRooms();
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  database
+    .prepare(
+      `INSERT INTO visitors (id, site_id, external_id, token_hash, expires_at)
+       VALUES ('visitor-realtime', 'default', 'TST123', 'unused', ?1)`,
+    )
+    .run(expiresAt);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent, expires_at,
+         last_message_at, created_at, updated_at, last_message_preview
+       ) VALUES ('conversation-realtime', 'default', 'visitor-realtime', 'open',
+         'admin', ?1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, '')`,
+    )
+    .run(expiresAt);
+
+  const pendingTasks = [];
+  const executionCtx = {
+    waitUntil(task) {
+      pendingTasks.push(task);
+    },
+  };
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+  const response = await Promise.race([
+    clientApi.request(
+      '/client/v1/conversations/conversation-realtime/messages',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          visitorId: 'TST123',
+          projectId: 'default',
+          clientMessageId: 'visitor-realtime-1',
+          body: 'Hello before realtime',
+        }),
+      },
+      env,
+      executionCtx,
+    ),
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('visitor response waited for DO')),
+        250,
+      ),
+    ),
+  ]);
+
+  assert.equal(response.status, 201);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM messages
+         WHERE conversation_id = 'conversation-realtime'
+           AND client_message_id = 'visitor-realtime-1'`,
+      )
+      .get().count,
+    1,
+  );
+  assert.equal(pendingTasks.length, 1);
+  assert.deepEqual(rooms.completed, []);
+
+  rooms.release();
+  await Promise.all(pendingTasks);
+  assert.deepEqual(rooms.completed.sort(), [
+    'agent-inbox:admin',
+    'client:default:TST123',
+    'conversation-realtime',
+  ]);
+
+  const duplicate = await clientApi.request(
+    '/client/v1/conversations/conversation-realtime/messages',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId: 'TST123',
+        projectId: 'default',
+        clientMessageId: 'visitor-realtime-1',
+        body: 'Hello before realtime',
+      }),
+    },
+    env,
+    executionCtx,
+  );
+  assert.equal(duplicate.status, 200);
+  assert.equal(pendingTasks.length, 1);
+  assert.equal(rooms.calls.length, 3);
+  database.close();
+});
 
 test('isolated client -> routing -> agent -> client flow works through real Hono handlers', async () => {
   const database = new DatabaseSync(':memory:');
