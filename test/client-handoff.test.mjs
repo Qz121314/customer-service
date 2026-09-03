@@ -314,6 +314,28 @@ test('CTA starts an assigned conversation without requiring a visitor message', 
   assert.equal(
     scalar(
       database,
+      `SELECT accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key = 'visitor:ABC123'`,
+      'accepted_count',
+    ),
+    1,
+    'a successful assignment consumes one visitor creation slot',
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key LIKE 'source:%'`,
+      'accepted_count',
+    ),
+    1,
+    'a successful assignment consumes one source creation slot',
+  );
+  assert.equal(
+    scalar(
+      database,
       `SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?`,
       'count',
       value.conversation.id,
@@ -442,6 +464,28 @@ test('concurrent CTA starts coalesce into one conversation and one quota receipt
   assert.equal(
     scalar(
       database,
+      `SELECT accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key = 'visitor:ABC123'`,
+      'accepted_count',
+    ),
+    1,
+    'duplicate CTA starts consume the visitor creation limit once',
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key LIKE 'source:%'`,
+      'accepted_count',
+    ),
+    1,
+    'duplicate CTA starts consume the source creation limit once',
+  );
+  assert.equal(
+    scalar(
+      database,
       'SELECT COUNT(*) AS count FROM conversation_source_handoffs',
       'count',
     ),
@@ -483,6 +527,68 @@ test('concurrent no-agent starts leave no reusable claim or handoff', async () =
       `${table} must not retain a no-agent claim`,
     );
   }
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COALESCE(MAX(accepted_count), 0) AS accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key = 'visitor:ABC123'`,
+      'accepted_count',
+    ),
+    0,
+    'concurrent no-agent starts must release the visitor reservation',
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COALESCE(MAX(accepted_count), 0) AS accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key LIKE 'source:%'`,
+      'accepted_count',
+    ),
+    0,
+    'concurrent no-agent starts must release the source reservation',
+  );
+  database.close();
+});
+
+test('repeated no-agent starts do not exhaust the successful creation limit', async () => {
+  const database = setup({ greetingEnabled: false });
+  const rooms = fakeRooms();
+  database.exec(`UPDATE agents SET status = 'offline' WHERE id = 'cta-agent'`);
+
+  const responses = await Promise.all(
+    Array.from({ length: 11 }, (_, index) =>
+      startConversation(
+        database,
+        rooms,
+        `00000000-0000-4000-8000-${String(index + 30).padStart(12, '0')}`,
+      ),
+    ),
+  );
+  assert.deepEqual(
+    responses.map((response) => response.status),
+    Array(11).fill(503),
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT accepted_count
+       FROM conversation_creation_limits
+       WHERE site_id = 'default' AND subject_key = 'visitor:ABC123'`,
+      'accepted_count',
+    ),
+    0,
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count FROM conversations
+       WHERE assigned_agent IS NULL`,
+      'count',
+    ),
+    0,
+  );
   database.close();
 });
 
