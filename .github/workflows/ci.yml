@@ -21,16 +21,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Repository guardrails
         run: pnpm guardrails
@@ -51,16 +56,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Validate local D1 migrations
         run: pnpm db:migrate:local
@@ -75,16 +85,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build UI
         run: pnpm build:ui
@@ -108,16 +123,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Download UI build
         uses: actions/download-artifact@v4
@@ -125,15 +145,38 @@ jobs:
           name: ui-build
           path: dist
 
+      - name: Restore Playwright Chromium cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ runner.arch }}-1.55.0
+
+      - name: Restore browser D1 schema cache
+        id: browser-d1-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .wrangler/state
+          key: browser-d1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('migrations/**/*.sql', 'wrangler.jsonc', 'pnpm-lock.yaml') }}
+
       - name: Prepare browser smoke dependencies
+        env:
+          D1_CACHE_HIT: ${{ steps.browser-d1-cache.outputs.cache-hit }}
+          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
         shell: bash
         run: |
           set -euo pipefail
 
-          pnpm db:migrate:local > /tmp/browser-smoke-d1.log 2>&1 &
-          d1_pid=$!
+          d1_pid=''
+          if [ "$D1_CACHE_HIT" != 'true' ]; then
+            pnpm db:migrate:local > /tmp/browser-smoke-d1.log 2>&1 &
+            d1_pid=$!
+          fi
+
           cleanup() {
-            kill "$d1_pid" >/dev/null 2>&1 || true
+            if [ -n "$d1_pid" ]; then
+              kill "$d1_pid" >/dev/null 2>&1 || true
+            fi
           }
           trap cleanup EXIT
 
@@ -142,20 +185,24 @@ jobs:
             if timeout --kill-after=30s 240s bash -c '
               set -euo pipefail
               pnpm add -Dw --ignore-scripts @playwright/test@1.55.0
-              pnpm exec playwright install chromium
+              if [ "$PLAYWRIGHT_CACHE_HIT" != "true" ]; then
+                pnpm exec playwright install chromium
+              fi
             '; then
               browser_status=0
               break
             fi
 
             if [ "$attempt" -eq 1 ]; then
-              echo "::warning::Playwright Chromium runtime installation timed out or failed; retrying once."
+              echo "::warning::Playwright Chromium runtime preparation timed out or failed; retrying once."
               sleep 5
             fi
           done
 
           d1_status=0
-          wait "$d1_pid" || d1_status=$?
+          if [ -n "$d1_pid" ]; then
+            wait "$d1_pid" || d1_status=$?
+          fi
           trap - EXIT
 
           if [ "$d1_status" -ne 0 ]; then
@@ -165,9 +212,16 @@ jobs:
           fi
 
           if [ "$browser_status" -ne 0 ]; then
-            echo "::error::Playwright Chromium runtime installation failed after two bounded attempts."
+            echo "::error::Playwright Chromium runtime preparation failed after two bounded attempts."
             exit 1
           fi
+
+      - name: Save browser D1 schema cache
+        if: steps.browser-d1-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .wrangler/state
+          key: browser-d1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('migrations/**/*.sql', 'wrangler.jsonc', 'pnpm-lock.yaml') }}
 
       - name: Smoke test Agent and Admin UI in Chromium
         env:
@@ -232,16 +286,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+          run_install: false
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Set up pnpm
-        run: npm install --global pnpm@11.19.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Download UI build
         uses: actions/download-artifact@v4
