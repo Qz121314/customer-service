@@ -119,8 +119,14 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.doesNotMatch(chrome, /前台提示音/u);
   assert.doesNotMatch(chrome, /后台可接收系统通知/u);
   assert.match(portal, /loadAgentVibrationEnabled\(identity\.id\)/u);
-  assert.match(portal, /saveAgentVibrationEnabled\(identity\.id, vibrationEnabled\)/u);
-  assert.match(portal, /rememberAgentReminderMessage\(remindedMessageIdsRef\.current, messageId\)/u);
+  assert.match(
+    portal,
+    /saveAgentVibrationEnabled\(identity\.id, vibrationEnabled\)/u,
+  );
+  assert.match(
+    portal,
+    /rememberAgentReminderMessage\(remindedMessageIdsRef\.current, messageId\)/u,
+  );
   assert.match(portal, /vibrationEnabledRef\.current/u);
   assert.match(portal, /agentReminderVibrationPattern\(type\)/u);
 });
