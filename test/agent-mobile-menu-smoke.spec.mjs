@@ -63,6 +63,18 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     .locator('.mobile-agent-settings-item')
     .filter({ hasText: '消息提示音' });
   await expect(soundRow).toBeVisible();
+  const soundPresetSelect = soundRow.getByRole('combobox', {
+    name: '选择消息提示音',
+  });
+  await expect(soundPresetSelect).toBeVisible();
+  await expect(soundPresetSelect).toHaveValue('strong');
+  await expect(soundPresetSelect.locator('option')).toHaveCount(5);
+  await expect(
+    soundPresetSelect.locator('option', { hasText: '经典双音（QQ 风格）' }),
+  ).toHaveCount(1);
+  await expect(
+    soundPresetSelect.locator('option', { hasText: '清脆提示（Apple 风格）' }),
+  ).toHaveCount(1);
   await expect(
     soundRow.getByRole('button', {
       name: /关闭消息提示音|开启消息提示音/u,

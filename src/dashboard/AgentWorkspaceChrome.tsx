@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
+import {
+  AGENT_SOUND_PRESET_OPTIONS,
+  loadAgentSoundPreset,
+  saveAgentSoundPreset,
+  type AgentSoundPreset,
+} from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button } from './ui';
 
@@ -265,6 +271,9 @@ export function AgentMobileSettingsPage({
 }) {
   const { state: installState, install } = useAgentPwaInstall();
   const [showManualInstall, setShowManualInstall] = useState(false);
+  const [soundPreset, setSoundPreset] = useState<AgentSoundPreset>(() =>
+    loadAgentSoundPreset(),
+  );
 
   const close = useCallback(() => {
     setShowManualInstall(false);
@@ -301,6 +310,9 @@ export function AgentMobileSettingsPage({
   const audioStateReady = !soundEnabled || audioReady;
   const reminderReady = realtimeReady && notificationsReady && audioStateReady;
   const soundReady = soundEnabled && audioReady;
+  const soundPresetLabel =
+    AGENT_SOUND_PRESET_OPTIONS.find((option) => option.id === soundPreset)
+      ?.label ?? '强提醒';
 
   const openInstall = () => {
     if (installState === 'installed') return;
@@ -316,6 +328,16 @@ export function AgentMobileSettingsPage({
   const openChild = (action: () => void) => {
     setShowManualInstall(false);
     action();
+  };
+
+  const changeSoundPreset = (value: string) => {
+    const nextPreset = AGENT_SOUND_PRESET_OPTIONS.find(
+      (option) => option.id === value,
+    )?.id;
+    if (!nextPreset) return;
+    setSoundPreset(nextPreset);
+    saveAgentSoundPreset(nextPreset);
+    onTestSound();
   };
 
   return (
@@ -464,17 +486,52 @@ export function AgentMobileSettingsPage({
                 <strong>消息提示音</strong>
                 <small>
                   {soundEnabled
-                    ? '已开启 · 工作台前台时每条客户消息都会响铃'
+                    ? `已开启 · ${soundPresetLabel}`
                     : '已关闭 · 不播放工作台提示音'}
                 </small>
               </span>
-              <AgentReminderToggleActions
-                enabled={soundEnabled}
-                toggleLabel={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
-                testLabel="测试提示音"
-                onToggle={onToggleSound}
-                onTest={onTestSound}
-              />
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  flexWrap: 'wrap',
+                  gap: 8,
+                }}
+              >
+                <select
+                  aria-label="选择消息提示音"
+                  value={soundPreset}
+                  onChange={(event) => changeSoundPreset(event.target.value)}
+                  style={{
+                    width: 118,
+                    maxWidth: '32vw',
+                    minHeight: 30,
+                    border: '1px solid var(--mobile-border)',
+                    borderRadius: 9,
+                    background: '#fff',
+                    padding: '0 7px',
+                    color: 'var(--mobile-text)',
+                    fontSize: 10,
+                    fontWeight: 680,
+                  }}
+                >
+                  {AGENT_SOUND_PRESET_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <AgentReminderToggleActions
+                  enabled={soundEnabled}
+                  toggleLabel={
+                    soundEnabled ? '关闭消息提示音' : '开启消息提示音'
+                  }
+                  testLabel="测试提示音"
+                  onToggle={onToggleSound}
+                  onTest={onTestSound}
+                />
+              </div>
             </div>
             {vibrationSupported && (
               <div className="mobile-agent-settings-item">
