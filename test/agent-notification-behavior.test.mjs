@@ -2,7 +2,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { URL } from 'node:url';
-import { emitAgentMessageTone } from '../src/dashboard/dashboard-runtime.ts';
+import {
+  agentReminderVibrationPattern,
+  emitAgentMessageTone,
+  loadAgentSoundEnabled,
+  loadAgentVibrationEnabled,
+  rememberAgentReminderMessage,
+  saveAgentSoundEnabled,
+  saveAgentVibrationEnabled,
+  supportsAgentVibration,
+} from '../src/dashboard/dashboard-runtime.ts';
 import {
   enableAgentNotifications,
   prepareAgentNotifications,
@@ -94,6 +103,7 @@ function browserEnvironment({
     navigatorValue,
     notification,
     pushManager,
+    storage,
     subscription,
     windowValue,
   };
@@ -201,6 +211,62 @@ test('iOS browser tabs ask for Home Screen installation before notification perm
   } finally {
     for (const restoreGlobal of restore.reverse()) restoreGlobal();
   }
+});
+
+test('agent reminder preferences default on and persist per agent on the current device', () => {
+  const environment = browserEnvironment();
+  const restoreWindow = replaceGlobal('window', environment.windowValue);
+
+  try {
+    assert.equal(loadAgentSoundEnabled('agent-a'), true);
+    assert.equal(loadAgentVibrationEnabled('agent-a'), true);
+
+    saveAgentSoundEnabled('agent-a', false);
+    saveAgentVibrationEnabled('agent-a', false);
+    assert.equal(loadAgentSoundEnabled('agent-a'), false);
+    assert.equal(loadAgentVibrationEnabled('agent-a'), false);
+
+    assert.equal(loadAgentSoundEnabled('agent-b'), true);
+    assert.equal(loadAgentVibrationEnabled('agent-b'), true);
+
+    saveAgentSoundEnabled('agent-a', true);
+    saveAgentVibrationEnabled('agent-a', true);
+    assert.equal(environment.storage.get('cs-agent-sound:agent-a'), 'on');
+    assert.equal(environment.storage.get('cs-agent-vibration:agent-a'), 'on');
+  } finally {
+    restoreWindow();
+  }
+});
+
+test('vibration capability is exposed only when the device implements navigator.vibrate', () => {
+  assert.equal(supportsAgentVibration({}), false);
+  assert.equal(
+    supportsAgentVibration({
+      vibrate() {
+        return true;
+      },
+    }),
+    true,
+  );
+});
+
+test('each durable customer message alerts once while duplicate realtime delivery is ignored', () => {
+  const seen = new Set();
+
+  assert.equal(rememberAgentReminderMessage(seen, 'message-1'), true);
+  assert.equal(rememberAgentReminderMessage(seen, 'message-2'), true);
+  assert.equal(rememberAgentReminderMessage(seen, 'message-3'), true);
+  assert.equal(rememberAgentReminderMessage(seen, 'message-2'), false);
+  assert.equal(seen.size, 3);
+});
+
+test('new conversation and customer reply use distinct vibration patterns', () => {
+  assert.deepEqual(agentReminderVibrationPattern('NEW_CONVERSATION'), [
+    220, 100, 220, 100, 320,
+  ]);
+  assert.deepEqual(agentReminderVibrationPattern('CUSTOMER_REPLY'), [
+    220, 100, 220,
+  ]);
 });
 
 test('agent message tone uses maximum in-app gain', () => {
