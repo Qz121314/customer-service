@@ -52,4 +52,3 @@ test('media reservations are idempotent and abandoned uploads are quarantined', 
   assert.match(retention, /now\.getTime\(\) - 2 \* HOUR_MS/u);
   assert.match(retention, /updated_at <= \?2/u);
 });
-
