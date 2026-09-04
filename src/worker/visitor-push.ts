@@ -17,6 +17,11 @@ type PushDeliveryOptions = {
   topic?: string;
 };
 
+export type PushEncryptionKeys = {
+  p256dh: string;
+  auth: string;
+};
+
 export type VapidSigningContext = {
   publicKey: string;
   subject: string;
@@ -189,6 +194,164 @@ export async function sendDataLessPush(
     method: 'POST',
     headers,
   });
+}
+
+export async function sendPayloadPush(
+  endpoint: string,
+  signingContext: VapidSigningContext,
+  keys: PushEncryptionKeys,
+  payload: unknown,
+  options: PushDeliveryOptions = {},
+): Promise<Response> {
+  const endpointUrl = new URL(endpoint);
+  let tokenPromise = signingContext.tokensByOrigin.get(endpointUrl.origin);
+  if (!tokenPromise) {
+    tokenPromise = signVapidToken(signingContext, endpointUrl.origin);
+    signingContext.tokensByOrigin.set(endpointUrl.origin, tokenPromise);
+  }
+  const [token, encrypted] = await Promise.all([
+    tokenPromise,
+    encryptPushPayload(keys, JSON.stringify(payload)),
+  ]);
+  const headers: Record<string, string> = {
+    Authorization: `vapid t=${token}, k=${signingContext.publicKey}`,
+    TTL: String(options.ttlSeconds ?? PUSH_TTL_SECONDS),
+    Urgency: 'high',
+    'Content-Encoding': 'aes128gcm',
+    'Content-Type': 'application/octet-stream',
+  };
+  if (options.topic) headers.Topic = options.topic;
+
+  return fetch(endpointUrl, {
+    method: 'POST',
+    headers,
+    body: encrypted,
+  });
+}
+
+async function encryptPushPayload(
+  keys: PushEncryptionKeys,
+  payload: string,
+): Promise<ArrayBuffer> {
+  const clientPublicBytes = base64UrlDecode(keys.p256dh);
+  const authSecret = base64UrlDecode(keys.auth);
+  const clientPublicKey = await crypto.subtle.importKey(
+    'raw',
+    clientPublicBytes,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    [],
+  );
+  const serverKeys = (await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits'],
+  )) as CryptoKeyPair;
+  const serverPublicBytes = new Uint8Array(
+    await crypto.subtle.exportKey('raw', serverKeys.publicKey),
+  );
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: 'ECDH', public: clientPublicKey },
+      serverKeys.privateKey,
+      256,
+    ),
+  );
+  const keyInfo = concatBytes(
+    new TextEncoder().encode('WebPush: info\0'),
+    clientPublicBytes,
+    serverPublicBytes,
+  );
+  const inputKeyMaterial = await hkdf(sharedSecret, authSecret, keyInfo, 32);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const contentEncryptionKey = await hkdf(
+    inputKeyMaterial,
+    salt,
+    new TextEncoder().encode('Content-Encoding: aes128gcm\0'),
+    16,
+  );
+  const nonce = await hkdf(
+    inputKeyMaterial,
+    salt,
+    new TextEncoder().encode('Content-Encoding: nonce\0'),
+    12,
+  );
+  const plaintext = concatBytes(
+    new TextEncoder().encode(payload),
+    new Uint8Array([2]),
+  );
+  const encryptionKey = await crypto.subtle.importKey(
+    'raw',
+    webCryptoBytes(contentEncryptionKey),
+    'AES-GCM',
+    false,
+    ['encrypt'],
+  );
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: webCryptoBytes(nonce), tagLength: 128 },
+      encryptionKey,
+      webCryptoBytes(plaintext),
+    ),
+  );
+  const recordSize = new Uint8Array(4);
+  new DataView(recordSize.buffer).setUint32(0, 4096);
+  return concatBytes(
+    salt,
+    recordSize,
+    new Uint8Array([serverPublicBytes.length]),
+    serverPublicBytes,
+    ciphertext,
+  ).buffer;
+}
+
+async function hkdf(
+  input: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array,
+  byteLength: number,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    webCryptoBytes(input),
+    'HKDF',
+    false,
+    ['deriveBits'],
+  );
+  return new Uint8Array(
+    await crypto.subtle.deriveBits(
+      {
+        name: 'HKDF',
+        hash: 'SHA-256',
+        salt: webCryptoBytes(salt),
+        info: webCryptoBytes(info),
+      },
+      key,
+      byteLength * 8,
+    ),
+  );
+}
+
+function webCryptoBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
+  return new Uint8Array(value);
+}
+
+function concatBytes(...values: Uint8Array[]): Uint8Array<ArrayBuffer> {
+  const result = new Uint8Array(
+    values.reduce((total, value) => total + value.length, 0),
+  );
+  let offset = 0;
+  for (const value of values) {
+    result.set(value, offset);
+    offset += value.length;
+  }
+  return result;
+}
+
+function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
+  const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 }
 
 export async function createVapidSigningContext(

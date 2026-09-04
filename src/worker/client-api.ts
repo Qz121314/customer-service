@@ -1106,6 +1106,7 @@ export async function broadcastClientConversationEvent(
     includeAgentInbox,
   });
   const inboxUpdates: Promise<void>[] = [];
+  const reminder = customerReplyReminder(type, details.message);
   if (
     fanoutRooms.includes(`agent-inbox:${conversation.assigned_agent ?? ''}`)
   ) {
@@ -1114,6 +1115,7 @@ export async function broadcastClientConversationEvent(
         type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
+        ...(reminder ? { reminder } : {}),
         ...(overview ? { overview } : {}),
       }),
     );
@@ -1133,6 +1135,21 @@ export async function broadcastClientConversationEvent(
   }
   await Promise.all(inboxUpdates);
   return conversation;
+}
+
+function customerReplyReminder(
+  type: string,
+  message: Record<string, unknown> | undefined,
+): { type: 'CUSTOMER_REPLY'; messageId: string } | null {
+  if (
+    type !== 'message.created' ||
+    message?.direction !== 'customer' ||
+    typeof message.id !== 'string' ||
+    !message.id
+  ) {
+    return null;
+  }
+  return { type: 'CUSTOMER_REPLY', messageId: message.id };
 }
 
 function agentConversationSummary(

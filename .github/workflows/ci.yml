@@ -215,6 +215,7 @@ jobs:
           pnpm exec playwright test \
             test/agent-browser-smoke.spec.mjs \
             test/agent-card-icon-browser-smoke.spec.mjs \
+            test/agent-multi-device-browser-smoke.spec.mjs \
             test/agent-mobile-menu-smoke.spec.mjs \
             --workers=1 \
             --reporter=github

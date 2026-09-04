@@ -1,6 +1,7 @@
 import type { AgentMediaItem } from './agent-media';
 import type {
   AgentAccount,
+  AgentAvailability,
   AgentRoutingScope,
   Conversation,
   ConversationDetail,
@@ -193,18 +194,34 @@ function saveAgentSoundEnabled(agentId: string, enabled: boolean): void {
   }
 }
 
-function emitAgentMessageTone(context: AudioContext): void {
+type AgentReminderType = 'NEW_CONVERSATION' | 'CUSTOMER_REPLY';
+
+function emitAgentMessageTone(
+  context: AudioContext,
+  type: AgentReminderType = 'CUSTOMER_REPLY',
+): void {
   const now = context.currentTime;
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(1, now + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+  gain.gain.exponentialRampToValueAtTime(
+    0.0001,
+    now + (type === 'NEW_CONVERSATION' ? 0.44 : 0.24),
+  );
   gain.connect(context.destination);
 
-  for (const [frequency, offset] of [
-    [660, 0],
-    [880, 0.075],
-  ] as const) {
+  const notes =
+    type === 'NEW_CONVERSATION'
+      ? ([
+          [880, 0],
+          [1175, 0.12],
+          [1320, 0.25],
+        ] as const)
+      : ([
+          [660, 0],
+          [880, 0.075],
+        ] as const);
+  for (const [frequency, offset] of notes) {
     const oscillator = context.createOscillator();
     oscillator.type = 'sine';
     oscillator.frequency.setValueAtTime(frequency, now + offset);
@@ -217,8 +234,15 @@ function emitAgentMessageTone(context: AudioContext): void {
 type InboxRealtimeEvent = {
   type?: string;
   cause?: 'initial_assignment' | 'assignment';
+  agentId?: string;
+  availability?: AgentAvailability;
+  updatedAt?: string;
   conversation?: Conversation;
   overview?: Overview | null;
+  reminder?: {
+    type: AgentReminderType;
+    messageId: string;
+  };
 };
 
 type ThreadRealtimeEvent = {
@@ -451,6 +475,7 @@ export {
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
   emitAgentMessageTone,
+  type AgentReminderType,
   parseRealtimeEvent,
   sortedConversationList,
   compareMessages,

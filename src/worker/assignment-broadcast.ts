@@ -171,6 +171,10 @@ async function broadcastAssignment(
       conversationId: conversation.id,
       conversation: agentConversationSummary(conversation),
       overview,
+      reminder: {
+        type: 'NEW_CONVERSATION',
+        messageId: visitorMessage?.id ?? conversation.id,
+      },
     }),
   ];
   if (conversation.external_id) {

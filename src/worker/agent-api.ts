@@ -43,6 +43,7 @@ type AgentCredentialRow = AgentSession & {
   password_hash: string;
   password_salt: string;
   password_iterations: number;
+  has_active_session: number;
 };
 
 type MessageRow = {
@@ -125,12 +126,18 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
 
   const agent = await c.env.DB.prepare(
-    `SELECT id, name, username, status, is_enabled,
-       password_hash, password_salt, password_iterations
-     FROM agents
-     WHERE lower(username) = lower(?1)
-       AND password_hash IS NOT NULL
-       AND password_salt IS NOT NULL
+    `SELECT a.id, a.name, a.username, a.status, a.is_enabled,
+       a.password_hash, a.password_salt, a.password_iterations,
+       EXISTS (
+         SELECT 1
+         FROM agent_sessions session
+         WHERE session.agent_id = a.id
+           AND datetime(session.expires_at) > CURRENT_TIMESTAMP
+       ) AS has_active_session
+     FROM agents a
+     WHERE lower(a.username) = lower(?1)
+       AND a.password_hash IS NOT NULL
+       AND a.password_salt IS NOT NULL
      LIMIT 1`,
   )
     .bind(username)
@@ -153,6 +160,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     Date.now() + SESSION_TTL_SECONDS * 1000,
   ).toISOString();
   const now = new Date().toISOString();
+  const loginStatus = agent.has_active_session ? agent.status : 'online';
   await c.env.DB.batch([
     c.env.DB.prepare(
       `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
@@ -160,10 +168,10 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     ).bind(sessionId, agent.id, await hashAgentSessionToken(token), expiresAt),
     c.env.DB.prepare(
       `UPDATE agents
-       SET status = 'online', last_login_at = ?1, last_seen_at = ?1,
+       SET status = ?2, last_login_at = ?1, last_seen_at = ?1,
            updated_at = ?1
-       WHERE id = ?2`,
-    ).bind(now, agent.id),
+       WHERE id = ?3`,
+    ).bind(now, loginStatus, agent.id),
     c.env.DB.prepare(
       `DELETE FROM agent_sessions
        WHERE datetime(expires_at) <= CURRENT_TIMESTAMP`,
@@ -183,7 +191,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
       id: agent.id,
       name: agent.name,
       username: agent.username,
-      status: 'online',
+      status: loginStatus,
     },
   });
 });
@@ -191,25 +199,63 @@ agentApi.post('/api/agent/auth/login', async (c) => {
 agentApi.post('/api/agent/auth/logout', async (c) => {
   const agent = await requireAgentSession(c);
   if (agent) {
-    const activeConversationIds = await activeConversationIdsForAgent(
-      c.env.DB,
-      agent.id,
-    );
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
-        agent.id,
-      ),
+    const results = await c.env.DB.batch([
+      c.env.DB.prepare(
+        'DELETE FROM agent_sessions WHERE id = ?1 AND agent_id = ?2',
+      ).bind(agent.session_id, agent.id),
       c.env.DB.prepare(
         `UPDATE agents
          SET status = 'offline', last_seen_at = NULL, updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?1`,
+         WHERE id = ?1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM agent_sessions session
+             WHERE session.agent_id = ?1
+               AND datetime(session.expires_at) > CURRENT_TIMESTAMP
+           )`,
       ).bind(agent.id),
     ]);
-    try {
-      await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
-    } catch (error) {
-      console.warn('agent realtime disconnect failed during logout', error);
+    const finalSessionLoggedOut = Boolean(results[1]?.meta.changes);
+    if (finalSessionLoggedOut) {
+      const activeConversationIds = await activeConversationIdsForAgent(
+        c.env.DB,
+        agent.id,
+      );
+      try {
+        await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
+      } catch (error) {
+        console.warn('agent realtime disconnect failed during logout', error);
+      }
     }
+  }
+  deleteCookie(c, AGENT_SESSION_COOKIE, { path: '/' });
+  return c.json({ ok: true });
+});
+
+agentApi.post('/api/agent/auth/revoke-all', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return unauthorized(c);
+  const activeConversationIds = await activeConversationIdsForAgent(
+    c.env.DB,
+    agent.id,
+  );
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
+      agent.id,
+    ),
+    c.env.DB.prepare(
+      `UPDATE agents
+       SET status = 'offline', last_seen_at = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?1`,
+    ).bind(agent.id),
+  ]);
+  try {
+    await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
+  } catch (error) {
+    console.warn(
+      'agent realtime disconnect failed during session revoke',
+      error,
+    );
   }
   deleteCookie(c, AGENT_SESSION_COOKIE, { path: '/' });
   return c.json({ ok: true });
@@ -244,14 +290,25 @@ agentApi.post('/api/agent/auth/status', async (c) => {
     return c.json({ error: 'INVALID_AGENT_STATUS' }, 400);
   }
 
+  const updatedAt = new Date().toISOString();
   await c.env.DB.prepare(
     `UPDATE agents
-     SET status = ?1, last_seen_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?2`,
+     SET status = ?1, last_seen_at = ?2,
+         updated_at = ?2
+     WHERE id = ?3`,
   )
-    .bind(body.status, agent.id)
+    .bind(body.status, updatedAt, agent.id)
     .run();
+
+  await deferAgentRealtime(
+    c,
+    broadcastConversationRoom(c.env, agentInboxRoom(agent.id), {
+      type: 'agent.availability.changed',
+      agentId: agent.id,
+      availability: body.status,
+      updatedAt,
+    }),
+  );
 
   return c.json({
     ok: true,

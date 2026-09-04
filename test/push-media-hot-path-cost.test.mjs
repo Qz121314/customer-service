@@ -14,7 +14,7 @@ const mediaStore = read('../src/worker/media-store.ts');
 test('agent push keeps expired-subscription cleanup off the message hot path', () => {
   const source = topLevelDeclaration(
     agentPush,
-    'export async function sendAgentPushForConversation',
+    'export async function sendAgentPushForMessage',
   );
 
   assert.equal((source.match(/env\.DB\.prepare/gu) ?? []).length, 1);

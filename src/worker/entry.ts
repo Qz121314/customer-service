@@ -13,7 +13,8 @@ import { agentAvatarApi } from './agent-avatar-api';
 import { mediaApi } from './media-api';
 import { pushApi } from './push-api';
 import { sendVisitorPushForConversation } from './visitor-push';
-import { sendAgentPushForConversation } from './agent-push';
+import { sendAgentPushForMessage } from './agent-push';
+import { agentNotificationForVisitorResponse } from './agent-notification-event';
 import { agentPushApi } from './agent-push-api';
 import { purgeExpiredConversations } from './conversation-retention';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
@@ -44,6 +45,7 @@ type AppEnv = { Bindings: Bindings };
 
 type MediaCompletePayload = {
   conversationId?: string;
+  messageId?: string;
   duplicate?: boolean;
   [key: string]: unknown;
 };
@@ -64,9 +66,6 @@ const AGENT_TEXT_MESSAGE_PATH =
 const AGENT_ATTACHMENT_MESSAGE_PATH =
   /^\/api\/agent\/conversations\/([^/]+)\/attachments$/u;
 const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
-const CLIENT_CONVERSATION_CREATE_PATH = /^\/client\/v1\/conversations$/u;
-const CLIENT_MESSAGE_PATH = /^\/client\/v1\/conversations\/([^/]+)\/messages$/u;
-const CLIENT_MEDIA_COMPLETE_PATH = /^\/client\/v1\/media\/[^/]+\/complete$/u;
 
 // Authentication is deliberately rate-limited before any D1 lookup or password
 // derivation. The Cloudflare Rate Limiter binding keeps this guard off D1's
@@ -99,23 +98,14 @@ app.use('/client/v1/*', async (c, next) => {
   if (c.req.method !== 'POST' || !c.res.ok) return;
 
   const pathname = new URL(c.req.url).pathname;
-  let conversationId: string | null = null;
-  const messageMatch = pathname.match(CLIENT_MESSAGE_PATH);
-  if (messageMatch?.[1] && c.res.status === 201) {
-    conversationId = decodeURIComponent(messageMatch[1]);
-  } else if (
-    CLIENT_CONVERSATION_CREATE_PATH.test(pathname) &&
-    c.res.status === 201
-  ) {
-    conversationId = await responseConversationId(c.res);
-  } else if (CLIENT_MEDIA_COMPLETE_PATH.test(pathname)) {
-    const payload = await responseMediaComplete(c.res);
-    if (!payload?.duplicate) conversationId = payload?.conversationId ?? null;
-  }
-  if (!conversationId) return;
+  const notification = await agentNotificationForVisitorResponse(
+    pathname,
+    c.res,
+  );
+  if (!notification) return;
 
   c.executionCtx.waitUntil(
-    sendAgentPushForConversation(c.env, conversationId).catch((error) => {
+    sendAgentPushForMessage(c.env, notification).catch((error) => {
       console.warn('Agent push dispatch failed.', error);
     }),
   );
@@ -224,28 +214,4 @@ function isProtocolNamespacePath(pathname: string): boolean {
 function isSpaNavigationRequest(request: Request): boolean {
   if (request.method !== 'GET' && request.method !== 'HEAD') return false;
   return (request.headers.get('Accept') ?? '').includes('text/html');
-}
-
-async function responseConversationId(
-  response: Response,
-): Promise<string | null> {
-  try {
-    const value = (await response.clone().json()) as {
-      conversation?: { id?: string };
-    };
-    const id = value.conversation?.id;
-    return typeof id === 'string' && id ? id : null;
-  } catch {
-    return null;
-  }
-}
-
-async function responseMediaComplete(
-  response: Response,
-): Promise<MediaCompletePayload | null> {
-  try {
-    return (await response.clone().json()) as MediaCompletePayload;
-  } catch {
-    return null;
-  }
 }

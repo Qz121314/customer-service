@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   createVapidSigningContext,
   sendDataLessPush,
+  sendPayloadPush,
   sendVisitorPushForConversation,
 } from '../src/worker/visitor-push.ts';
 
@@ -19,6 +20,31 @@ async function createConfig() {
     ),
     subject: 'https://customer-service.example',
   };
+}
+
+function concatBytes(...values) {
+  const result = new Uint8Array(
+    values.reduce((total, value) => total + value.length, 0),
+  );
+  let offset = 0;
+  for (const value of values) {
+    result.set(value, offset);
+    offset += value.length;
+  }
+  return result;
+}
+
+async function hkdf(input, salt, info, byteLength) {
+  const key = await crypto.subtle.importKey('raw', input, 'HKDF', false, [
+    'deriveBits',
+  ]);
+  return new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: 'HKDF', hash: 'SHA-256', salt, info },
+      key,
+      byteLength * 8,
+    ),
+  );
 }
 
 async function sendBatch(endpoints, options = {}) {
@@ -107,6 +133,118 @@ test('single endpoint preserves TTL, Topic, and VAPID authorization behavior', a
   assert.match(headers.Authorization, /^vapid t=.+, k=public-key$/u);
   assert.equal(headers.TTL, '86400');
   assert.equal(headers.Topic, 'agent-unread');
+});
+
+test('payload push encrypts exact notification identity without a collapsing topic', async () => {
+  const clientKeys = await crypto.subtle.generateKey(
+    { name: 'ECDH', namedCurve: 'P-256' },
+    true,
+    ['deriveBits'],
+  );
+  const clientPublic = new Uint8Array(
+    await crypto.subtle.exportKey('raw', clientKeys.publicKey),
+  );
+  const authSecret = crypto.getRandomValues(new Uint8Array(16));
+  const notification = {
+    type: 'CUSTOMER_REPLY',
+    conversationId: 'conversation-12',
+    messageId: 'message-34',
+    title: '客户回复',
+    body: '客户：还在吗？',
+    conversationUnreadCount: 3,
+  };
+  let request;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    request = { url: String(input), init };
+    return new Response(null, { status: 201 });
+  };
+
+  try {
+    const context = await createVapidSigningContext(await createConfig());
+    await sendPayloadPush(
+      'https://push.example.test/message-34',
+      context,
+      {
+        p256dh: Buffer.from(clientPublic).toString('base64url'),
+        auth: Buffer.from(authSecret).toString('base64url'),
+      },
+      notification,
+      { ttlSeconds: 86_400 },
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(request.init.headers['Content-Encoding'], 'aes128gcm');
+  assert.equal(
+    request.init.headers['Content-Type'],
+    'application/octet-stream',
+  );
+  assert.equal(request.init.headers.TTL, '86400');
+  assert.equal(request.init.headers.Topic, undefined);
+
+  const record = new Uint8Array(request.init.body);
+  const salt = record.slice(0, 16);
+  assert.equal(new DataView(record.buffer).getUint32(16), 4096);
+  const serverKeyLength = record[20];
+  const serverPublic = record.slice(21, 21 + serverKeyLength);
+  const ciphertext = record.slice(21 + serverKeyLength);
+  const serverKey = await crypto.subtle.importKey(
+    'raw',
+    serverPublic,
+    { name: 'ECDH', namedCurve: 'P-256' },
+    false,
+    [],
+  );
+  const sharedSecret = new Uint8Array(
+    await crypto.subtle.deriveBits(
+      { name: 'ECDH', public: serverKey },
+      clientKeys.privateKey,
+      256,
+    ),
+  );
+  const inputKeyMaterial = await hkdf(
+    sharedSecret,
+    authSecret,
+    concatBytes(
+      new TextEncoder().encode('WebPush: info\0'),
+      clientPublic,
+      serverPublic,
+    ),
+    32,
+  );
+  const contentEncryptionKey = await hkdf(
+    inputKeyMaterial,
+    salt,
+    new TextEncoder().encode('Content-Encoding: aes128gcm\0'),
+    16,
+  );
+  const nonce = await hkdf(
+    inputKeyMaterial,
+    salt,
+    new TextEncoder().encode('Content-Encoding: nonce\0'),
+    12,
+  );
+  const aesKey = await crypto.subtle.importKey(
+    'raw',
+    contentEncryptionKey,
+    'AES-GCM',
+    false,
+    ['decrypt'],
+  );
+  const plaintext = new Uint8Array(
+    await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: nonce, tagLength: 128 },
+      aesKey,
+      ciphertext,
+    ),
+  );
+  assert.equal(plaintext.at(-1), 2);
+  assert.deepEqual(
+    JSON.parse(new TextDecoder().decode(plaintext.slice(0, -1))),
+    notification,
+  );
 });
 
 test('visitor push still removes terminal 404 and 410 endpoints', async () => {

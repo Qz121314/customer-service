@@ -50,6 +50,7 @@ import {
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
   emitAgentMessageTone,
+  type AgentReminderType,
   parseRealtimeEvent,
   sortedConversationList,
   mergeAgentConversationPage,
@@ -83,6 +84,7 @@ import {
   disableAgentNotifications,
   enableAgentNotifications,
   prepareAgentNotifications,
+  updateAgentAppBadge,
   type AgentNotificationState,
 } from './agent-push';
 import { UiIcon } from './icons';
@@ -415,6 +417,7 @@ function AgentWorkspace({
   const [visitorTyping, setVisitorTyping] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -427,6 +430,7 @@ function AgentWorkspace({
   const soundEnabledRef = useRef(soundEnabled);
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
+  const remindedMessageIdsRef = useRef(new Set<string>());
   const lastScrolledConversationRef = useRef<string | null>(null);
   const pendingHistoryScrollRef = useRef<{
     scrollHeight: number;
@@ -542,37 +546,68 @@ function AgentWorkspace({
   }, [identity.id, soundEnabled]);
 
   const ensureSoundContext = useCallback((): AudioContext | null => {
-    if (soundContextRef.current) return soundContextRef.current;
+    if (soundContextRef.current) {
+      if (soundContextRef.current.state === 'running') setAudioUnlocked(true);
+      return soundContextRef.current;
+    }
     try {
       soundContextRef.current = new AudioContext();
+      setAudioUnlocked(soundContextRef.current.state === 'running');
       return soundContextRef.current;
     } catch {
       return null;
     }
   }, []);
 
-  const playIncomingTone = useCallback(() => {
-    if (!soundEnabledRef.current || document.visibilityState !== 'visible') {
-      return;
-    }
-    const context = ensureSoundContext();
-    if (!context) return;
-    if (context.state === 'running') {
-      emitAgentMessageTone(context);
-      return;
-    }
-    void context
-      .resume()
-      .then(() => emitAgentMessageTone(context))
-      .catch(() => undefined);
-  }, [ensureSoundContext]);
+  const playIncomingTone = useCallback(
+    (type: AgentReminderType) => {
+      if (!soundEnabledRef.current || document.visibilityState !== 'visible') {
+        return;
+      }
+      const context = ensureSoundContext();
+      if (!context) return;
+      if (context.state === 'running') {
+        emitAgentMessageTone(context, type);
+        return;
+      }
+      void context
+        .resume()
+        .then(() => {
+          setAudioUnlocked(context.state === 'running');
+          emitAgentMessageTone(context, type);
+        })
+        .catch(() => undefined);
+    },
+    [ensureSoundContext],
+  );
+
+  const alertForReminder = useCallback(
+    (type: AgentReminderType, messageId: string) => {
+      const seen = remindedMessageIdsRef.current;
+      if (seen.has(messageId)) return;
+      seen.add(messageId);
+      if (seen.size > 500) seen.delete(seen.values().next().value!);
+      playIncomingTone(type);
+      if (document.visibilityState === 'visible' && 'vibrate' in navigator) {
+        navigator.vibrate(
+          type === 'NEW_CONVERSATION'
+            ? [220, 100, 220, 100, 320]
+            : [220, 100, 220],
+        );
+      }
+    },
+    [playIncomingTone],
+  );
 
   useEffect(() => {
     const primeSound = () => {
       if (!soundEnabledRef.current) return;
       const context = ensureSoundContext();
       if (context?.state === 'suspended') {
-        void context.resume().catch(() => undefined);
+        void context
+          .resume()
+          .then(() => setAudioUnlocked(context.state === 'running'))
+          .catch(() => undefined);
       }
     };
     window.addEventListener('pointerdown', primeSound, { once: true });
@@ -628,6 +663,10 @@ function AgentWorkspace({
     return () => {
       document.title = baseTitle;
     };
+  }, [totalUnread]);
+
+  useEffect(() => {
+    updateAgentAppBadge(totalUnread);
   }, [totalUnread]);
 
   const applyInbox = useCallback((inbox: AgentInbox) => {
@@ -759,6 +798,14 @@ function AgentWorkspace({
         const payload = parseRealtimeEvent<InboxRealtimeEvent>(event);
         if (!payload || payload.type === 'ready' || payload.type === 'pong')
           return;
+        if (
+          payload.type === 'agent.availability.changed' &&
+          payload.agentId === identity.id &&
+          (payload.availability === 'online' || payload.availability === 'busy')
+        ) {
+          setAvailability(payload.availability);
+          return;
+        }
         if (payload.type !== 'conversation.changed' || !payload.conversation) {
           void refresh().catch(() => undefined);
           return;
@@ -774,12 +821,16 @@ function AgentWorkspace({
         } else {
           unreadCountRef.current.delete(next.id);
         }
-        if (
+        if (belongsToAgent && payload.reminder?.messageId) {
+          alertForReminder(payload.reminder.type, payload.reminder.messageId);
+        } else if (
           belongsToAgent &&
-          (isNewAssignment || next.agent_unread_count > previousUnread) &&
-          document.visibilityState === 'visible'
+          (isNewAssignment || next.agent_unread_count > previousUnread)
         ) {
-          playIncomingTone();
+          alertForReminder(
+            isNewAssignment ? 'NEW_CONVERSATION' : 'CUSTOMER_REPLY',
+            `${next.id}:${next.last_message_at}`,
+          );
         }
         setConversations((current) => {
           const withoutCurrent = current.filter((item) => item.id !== next.id);
@@ -821,7 +872,7 @@ function AgentWorkspace({
       if (timer !== null) window.clearTimeout(timer);
       if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
-  }, [identity.id, playIncomingTone, recoverAgentInbox, refresh]);
+  }, [alertForReminder, identity.id, recoverAgentInbox, refresh]);
 
   const sendAgentTyping = useCallback((active: boolean) => {
     agentTypingDesiredRef.current = active;
@@ -1640,12 +1691,15 @@ function AgentWorkspace({
     const context = ensureSoundContext();
     if (!context) return;
     if (context.state === 'running') {
-      emitAgentMessageTone(context);
+      emitAgentMessageTone(context, 'CUSTOMER_REPLY');
       return;
     }
     void context
       .resume()
-      .then(() => emitAgentMessageTone(context))
+      .then(() => {
+        setAudioUnlocked(context.state === 'running');
+        emitAgentMessageTone(context, 'CUSTOMER_REPLY');
+      })
       .catch(() => undefined);
   }
 
@@ -1741,6 +1795,8 @@ function AgentWorkspace({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
+        realtimeReady={inboxConnected}
+        audioReady={soundEnabled && audioUnlocked}
         onNicknameChange={handleNicknameChange}
         onToggleNotifications={handleToggleNotifications}
         onToggleSound={handleToggleSound}

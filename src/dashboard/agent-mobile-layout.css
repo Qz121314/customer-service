@@ -1500,6 +1500,51 @@
       0 10px 28px rgb(15 23 42 / 3.5%);
   }
 
+  .workspace-shell .agent-notification-health {
+    display: grid;
+    gap: 10px;
+    padding: 15px;
+    border: 1px solid #e4e7ec;
+    border-radius: 18px;
+    background: #fff;
+  }
+
+  .workspace-shell .agent-notification-health > strong {
+    color: #1b2028;
+    font-size: 14px;
+  }
+
+  .workspace-shell .agent-notification-health dl {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+  }
+
+  .workspace-shell .agent-notification-health dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #657080;
+    font-size: 11px;
+  }
+
+  .workspace-shell .agent-notification-health dt,
+  .workspace-shell .agent-notification-health dd {
+    margin: 0;
+  }
+
+  .workspace-shell .agent-notification-health dd {
+    color: #3f7c5d;
+    font-weight: 700;
+  }
+
+  .workspace-shell .agent-notification-health > p {
+    margin: 0;
+    color: #a65f20;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
   .workspace-shell .mobile-agent-settings-item {
     min-height: 64px;
     grid-template-columns: 38px minmax(0, 1fr) auto;

@@ -5,7 +5,7 @@ const AGENT_NOTIFICATION_PARAM = 'notification';
 const AGENT_NOTIFICATION_TARGET = 'latest-unread';
 const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
 const AGENT_SERVICE_WORKER_SCOPE = '/agent';
-const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v2';
+const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v3';
 const AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
 
 type PushConfig = {
@@ -14,21 +14,24 @@ type PushConfig = {
 };
 
 export function hasAgentNotificationOpenIntent(): boolean {
-  return (
-    new URLSearchParams(window.location.search).get(
-      AGENT_NOTIFICATION_PARAM,
-    ) === AGENT_NOTIFICATION_TARGET
-  );
+  return agentNotificationOpenTarget() !== null;
+}
+
+export function agentNotificationOpenTarget(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const conversationId = params.get('conversationId')?.trim();
+  if (conversationId) return conversationId;
+  return params.get(AGENT_NOTIFICATION_PARAM) === AGENT_NOTIFICATION_TARGET
+    ? AGENT_NOTIFICATION_TARGET
+    : null;
 }
 
 export function clearAgentNotificationOpenIntent(): void {
   const url = new URL(window.location.href);
-  if (
-    url.searchParams.get(AGENT_NOTIFICATION_PARAM) !== AGENT_NOTIFICATION_TARGET
-  ) {
-    return;
-  }
+  if (!agentNotificationOpenTarget()) return;
   url.searchParams.delete(AGENT_NOTIFICATION_PARAM);
+  url.searchParams.delete('conversationId');
+  url.searchParams.delete('messageId');
   window.history.replaceState(
     window.history.state,
     '',
@@ -39,10 +42,15 @@ export function clearAgentNotificationOpenIntent(): void {
 export function isAgentNotificationOpenMessage(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return (
-    record.type === AGENT_NOTIFICATION_MESSAGE_TYPE &&
-    record.target === AGENT_NOTIFICATION_TARGET
-  );
+  return record.type === AGENT_NOTIFICATION_MESSAGE_TYPE;
+}
+
+export function agentNotificationMessageTarget(value: unknown): string | null {
+  if (!isAgentNotificationOpenMessage(value)) return null;
+  const conversationId = (value as Record<string, unknown>).conversationId;
+  return typeof conversationId === 'string' && conversationId
+    ? conversationId
+    : AGENT_NOTIFICATION_TARGET;
 }
 
 export async function prepareAgentNotifications(
@@ -107,6 +115,22 @@ export async function disableAgentNotifications(): Promise<AgentNotificationStat
   }
   clearAgentPushBinding();
   return Notification.permission === 'denied' ? 'blocked' : 'disabled';
+}
+
+export function updateAgentAppBadge(unreadMessageCount: number): void {
+  const badgeNavigator = navigator as Navigator & {
+    setAppBadge?: (count?: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  const task =
+    unreadMessageCount > 0
+      ? badgeNavigator.setAppBadge?.(unreadMessageCount)
+      : badgeNavigator.clearAppBadge?.();
+  void task?.catch(() => undefined);
+  navigator.serviceWorker?.controller?.postMessage({
+    type: 'agent.badge.sync',
+    unreadMessageCount,
+  });
 }
 
 function notificationPrerequisite(): AgentNotificationState | null {

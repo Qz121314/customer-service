@@ -1,59 +1,80 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { URL } from 'node:url';
 import test from 'node:test';
+import { URL } from 'node:url';
+import {
+  agentNotificationMessageTarget,
+  agentNotificationOpenTarget,
+  clearAgentNotificationOpenIntent,
+} from '../src/dashboard/agent-push.ts';
 
 function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-function surfaceSource(paths) {
-  return paths.map(source).join('\n');
+function withWindow(url, run) {
+  const original = globalThis.window;
+  let currentUrl = new URL(url);
+  globalThis.window = {
+    get location() {
+      return currentUrl;
+    },
+    history: {
+      state: null,
+      replaceState(_state, _unused, next) {
+        currentUrl = new URL(next, currentUrl);
+      },
+    },
+  };
+  try {
+    return run(() => currentUrl);
+  } finally {
+    globalThis.window = original;
+  }
 }
 
-test('agent push opens the latest unread thread without reloading the workspace', () => {
+test('notification URL targets the exact conversation and is cleared after use', () => {
+  withWindow(
+    'https://service.example/agent?notification=message&conversationId=conversation-42&messageId=message-9',
+    (currentUrl) => {
+      assert.equal(agentNotificationOpenTarget(), 'conversation-42');
+      clearAgentNotificationOpenIntent();
+      assert.equal(agentNotificationOpenTarget(), null);
+      assert.equal(currentUrl().search, '');
+    },
+  );
+});
+
+test('service worker open messages prefer an exact conversation with legacy fallback', () => {
+  assert.equal(
+    agentNotificationMessageTarget({
+      type: 'agent.notification.open',
+      target: 'conversation',
+      conversationId: 'conversation-7',
+      messageId: 'message-3',
+    }),
+    'conversation-7',
+  );
+  assert.equal(
+    agentNotificationMessageTarget({
+      type: 'agent.notification.open',
+      target: 'latest-unread',
+    }),
+    'latest-unread',
+  );
+  assert.equal(agentNotificationMessageTarget({ type: 'other' }), null);
+});
+
+test('service worker focuses an existing agent PWA with exact message identity', () => {
   const serviceWorker = source('../public/agent-sw.js');
-  const pushClient = source('../src/dashboard/agent-push.ts');
   const inbox = source('../src/dashboard/AgentWorkspacePanels.tsx');
-  const statistics = surfaceSource([
-    '../src/dashboard/AgentStatisticsWorkspace.tsx',
-    '../src/dashboard/AgentStatisticsWorkspaceImpl.tsx',
-    '../src/dashboard/AgentStatisticsWorkspaceRuntime.tsx',
-  ]);
 
-  for (const contract of [
-    "const AGENT_NOTIFICATION_URL = '/agent?notification=latest-unread';",
-    "type: 'agent.notification.open'",
-    "target: 'latest-unread'",
-    'existingAgent.postMessage({',
-    'await existingAgent.focus();',
-  ]) {
-    assert.ok(serviceWorker.includes(contract), contract);
-  }
-
-  assert.ok(!serviceWorker.includes('existingAgent.navigate('));
-
-  for (const contract of [
-    'hasAgentNotificationOpenIntent',
-    'clearAgentNotificationOpenIntent',
-    'isAgentNotificationOpenMessage',
-  ]) {
-    assert.ok(pushClient.includes(contract), contract);
-  }
-
-  for (const contract of [
-    'notificationOverviewBaselineRef',
-    'conversation.agent_unread_count > 0',
-    'rightTime - leftTime',
-    "onFilterChange('all')",
-    "onSearchChange('')",
-    'clearAgentNotificationOpenIntent();',
-    "selectConversation(target.id, 'notification')",
-  ]) {
-    assert.ok(inbox.includes(contract), contract);
-  }
-
-  assert.ok(!inbox.includes('heartbeat('));
-  assert.ok(!inbox.includes('getAgentInbox('));
-  assert.ok(statistics.includes('isAgentNotificationOpenMessage(event.data)'));
+  assert.match(serviceWorker, /conversationId: event\.notification\.data/u);
+  assert.match(serviceWorker, /messageId: event\.notification\.data/u);
+  assert.match(serviceWorker, /await existingAgent\.focus\(\)/u);
+  assert.doesNotMatch(serviceWorker, /existingAgent\.navigate\(/u);
+  assert.match(inbox, /conversation\.id === notificationOpenPending/u);
+  assert.match(inbox, /selectConversation\(target\.id, 'notification'\)/u);
+  assert.doesNotMatch(inbox, /heartbeat\(/u);
+  assert.doesNotMatch(inbox, /getAgentInbox\(/u);
 });

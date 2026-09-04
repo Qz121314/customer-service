@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 export const AGENT_SESSION_COOKIE = 'cs_agent_session';
 
 export type AgentSessionIdentity = {
+  session_id: string;
   id: string;
   name: string;
   username: string;
@@ -21,7 +22,7 @@ export async function authenticateAgentSession(
   if (!token) return null;
   return db
     .prepare(
-      `SELECT a.id, a.name, a.username, a.status, a.is_enabled,
+      `SELECT s.id AS session_id, a.id, a.name, a.username, a.status, a.is_enabled,
          a.avatar_version, a.auto_greeting_enabled, a.auto_greeting_text
        FROM agent_sessions s
        JOIN agents a ON a.id = s.agent_id

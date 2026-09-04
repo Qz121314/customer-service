@@ -3,7 +3,9 @@
 const AGENT_WORKSPACE_URL = '/agent';
 const AGENT_SHELL_URL = '/index.html';
 const AGENT_NOTIFICATION_URL = '/agent?notification=latest-unread';
-const AGENT_CACHE = 'agent-workspace-v4';
+const AGENT_CACHE = 'agent-workspace-v5';
+const conversationUnread = new Map();
+let badgeTotal = 0;
 const APP_SHELL = [
   AGENT_SHELL_URL,
   '/agent.webmanifest',
@@ -92,22 +94,39 @@ self.addEventListener('push', (event) => {
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
       .then((clients) => {
+        const payload = pushPayload(event);
+        const targetUrl = notificationUrl(payload);
         const foreground = clients.some(
           (client) => client.visibilityState === 'visible',
         );
-        return self.registration.showNotification('客服坐席有新消息', {
-          body: '有新的访客消息等待处理',
+        updateBadgeFromPush(payload);
+        return self.registration.showNotification(payload.title, {
+          body: payload.body,
           icon: '/icons/customer-service-192.svg',
           badge: '/icons/customer-service-192.svg',
-          tag: foreground
-            ? 'agent-foreground-message'
-            : `agent-new-message-${Date.now()}`,
+          tag: `agent-message-${payload.messageId}`,
           silent: foreground,
-          vibrate: foreground ? undefined : [200, 100, 200],
-          data: { url: AGENT_NOTIFICATION_URL },
+          renotify: false,
+          vibrate:
+            foreground || payload.type !== 'NEW_CONVERSATION'
+              ? foreground
+                ? undefined
+                : [220, 100, 220]
+              : [220, 100, 220, 100, 320],
+          data: {
+            url: targetUrl,
+            conversationId: payload.conversationId,
+            messageId: payload.messageId,
+          },
         });
       }),
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type !== 'agent.badge.sync') return;
+  badgeTotal = Math.max(0, Number(event.data.unreadMessageCount) || 0);
+  updateAppBadge(badgeTotal);
 });
 
 self.addEventListener('notificationclick', (event) => {
@@ -130,7 +149,11 @@ self.addEventListener('notificationclick', (event) => {
         if (existingAgent) {
           existingAgent.postMessage({
             type: 'agent.notification.open',
-            target: 'latest-unread',
+            target: event.notification.data?.conversationId
+              ? 'conversation'
+              : 'latest-unread',
+            conversationId: event.notification.data?.conversationId || null,
+            messageId: event.notification.data?.messageId || null,
           });
           await existingAgent.focus();
           return;
@@ -139,3 +162,62 @@ self.addEventListener('notificationclick', (event) => {
       }),
   );
 });
+
+function pushPayload(event) {
+  try {
+    const value = event.data?.json();
+    if (
+      value &&
+      (value.type === 'NEW_CONVERSATION' || value.type === 'CUSTOMER_REPLY') &&
+      typeof value.conversationId === 'string' &&
+      typeof value.messageId === 'string'
+    ) {
+      return {
+        ...value,
+        title:
+          typeof value.title === 'string' ? value.title : '客服坐席有新消息',
+        body:
+          typeof value.body === 'string'
+            ? value.body
+            : '有新的访客消息等待处理',
+      };
+    }
+  } catch {
+    // Existing data-less subscriptions fall back until the device rebinds.
+  }
+  return {
+    type: 'CUSTOMER_REPLY',
+    conversationId: '',
+    messageId: `legacy-${Date.now()}`,
+    title: '客服坐席有新消息',
+    body: '有新的访客消息等待处理',
+    conversationUnreadCount: 1,
+  };
+}
+
+function notificationUrl(payload) {
+  if (!payload.conversationId) return AGENT_NOTIFICATION_URL;
+  const url = new URL(AGENT_WORKSPACE_URL, self.location.origin);
+  url.searchParams.set('notification', 'message');
+  url.searchParams.set('conversationId', payload.conversationId);
+  url.searchParams.set('messageId', payload.messageId);
+  return `${url.pathname}${url.search}`;
+}
+
+function updateBadgeFromPush(payload) {
+  if (!payload.conversationId) return;
+  const next = Math.max(0, Number(payload.conversationUnreadCount) || 0);
+  const previous =
+    conversationUnread.get(payload.conversationId) ?? Math.max(0, next - 1);
+  conversationUnread.set(payload.conversationId, next);
+  badgeTotal = Math.max(0, badgeTotal + next - previous);
+  updateAppBadge(badgeTotal);
+}
+
+function updateAppBadge(count) {
+  const task =
+    count > 0
+      ? self.navigator.setAppBadge?.(count)
+      : self.navigator.clearAppBadge?.();
+  void task?.catch(() => undefined);
+}
