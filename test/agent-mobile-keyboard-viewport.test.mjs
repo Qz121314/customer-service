@@ -9,7 +9,9 @@ function source(path) {
 
 function cssRule(styles, selector) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = styles.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`));
+  const match = styles.match(
+    new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`),
+  );
   assert.ok(match, `missing CSS rule: ${selector}`);
   return match[1];
 }
@@ -102,10 +104,7 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
     'composer must never auto-place into the 1fr message row',
   );
   assert.match(
-    cssRule(
-      routeLayout,
-      '.workspace-shell.is-thread-open .thread-pane',
-    ),
+    cssRule(routeLayout, '.workspace-shell.is-thread-open .thread-pane'),
     /display:\s*grid;/,
     'mobile thread-open override must preserve the chat grid contract',
   );
