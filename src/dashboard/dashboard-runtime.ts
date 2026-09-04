@@ -298,16 +298,15 @@ function agentToneProfile(
         waveform: 'sine',
         peak: 0.92,
         release: isNewConversation ? 0.42 : 0.28,
-        noteDuration: 0.15,
+        noteDuration: 0.08,
         notes: isNewConversation
           ? [
-              [784, 0],
-              [1047, 0.11],
-              [1319, 0.24],
+              [880, 0],
+              [1319, 0.27],
             ]
           : [
               [784, 0],
-              [1047, 0.11],
+              [1047, 0.17],
             ],
       };
     case 'crisp':
@@ -315,16 +314,15 @@ function agentToneProfile(
         waveform: 'triangle',
         peak: 0.88,
         release: isNewConversation ? 0.4 : 0.26,
-        noteDuration: 0.12,
+        noteDuration: 0.06,
         notes: isNewConversation
           ? [
               [1319, 0],
-              [1760, 0.1],
-              [2093, 0.22],
+              [2093, 0.2],
             ]
           : [
               [1319, 0],
-              [1760, 0.1],
+              [1760, 0.14],
             ],
       };
     case 'triple':
@@ -332,18 +330,17 @@ function agentToneProfile(
         waveform: 'sine',
         peak: 0.96,
         release: isNewConversation ? 0.48 : 0.34,
-        noteDuration: 0.14,
+        noteDuration: 0.065,
         notes: isNewConversation
           ? [
               [659, 0],
-              [880, 0.09],
-              [1175, 0.18],
-              [1319, 0.3],
+              [880, 0.17],
+              [1175, 0.34],
             ]
           : [
               [659, 0],
-              [880, 0.09],
-              [1175, 0.18],
+              [880, 0.12],
+              [1175, 0.24],
             ],
       };
     case 'soft':
@@ -351,16 +348,15 @@ function agentToneProfile(
         waveform: 'sine',
         peak: 0.55,
         release: isNewConversation ? 0.5 : 0.34,
-        noteDuration: 0.18,
+        noteDuration: 0.09,
         notes: isNewConversation
           ? [
               [523, 0],
-              [659, 0.14],
-              [784, 0.28],
+              [784, 0.26],
             ]
           : [
               [523, 0],
-              [659, 0.14],
+              [659, 0.18],
             ],
       };
     case 'strong':
@@ -369,18 +365,18 @@ function agentToneProfile(
         waveform: 'triangle',
         peak: 1,
         release: isNewConversation ? 0.5 : 0.34,
-        noteDuration: 0.16,
+        noteDuration: 0.07,
         notes: isNewConversation
           ? [
               [880, 0],
-              [1175, 0.09],
-              [1568, 0.18],
-              [1760, 0.3],
+              [1175, 0.12],
+              [1568, 0.24],
+              [1760, 0.36],
             ]
           : [
               [880, 0],
-              [1175, 0.07],
-              [1568, 0.15],
+              [1175, 0.12],
+              [1568, 0.24],
             ],
       };
   }
