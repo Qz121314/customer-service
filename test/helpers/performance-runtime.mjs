@@ -354,4 +354,3 @@ export function executionsMatching(metrics, pattern, kind) {
 export function changedRows(executions) {
   return executions.reduce((sum, execution) => sum + execution.changes, 0);
 }
-

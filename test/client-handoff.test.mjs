@@ -1115,4 +1115,3 @@ test('configured greeting is returned immediately from the same CTA start reques
 
   database.close();
 });
-

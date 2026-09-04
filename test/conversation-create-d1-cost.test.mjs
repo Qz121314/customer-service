@@ -589,4 +589,3 @@ test('concurrent duplicate claim produces one owner, one quota consumption and o
   );
   database.close();
 });
-

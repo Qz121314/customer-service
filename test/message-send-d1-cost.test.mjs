@@ -512,4 +512,3 @@ test('visitor duplicate returns the existing message without a second state muta
   );
   database.close();
 });
-

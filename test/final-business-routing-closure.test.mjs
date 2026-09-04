@@ -245,4 +245,3 @@ test('only online agents participate in site-wide round robin across products', 
 
   database.close();
 });
-
