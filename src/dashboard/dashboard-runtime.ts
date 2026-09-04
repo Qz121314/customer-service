@@ -194,6 +194,42 @@ function saveAgentSoundEnabled(agentId: string, enabled: boolean): void {
   }
 }
 
+type AgentSoundPreset = 'strong' | 'classic' | 'crisp' | 'triple' | 'soft';
+
+const AGENT_SOUND_PRESET_OPTIONS: readonly {
+  id: AgentSoundPreset;
+  label: string;
+}[] = [
+  { id: 'strong', label: '强提醒' },
+  { id: 'classic', label: '经典双音（QQ 风格）' },
+  { id: 'crisp', label: '清脆提示（Apple 风格）' },
+  { id: 'triple', label: '三连音' },
+  { id: 'soft', label: '柔和' },
+];
+
+const AGENT_SOUND_PRESET_KEY = 'cs-agent-sound-preset';
+
+function isAgentSoundPreset(value: string | null): value is AgentSoundPreset {
+  return AGENT_SOUND_PRESET_OPTIONS.some((option) => option.id === value);
+}
+
+function loadAgentSoundPreset(): AgentSoundPreset {
+  try {
+    const value = window.localStorage.getItem(AGENT_SOUND_PRESET_KEY);
+    return isAgentSoundPreset(value) ? value : 'strong';
+  } catch {
+    return 'strong';
+  }
+}
+
+function saveAgentSoundPreset(preset: AgentSoundPreset): void {
+  try {
+    window.localStorage.setItem(AGENT_SOUND_PRESET_KEY, preset);
+  } catch {
+    // Sound preset is device-local and must never interrupt reception work.
+  }
+}
+
 function loadAgentVibrationEnabled(agentId: string): boolean {
   try {
     return (
@@ -243,38 +279,133 @@ function rememberAgentReminderMessage(
   return true;
 }
 
+type AgentToneProfile = {
+  waveform: OscillatorType;
+  peak: number;
+  release: number;
+  noteDuration: number;
+  notes: readonly (readonly [frequency: number, offset: number])[];
+};
+
+function agentToneProfile(
+  preset: AgentSoundPreset,
+  type: AgentReminderType,
+): AgentToneProfile {
+  const isNewConversation = type === 'NEW_CONVERSATION';
+  switch (preset) {
+    case 'classic':
+      return {
+        waveform: 'sine',
+        peak: 0.92,
+        release: isNewConversation ? 0.42 : 0.28,
+        noteDuration: 0.15,
+        notes: isNewConversation
+          ? [
+              [784, 0],
+              [1047, 0.11],
+              [1319, 0.24],
+            ]
+          : [
+              [784, 0],
+              [1047, 0.11],
+            ],
+      };
+    case 'crisp':
+      return {
+        waveform: 'triangle',
+        peak: 0.88,
+        release: isNewConversation ? 0.4 : 0.26,
+        noteDuration: 0.12,
+        notes: isNewConversation
+          ? [
+              [1319, 0],
+              [1760, 0.1],
+              [2093, 0.22],
+            ]
+          : [
+              [1319, 0],
+              [1760, 0.1],
+            ],
+      };
+    case 'triple':
+      return {
+        waveform: 'sine',
+        peak: 0.96,
+        release: isNewConversation ? 0.48 : 0.34,
+        noteDuration: 0.14,
+        notes: isNewConversation
+          ? [
+              [659, 0],
+              [880, 0.09],
+              [1175, 0.18],
+              [1319, 0.3],
+            ]
+          : [
+              [659, 0],
+              [880, 0.09],
+              [1175, 0.18],
+            ],
+      };
+    case 'soft':
+      return {
+        waveform: 'sine',
+        peak: 0.55,
+        release: isNewConversation ? 0.5 : 0.34,
+        noteDuration: 0.18,
+        notes: isNewConversation
+          ? [
+              [523, 0],
+              [659, 0.14],
+              [784, 0.28],
+            ]
+          : [
+              [523, 0],
+              [659, 0.14],
+            ],
+      };
+    case 'strong':
+    default:
+      return {
+        waveform: 'triangle',
+        peak: 1,
+        release: isNewConversation ? 0.5 : 0.34,
+        noteDuration: 0.16,
+        notes: isNewConversation
+          ? [
+              [880, 0],
+              [1175, 0.09],
+              [1568, 0.18],
+              [1760, 0.3],
+            ]
+          : [
+              [880, 0],
+              [1175, 0.07],
+              [1568, 0.15],
+            ],
+      };
+  }
+}
+
 function emitAgentMessageTone(
   context: AudioContext,
   type: AgentReminderType = 'CUSTOMER_REPLY',
+  preset: AgentSoundPreset = loadAgentSoundPreset(),
 ): void {
   const now = context.currentTime;
+  const profile = agentToneProfile(preset, type);
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(1, now + 0.012);
-  gain.gain.exponentialRampToValueAtTime(
-    0.0001,
-    now + (type === 'NEW_CONVERSATION' ? 0.44 : 0.24),
-  );
+  gain.gain.exponentialRampToValueAtTime(profile.peak, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + profile.release);
   gain.connect(context.destination);
 
-  const notes =
-    type === 'NEW_CONVERSATION'
-      ? ([
-          [880, 0],
-          [1175, 0.12],
-          [1320, 0.25],
-        ] as const)
-      : ([
-          [660, 0],
-          [880, 0.075],
-        ] as const);
-  for (const [frequency, offset] of notes) {
+  for (const [frequency, offset] of profile.notes) {
     const oscillator = context.createOscillator();
-    oscillator.type = 'sine';
+    oscillator.type = profile.waveform;
     oscillator.frequency.setValueAtTime(frequency, now + offset);
     oscillator.connect(gain);
     oscillator.start(now + offset);
-    oscillator.stop(now + offset + 0.13);
+    oscillator.stop(now + offset + profile.noteDuration);
   }
 }
 
@@ -508,6 +639,7 @@ export type {
   PendingAgentText,
   InboxRealtimeEvent,
   ThreadRealtimeEvent,
+  AgentSoundPreset,
 };
 
 export {
@@ -521,6 +653,9 @@ export {
   createAgentDraftSaveScheduler,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
+  AGENT_SOUND_PRESET_OPTIONS,
+  loadAgentSoundPreset,
+  saveAgentSoundPreset,
   loadAgentVibrationEnabled,
   saveAgentVibrationEnabled,
   agentReminderVibrationPattern,
