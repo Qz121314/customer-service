@@ -18,6 +18,17 @@ async function loginAgent(page, username, password) {
   await expect(page.getByText('连接正常')).toBeVisible();
 }
 
+function logBrowserErrors(page, label) {
+  page.on('pageerror', (error) => {
+    console.error(`[${label}] pageerror: ${error.stack || error.message}`);
+  });
+  page.on('console', (message) => {
+    if (message.type() === 'error') {
+      console.error(`[${label}] console.error: ${message.text()}`);
+    }
+  });
+}
+
 test('desktop and phone share availability while logout remains device-local', async ({
   browser,
   page: adminPage,
@@ -69,6 +80,8 @@ test('desktop and phone share availability while logout remains device-local', a
   });
   const desktop = await desktopContext.newPage();
   const phone = await phoneContext.newPage();
+  logBrowserErrors(desktop, 'desktop');
+  logBrowserErrors(phone, 'phone');
   try {
     await loginAgent(desktop, username, password);
     await loginAgent(phone, username, password);
@@ -163,7 +176,7 @@ test('desktop and phone share availability while logout remains device-local', a
       })
       .toBe('offline');
   } finally {
-    await phoneContext.close();
-    await desktopContext.close();
+    await phoneContext.close().catch(() => undefined);
+    await desktopContext.close().catch(() => undefined);
   }
 });
