@@ -160,12 +160,12 @@ test('hourly stale media cleanup range-searches narrow partial indexes', () => {
   assertSearchesIndex(
     pendingPlan,
     'media_items',
-    'idx_media_items_pending_cleanup',
+    'idx_media_items_cleanup_queue',
   );
   assertSearchesIndex(
     failedPlan,
     'media_items',
-    'idx_media_items_failed_cleanup',
+    'idx_media_items_cleanup_queue',
   );
   assertNoTableScan(pendingPlan, 'media_items');
   assertNoTableScan(failedPlan, 'media_items');
@@ -207,10 +207,9 @@ function createRetentionBehaviorDatabase() {
       updated_at TEXT NOT NULL,
       FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
     );
-    CREATE INDEX idx_media_items_pending_cleanup
-      ON media_items(updated_at, id) WHERE status = 'pending';
-    CREATE INDEX idx_media_items_failed_cleanup
-      ON media_items(updated_at, id) WHERE status = 'failed';
+    CREATE INDEX idx_media_items_cleanup_queue
+      ON media_items(status, updated_at, id)
+      WHERE status = 'pending' OR status = 'failed';
     CREATE TABLE visitor_push_subscriptions (
       endpoint TEXT PRIMARY KEY,
       site_id TEXT NOT NULL,

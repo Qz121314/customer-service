@@ -1,12 +1,9 @@
 PRAGMA foreign_keys = ON;
 
--- Hourly retention only needs to range-scan media rows that are still pending
--- or have already failed. Keep ready rows out of these indexes so the cleanup
--- read win does not turn into permanent write amplification on chat media.
-CREATE INDEX IF NOT EXISTS idx_media_items_pending_cleanup
-  ON media_items(updated_at, id)
-  WHERE status = 'pending';
-
-CREATE INDEX IF NOT EXISTS idx_media_items_failed_cleanup
-  ON media_items(updated_at, id)
-  WHERE status = 'failed';
+-- One partial queue index serves both cleanup states. The OR predicate lets
+-- SQLite prove that either status-specific query can use the index, while one
+-- CREATE INDEX halves the full-table build work during production migration.
+-- Ready media stays out, avoiding permanent write and storage amplification.
+CREATE INDEX IF NOT EXISTS idx_media_items_cleanup_queue
+  ON media_items(status, updated_at, id)
+  WHERE status = 'pending' OR status = 'failed';
