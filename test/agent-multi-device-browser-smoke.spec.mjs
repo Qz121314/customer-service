@@ -20,7 +20,9 @@ async function loginAgent(page, username, password) {
 
 function logBrowserErrors(page, label) {
   page.on('pageerror', (error) => {
-    console.error(`[${label}] pageerror: ${error.stack || error.message}`);
+    console.error(
+      `[${label}] pageerror: ${error.stack || error.message}`,
+    );
   });
   page.on('console', (message) => {
     if (message.type() === 'error') {
