@@ -59,14 +59,7 @@ agentPushApi.post('/api/agent/push/subscriptions', async (c) => {
        session_id = excluded.session_id,
        updated_at = CURRENT_TIMESTAMP`,
   )
-    .bind(
-      endpoint,
-      agent.id,
-      expirationTime,
-      p256dh,
-      auth,
-      agent.session_id,
-    )
+    .bind(endpoint, agent.id, expirationTime, p256dh, auth, agent.session_id)
     .run();
   return c.json({ ok: true });
 });
