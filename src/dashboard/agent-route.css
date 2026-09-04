@@ -8,3 +8,42 @@
 @import './agent-thread.css';
 @import './agent-state.css';
 @import './commercial-polish.css';
+
+/* The active chat has exactly one elastic row: the message timeline.
+ * Bind each semantic child to a named row so new message content or optional
+ * UI cannot shift the composer into the 1fr track. */
+.workspace-shell .thread-pane {
+  display: grid;
+  grid-template-areas:
+    'thread-head'
+    'thread-messages'
+    'thread-composer';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+/* agent-mobile-layout.css hides the inactive thread with a more-specific rule.
+ * Only restore Grid when the mobile thread is actually open. */
+.workspace-shell.is-thread-open .thread-pane {
+  display: grid;
+}
+
+.workspace-shell .thread-pane > .thread-head {
+  grid-area: thread-head;
+}
+
+.workspace-shell .thread-pane > .messages {
+  min-height: 0;
+  grid-area: thread-messages;
+}
+
+.workspace-shell .thread-pane > .composer {
+  min-height: 0;
+  grid-area: thread-composer;
+}
+
+.workspace-shell .thread-pane > .thread-empty,
+.workspace-shell .thread-pane > .empty-state {
+  min-height: 0;
+  grid-area: 1 / 1 / -1 / -1;
+}
