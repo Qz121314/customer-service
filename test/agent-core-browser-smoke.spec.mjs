@@ -58,7 +58,9 @@ test('core multi-device agent workflow remains usable', async ({
   const username = `core-smoke-${runId.slice(0, 14)}`;
   const password = 'core-smoke-pass';
   const productId = `core-smoke-product-${runId}`;
-  const visitorId = `COR${String(Number.parseInt(runId.slice(0, 6), 16) % 1000).padStart(3, '0')}`;
+  const visitorId = `COR${String(
+    Number.parseInt(runId.slice(0, 6), 16) % 1000,
+  ).padStart(3, '0')}`;
 
   const product = {
     id: productId,
@@ -157,7 +159,9 @@ test('core multi-device agent workflow remains usable', async ({
 
     await phone.getByPlaceholder('输入回复内容…').fill('Phone reply');
     await phone.getByRole('button', { name: '发送' }).click();
-    await expect(desktop.getByText('Phone reply')).toBeVisible();
+    await expect(
+      desktop.getByRole('main').getByText('Phone reply'),
+    ).toBeVisible();
 
     const visitorReply = await adminPage.request.post(
       url(`/client/v1/conversations/${conversationId}/messages`),
@@ -172,9 +176,11 @@ test('core multi-device agent workflow remains usable', async ({
     );
     expect(visitorReply.ok()).toBeTruthy();
     await expect(
-      desktop.getByText('Visitor reply on both devices'),
+      desktop.getByRole('main').getByText('Visitor reply on both devices'),
     ).toBeVisible();
-    await expect(phone.getByText('Visitor reply on both devices')).toBeVisible();
+    await expect(
+      phone.getByRole('main').getByText('Visitor reply on both devices'),
+    ).toBeVisible();
 
     await phone.getByRole('button', { name: '打开功能菜单' }).click();
     await phone.getByRole('button', { name: /退出客服账号/u }).click();
@@ -187,7 +193,9 @@ test('core multi-device agent workflow remains usable', async ({
       .getByPlaceholder('输入回复内容…')
       .fill('Desktop still active');
     await desktop.getByRole('button', { name: '发送' }).click();
-    await expect(desktop.getByText('Desktop still active')).toBeVisible();
+    await expect(
+      desktop.getByRole('main').getByText('Desktop still active'),
+    ).toBeVisible();
 
     await desktop.getByRole('button', { name: '退出客服账号' }).click();
     await expect(
