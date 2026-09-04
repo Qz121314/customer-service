@@ -144,3 +144,17 @@ test('normal prepare deduplicates binding while logout makes same-device relogin
     globalThis.window = previousWindow;
   }
 });
+
+test('AgentPortal only alerts from a durable reminder message id', async () => {
+  const portal = await read('../src/dashboard/AgentPortal.tsx');
+
+  assert.match(
+    portal,
+    /payload\.reminder\?\.messageId[\s\S]*alertForReminder\(\s*payload\.reminder\.type,\s*payload\.reminder\.messageId/u,
+  );
+  assert.doesNotMatch(portal, /`\$\{next\.id\}:\$\{next\.last_message_at\}`/u);
+  assert.doesNotMatch(
+    portal,
+    /alertForReminder\([\s\S]{0,160}next\.last_message_at/u,
+  );
+});

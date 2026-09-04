@@ -817,9 +817,6 @@ function AgentWorkspace({
 
         const next = payload.conversation;
         const belongsToAgent = next.assigned_agent === identity.id;
-        const isNewAssignment =
-          belongsToAgent && !unreadCountRef.current.has(next.id);
-        const previousUnread = unreadCountRef.current.get(next.id) ?? 0;
         if (belongsToAgent) {
           unreadCountRef.current.set(next.id, next.agent_unread_count);
         } else {
@@ -837,14 +834,6 @@ function AgentWorkspace({
         }
         if (belongsToAgent && payload.reminder?.messageId) {
           alertForReminder(payload.reminder.type, payload.reminder.messageId);
-        } else if (
-          belongsToAgent &&
-          (isNewAssignment || next.agent_unread_count > previousUnread)
-        ) {
-          alertForReminder(
-            isNewAssignment ? 'NEW_CONVERSATION' : 'CUSTOMER_REPLY',
-            `${next.id}:${next.last_message_at}`,
-          );
         }
       });
       socket.addEventListener('close', () => {
