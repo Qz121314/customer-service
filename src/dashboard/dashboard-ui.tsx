@@ -230,7 +230,11 @@ function Bubble({
   return (
     <div className={isAgent ? 'message mine' : 'message visitor'}>
       <div>
-        {item.body ? <p>{item.body}</p> : null}
+        {item.message_kind === 'product_context' && item.product_context ? (
+          <ProductContextCard snapshot={item.product_context} />
+        ) : item.body ? (
+          <p>{item.body}</p>
+        ) : null}
         {attachments.length > 0 ? (
           <div className="message-attachments">
             {attachments.map((attachment) => {
@@ -307,6 +311,50 @@ function Bubble({
         </span>
       </div>
     </div>
+  );
+}
+
+function ProductContextCard({
+  snapshot,
+}: {
+  snapshot: NonNullable<Message['product_context']>;
+}) {
+  const details = [snapshot.sectionName, snapshot.categoryName]
+    .filter(Boolean)
+    .join(' · ');
+  const content = (
+    <>
+      {snapshot.coverUrl ? (
+        <img src={snapshot.coverUrl} alt="" loading="lazy" />
+      ) : (
+        <span className="product-context-placeholder" aria-hidden="true">
+          <UiIcon name="image-plus" />
+        </span>
+      )}
+      <span className="product-context-copy">
+        <small>咨询商品</small>
+        <strong>{snapshot.title}</strong>
+        {details ? <span>{details}</span> : null}
+      </span>
+      {snapshot.href ? (
+        <span className="product-context-action">
+          查看商品
+          <UiIcon name="external" />
+        </span>
+      ) : null}
+    </>
+  );
+  return snapshot.href ? (
+    <a
+      className="message-product-context"
+      href={snapshot.href}
+      target="_blank"
+      rel="noreferrer"
+    >
+      {content}
+    </a>
+  ) : (
+    <div className="message-product-context">{content}</div>
   );
 }
 

@@ -2,6 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { URL } from 'node:url';
+import {
+  agentPushBindingMarker,
+  clearAgentPushBindingMarker,
+  shouldBindAgentSubscription,
+} from '../src/dashboard/agent-push.ts';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
@@ -14,6 +19,8 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
     migration,
     payloadMigration,
     dashboard,
+    portal,
+    assignmentBroadcast,
     chrome,
   ] = await Promise.all([
     read('../src/worker/agent-push-api.ts'),
@@ -23,6 +30,8 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
     read('../migrations/0011_agent_web_push.sql'),
     read('../migrations/0058_agent_push_payload_keys.sql'),
     read('../src/dashboard/agent-push.ts'),
+    read('../src/dashboard/AgentPortal.tsx'),
+    read('../src/worker/assignment-broadcast.ts'),
     read('../src/dashboard/AgentWorkspaceChrome.tsx'),
   ]);
 
@@ -71,6 +80,31 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.match(dashboard, /install-required/u);
   assert.match(dashboard, /bindAgentSubscription\(subscription, agentId/u);
   assert.match(dashboard, /cs-agent-push-binding:v4/u);
+  assert.match(
+    dashboard,
+    /shouldBindAgentSubscription\(readAgentPushBinding\(\), marker, force\)/u,
+  );
+  assert.match(
+    dashboard,
+    /localStorage\.setItem\(AGENT_PUSH_BINDING_KEY, marker\)/u,
+  );
+  assert.match(
+    dashboard,
+    /export function clearAgentPushBindingMarker\(\)[\s\S]{0,180}localStorage\.removeItem\(AGENT_PUSH_BINDING_KEY\)/u,
+  );
+  assert.match(
+    portal,
+    /async function logoutFromWorkspace\(\) \{\s*await onLogout\(\);\s*clearAgentPushBindingMarker\(\);\s*\}/u,
+  );
+  assert.doesNotMatch(
+    portal,
+    /async function logoutFromWorkspace\(\)[\s\S]{0,180}(?:disableAgentNotifications|unsubscribe)/u,
+  );
+  assert.match(assignmentBroadcast, /messageId: visitorMessage\.id/u);
+  assert.doesNotMatch(
+    assignmentBroadcast,
+    /messageId: visitorMessage\?\.id \?\? conversation\.id/u,
+  );
   assert.match(dashboard, /AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000/u);
   assert.match(dashboard, /Promise\.race\(\[/u);
   assert.match(dashboard, /通知服务启动超时，请刷新页面后重试/u);
@@ -80,4 +114,33 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.match(chrome, /消息提醒：/u);
   assert.doesNotMatch(chrome, /前台提示音/u);
   assert.doesNotMatch(chrome, /后台可接收系统通知/u);
+});
+
+test('normal prepare deduplicates binding while logout makes same-device relogin bind again', () => {
+  const marker = agentPushBindingMarker(
+    'agent-a',
+    'https://push.example/device-a',
+  );
+  assert.equal(shouldBindAgentSubscription(null, marker), true);
+  assert.equal(shouldBindAgentSubscription(marker, marker), false);
+
+  const values = new Map([['cs-agent-push-binding:v4', marker]]);
+  const previousWindow = globalThis.window;
+  globalThis.window = {
+    localStorage: {
+      getItem(key) {
+        return values.get(key) ?? null;
+      },
+      removeItem(key) {
+        values.delete(key);
+      },
+    },
+  };
+  try {
+    clearAgentPushBindingMarker();
+    assert.equal(values.has('cs-agent-push-binding:v4'), false);
+    assert.equal(shouldBindAgentSubscription(null, marker), true);
+  } finally {
+    globalThis.window = previousWindow;
+  }
 });

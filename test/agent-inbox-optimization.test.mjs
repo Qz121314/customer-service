@@ -17,7 +17,10 @@ test('agent inbox returns overview, conversations, messages and media in two req
   assert.match(worker, /loadAgentInbox/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
-  assert.match(worker, /messages: pageMessages,[\s\S]*media,[\s\S]*readState/u);
+  assert.match(
+    worker,
+    /messages: pageMessages\.map\(agentMessage\),[\s\S]*media,[\s\S]*readState/u,
+  );
   assert.doesNotMatch(app, /getConversations\(filter/u);
   assert.doesNotMatch(app, /getAgentMedia\(selectedId\)/u);
 });

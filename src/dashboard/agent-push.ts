@@ -148,10 +148,10 @@ export async function disableAgentNotifications(): Promise<AgentNotificationStat
       removalError = error;
     }
     await subscription.unsubscribe();
-    clearAgentPushBinding();
+    clearAgentPushBindingMarker();
     if (removalError) throw removalError;
   }
-  clearAgentPushBinding();
+  clearAgentPushBindingMarker();
   return Notification.permission === 'denied' ? 'blocked' : 'disabled';
 }
 
@@ -244,8 +244,10 @@ async function bindAgentSubscription(
   agentId: string,
   force = false,
 ): Promise<void> {
-  const marker = `${agentId}\n${subscription.endpoint}`;
-  if (!force && readAgentPushBinding() === marker) return;
+  const marker = agentPushBindingMarker(agentId, subscription.endpoint);
+  if (!shouldBindAgentSubscription(readAgentPushBinding(), marker, force)) {
+    return;
+  }
   await request('/api/agent/push/subscriptions', {
     method: 'POST',
     body: JSON.stringify({ subscription: subscription.toJSON() }),
@@ -257,6 +259,21 @@ async function bindAgentSubscription(
   }
 }
 
+export function agentPushBindingMarker(
+  agentId: string,
+  endpoint: string,
+): string {
+  return `${agentId}\n${endpoint}`;
+}
+
+export function shouldBindAgentSubscription(
+  currentMarker: string | null,
+  expectedMarker: string,
+  force = false,
+): boolean {
+  return force || currentMarker !== expectedMarker;
+}
+
 function readAgentPushBinding(): string | null {
   try {
     return window.localStorage.getItem(AGENT_PUSH_BINDING_KEY);
@@ -265,7 +282,7 @@ function readAgentPushBinding(): string | null {
   }
 }
 
-function clearAgentPushBinding(): void {
+export function clearAgentPushBindingMarker(): void {
   try {
     window.localStorage.removeItem(AGENT_PUSH_BINDING_KEY);
   } catch {

@@ -118,6 +118,18 @@ test('core multi-device agent workflow remains usable', async ({
     await loginAgent(desktop, username, password);
     await loginAgent(phone, username, password);
 
+    const autoReply = await desktop.request.patch(
+      url('/api/agent/settings/auto-reply'),
+      {
+        data: {
+          enabled: true,
+          text: 'Hello from the core smoke agent',
+          attachmentIds: [],
+        },
+      },
+    );
+    expect(autoReply.ok()).toBeTruthy();
+
     await phone
       .locator('.availability-pill[title="点击切换为忙碌状态"]')
       .click();
@@ -159,6 +171,17 @@ test('core multi-device agent workflow remains usable', async ({
       await expect(conversation).toBeVisible({ timeout: 15_000 });
       await conversation.click();
       await expect(device.getByPlaceholder('输入回复内容…')).toBeVisible();
+      const timeline = device.locator('.messages .message');
+      await expect(timeline).toHaveCount(2);
+      await expect(
+        timeline.nth(0).locator('.message-product-context'),
+      ).toHaveText(/Core Smoke Product/u);
+      await expect(
+        timeline.nth(0).locator('.message-product-context'),
+      ).toHaveAttribute('href', 'https://example.com/core-smoke-product');
+      await expect(timeline.nth(1)).toContainText(
+        'Hello from the core smoke agent',
+      );
     }
 
     await phone.getByPlaceholder('输入回复内容…').fill('Phone reply');

@@ -168,10 +168,23 @@ export type Message = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
+  message_kind?: 'text' | 'image' | 'product_context';
+  product_context?: ProductContextSnapshot | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
   read_by_agent_at: string | null;
   created_at: string;
+};
+
+export type ProductContextSnapshot = {
+  productId: string;
+  title: string;
+  coverUrl: string | null;
+  href: string;
+  sectionId: string;
+  sectionName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
 };
 
 export type ConversationMessageCursor = {

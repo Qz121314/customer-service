@@ -83,6 +83,7 @@ import { sendAgentImage } from './agent-media';
 import {
   disableAgentNotifications,
   enableAgentNotifications,
+  clearAgentPushBindingMarker,
   prepareAgentNotifications,
   runBestEffortAgentCapability,
   updateAgentAppBadge,
@@ -1707,10 +1708,8 @@ function AgentWorkspace({
   }
 
   async function logoutFromWorkspace() {
-    if (notificationState === 'enabled') {
-      await disableAgentNotifications().catch(() => undefined);
-    }
     await onLogout();
+    clearAgentPushBindingMarker();
   }
 
   const handleNicknameChange = useEventCallback(async (nickname: string) => {
@@ -1913,41 +1912,6 @@ function AgentWorkspace({
                 </button>
               </div>
             </header>
-            {detail.conversation.product_title && (
-              <div className="conversation-context-card">
-                {detail.conversation.product_cover_url ? (
-                  <img
-                    src={detail.conversation.product_cover_url}
-                    alt=""
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="conversation-context-placeholder">CS</span>
-                )}
-                <div>
-                  <span>咨询商品</span>
-                  <strong>{detail.conversation.product_title}</strong>
-                  <small>
-                    {[
-                      detail.conversation.section_name,
-                      detail.conversation.category_name,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || '商品咨询'}
-                  </small>
-                </div>
-                {detail.conversation.product_href && (
-                  <a
-                    href={detail.conversation.product_href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    查看商品
-                    <UiIcon name="external" />
-                  </a>
-                )}
-              </div>
-            )}
             <div className="messages" ref={messagesRef}>
               {detail.page.hasMoreBefore && (
                 <div className="message-history-loader">

@@ -2,18 +2,20 @@
 
 ## Product contract
 
-`POST /client/v1/conversations` means **start a consultation**. It is not the visitor-message endpoint.
+`POST /client/v1/conversations` means **the visitor clicked a product CTA**. The click is both the consultation start and a durable customer `product_context` message.
 
 A storefront CTA should therefore create the conversation immediately when the user chooses to start support. The visitor does not need to type a message first.
 
 ```text
 CTA click
 → POST /client/v1/conversations
-→ create conversation
+→ reuse or create conversation using the existing routing decision order
+→ persist the product-context snapshot as a customer message
 → attempt first agent assignment
 → first successful assignment creates one traffic receipt
 → optional assigned-agent greeting is resolved exactly once
-→ return the conversation with any generated greeting
+→ notify with the product message's real message ID
+→ return the conversation with the product message before any generated greeting
 → later visitor text uses /messages
 ```
 
@@ -31,14 +33,11 @@ The request requires the existing visitor, handoff and product context but does 
 }
 ```
 
-The product ID is resolved against the Site-synchronized product catalog. That
-catalog owns the canonical public detail URL; Customer Service snapshots it into
-the new conversation. CTA callers must not send product URLs or other catalog
-fields.
+The product ID is resolved against the Site-synchronized product catalog. That catalog owns the canonical product fields. Customer Service stores the same product snapshot in the conversation and in the durable `product_context` message (`productId`, `title`, `coverUrl`, `href`, `sectionId`, `sectionName`, `categoryId`, `categoryName`). Historical messages render this snapshot and never reread the current catalog.
 
 `sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing conversation and must not create a second conversation, traffic receipt, quota charge or greeting.
 
-## Legacy create-with-message compatibility
+## Optional legacy body compatibility
 
 Existing callers may continue to provide both:
 
@@ -49,7 +48,7 @@ Existing callers may continue to provide both:
 }
 ```
 
-The two fields are an optional pair. If either field is supplied, both must be valid. New storefront integrations should prefer CTA-only creation followed by the normal message endpoint.
+Existing callers may keep supplying these fields. `clientMessageId` becomes the product message's idempotency identity; otherwise the server derives one from `sourceHandoffId`. The structured product snapshot, not the body string, owns product-card rendering. New storefront integrations should use CTA creation for the product message and the normal message endpoint for later text.
 
 ## Visitor messages after start
 
@@ -67,7 +66,7 @@ A CTA start consumes a seat quota only when its first agent assignment succeeds.
 If no eligible agent exists, the temporary creation is discarded and the API
 returns `503 NO_AGENT_AVAILABLE` with the administrator-authored message.
 
-The successful assignment is the existing billing boundary:
+The successful assignment is the existing billing boundary. When no eligible agent exists, the temporary conversation and its product message are deleted together; no reminder or greeting is emitted.
 
 ```text
 new consultation claim
@@ -92,15 +91,10 @@ The automation receipt uses `(conversation_id, automation_key)` as its unique bo
 
 Existing conversations are migrated as `skipped`, so deploying the feature never sends retroactive greetings.
 
-## New-consultation attention
+## Product-message attention
 
-The first effective assignment is also a seat-attention event. D1 ensures `agent_unread_count >= 1` at first reception.
+Every CTA creates one real unread customer message. A new conversation emits `NEW_CONVERSATION`; a two-hour active reuse emits `CUSTOMER_REPLY`. Both reminder forms use the durable product message ID, never the conversation ID. Replaying the same handoff or product-message identity emits neither a duplicate message nor a duplicate reminder.
 
-This intentionally reuses the existing agent Inbox notification path:
-
-- CTA with no visitor message: `0 → 1`, so the existing foreground tone fires once;
-- legacy create with one visitor message: unread is already `1`, so it is not incremented to `2`;
-- multiple queued visitor messages keep their actual unread count;
-- opening/reading the conversation recalculates unread state from actual visitor messages and acknowledges the consultation event.
+The first effective assignment separately owns the exactly-once greeting. The product message is persisted first, so both the agent and visitor timelines render the customer product card before the agent greeting.
 
 The automatically generated greeting does not create an agent-side sound event because it is the agent's own outgoing message.

@@ -4,6 +4,7 @@ import { routingBusinessDate } from './routing';
 import { loadAgentInbox, loadAgentOverview } from './agent-inbox';
 import {
   broadcastClientConversationEvent,
+  productContextFromMessage,
   type ConversationEventSnapshot,
 } from './client-api';
 import { verifyAgentPassword } from './agent-password';
@@ -52,6 +53,8 @@ type MessageRow = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
+  message_kind: 'text' | 'image' | 'product_context';
+  structured_payload_json: string | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
   read_by_agent_at: string | null;
@@ -518,7 +521,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const limitParameter = pageCursor ? '?4' : '?2';
   const messageRequest = c.env.DB.prepare(
     `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
-       m.client_message_id,
+       m.message_kind, m.structured_payload_json, m.client_message_id,
        COALESCE(
          m.read_by_visitor_at,
          CASE
@@ -592,7 +595,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
 
   return c.json({
     conversation,
-    messages: pageMessages,
+    messages: pageMessages.map(agentMessage),
     media,
     readState: readState.results ?? [],
     page: {
@@ -807,6 +810,8 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     sender_type: 'agent',
     sender_id: agent.id,
     body: text,
+    message_kind: 'text',
+    structured_payload_json: null,
     client_message_id: clientMessageId,
     read_by_visitor_at: null,
     read_by_agent_at: null,
@@ -970,7 +975,8 @@ async function findAgentMessageByClientId(
   return db
     .prepare(
       `SELECT id, conversation_id, sender_type, sender_id, body,
-         client_message_id, read_by_visitor_at, read_by_agent_at, created_at
+         message_kind, structured_payload_json, client_message_id,
+         read_by_visitor_at, read_by_agent_at, created_at
        FROM messages
        WHERE conversation_id = ?1
          AND client_message_id = ?2
@@ -1020,6 +1026,8 @@ function clientRealtimeMessage(message: MessageRow) {
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
+    kind: message.message_kind,
+    productContext: productContextFromMessage(message),
     sentAt,
     delivery:
       message.sender_type === 'agent' && message.read_by_visitor_at
@@ -1028,6 +1036,13 @@ function clientRealtimeMessage(message: MessageRow) {
           ? 'read'
           : 'sent',
     attachments: [],
+  };
+}
+
+function agentMessage(message: MessageRow) {
+  return {
+    ...message,
+    product_context: productContextFromMessage(message),
   };
 }
 
