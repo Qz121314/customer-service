@@ -10,7 +10,8 @@ function normalizeAgentVibrationCapability(): void {
   }
 
   try {
-    Object.defineProperty(navigator, 'vibrate', {
+    const navigatorPrototype = Object.getPrototypeOf(navigator) as object;
+    Object.defineProperty(navigatorPrototype, 'vibrate', {
       configurable: true,
       value: () => false,
     });
