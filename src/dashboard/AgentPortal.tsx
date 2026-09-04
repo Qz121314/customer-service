@@ -1063,6 +1063,7 @@ function AgentWorkspace({
         if (payload.type === 'message' && payload.message) {
           const incoming = payload.message;
           if (incoming.sender_type === 'visitor') {
+            alertForReminder('CUSTOMER_REPLY', incoming.id);
             setVisitorTyping(false);
             if (visitorTypingTimerRef.current !== null) {
               window.clearTimeout(visitorTypingTimerRef.current);
@@ -1231,7 +1232,13 @@ function AgentWorkspace({
       if (timer !== null) window.clearTimeout(timer);
       if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
-  }, [acknowledgeConversation, refresh, selectedId, sendAgentTyping]);
+  }, [
+    acknowledgeConversation,
+    alertForReminder,
+    refresh,
+    selectedId,
+    sendAgentTyping,
+  ]);
 
   const lastMessageId = detail?.messages.at(-1)?.id ?? null;
   const messageCount = detail?.messages.length ?? 0;
