@@ -14,9 +14,10 @@ const migrationsDirectory = new URL('../migrations/', import.meta.url);
 
 function createMigratedDatabase() {
   const database = new DatabaseSync(':memory:');
-  for (const filename of readdirSync(migrationsDirectory)
+  const migrationFiles = readdirSync(migrationsDirectory)
     .filter((name) => name.endsWith('.sql'))
-    .sort()) {
+    .sort();
+  for (const filename of migrationFiles) {
     database.exec(readFileSync(new URL(filename, migrationsDirectory), 'utf8'));
   }
   return database;
@@ -30,6 +31,12 @@ function seedPlannerFixture(database) {
        external_id, expires_at
      ) VALUES (?, 'default', ?, ?, ?, ?, ?, ?)`,
   );
+  const insertConversation = database.prepare(
+    `INSERT INTO conversations (
+       id, site_id, visitor_id, status, last_message_at, created_at,
+       updated_at, expires_at
+     ) VALUES (?, 'default', ?, 'open', ?, ?, ?, ?)`,
+  );
   const insertMedia = database.prepare(
     `INSERT INTO media_items (
        id, conversation_id, reserved_message_id, sender_type, sender_id,
@@ -41,12 +48,14 @@ function seedPlannerFixture(database) {
 
   for (let index = 0; index < 512; index += 1) {
     const createdAt = '2026-09-01T00:00:00.000Z';
+    const currentAt = '2026-09-04T12:30:00.000Z';
     const expiresAt =
       index % 2 === 0
         ? '2026-09-03T00:00:00.000Z'
         : '2026-09-06T00:00:00.000Z';
+    const visitorId = `visitor-${index}`;
     insertVisitor.run(
-      `visitor-${index}`,
+      visitorId,
       `token-${index}`,
       `Visitor ${index}`,
       createdAt,
@@ -55,16 +64,35 @@ function seedPlannerFixture(database) {
       expiresAt,
     );
 
+    if (index % 4 !== 0) {
+      insertConversation.run(
+        `conversation-${index}`,
+        visitorId,
+        currentAt,
+        createdAt,
+        currentAt,
+        expiresAt,
+      );
+    }
+
+    const isStaleMedia = index % 16 === 0;
+    const pendingUpdatedAt = isStaleMedia
+      ? '2026-09-03T08:00:00.000Z'
+      : currentAt;
+    const failedUpdatedAt = isStaleMedia
+      ? '2026-09-03T09:00:00.000Z'
+      : currentAt;
+
     for (const [suffix, status, updatedAt] of [
-      ['pending', 'pending', '2026-09-03T08:00:00.000Z'],
-      ['failed', 'failed', '2026-09-03T09:00:00.000Z'],
-      ['ready', 'ready', '2026-09-04T09:00:00.000Z'],
+      ['pending', 'pending', pendingUpdatedAt],
+      ['failed', 'failed', failedUpdatedAt],
+      ['ready', 'ready', currentAt],
     ]) {
       insertMedia.run(
         `media-${suffix}-${index}`,
         `conversation-${index}`,
         `reserved-${suffix}-${index}`,
-        `visitor-${index}`,
+        visitorId,
         `chat/${index}/${suffix}.webp`,
         status,
         createdAt,
