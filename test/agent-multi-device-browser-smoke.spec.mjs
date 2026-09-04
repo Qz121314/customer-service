@@ -61,6 +61,20 @@ async function logAgentState(page, label) {
   );
 }
 
+async function logRenderedInbox(page, label) {
+  const rendered = await page.evaluate(() => ({
+    href: window.location.href,
+    bodyText: document.body.innerText.slice(0, 1200),
+    rows: Array.from(document.querySelectorAll('.conversation-row')).map(
+      (row) => ({
+        id: row.getAttribute('data-conversation-id'),
+        text: row.textContent,
+      }),
+    ),
+  }));
+  console.error(`[${label}] rendered-inbox ${JSON.stringify(rendered)}`);
+}
+
 test('desktop and phone share availability while logout remains device-local', async ({
   browser,
   page: adminPage,
@@ -152,6 +166,8 @@ test('desktop and phone share availability while logout remains device-local', a
     const conversationId = created.conversation.id;
     await logAgentState(desktop, 'desktop');
     await logAgentState(phone, 'phone');
+    await logRenderedInbox(desktop, 'desktop');
+    await logRenderedInbox(phone, 'phone');
 
     for (const device of [desktop, phone]) {
       const conversation = device.getByRole('button', {
