@@ -1712,10 +1712,7 @@ async function conversationReuseKey(
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(
-      `cta-reuse-v1\
-${siteId}\
-${visitorId}\
-${productId}`,
+      `cta-reuse-v1\n${siteId}\n${visitorId}\n${productId}`,
     ),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
@@ -1730,9 +1727,7 @@ async function nextConversationReuseKey(
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(
-      `cta-reuse-next-v1\
-${reuseKey}\
-${previousConversationId}`,
+      `cta-reuse-next-v1\n${reuseKey}\n${previousConversationId}`,
     ),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
