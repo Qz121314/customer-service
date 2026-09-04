@@ -29,6 +29,12 @@ function logBrowserErrors(page, label) {
       console.error(`[${label}] console.error: ${message.text()}`);
     }
   });
+  page.on('websocket', (socket) => {
+    if (!socket.url().includes('/api/agent/realtime/inbox')) return;
+    socket.on('framereceived', (event) => {
+      console.error(`[${label}] inbox-frame ${String(event.payload)}`);
+    });
+  });
 }
 
 async function logAgentState(page, label) {
