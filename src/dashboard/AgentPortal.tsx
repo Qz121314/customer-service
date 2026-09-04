@@ -600,7 +600,9 @@ function AgentWorkspace({
 
   const alertForReminder = useCallback(
     (type: AgentReminderType, messageId: string) => {
-      if (!rememberAgentReminderMessage(remindedMessageIdsRef.current, messageId)) {
+      if (
+        !rememberAgentReminderMessage(remindedMessageIdsRef.current, messageId)
+      ) {
         return;
       }
       runBestEffortAgentCapability(() => playIncomingTone(type));
