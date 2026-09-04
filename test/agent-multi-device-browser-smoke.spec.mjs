@@ -18,63 +18,6 @@ async function loginAgent(page, username, password) {
   await expect(page.getByText('连接正常')).toBeVisible();
 }
 
-function logBrowserErrors(page, label) {
-  page.on('pageerror', (error) => {
-    console.error(
-      `[${label}] pageerror: ${error.stack || error.message}`,
-    );
-  });
-  page.on('console', (message) => {
-    if (message.type() === 'error') {
-      console.error(`[${label}] console.error: ${message.text()}`);
-    }
-  });
-  page.on('websocket', (socket) => {
-    if (!socket.url().includes('/api/agent/realtime/inbox')) return;
-    socket.on('framereceived', (event) => {
-      console.error(`[${label}] inbox-frame ${String(event.payload)}`);
-    });
-  });
-}
-
-async function logAgentState(page, label) {
-  const sessionResponse = await page.request.get(url('/api/agent/auth/session'));
-  const bootstrapResponse = await page.request.get(url('/api/agent/bootstrap'));
-  const session = await sessionResponse.json();
-  const bootstrap = await bootstrapResponse.json();
-  console.error(
-    `[${label}] agent-state ${JSON.stringify({
-      sessionStatus: sessionResponse.status(),
-      session,
-      bootstrapStatus: bootstrapResponse.status(),
-      authenticated: bootstrap.authenticated,
-      agent: bootstrap.agent,
-      conversations: (bootstrap.inbox?.conversations ?? []).map(
-        (conversation) => ({
-          id: conversation.id,
-          title: conversation.product_title,
-          status: conversation.status,
-          assignedAgent: conversation.assigned_agent,
-        }),
-      ),
-    })}`,
-  );
-}
-
-async function logRenderedInbox(page, label) {
-  const rendered = await page.evaluate(() => ({
-    href: window.location.href,
-    bodyText: document.body.innerText.slice(0, 1200),
-    rows: Array.from(document.querySelectorAll('.conversation-row')).map(
-      (row) => ({
-        id: row.getAttribute('data-conversation-id'),
-        text: row.textContent,
-      }),
-    ),
-  }));
-  console.error(`[${label}] rendered-inbox ${JSON.stringify(rendered)}`);
-}
-
 test('desktop and phone share availability while logout remains device-local', async ({
   browser,
   page: adminPage,
@@ -126,8 +69,6 @@ test('desktop and phone share availability while logout remains device-local', a
   });
   const desktop = await desktopContext.newPage();
   const phone = await phoneContext.newPage();
-  logBrowserErrors(desktop, 'desktop');
-  logBrowserErrors(phone, 'phone');
   try {
     await loginAgent(desktop, username, password);
     await loginAgent(phone, username, password);
@@ -164,10 +105,6 @@ test('desktop and phone share availability while logout remains device-local', a
     expect(createConversation.ok()).toBeTruthy();
     const created = await createConversation.json();
     const conversationId = created.conversation.id;
-    await logAgentState(desktop, 'desktop');
-    await logAgentState(phone, 'phone');
-    await logRenderedInbox(desktop, 'desktop');
-    await logRenderedInbox(phone, 'phone');
 
     for (const device of [desktop, phone]) {
       const conversation = device.getByRole('button', {
@@ -226,7 +163,7 @@ test('desktop and phone share availability while logout remains device-local', a
       })
       .toBe('offline');
   } finally {
-    await phoneContext.close().catch(() => undefined);
-    await desktopContext.close().catch(() => undefined);
+    await phoneContext.close();
+    await desktopContext.close();
   }
 });
