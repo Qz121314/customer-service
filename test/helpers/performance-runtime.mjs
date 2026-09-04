@@ -63,7 +63,17 @@ export function applyMigrations(database) {
 export function createInstrumentedD1(database) {
   const statementExecutors = new WeakMap();
   let batchSequence = 0;
+  let executionTail = Promise.resolve();
   let state = createMetricState();
+
+  function enqueue(operation) {
+    const execution = executionTail.then(operation, operation);
+    executionTail = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  }
 
   function executeStatement(sql, bindings, method, batchId = null, column) {
     const kind = statementKind(sql);
@@ -104,14 +114,16 @@ export function createInstrumentedD1(database) {
         bindings = values;
         return statement;
       },
-      async first(column) {
-        return executeStatement(sql, bindings, 'first', null, column);
+      first(column) {
+        return enqueue(() =>
+          executeStatement(sql, bindings, 'first', null, column),
+        );
       },
-      async all() {
-        return executeStatement(sql, bindings, 'all');
+      all() {
+        return enqueue(() => executeStatement(sql, bindings, 'all'));
       },
-      async run() {
-        return executeStatement(sql, bindings, 'run');
+      run() {
+        return enqueue(() => executeStatement(sql, bindings, 'run'));
       },
     };
     statementExecutors.set(statement, (batchId) =>
@@ -122,25 +134,27 @@ export function createInstrumentedD1(database) {
 
   const db = {
     prepare,
-    async batch(statements) {
+    batch(statements) {
       state.batch += 1;
       state.batchStatements += statements.length;
       state.batchSizes.push(statements.length);
       const batchId = ++batchSequence;
-      const results = [];
-      database.exec('BEGIN');
-      try {
-        for (const statement of statements) {
-          const execute = statementExecutors.get(statement);
-          if (!execute) throw new Error('Unknown instrumented D1 statement');
-          results.push(execute(batchId));
+      return enqueue(() => {
+        const results = [];
+        database.exec('BEGIN');
+        try {
+          for (const statement of statements) {
+            const execute = statementExecutors.get(statement);
+            if (!execute) throw new Error('Unknown instrumented D1 statement');
+            results.push(execute(batchId));
+          }
+          database.exec('COMMIT');
+          return results;
+        } catch (error) {
+          database.exec('ROLLBACK');
+          throw error;
         }
-        database.exec('COMMIT');
-        return results;
-      } catch (error) {
-        database.exec('ROLLBACK');
-        throw error;
-      }
+      });
     },
   };
 
