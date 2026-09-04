@@ -170,9 +170,6 @@ test('desktop and phone share availability while logout remains device-local', a
       })
       .toBe('offline');
   } finally {
-    await Promise.allSettled([
-      phoneContext.close(),
-      desktopContext.close(),
-    ]);
+    await Promise.allSettled([phoneContext.close(), desktopContext.close()]);
   }
 });
