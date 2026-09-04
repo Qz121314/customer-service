@@ -2,9 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { URL } from 'node:url';
-import {
-  rememberAgentReminderMessage,
-} from '../src/dashboard/dashboard-runtime.ts';
+import { rememberAgentReminderMessage } from '../src/dashboard/dashboard-runtime.ts';
 
 function threadMessageHandlerSource() {
   const portal = readFileSync(
@@ -27,9 +25,7 @@ test('live visitor thread messages trigger the shared customer reply reminder', 
   const visitorStart = handler.indexOf(
     "if (incoming.sender_type === 'visitor')",
   );
-  const clientMessageStart = handler.indexOf(
-    'if (incoming.client_message_id)',
-  );
+  const clientMessageStart = handler.indexOf('if (incoming.client_message_id)');
   assert.ok(visitorStart >= 0 && clientMessageStart > visitorStart);
 
   const visitorBlock = handler.slice(visitorStart, clientMessageStart);
