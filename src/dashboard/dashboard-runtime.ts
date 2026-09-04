@@ -196,7 +196,9 @@ function saveAgentSoundEnabled(agentId: string, enabled: boolean): void {
 
 function loadAgentVibrationEnabled(agentId: string): boolean {
   try {
-    return window.localStorage.getItem(`cs-agent-vibration:${agentId}`) !== 'off';
+    return (
+      window.localStorage.getItem(`cs-agent-vibration:${agentId}`) !== 'off'
+    );
   } catch {
     return true;
   }
