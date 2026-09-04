@@ -201,10 +201,10 @@ const AGENT_SOUND_PRESET_OPTIONS: readonly {
   label: string;
 }[] = [
   { id: 'strong', label: '强提醒' },
-  { id: 'classic', label: '经典双音（QQ 风格）' },
-  { id: 'crisp', label: '清脆提示（Apple 风格）' },
+  { id: 'classic', label: '经典双音' },
+  { id: 'crisp', label: '清脆提示' },
   { id: 'triple', label: '三连音' },
-  { id: 'soft', label: '柔和' },
+  { id: 'soft', label: '柔和水滴' },
 ];
 
 const AGENT_SOUND_PRESET_KEY = 'cs-agent-sound-preset';
