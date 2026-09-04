@@ -14,7 +14,10 @@ import { mediaApi } from './media-api';
 import { pushApi } from './push-api';
 import { sendVisitorPushForConversation } from './visitor-push';
 import { sendAgentPushForMessage } from './agent-push';
-import { agentNotificationForVisitorResponse } from './agent-notification-event';
+import {
+  agentNotificationForVisitorResponse,
+  type AgentNotificationVariables,
+} from './agent-notification-event';
 import { agentPushApi } from './agent-push-api';
 import { purgeExpiredConversations } from './conversation-retention';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
@@ -41,7 +44,10 @@ interface Bindings {
   APP_VERSION: string;
 }
 
-type AppEnv = { Bindings: Bindings };
+type AppEnv = {
+  Bindings: Bindings;
+  Variables: AgentNotificationVariables;
+};
 
 type MediaCompletePayload = {
   conversationId?: string;
@@ -98,10 +104,9 @@ app.use('/client/v1/*', async (c, next) => {
   if (c.req.method !== 'POST' || !c.res.ok) return;
 
   const pathname = new URL(c.req.url).pathname;
-  const notification = await agentNotificationForVisitorResponse(
-    pathname,
-    c.res,
-  );
+  const notification =
+    c.get('agentNotification') ??
+    (await agentNotificationForVisitorResponse(pathname, c.res));
   if (!notification) return;
 
   c.executionCtx.waitUntil(

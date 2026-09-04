@@ -52,9 +52,10 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.match(entry, /sendAgentPushForMessage/u);
   assert.match(entry, /executionCtx\.waitUntil/u);
   assert.match(
-    classification,
-    /CLIENT_CONVERSATION_CREATE_PATH\.test\(pathname\)[\s\S]{0,40}response\.status === 201/u,
+    entry,
+    /c\.get\('agentNotification'\)[\s\S]{0,100}agentNotificationForVisitorResponse/u,
   );
+  assert.match(classification, /agentNotificationForConversationStart/u);
   assert.match(
     migration,
     /FOREIGN KEY \(agent_id\) REFERENCES agents\(id\) ON DELETE CASCADE/u,

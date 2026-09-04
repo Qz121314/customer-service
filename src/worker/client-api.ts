@@ -20,6 +20,11 @@ import { listConversationAttachmentsForMessageIds } from './message-attachments'
 import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 import { clientConversationFanoutPlan } from './conversation-fanout-plan.ts';
 import { loadAgentOverview } from './agent-inbox';
+import {
+  agentNotificationForConversationStart,
+  type AgentNotificationEvent,
+  type AgentNotificationVariables,
+} from './agent-notification-event';
 
 type ClientBindings = {
   DB: D1Database;
@@ -31,7 +36,10 @@ type ClientBindings = {
   R2_BUCKET_NAME?: string;
 };
 
-type ClientEnv = { Bindings: ClientBindings };
+type ClientEnv = {
+  Bindings: ClientBindings;
+  Variables: AgentNotificationVariables;
+};
 type ConversationStatus = 'open' | 'pending' | 'closed';
 type SenderType = 'visitor' | 'agent' | 'system';
 
@@ -484,7 +492,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
         if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
           return noAgentResponse(c, site);
         }
-        conversation = await continueConversationStart(c.env, {
+        const continuation = await continueConversationStart(c.env, {
           conversation,
           siteId: site.id,
           visitorId,
@@ -492,6 +500,10 @@ clientApi.post('/client/v1/conversations', async (c) => {
           clientMessageId,
           assignmentPolicy: 'preserve',
         });
+        conversation = continuation.conversation;
+        if (continuation.notification) {
+          c.set('agentNotification', continuation.notification);
+        }
         return c.json({
           conversation: await conversationDetail(c.env, conversation, 30, null),
         });
@@ -647,7 +659,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
     if (!conversation) throw new Error('Conversation replay failed');
 
-    conversation = await continueConversationStart(c.env, {
+    const continuation = await continueConversationStart(c.env, {
       conversation,
       siteId: site.id,
       visitorId,
@@ -655,6 +667,10 @@ clientApi.post('/client/v1/conversations', async (c) => {
       clientMessageId,
       assignmentPolicy: 'complete-new-claim',
     });
+    conversation = continuation.conversation;
+    if (continuation.notification) {
+      c.set('agentNotification', continuation.notification);
+    }
     if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
       await discardUnassignedConversation(c.env.DB, {
         siteId: site.id,
@@ -755,6 +771,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
 
   if (!conversation) throw new Error('Conversation persistence failed');
+  const notification = agentNotificationForConversationStart({
+    conversationId: conversation.id,
+    message: createdMessage,
+    newlyAssigned: Boolean(assignment.newlyAssigned),
+  });
+  if (notification) c.set('agentNotification', notification);
   return c.json(
     {
       ...(issuedVisitorToken ? { visitorToken: issuedVisitorToken } : {}),
@@ -1851,12 +1873,15 @@ async function continueConversationStart(
     clientMessageId: string | null;
     assignmentPolicy: 'preserve' | 'complete-new-claim';
   },
-): Promise<ConversationRow> {
+): Promise<{
+  conversation: ConversationRow;
+  notification: AgentNotificationEvent | null;
+}> {
   let conversation = input.conversation;
   let createdMessage: MessageRow | null = null;
 
   if (input.assignmentPolicy === 'preserve' && !conversation.assigned_agent) {
-    return conversation;
+    return { conversation, notification: null };
   }
 
   if (input.initialMessage && input.clientMessageId) {
@@ -1911,7 +1936,14 @@ async function continueConversationStart(
       )) ?? conversation;
   }
 
-  return conversation;
+  return {
+    conversation,
+    notification: agentNotificationForConversationStart({
+      conversationId: conversation.id,
+      message: createdMessage,
+      newlyAssigned: Boolean(assignment?.newlyAssigned),
+    }),
+  };
 }
 
 function conversationSummary(conversation: ConversationRow) {

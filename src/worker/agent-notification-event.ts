@@ -7,6 +7,10 @@ export type AgentNotificationEvent = {
   preview: string;
 };
 
+export type AgentNotificationVariables = {
+  agentNotification: AgentNotificationEvent | null;
+};
+
 type MediaCompletePayload = {
   conversationId?: string;
   messageId?: string;
@@ -14,9 +18,22 @@ type MediaCompletePayload = {
   [key: string]: unknown;
 };
 
-const CLIENT_CONVERSATION_CREATE_PATH = /^\/client\/v1\/conversations$/u;
 const CLIENT_MESSAGE_PATH = /^\/client\/v1\/conversations\/([^/]+)\/messages$/u;
 const CLIENT_MEDIA_COMPLETE_PATH = /^\/client\/v1\/media\/[^/]+\/complete$/u;
+
+export function agentNotificationForConversationStart(input: {
+  conversationId: string;
+  message: { id: string; body: string } | null;
+  newlyAssigned: boolean;
+}): AgentNotificationEvent | null {
+  if (!input.message) return null;
+  return {
+    type: input.newlyAssigned ? 'NEW_CONVERSATION' : 'CUSTOMER_REPLY',
+    conversationId: input.conversationId,
+    messageId: input.message.id,
+    preview: input.message.body,
+  };
+}
 
 export async function agentNotificationForVisitorResponse(
   pathname: string,
@@ -34,12 +51,6 @@ export async function agentNotificationForVisitorResponse(
         }
       : null;
   }
-  if (
-    CLIENT_CONVERSATION_CREATE_PATH.test(pathname) &&
-    response.status === 201
-  ) {
-    return responseNewConversation(response);
-  }
   if (CLIENT_MEDIA_COMPLETE_PATH.test(pathname)) {
     const payload = await responseMediaComplete(response);
     if (!payload?.duplicate && payload?.conversationId && payload.messageId) {
@@ -52,33 +63,6 @@ export async function agentNotificationForVisitorResponse(
     }
   }
   return null;
-}
-
-async function responseNewConversation(
-  response: Response,
-): Promise<AgentNotificationEvent | null> {
-  try {
-    const value = (await response.clone().json()) as {
-      conversation?: {
-        id?: string;
-        messages?: Array<{ id?: string; direction?: string; body?: string }>;
-      };
-    };
-    const conversationId = value.conversation?.id;
-    if (typeof conversationId !== 'string' || !conversationId) return null;
-    const message = value.conversation?.messages
-      ?.slice()
-      .reverse()
-      .find((item) => item.direction === 'customer' && item.id);
-    return {
-      type: 'NEW_CONVERSATION',
-      conversationId,
-      messageId: message?.id || conversationId,
-      preview: message?.body ?? '',
-    };
-  } catch {
-    return null;
-  }
 }
 
 async function responseMessage(

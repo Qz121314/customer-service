@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { agentNotificationForVisitorResponse } from '../src/worker/agent-notification-event.ts';
+import {
+  agentNotificationForConversationStart,
+  agentNotificationForVisitorResponse,
+} from '../src/worker/agent-notification-event.ts';
 
 test('every durable visitor text message carries exact customer-reply identity', async () => {
   for (const [messageId, body] of [
@@ -21,21 +24,12 @@ test('every durable visitor text message carries exact customer-reply identity',
   }
 });
 
-test('new conversation is distinct and retries do not dispatch another reminder', async () => {
-  const created = await agentNotificationForVisitorResponse(
-    '/client/v1/conversations',
-    Response.json(
-      {
-        conversation: {
-          id: 'conversation-new',
-          messages: [
-            { id: 'message-new', direction: 'customer', body: 'Need help' },
-          ],
-        },
-      },
-      { status: 201 },
-    ),
-  );
+test('conversation starts notify exactly once from durable message identity', () => {
+  const created = agentNotificationForConversationStart({
+    conversationId: 'conversation-new',
+    message: { id: 'message-new', body: 'Need help' },
+    newlyAssigned: true,
+  });
   assert.deepEqual(created, {
     type: 'NEW_CONVERSATION',
     conversationId: 'conversation-new',
@@ -43,13 +37,23 @@ test('new conversation is distinct and retries do not dispatch another reminder'
     preview: 'Need help',
   });
 
-  const duplicate = await agentNotificationForVisitorResponse(
-    '/client/v1/conversations/conversation-new/messages',
-    Response.json(
-      { message: { id: 'message-new', body: 'Need help' }, duplicate: true },
-      { status: 200 },
-    ),
-  );
+  const reused = agentNotificationForConversationStart({
+    conversationId: 'conversation-new',
+    message: { id: 'message-reused', body: 'Still there?' },
+    newlyAssigned: false,
+  });
+  assert.deepEqual(reused, {
+    type: 'CUSTOMER_REPLY',
+    conversationId: 'conversation-new',
+    messageId: 'message-reused',
+    preview: 'Still there?',
+  });
+
+  const duplicate = agentNotificationForConversationStart({
+    conversationId: 'conversation-new',
+    message: null,
+    newlyAssigned: false,
+  });
   assert.equal(duplicate, null);
 });
 
