@@ -10,6 +10,7 @@ import {
   clearAgentNotificationOpenIntent,
   agentNotificationMessageTarget,
   agentNotificationOpenTarget,
+  resolveAgentNotificationConversation,
   type AgentNotificationState,
 } from './agent-push';
 import type { Filter } from './dashboard-runtime';
@@ -138,6 +139,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   totalUnread,
   overview,
   busy,
+  conversations,
   visibleConversations,
   conversationCount,
   selectedId,
@@ -158,6 +160,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   totalUnread: number;
   overview: AgentInbox['overview'];
   busy: boolean;
+  conversations: Conversation[];
   visibleConversations: Conversation[];
   conversationCount: number;
   selectedId: string | null;
@@ -228,26 +231,17 @@ export const AgentInboxPane = memo(function AgentInboxPane({
     }
     if (resetInboxView) return;
 
-    const directTarget = visibleConversations.find(
-      (conversation) => conversation.id === notificationOpenPending,
+    const target = resolveAgentNotificationConversation(
+      conversations,
+      notificationOpenPending,
     );
-    const target =
-      directTarget ??
-      [...visibleConversations]
-        .filter((conversation) => conversation.agent_unread_count > 0)
-        .sort((left, right) => {
-          const leftTime = Date.parse(left.last_message_at || left.created_at);
-          const rightTime = Date.parse(
-            right.last_message_at || right.created_at,
-          );
-          return rightTime - leftTime;
-        })[0];
 
     setNotificationOpenPending(null);
     clearAgentNotificationOpenIntent();
     if (target) selectConversation(target.id, 'notification');
   }, [
     busy,
+    conversations,
     filter,
     notificationOpenPending,
     onFilterChange,
@@ -255,7 +249,6 @@ export const AgentInboxPane = memo(function AgentInboxPane({
     overview,
     searchQuery,
     selectConversation,
-    visibleConversations,
   ]);
 
   return (

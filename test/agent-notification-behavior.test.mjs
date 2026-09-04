@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { URL } from 'node:url';
 import { emitAgentMessageTone } from '../src/dashboard/dashboard-runtime.ts';
 import {
   enableAgentNotifications,
   prepareAgentNotifications,
+  runBestEffortAgentCapability,
   updateAgentAppBadge,
 } from '../src/dashboard/agent-push.ts';
 
@@ -317,4 +320,38 @@ test('app badge follows unread message total and clears at zero', () => {
   } finally {
     restoreNavigator();
   }
+});
+
+test('browser reminder failures cannot interrupt core realtime state updates', () => {
+  let continued = false;
+  assert.doesNotThrow(() => {
+    runBestEffortAgentCapability(() => {
+      throw new Error('sound unavailable');
+    });
+    runBestEffortAgentCapability(() => {
+      throw new Error('vibration unavailable');
+    });
+    continued = true;
+  });
+  assert.equal(continued, true);
+
+  const portal = readFileSync(
+    new URL('../src/dashboard/AgentPortal.tsx', import.meta.url),
+    'utf8',
+  );
+  const handlerStart = portal.indexOf(
+    "payload.type !== 'conversation.changed'",
+  );
+  const handlerEnd = portal.indexOf(
+    "socket.addEventListener('close'",
+    handlerStart,
+  );
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  const handler = portal.slice(handlerStart, handlerEnd);
+  assert.ok(
+    handler.indexOf('setConversations') < handler.indexOf('alertForReminder'),
+  );
+  assert.ok(
+    handler.indexOf('setOverview') < handler.indexOf('alertForReminder'),
+  );
 });

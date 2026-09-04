@@ -6,6 +6,7 @@ import {
   agentNotificationMessageTarget,
   agentNotificationOpenTarget,
   clearAgentNotificationOpenIntent,
+  resolveAgentNotificationConversation,
 } from '../src/dashboard/agent-push.ts';
 
 function source(path) {
@@ -73,10 +74,70 @@ test('service worker focuses an existing agent PWA with exact message identity',
   assert.match(serviceWorker, /messageId: event\.notification\.data/u);
   assert.match(serviceWorker, /await existingAgent\.focus\(\)/u);
   assert.doesNotMatch(serviceWorker, /existingAgent\.navigate\(/u);
-  assert.match(inbox, /conversation\.id === notificationOpenPending/u);
+  assert.match(inbox, /resolveAgentNotificationConversation/u);
   assert.match(inbox, /selectConversation\(target\.id, 'notification'\)/u);
   assert.doesNotMatch(inbox, /heartbeat\(/u);
   assert.doesNotMatch(inbox, /getAgentInbox\(/u);
+});
+
+test('exact notification targets use authoritative conversations despite filters', () => {
+  const conversations = [
+    {
+      id: 'conversation-a',
+      status: 'closed',
+      visitor_name: 'Hidden visitor',
+      agent_unread_count: 1,
+      last_message_at: '2026-09-04T10:00:00.000Z',
+      created_at: '2026-09-04T09:00:00.000Z',
+    },
+    {
+      id: 'conversation-b',
+      status: 'open',
+      visitor_name: 'Visible visitor',
+      agent_unread_count: 2,
+      last_message_at: '2026-09-04T11:00:00.000Z',
+      created_at: '2026-09-04T08:00:00.000Z',
+    },
+  ];
+  const searchVisible = conversations.filter((conversation) =>
+    conversation.visitor_name.includes('Visible'),
+  );
+  const statusVisible = conversations.filter(
+    (conversation) => conversation.status === 'open',
+  );
+  assert.equal(
+    searchVisible.some(({ id }) => id === 'conversation-a'),
+    false,
+  );
+  assert.equal(
+    statusVisible.some(({ id }) => id === 'conversation-a'),
+    false,
+  );
+  assert.equal(
+    resolveAgentNotificationConversation(conversations, 'conversation-a')?.id,
+    'conversation-a',
+  );
+});
+
+test('missing exact notification target safely falls back to latest unread', () => {
+  const conversations = [
+    {
+      id: 'conversation-old',
+      agent_unread_count: 1,
+      last_message_at: '2026-09-04T10:00:00.000Z',
+      created_at: '2026-09-04T09:00:00.000Z',
+    },
+    {
+      id: 'conversation-latest',
+      agent_unread_count: 1,
+      last_message_at: '2026-09-04T11:00:00.000Z',
+      created_at: '2026-09-04T08:00:00.000Z',
+    },
+  ];
+  assert.equal(
+    resolveAgentNotificationConversation(conversations, 'expired-target')?.id,
+    'conversation-latest',
+  );
 });
 
 test('authoritative foreground badge sync resets service-worker delta state', () => {

@@ -13,6 +13,44 @@ type PushConfig = {
   applicationServerKey: string;
 };
 
+type NotificationConversation = {
+  id: string;
+  agent_unread_count: number;
+  last_message_at: string;
+  created_at: string;
+};
+
+export function runBestEffortAgentCapability(
+  action: () => void | Promise<void>,
+): void {
+  try {
+    const task = action();
+    void task?.catch(() => undefined);
+  } catch {
+    // Browser notification capabilities must never affect the core workspace.
+  }
+}
+
+export function resolveAgentNotificationConversation<
+  T extends NotificationConversation,
+>(conversations: T[], targetId: string): T | null {
+  if (targetId !== AGENT_NOTIFICATION_TARGET) {
+    const exact = conversations.find(
+      (conversation) => conversation.id === targetId,
+    );
+    if (exact) return exact;
+  }
+  return (
+    conversations
+      .filter((conversation) => conversation.agent_unread_count > 0)
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.last_message_at || left.created_at);
+        const rightTime = Date.parse(right.last_message_at || right.created_at);
+        return rightTime - leftTime;
+      })[0] ?? null
+  );
+}
+
 export function hasAgentNotificationOpenIntent(): boolean {
   return agentNotificationOpenTarget() !== null;
 }
@@ -122,14 +160,16 @@ export function updateAgentAppBadge(unreadMessageCount: number): void {
     setAppBadge?: (count?: number) => Promise<void>;
     clearAppBadge?: () => Promise<void>;
   };
-  const task =
+  runBestEffortAgentCapability(() =>
     unreadMessageCount > 0
       ? badgeNavigator.setAppBadge?.(unreadMessageCount)
-      : badgeNavigator.clearAppBadge?.();
-  void task?.catch(() => undefined);
-  navigator.serviceWorker?.controller?.postMessage({
-    type: 'agent.badge.sync',
-    unreadMessageCount,
+      : badgeNavigator.clearAppBadge?.(),
+  );
+  runBestEffortAgentCapability(() => {
+    navigator.serviceWorker?.controller?.postMessage({
+      type: 'agent.badge.sync',
+      unreadMessageCount,
+    });
   });
 }
 

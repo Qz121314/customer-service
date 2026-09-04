@@ -84,6 +84,7 @@ import {
   disableAgentNotifications,
   enableAgentNotifications,
   prepareAgentNotifications,
+  runBestEffortAgentCapability,
   updateAgentAppBadge,
   type AgentNotificationState,
 } from './agent-push';
@@ -587,13 +588,15 @@ function AgentWorkspace({
       if (seen.has(messageId)) return;
       seen.add(messageId);
       if (seen.size > 500) seen.delete(seen.values().next().value!);
-      playIncomingTone(type);
+      runBestEffortAgentCapability(() => playIncomingTone(type));
       if (document.visibilityState === 'visible' && 'vibrate' in navigator) {
-        navigator.vibrate(
-          type === 'NEW_CONVERSATION'
-            ? [220, 100, 220, 100, 320]
-            : [220, 100, 220],
-        );
+        runBestEffortAgentCapability(() => {
+          navigator.vibrate(
+            type === 'NEW_CONVERSATION'
+              ? [220, 100, 220, 100, 320]
+              : [220, 100, 220],
+          );
+        });
       }
     },
     [playIncomingTone],
@@ -821,6 +824,16 @@ function AgentWorkspace({
         } else {
           unreadCountRef.current.delete(next.id);
         }
+        setConversations((current) => {
+          const withoutCurrent = current.filter((item) => item.id !== next.id);
+          if (!belongsToAgent) return withoutCurrent;
+          return sortedConversationList([next, ...withoutCurrent]);
+        });
+        if (belongsToAgent && payload.overview) {
+          setOverview((current) =>
+            mergeAgentOverview(current, payload.overview!),
+          );
+        }
         if (belongsToAgent && payload.reminder?.messageId) {
           alertForReminder(payload.reminder.type, payload.reminder.messageId);
         } else if (
@@ -830,16 +843,6 @@ function AgentWorkspace({
           alertForReminder(
             isNewAssignment ? 'NEW_CONVERSATION' : 'CUSTOMER_REPLY',
             `${next.id}:${next.last_message_at}`,
-          );
-        }
-        setConversations((current) => {
-          const withoutCurrent = current.filter((item) => item.id !== next.id);
-          if (!belongsToAgent) return withoutCurrent;
-          return sortedConversationList([next, ...withoutCurrent]);
-        });
-        if (belongsToAgent && payload.overview) {
-          setOverview((current) =>
-            mergeAgentOverview(current, payload.overview!),
           );
         }
       });
@@ -1822,6 +1825,7 @@ function AgentWorkspace({
         totalUnread={totalUnread}
         overview={overview}
         busy={busy}
+        conversations={conversations}
         visibleConversations={visibleConversations}
         conversationCount={conversations.length}
         selectedId={selectedId}
