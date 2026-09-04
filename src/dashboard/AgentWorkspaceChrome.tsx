@@ -47,8 +47,8 @@ export function AgentActionToolbar({
           className={`full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
           aria-label={
             notificationState === 'enabled'
-              ? '关闭新会话通知'
-              : '开启新会话通知'
+              ? '关闭客户消息通知'
+              : '开启客户消息通知'
           }
           title={
             notificationState === 'unsupported'
@@ -58,8 +58,8 @@ export function AgentActionToolbar({
                 : notificationState === 'blocked'
                   ? '通知已被浏览器阻止'
                   : notificationState === 'enabled'
-                    ? '新会话通知已开启'
-                    : '开启新会话通知'
+                    ? '客户消息通知已开启'
+                    : '开启客户消息通知'
           }
           disabled={notificationBusy || notificationState === 'unsupported'}
           onClick={onToggleNotifications}
@@ -69,12 +69,12 @@ export function AgentActionToolbar({
             {notificationBusy
               ? '正在设置…'
               : notificationState === 'enabled'
-                ? '新会话通知已开启'
+                ? '客户消息通知已开启'
                 : notificationState === 'install-required'
                   ? '添加到主屏幕后开启通知'
                   : notificationState === 'blocked'
                     ? '通知已被阻止'
-                    : '开启新会话通知'}
+                    : '开启客户消息通知'}
           </span>
         </Button>
         <Button
@@ -82,14 +82,12 @@ export function AgentActionToolbar({
           variant="ghost"
           className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
           aria-pressed={soundEnabled}
-          aria-label={soundEnabled ? '关闭工作台提示音' : '开启工作台提示音'}
-          title={soundEnabled ? '工作台提示音已开启' : '工作台提示音已静音'}
+          aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
+          title={soundEnabled ? '消息提示音已开启' : '消息提示音已关闭'}
           onClick={onToggleSound}
         >
           <UiIcon name="sound" />
-          <span>
-            {soundEnabled ? '工作台提示音已开启' : '工作台提示音已静音'}
-          </span>
+          <span>{soundEnabled ? '消息提示音已开启' : '消息提示音已关闭'}</span>
         </Button>
         <Button
           type="button"
@@ -145,11 +143,16 @@ export function AgentMobileSettingsPage({
   notificationState,
   notificationBusy,
   soundEnabled,
+  vibrationEnabled,
+  vibrationSupported,
   realtimeReady,
   audioReady,
   onClose,
   onToggleNotifications,
   onToggleSound,
+  onToggleVibration,
+  onTestSound,
+  onTestVibration,
   onOpenCardSettings,
   onOpenAutoReply,
   onOpenStatistics,
@@ -159,11 +162,16 @@ export function AgentMobileSettingsPage({
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
   soundEnabled: boolean;
+  vibrationEnabled: boolean;
+  vibrationSupported: boolean;
   realtimeReady: boolean;
   audioReady: boolean;
   onClose: () => void;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
+  onToggleVibration: () => void;
+  onTestSound: () => void;
+  onTestVibration: () => void;
   onOpenCardSettings: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
@@ -204,7 +212,8 @@ export function AgentMobileSettingsPage({
         : '通过浏览器菜单完成安装';
   const notificationsReady = notificationState === 'enabled';
   const pwaReady = installState === 'installed';
-  const reminderReady = realtimeReady && notificationsReady && audioReady;
+  const audioStateReady = !soundEnabled || audioReady;
+  const reminderReady = realtimeReady && notificationsReady && audioStateReady;
 
   const openInstall = () => {
     if (installState === 'installed') return;
@@ -255,13 +264,19 @@ export function AgentMobileSettingsPage({
               <div>
                 <dt>提示音</dt>
                 <dd>
-                  {audioReady
-                    ? '● 已开启'
-                    : soundEnabled
-                      ? '● 待解锁'
-                      : '● 已静音'}
+                  {!soundEnabled
+                    ? '● 已关闭'
+                    : audioReady
+                      ? '● 已开启'
+                      : '● 待解锁'}
                 </dd>
               </div>
+              {vibrationSupported && (
+                <div>
+                  <dt>震动</dt>
+                  <dd>{vibrationEnabled ? '● 已开启' : '● 已关闭'}</dd>
+                </div>
+              )}
               <div>
                 <dt>PWA</dt>
                 <dd>{pwaReady ? '● 已安装' : '● 建议安装'}</dd>
@@ -328,13 +343,65 @@ export function AgentMobileSettingsPage({
                 <UiIcon name="sound" />
               </i>
               <span>
-                <strong>工作台提示音</strong>
+                <strong>消息提示音</strong>
                 <small>
-                  {soundEnabled ? '已开启 · 工作台打开时响铃' : '已静音'}
+                  {soundEnabled
+                    ? '已开启 · 工作台前台时每条客户消息都会响铃'
+                    : '已关闭 · 不播放工作台提示音'}
                 </small>
               </span>
               <b aria-hidden="true" />
             </button>
+            {vibrationSupported && (
+              <button
+                type="button"
+                className={`mobile-agent-settings-item${vibrationEnabled ? ' is-enabled' : ''}`}
+                onClick={onToggleVibration}
+              >
+                <i aria-hidden="true">
+                  <UiIcon name="notification" />
+                </i>
+                <span>
+                  <strong>震动提醒</strong>
+                  <small>
+                    {vibrationEnabled
+                      ? '已开启 · 工作台前台时每条客户消息都会震动'
+                      : '已关闭 · 不触发工作台震动'}
+                  </small>
+                </span>
+                <b aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="mobile-agent-settings-item"
+              onClick={onTestSound}
+            >
+              <i aria-hidden="true">
+                <UiIcon name="sound" />
+              </i>
+              <span>
+                <strong>测试提示音</strong>
+                <small>立即播放一次客户回复提示音</small>
+              </span>
+              <UiIcon name="chevron" />
+            </button>
+            {vibrationSupported && (
+              <button
+                type="button"
+                className="mobile-agent-settings-item"
+                onClick={onTestVibration}
+              >
+                <i aria-hidden="true">
+                  <UiIcon name="notification" />
+                </i>
+                <span>
+                  <strong>测试震动</strong>
+                  <small>立即执行一次客户回复震动节奏</small>
+                </span>
+                <UiIcon name="chevron" />
+              </button>
+            )}
           </div>
           {showManualInstall && (
             <p className="mobile-agent-install-help" role="status">
