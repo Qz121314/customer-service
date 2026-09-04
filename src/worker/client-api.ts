@@ -80,6 +80,11 @@ export type ConversationEventSnapshot = ConversationRow & {
   visitor_name: string | null;
 };
 
+type MessageWriteConversationSnapshot = Omit<
+  ConversationEventSnapshot,
+  'last_message_at' | 'last_message'
+>;
+
 type MessageRow = {
   id: string;
   conversation_id: string;
@@ -829,6 +834,15 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     return c.json({ message: clientMessage(persistedMessage.message) });
   }
   const createdMessage = persistedMessage.message;
+  const conversationSnapshot: ConversationEventSnapshot | undefined =
+    persistedMessage.conversationUpdated
+      ? {
+          ...conversation,
+          agent_unread_count: Number(conversation.agent_unread_count || 0) + 1,
+          last_message_at: createdMessage.created_at,
+          last_message: createdMessage.body,
+        }
+      : undefined;
 
   await deferClientRealtime(
     c,
@@ -842,6 +856,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
         conversation.id,
         'message.created',
         { message: clientMessage(createdMessage) },
+        { conversationSnapshot },
       ),
     ]),
   );
@@ -929,13 +944,20 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
                visitor_read_through_at = ?2
                AND visitor_read_through_id < ?3
              )
-           )`,
+           )
+         RETURNING visitor_unread_count`,
       )
         .bind(conversation.id, boundary.created_at, boundary.id)
-        .run()
+        .first<{ visitor_unread_count: number }>()
     : null;
 
-  if (readResult?.meta.changes) {
+  if (readResult) {
+    const conversationSnapshot: ConversationEventSnapshot = {
+      ...conversation,
+      external_id: visitor.external_id,
+      visitor_name: null,
+      visitor_unread_count: Number(readResult.visitor_unread_count || 0),
+    };
     await deferClientRealtime(
       c,
       Promise.allSettled([
@@ -952,7 +974,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
             reader: 'visitor',
             lastMessageId: boundary?.id ?? null,
           },
-          { includeAgentInbox: false },
+          { includeAgentInbox: false, conversationSnapshot },
         ),
       ]).then((results) => {
         for (const result of results) {
@@ -1581,13 +1603,27 @@ async function ownedConversationForMessageWrite(
   conversationId: string,
   siteId: string,
   visitorId: string,
-): Promise<Pick<
-  ConversationRow,
-  'id' | 'visitor_id' | 'status' | 'assigned_agent'
-> | null> {
+): Promise<MessageWriteConversationSnapshot | null> {
   return db
     .prepare(
-      `SELECT c.id, c.visitor_id, c.status, c.assigned_agent
+      `SELECT c.id, c.visitor_id, c.status, c.assigned_agent,
+         c.site_id, c.subject, c.product_id, c.section_id, c.section_name,
+         c.category_id, c.category_name, c.product_title, c.product_cover_url,
+         c.product_href, c.expires_at, c.visitor_unread_count,
+         c.agent_unread_count, c.created_at,
+         v.external_id, v.display_name AS visitor_name,
+         (
+           SELECT a.name
+           FROM agents a
+           WHERE a.id = c.assigned_agent AND a.site_id = c.site_id
+           LIMIT 1
+         ) AS agent_name,
+         (
+           SELECT a.avatar_version
+           FROM agents a
+           WHERE a.id = c.assigned_agent AND a.site_id = c.site_id
+           LIMIT 1
+         ) AS agent_avatar_version
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.id = ?1 AND c.site_id = ?2 AND v.external_id = ?3
@@ -1596,9 +1632,7 @@ async function ownedConversationForMessageWrite(
        LIMIT 1`,
     )
     .bind(conversationId, siteId, visitorId)
-    .first<
-      Pick<ConversationRow, 'id' | 'visitor_id' | 'status' | 'assigned_agent'>
-    >();
+    .first<MessageWriteConversationSnapshot>();
 }
 
 async function ownedConversation(
@@ -1678,7 +1712,10 @@ async function conversationReuseKey(
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(
-      `cta-reuse-v1\n${siteId}\n${visitorId}\n${productId}`,
+      `cta-reuse-v1\
+${siteId}\
+${visitorId}\
+${productId}`,
     ),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
@@ -1693,7 +1730,9 @@ async function nextConversationReuseKey(
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(
-      `cta-reuse-next-v1\n${reuseKey}\n${previousConversationId}`,
+      `cta-reuse-next-v1\
+${reuseKey}\
+${previousConversationId}`,
     ),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
@@ -1977,10 +2016,14 @@ async function persistClientMessage(
     body: string;
     clientMessageId: string;
   },
-): Promise<{ message: MessageRow; duplicate: boolean }> {
+): Promise<{
+  message: MessageRow;
+  duplicate: boolean;
+  conversationUpdated: boolean;
+}> {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
-  const [inserted] = await db.batch([
+  const [inserted, conversationUpdate] = await db.batch([
     db
       .prepare(
         `INSERT OR IGNORE INTO messages (
@@ -2019,7 +2062,7 @@ async function persistClientMessage(
       .bind(input.conversationId, input.clientMessageId)
       .first<MessageRow>();
     if (!existing) throw new Error('Message persistence conflict');
-    return { message: existing, duplicate: true };
+    return { message: existing, duplicate: true, conversationUpdated: false };
   }
 
   const message: MessageRow = {
@@ -2033,7 +2076,11 @@ async function persistClientMessage(
     read_by_agent_at: null,
     created_at: createdAt,
   };
-  return { message, duplicate: false };
+  return {
+    message,
+    duplicate: false,
+    conversationUpdated: Boolean(conversationUpdate?.meta.changes),
+  };
 }
 
 function assignmentVisitorMessage(
