@@ -221,7 +221,9 @@ function agentReminderVibrationPattern(type: AgentReminderType): number[] {
     : [220, 100, 220];
 }
 
-function supportsAgentVibration(value: { vibrate?: unknown } = navigator): boolean {
+function supportsAgentVibration(
+  value: { vibrate?: unknown } = navigator,
+): boolean {
   return typeof value.vibrate === 'function';
 }
 
