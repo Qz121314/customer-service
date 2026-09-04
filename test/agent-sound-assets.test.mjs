@@ -30,10 +30,7 @@ test('asset plans preserve distinct customer-reply cadences', () => {
     gapMs: 90,
     gain: 0.92,
   });
-  assert.equal(
-    agentSoundAssetPlan('triple', 'CUSTOMER_REPLY').repeats,
-    3,
-  );
+  assert.equal(agentSoundAssetPlan('triple', 'CUSTOMER_REPLY').repeats, 3);
   assert.equal(agentSoundAssetPlan('strong', 'CUSTOMER_REPLY').repeats, 2);
   assert.equal(agentSoundAssetPlan('crisp', 'CUSTOMER_REPLY').repeats, 1);
   assert.equal(agentSoundAssetPlan('soft', 'CUSTOMER_REPLY').repeats, 1);
@@ -122,16 +119,11 @@ test('asset playback failure reports false so the synthesized fallback can run',
   };
 
   assert.equal(
-    await playAgentSoundAssetSequence(
-      context,
-      'CUSTOMER_REPLY',
-      'crisp',
-      {
-        async fetchAsset() {
-          throw new Error('asset unavailable');
-        },
+    await playAgentSoundAssetSequence(context, 'CUSTOMER_REPLY', 'crisp', {
+      async fetchAsset() {
+        throw new Error('asset unavailable');
       },
-    ),
+    }),
     false,
   );
 });
