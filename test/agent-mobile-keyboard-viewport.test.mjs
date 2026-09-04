@@ -12,6 +12,7 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
   const agentEntry = source('../src/dashboard/agent-entry.tsx');
   const navigation = source('../src/dashboard/agent-navigation.ts');
   const mobileLayout = source('../src/dashboard/agent-mobile-layout.css');
+  const routeLayout = source('../src/dashboard/agent-route.css');
 
   assert.ok(main.includes("import('./agent-entry')"));
 
@@ -61,6 +62,25 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
     mobileLayout,
     /\.workspace-shell\.is-thread-open \.thread-pane\s*{[\s\S]*?height: auto;[\s\S]*?flex: 1 1 auto;/,
     'mobile thread must consume the remaining visual viewport',
+  );
+
+  for (const contract of [
+    'grid-template-rows: auto minmax(0, 1fr) auto;',
+    "'thread-head'",
+    "'thread-messages'",
+    "'thread-composer'",
+    'grid-area: thread-head;',
+    'grid-area: thread-messages;',
+    'grid-area: thread-composer;',
+  ]) {
+    assert.ok(routeLayout.includes(contract), contract);
+  }
+
+  assert.ok(
+    routeLayout.includes(
+      '.workspace-shell.is-thread-open .thread-pane {\n  display: grid;\n}',
+    ),
+    'mobile thread-open override must preserve the chat grid contract',
   );
 
   const renderIndex = agentEntry.indexOf(
