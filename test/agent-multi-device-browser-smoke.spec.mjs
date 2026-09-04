@@ -25,6 +25,70 @@ async function loginAgent(page, username, password) {
   await expect(page.getByText('连接正常')).toBeVisible();
 }
 
+function attachBrowserDiagnostics(page, label) {
+  page.on('pageerror', (error) => {
+    console.error(`[${label}] pageerror ${error.stack ?? error.message}`);
+  });
+  page.on('console', (message) => {
+    if (message.type() !== 'error') return;
+    console.error(`[${label}] console.error ${message.text()}`);
+  });
+  page.on('crash', () => {
+    console.error(`[${label}] page-crash`);
+  });
+}
+
+async function logRenderedInbox(page, label) {
+  try {
+    const rendered = await page.evaluate(() => ({
+      href: window.location.href,
+      workspace: Boolean(document.querySelector('.workspace-shell')),
+      conversationPane: Boolean(document.querySelector('.conversation-pane')),
+      bodyText: document.body.innerText.slice(0, 1600),
+      rows: Array.from(document.querySelectorAll('.conversation-row')).map(
+        (row) => ({
+          id: row.getAttribute('data-conversation-id'),
+          text: row.textContent,
+          ariaLabel: row.getAttribute('aria-label'),
+        }),
+      ),
+    }));
+    console.error(`[${label}] rendered-inbox ${JSON.stringify(rendered)}`);
+  } catch (error) {
+    console.error(
+      `[${label}] rendered-inbox-error ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
+    );
+  }
+}
+
+async function logAgentBootstrap(page, label) {
+  try {
+    const result = await page.evaluate(async () => {
+      const response = await fetch('/api/agent/bootstrap', {
+        credentials: 'same-origin',
+      });
+      const payload = await response.json();
+      return {
+        status: response.status,
+        conversations: Array.isArray(payload?.conversations)
+          ? payload.conversations.map((conversation) => ({
+              id: conversation.id,
+              productTitle: conversation.product_title,
+              subject: conversation.subject,
+              assignedAgent: conversation.assigned_agent,
+              status: conversation.status,
+            }))
+          : null,
+      };
+    });
+    console.error(`[${label}] bootstrap ${JSON.stringify(result)}`);
+  } catch (error) {
+    console.error(
+      `[${label}] bootstrap-error ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
+    );
+  }
+}
+
 test('desktop and phone share availability while logout remains device-local', async ({
   browser,
   page: adminPage,
@@ -76,6 +140,9 @@ test('desktop and phone share availability while logout remains device-local', a
   });
   const desktop = await desktopContext.newPage();
   const phone = await phoneContext.newPage();
+  attachBrowserDiagnostics(desktop, 'desktop');
+  attachBrowserDiagnostics(phone, 'phone');
+
   try {
     await loginAgent(desktop, username, password);
     await loginAgent(phone, username, password);
@@ -113,11 +180,27 @@ test('desktop and phone share availability while logout remains device-local', a
     const created = await createConversation.json();
     const conversationId = created.conversation.id;
 
-    for (const device of [desktop, phone]) {
+    await Promise.all([
+      logAgentBootstrap(desktop, 'desktop'),
+      logAgentBootstrap(phone, 'phone'),
+      logRenderedInbox(desktop, 'desktop'),
+      logRenderedInbox(phone, 'phone'),
+    ]);
+
+    for (const [label, device] of [
+      ['desktop', desktop],
+      ['phone', phone],
+    ]) {
       const conversation = device.getByRole('button', {
         name: /Multi-device Product/u,
       });
-      await expect(conversation).toBeVisible();
+      try {
+        await expect(conversation).toBeVisible({ timeout: 10_000 });
+      } catch (error) {
+        await logAgentBootstrap(device, `${label}-after-wait`);
+        await logRenderedInbox(device, `${label}-after-wait`);
+        throw error;
+      }
       await conversation.click();
       await expect(device.getByPlaceholder('输入回复内容…')).toBeVisible();
     }
