@@ -79,7 +79,12 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(healthSummary.locator('dd .ui-icon').first()).toBeVisible();
   const healthColors = await healthSummary
     .locator('dd > span')
-    .evaluateAll((rows) => rows.map((row) => getComputedStyle(row).color));
+    .evaluateAll((rows) =>
+      rows.map(
+        (row) =>
+          row.ownerDocument.defaultView?.getComputedStyle(row).color ?? '',
+      ),
+    );
   expect(new Set(healthColors).size).toBeGreaterThan(1);
 
   await expect(settingsPage.getByText('接待', { exact: true })).toBeVisible();
