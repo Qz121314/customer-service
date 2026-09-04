@@ -1,174 +1,514 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import {
+  agentApi,
+  applyMigrations,
+  blockingRooms,
+  changedRows,
+  clientApi,
+  createExecutionContext,
+  createInstrumentedD1,
+  DatabaseSync,
+  executionsMatching,
+  fakeRooms,
+  sha256,
+} from './helpers/performance-runtime.mjs';
 
-const agentSource = readFileSync('src/worker/agent-api.ts', 'utf8');
-const assignmentBroadcastSource = readFileSync(
-  'src/worker/assignment-broadcast.ts',
-  'utf8',
-);
-const clientSource = readFileSync('src/worker/client-api.ts', 'utf8');
-const mediaSource = readFileSync('src/worker/media-store.ts', 'utf8');
+const AGENT_ID = 'agent-message-cost';
+const CONVERSATION_ID = 'conversation-message-cost';
+const VISITOR_DATABASE_ID = 'visitor-message-cost';
+const VISITOR_ID = 'MSG123';
+const SESSION_TOKEN = 'message-cost-session-token';
 
-function section(source, start, end) {
-  const from = source.indexOf(start);
-  assert.notEqual(from, -1, `missing start marker: ${start}`);
-  const to = source.indexOf(end, from);
-  assert.notEqual(to, -1, `missing end marker: ${end}`);
-  return source.slice(from, to);
+function createMessageFixture(status = 'open') {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  database
+    .prepare(
+      `INSERT INTO agents (
+         id, site_id, name, username, password_hash, status, is_enabled,
+         last_seen_at
+       ) VALUES (?1, 'default', 'Message Cost Agent', 'message-cost-agent',
+         'test-password-hash', 'online', 1, CURRENT_TIMESTAMP)`,
+    )
+    .run(AGENT_ID);
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES ('message-cost-session', ?1, ?2, ?3)`,
+    )
+    .run(AGENT_ID, sha256(SESSION_TOKEN), expiresAt);
+  database
+    .prepare(
+      `INSERT INTO visitors (
+         id, site_id, external_id, token_hash, display_name, expires_at
+       ) VALUES (?1, 'default', ?2, 'unused-message-cost-token',
+         'Message Cost Visitor', ?3)`,
+    )
+    .run(VISITOR_DATABASE_ID, VISITOR_ID, expiresAt);
+  database
+    .prepare(
+      `INSERT INTO conversations (
+         id, site_id, visitor_id, status, assigned_agent,
+         visitor_unread_count, agent_unread_count, expires_at,
+         last_message_at, created_at, updated_at, last_message_preview
+       ) VALUES (?1, 'default', ?2, ?3, ?4, 0, 0, ?5,
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)`,
+    )
+    .run(CONVERSATION_ID, VISITOR_DATABASE_ID, status, AGENT_ID, expiresAt);
+  const instrumentation = createInstrumentedD1(database);
+  return { database, instrumentation };
 }
 
-test('agent text sends keep persistence on a bounded D1 path and reuse the updated conversation snapshot', () => {
-  const route = section(
-    agentSource,
-    "agentApi.post('/api/agent/conversations/:id/messages'",
-    "agentApi.post('/api/agent/conversations/:id/status'",
+function agentRequest(clientMessageId, body = 'Agent cost message') {
+  return {
+    method: 'POST',
+    headers: {
+      cookie: `cs_agent_session=${SESSION_TOKEN}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ body, clientMessageId }),
+  };
+}
+
+function visitorRequest(clientMessageId, body = 'Visitor cost message') {
+  return {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      visitorId: VISITOR_ID,
+      projectId: 'default',
+      body,
+      clientMessageId,
+    }),
+  };
+}
+
+function messageInserts(metrics) {
+  return executionsMatching(
+    metrics,
+    /\bINSERT(?: OR IGNORE)? INTO messages\b/iu,
+    'INSERT',
   );
-  const helper = section(
-    agentSource,
-    'async function assignedConversationForMessageWrite(',
-    'async function assignedConversation(',
+}
+
+function conversationUpdates(metrics) {
+  return executionsMatching(metrics, /\bUPDATE conversations\b/iu, 'UPDATE');
+}
+
+function messageReads(metrics) {
+  return executionsMatching(metrics, /\bFROM messages\b/iu, 'SELECT');
+}
+
+function broadcasterConversationReads(metrics) {
+  return executionsMatching(
+    metrics,
+    /SELECT c\.id, c\.site_id,[\s\S]*c\.last_message_preview AS last_message,[\s\S]*v\.external_id,[\s\S]*WHERE c\.id = \?1[\s\S]*LIMIT 1/iu,
+    'SELECT',
   );
-  const broadcaster = section(
-    clientSource,
-    'export async function broadcastClientConversationEvent(',
-    'function agentConversationSummary(',
+}
+
+function assertMetricIntegrity(metrics) {
+  assert.equal(metrics.executed, metrics.first + metrics.all + metrics.run);
+  assert.equal(
+    metrics.executed,
+    metrics.select + metrics.insert + metrics.update + metrics.delete,
+  );
+  assert.equal(metrics.prepare, metrics.executed);
+}
+
+async function responseBeforeRealtime(request) {
+  return Promise.race([
+    request,
+    new Promise((_, reject) =>
+      setTimeout(
+        () => reject(new Error('message response waited for realtime DO')),
+        500,
+      ),
+    ),
+  ]);
+}
+
+test('agent text normal success has an executable bounded D1 budget and snapshot realtime', async () => {
+  const { database, instrumentation } = createMessageFixture('open');
+  const rooms = blockingRooms();
+  const execution = createExecutionContext();
+  const env = {
+    DB: instrumentation.db,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+
+  const response = await responseBeforeRealtime(
+    agentApi.request(
+      `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+      agentRequest('agent-normal-cost-1'),
+      env,
+      execution.context,
+    ),
+  );
+  assert.equal(response.status, 201);
+  assert.equal(execution.tasks.length, 1);
+  assert.deepEqual(rooms.completed, []);
+
+  const durableMetrics = instrumentation.metrics();
+  assert.equal(durableMetrics.executed, 4);
+  assert.equal(durableMetrics.select, 2);
+  assert.equal(durableMetrics.insert, 1);
+  assert.equal(durableMetrics.update, 1);
+  assert.equal(durableMetrics.delete, 0);
+  assert.equal(durableMetrics.batch, 0);
+  assertMetricIntegrity(durableMetrics);
+  assert.equal(messageInserts(durableMetrics).length, 1);
+  assert.equal(changedRows(messageInserts(durableMetrics)), 1);
+  assert.equal(conversationUpdates(durableMetrics).length, 1);
+  assert.equal(changedRows(conversationUpdates(durableMetrics)), 1);
+  assert.equal(messageReads(durableMetrics).length, 0);
+  assert.equal(broadcasterConversationReads(durableMetrics).length, 0);
+
+  const state = database
+    .prepare(
+      `SELECT status, visitor_unread_count, agent_unread_count,
+         last_message_preview
+       FROM conversations WHERE id = ?1`,
+    )
+    .get(CONVERSATION_ID);
+  assert.equal(state.status, 'pending');
+  assert.equal(state.visitor_unread_count, 1);
+  assert.equal(state.agent_unread_count, 0);
+  assert.equal(state.last_message_preview, 'Agent cost message');
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = ?1 AND client_message_id = ?2`,
+      )
+      .get(CONVERSATION_ID, 'agent-normal-cost-1').count,
+    1,
   );
 
-  assert.match(route, /assignedConversationForMessageWrite\(/u);
-  assert.doesNotMatch(route, /assignedConversation\(c\.env\.DB/u);
-  assert.match(route, /client_message_id, created_at/u);
-  assert.match(route, /const message: MessageRow = \{/u);
-  assert.doesNotMatch(route, /FROM messages WHERE id = \?1/u);
-  assert.match(route, /UPDATE conversations[\s\S]*RETURNING/u);
-  assert.match(route, /conversationSnapshot/u);
-  assert.match(route, /await deferAgentRealtime\(/u);
-  assert.doesNotMatch(route, /await Promise\.allSettled\(/u);
-
-  assert.match(helper, /SELECT c\.id, c\.status/u);
-  assert.match(helper, /v\.external_id/u);
-  assert.match(helper, /v\.display_name AS visitor_name/u);
-  assert.match(helper, /a\.name AS agent_name/u);
-  assert.match(helper, /a\.avatar_version AS agent_avatar_version/u);
-  assert.doesNotMatch(helper, /SELECT c\.\*/u);
-  assert.doesNotMatch(helper, /c\.product_title/u);
-  assert.doesNotMatch(helper, /c\.last_message_preview/u);
-
-  assert.match(
-    broadcaster,
-    /conversationSnapshot\?: ConversationEventSnapshot/u,
+  rooms.release();
+  await execution.drain();
+  const finalMetrics = instrumentation.metrics();
+  assert.equal(finalMetrics.executed, 5);
+  assert.equal(finalMetrics.select, 3);
+  assert.equal(finalMetrics.insert, 1);
+  assert.equal(finalMetrics.update, 1);
+  assert.equal(finalMetrics.delete, 0);
+  assert.equal(finalMetrics.batch, 0);
+  assert.equal(finalMetrics.batchStatements, 0);
+  assertMetricIntegrity(finalMetrics);
+  assert.equal(broadcasterConversationReads(finalMetrics).length, 0);
+  assert.equal(rooms.calls.length, 3);
+  assert.deepEqual(
+    [...rooms.completed].sort(),
+    [
+      CONVERSATION_ID,
+      `client:default:${VISITOR_ID}`,
+      `agent-inbox:${AGENT_ID}`,
+    ].sort(),
   );
-  assert.match(broadcaster, /options\.conversationSnapshot\s*\?\?/u);
+  database.close();
 });
 
-test('visitor text sends keep duplicate reads off the normal write path', () => {
-  const route = section(
-    clientSource,
-    "clientApi.post('/client/v1/conversations/:id/messages'",
-    "clientApi.post('/client/v1/conversations/:id/read'",
+test('agent duplicate clientMessageId does not repeat state mutation or realtime', async () => {
+  const { database, instrumentation } = createMessageFixture('pending');
+  const rooms = fakeRooms();
+  const env = {
+    DB: instrumentation.db,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+  const firstExecution = createExecutionContext();
+  const first = await agentApi.request(
+    `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+    agentRequest('agent-duplicate-cost-1'),
+    env,
+    firstExecution.context,
   );
-  const helper = section(
-    clientSource,
-    'async function persistClientMessage(',
-    'function clientMessage(',
-  );
-  const ownership = section(
-    clientSource,
-    'async function ownedConversationForMessageWrite(',
-    'async function ownedConversation(',
-  );
+  assert.equal(first.status, 201);
+  await firstExecution.drain();
+  const callsAfterFirst = rooms.calls.length;
+  instrumentation.reset();
 
-  assert.match(route, /ownedConversationForMessageWrite\(/u);
-  assert.doesNotMatch(route, /const existingMessage =/u);
-  assert.match(route, /persistedMessage\.duplicate/u);
-  assert.match(helper, /INSERT OR IGNORE INTO messages/u);
-  assert.match(
-    helper,
-    /last_message_at = \?1, last_message_preview = \?2, updated_at = \?1/u,
+  const duplicateExecution = createExecutionContext();
+  const duplicate = await agentApi.request(
+    `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+    agentRequest('agent-duplicate-cost-1'),
+    env,
+    duplicateExecution.context,
   );
-  assert.match(helper, /AND EXISTS \(SELECT 1 FROM messages WHERE id = \?4\)/u);
-  assert.match(
-    helper,
-    /\.bind\(createdAt, input\.body, input\.conversationId, id\)/u,
+  assert.equal(duplicate.status, 200);
+  assert.equal((await duplicate.json()).duplicate, true);
+  assert.equal(duplicateExecution.tasks.length, 0);
+  assert.equal(rooms.calls.length, callsAfterFirst);
+
+  const metrics = instrumentation.metrics();
+  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.select <= 3);
+  assert.ok(metrics.insert <= 1);
+  assert.equal(metrics.update, 0);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 0);
+  assertMetricIntegrity(metrics);
+  assert.equal(changedRows(messageInserts(metrics)), 0);
+  assert.equal(conversationUpdates(metrics).length, 0);
+  assert.ok(messageReads(metrics).length <= 1);
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = ?1 AND client_message_id = ?2`,
+      )
+      .get(CONVERSATION_ID, 'agent-duplicate-cost-1').count,
+    1,
   );
-  assert.match(helper, /if \(!inserted\?\.meta\.changes\)/u);
-  assert.match(helper, /const message: MessageRow = \{/u);
-  assert.ok(
-    helper.indexOf('if (!inserted?.meta.changes)') <
-      helper.indexOf('WHERE conversation_id = ?1 AND client_message_id = ?2'),
-    'duplicate SELECT must only run after an ignored insert',
-  );
-  assert.match(
-    ownership,
-    /SELECT c\.id, c\.visitor_id, c\.status, c\.assigned_agent/u,
-  );
-  assert.match(ownership, /AND c\.assigned_agent IS NOT NULL/u);
-  assert.doesNotMatch(ownership, /last_message/u);
-  assert.doesNotMatch(ownership, /LEFT JOIN agents/u);
-  assert.doesNotMatch(
-    route,
-    /UPDATE visitors SET last_seen_at = CURRENT_TIMESTAMP/u,
-  );
+  database.close();
 });
 
-test('realtime overview scans run only when assignment or status counts can change', () => {
-  const broadcaster = section(
-    clientSource,
-    'export async function broadcastClientConversationEvent(',
-    'function agentConversationSummary(',
-  );
-  const assignmentBroadcaster = section(
-    assignmentBroadcastSource,
-    'export async function broadcastAssignments(',
-    'async function broadcastAssignment(',
-  );
-  const clientRoute = section(
-    clientSource,
-    "clientApi.post('/client/v1/conversations/:id/messages'",
-    "clientApi.post('/client/v1/conversations/:id/read'",
-  );
-  const visitorReadRoute = section(
-    clientSource,
-    "clientApi.post('/client/v1/conversations/:id/read'",
-    "clientApi.get('/client/v1/realtime'",
-  );
-  const agentRoute = section(
-    agentSource,
-    "agentApi.post('/api/agent/conversations/:id/messages'",
-    "agentApi.post('/api/agent/conversations/:id/status'",
+test('agent message conflict performs only the necessary idempotency lookup', async () => {
+  const { database, instrumentation } = createMessageFixture('pending');
+  database
+    .prepare(
+      `INSERT INTO messages (
+         id, conversation_id, sender_type, sender_id, body,
+         client_message_id, created_at
+       ) VALUES ('visitor-conflict-message', ?1, 'visitor', ?2,
+         'Existing visitor message', 'agent-conflict-cost-1', CURRENT_TIMESTAMP)`,
+    )
+    .run(CONVERSATION_ID, VISITOR_DATABASE_ID);
+  instrumentation.reset();
+  const rooms = fakeRooms();
+  const execution = createExecutionContext();
+  const response = await agentApi.request(
+    `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+    agentRequest('agent-conflict-cost-1'),
+    { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
+    execution.context,
   );
 
-  assert.match(
-    broadcaster,
-    /options: \{[\s\S]*includeOverview\?: boolean;[\s\S]*includeAgentInbox\?: boolean;[\s\S]*previousAgentId\?: string \| null;[\s\S]*conversationSnapshot\?: ConversationEventSnapshot;[\s\S]*\} = \{\}/u,
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: 'MESSAGE_ID_CONFLICT' });
+  assert.equal(execution.tasks.length, 0);
+  assert.equal(rooms.calls.length, 0);
+  const metrics = instrumentation.metrics();
+  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.select <= 3);
+  assert.ok(metrics.insert <= 1);
+  assert.equal(metrics.update, 0);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 0);
+  assertMetricIntegrity(metrics);
+  assert.equal(changedRows(messageInserts(metrics)), 0);
+  assert.ok(messageReads(metrics).length <= 1);
+  database.close();
+});
+
+test('agent closed conversation blocks writes while preserving duplicate behavior', async (t) => {
+  await t.test(
+    'new message is rejected without persistence or realtime',
+    async () => {
+      const { database, instrumentation } = createMessageFixture('closed');
+      const rooms = fakeRooms();
+      const execution = createExecutionContext();
+      const response = await agentApi.request(
+        `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+        agentRequest('agent-closed-cost-1'),
+        { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
+        execution.context,
+      );
+
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { error: 'CONVERSATION_CLOSED' });
+      const metrics = instrumentation.metrics();
+      assert.equal(metrics.executed, 3);
+      assert.equal(metrics.select, 3);
+      assert.equal(metrics.insert, 0);
+      assert.equal(metrics.update, 0);
+      assert.equal(metrics.delete, 0);
+      assertMetricIntegrity(metrics);
+      assert.equal(execution.tasks.length, 0);
+      assert.equal(rooms.calls.length, 0);
+      database.close();
+    },
   );
-  assert.match(
-    broadcaster,
-    /type === 'conversation\.assigned' \|\| type === 'conversation\.closed'/u,
+
+  await t.test('existing duplicate remains idempotent', async () => {
+    const { database, instrumentation } = createMessageFixture('closed');
+    database
+      .prepare(
+        `INSERT INTO messages (
+           id, conversation_id, sender_type, sender_id, body,
+           client_message_id, created_at
+         ) VALUES ('closed-duplicate-message', ?1, 'agent', ?2,
+           'Already sent', 'agent-closed-duplicate-cost-1', CURRENT_TIMESTAMP)`,
+      )
+      .run(CONVERSATION_ID, AGENT_ID);
+    instrumentation.reset();
+    const rooms = fakeRooms();
+    const execution = createExecutionContext();
+    const response = await agentApi.request(
+      `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+      agentRequest('agent-closed-duplicate-cost-1'),
+      { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
+      execution.context,
+    );
+
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).duplicate, true);
+    const metrics = instrumentation.metrics();
+    assert.equal(metrics.executed, 3);
+    assert.equal(metrics.select, 3);
+    assert.equal(metrics.insert, 0);
+    assert.equal(metrics.update, 0);
+    assert.equal(metrics.delete, 0);
+    assertMetricIntegrity(metrics);
+    assert.equal(execution.tasks.length, 0);
+    assert.equal(rooms.calls.length, 0);
+    database.close();
+  });
+});
+
+test('visitor text normal success uses persistence results for snapshot realtime', async () => {
+  const { database, instrumentation } = createMessageFixture('pending');
+  const rooms = blockingRooms();
+  const execution = createExecutionContext();
+  const env = {
+    DB: instrumentation.db,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+
+  const response = await responseBeforeRealtime(
+    clientApi.request(
+      `/client/v1/conversations/${CONVERSATION_ID}/messages`,
+      visitorRequest('visitor-normal-cost-1'),
+      env,
+      execution.context,
+    ),
   );
-  assert.match(
-    broadcaster,
-    /conversation\.assigned_agent && includeOverview[\s\S]*loadAgentOverview\(env\.DB, conversation\.assigned_agent\)/u,
+  assert.equal(response.status, 201);
+  assert.equal(execution.tasks.length, 1);
+  assert.deepEqual(rooms.completed, []);
+
+  const metrics = instrumentation.metrics();
+  assert.equal(metrics.executed, 5);
+  assert.equal(metrics.select, 3);
+  assert.equal(metrics.insert, 1);
+  assert.equal(metrics.update, 1);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
+  assert.deepEqual(metrics.batchSizes, [2]);
+  assertMetricIntegrity(metrics);
+  assert.equal(messageInserts(metrics).length, 1);
+  assert.equal(changedRows(messageInserts(metrics)), 1);
+  assert.equal(conversationUpdates(metrics).length, 1);
+  assert.equal(changedRows(conversationUpdates(metrics)), 1);
+  assert.equal(messageReads(metrics).length, 0);
+  assert.equal(broadcasterConversationReads(metrics).length, 0);
+
+  const state = database
+    .prepare(
+      `SELECT agent_unread_count, last_message_preview
+       FROM conversations WHERE id = ?1`,
+    )
+    .get(CONVERSATION_ID);
+  assert.equal(state.agent_unread_count, 1);
+  assert.equal(state.last_message_preview, 'Visitor cost message');
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = ?1 AND client_message_id = ?2`,
+      )
+      .get(CONVERSATION_ID, 'visitor-normal-cost-1').count,
+    1,
   );
-  assert.match(
-    broadcaster,
-    /previousAgentId[\s\S]*loadAgentOverview\(env\.DB, previousAgentId\)/u,
+
+  rooms.release();
+  await execution.drain();
+  assert.equal(
+    broadcasterConversationReads(instrumentation.metrics()).length,
+    0,
   );
-  assert.doesNotMatch(clientRoute, /assignConversationAgent\(/u);
-  assert.doesNotMatch(clientRoute, /broadcastAssignments\(/u);
-  assert.match(clientRoute, /broadcastClientConversationEvent\(/u);
-  assert.match(visitorReadRoute, /includeAgentInbox: false/u);
-  assert.doesNotMatch(clientRoute, /includeOverview:\s*true/u);
-  assert.match(assignmentBroadcaster, /loadAgentOverview\(env\.DB, agentId\)/u);
-  assert.doesNotMatch(
-    assignmentBroadcastSource,
-    /async function loadAgentOverview/u,
+  assert.equal(rooms.calls.length, 3);
+  assert.deepEqual(
+    [...rooms.completed].sort(),
+    [
+      CONVERSATION_ID,
+      `client:default:${VISITOR_ID}`,
+      `agent-inbox:${AGENT_ID}`,
+    ].sort(),
   );
-  assert.doesNotMatch(clientSource, /async function loadAgentOverview/u);
-  assert.match(agentRoute, /includeOverview: conversation\.status === 'open'/u);
-  assert.doesNotMatch(mediaSource, /\{ includeOverview: true \}/u);
-  assert.match(
-    mediaSource,
-    /media\.sender_type === 'agent' &&\s*context\.conversationStatus === 'open'/u,
+  database.close();
+});
+
+test('visitor duplicate returns the existing message without a second state mutation or realtime', async () => {
+  const { database, instrumentation } = createMessageFixture('pending');
+  const rooms = fakeRooms();
+  const env = {
+    DB: instrumentation.db,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+  const firstExecution = createExecutionContext();
+  const first = await clientApi.request(
+    `/client/v1/conversations/${CONVERSATION_ID}/messages`,
+    visitorRequest('visitor-duplicate-cost-1'),
+    env,
+    firstExecution.context,
   );
+  assert.equal(first.status, 201);
+  await firstExecution.drain();
+  const stateAfterFirst = database
+    .prepare(
+      `SELECT agent_unread_count, last_message_preview
+       FROM conversations WHERE id = ?1`,
+    )
+    .get(CONVERSATION_ID);
+  const callsAfterFirst = rooms.calls.length;
+  instrumentation.reset();
+
+  const duplicateExecution = createExecutionContext();
+  const duplicate = await clientApi.request(
+    `/client/v1/conversations/${CONVERSATION_ID}/messages`,
+    visitorRequest('visitor-duplicate-cost-1'),
+    env,
+    duplicateExecution.context,
+  );
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicateExecution.tasks.length, 0);
+  assert.equal(rooms.calls.length, callsAfterFirst);
+
+  const metrics = instrumentation.metrics();
+  assert.equal(metrics.executed, 6);
+  assert.equal(metrics.select, 4);
+  assert.equal(metrics.insert, 1);
+  assert.equal(metrics.update, 1);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
+  assert.deepEqual(metrics.batchSizes, [2]);
+  assertMetricIntegrity(metrics);
+  assert.equal(changedRows(messageInserts(metrics)), 0);
+  assert.equal(changedRows(conversationUpdates(metrics)), 0);
+  assert.equal(messageReads(metrics).length, 1);
+  assert.equal(broadcasterConversationReads(metrics).length, 0);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT agent_unread_count, last_message_preview
+         FROM conversations WHERE id = ?1`,
+      )
+      .get(CONVERSATION_ID),
+    stateAfterFirst,
+  );
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM messages
+         WHERE conversation_id = ?1 AND client_message_id = ?2`,
+      )
+      .get(CONVERSATION_ID, 'visitor-duplicate-cost-1').count,
+    1,
+  );
+  database.close();
 });

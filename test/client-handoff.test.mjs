@@ -1,53 +1,14 @@
 import assert from 'node:assert/strict';
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  symlinkSync,
-  unlinkSync,
-} from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
-
-const workerDirectory = fileURLToPath(
-  new URL('../src/worker/', import.meta.url),
-);
-const shims = [];
-for (const name of [
-  'conversation-retention.ts',
-  'routing.ts',
-  'assignment-broadcast.ts',
-  'agent-inbox.ts',
-  'abuse-control.ts',
-  'no-agent-message.ts',
-  'message-attachments.ts',
-]) {
-  const shimPath = join(workerDirectory, name.slice(0, -3));
-  if (existsSync(shimPath)) continue;
-  symlinkSync(name, shimPath);
-  shims.push(shimPath);
-}
-
-let clientApi;
-let broadcastClientConversationEvent;
-let loadAgentOverview;
-let routingBusinessDate;
-try {
-  ({ clientApi, broadcastClientConversationEvent } =
-    await import('../src/worker/client-api.ts'));
-  ({ loadAgentOverview } = await import('../src/worker/agent-inbox.ts'));
-  ({ routingBusinessDate } = await import('../src/worker/routing.ts'));
-} catch (error) {
-  for (const shimPath of shims) unlinkSync(shimPath);
-  throw error;
-}
-process.once('exit', () => {
-  for (const shimPath of shims) {
-    if (existsSync(shimPath)) unlinkSync(shimPath);
-  }
-});
+import {
+  broadcastClientConversationEvent,
+  clientApi,
+  loadAgentOverview,
+  routingBusinessDate,
+} from './helpers/performance-runtime.mjs';
 
 const product = {
   id: 'product-1',
