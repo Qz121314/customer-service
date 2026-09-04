@@ -78,3 +78,11 @@ test('service worker focuses an existing agent PWA with exact message identity',
   assert.doesNotMatch(inbox, /heartbeat\(/u);
   assert.doesNotMatch(inbox, /getAgentInbox\(/u);
 });
+
+test('authoritative foreground badge sync resets service-worker delta state', () => {
+  const serviceWorker = source('../public/agent-sw.js');
+  assert.match(
+    serviceWorker,
+    /event\.data\?\.type !== 'agent\.badge\.sync'[\s\S]{0,120}conversationUnread\.clear\(\)/u,
+  );
+});

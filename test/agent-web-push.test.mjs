@@ -5,7 +5,7 @@ import { URL } from 'node:url';
 
 const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
-test('agent web push is authenticated, seat-scoped and dispatched after visitor writes', async () => {
+test('agent web push is authenticated, session-scoped and dispatched after visitor writes', async () => {
   const [
     api,
     delivery,
@@ -29,9 +29,17 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   assert.match(api, /requireAgentSession/u);
   assert.match(api, /agent_push_subscriptions/u);
   assert.match(api, /agent_id = \?2/u);
+  assert.match(api, /agent\.session_id/u);
+  assert.match(api, /session_id = excluded\.session_id/u);
   assert.match(
     delivery,
     /subscription\.agent_id = conversation\.assigned_agent/u,
+  );
+  assert.match(delivery, /JOIN agent_sessions session/u);
+  assert.match(delivery, /session\.id = subscription\.session_id/u);
+  assert.match(
+    delivery,
+    /datetime\(session\.expires_at\) > CURRENT_TIMESTAMP/u,
   );
   assert.match(delivery, /JOIN visitor_push_vapid vapid/u);
   assert.match(delivery, /sendDataLessPush/u);
@@ -53,11 +61,15 @@ test('agent web push is authenticated, seat-scoped and dispatched after visitor 
   );
   assert.match(payloadMigration, /ADD COLUMN p256dh TEXT/u);
   assert.match(payloadMigration, /ADD COLUMN auth TEXT/u);
+  assert.match(
+    payloadMigration,
+    /session_id TEXT REFERENCES agent_sessions\(id\) ON DELETE CASCADE/u,
+  );
   assert.match(dashboard, /Notification\.requestPermission\(\)/u);
   assert.match(dashboard, /pushManager\.subscribe/u);
   assert.match(dashboard, /install-required/u);
   assert.match(dashboard, /bindAgentSubscription\(subscription, agentId/u);
-  assert.match(dashboard, /cs-agent-push-binding:v3/u);
+  assert.match(dashboard, /cs-agent-push-binding:v4/u);
   assert.match(dashboard, /AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000/u);
   assert.match(dashboard, /Promise\.race\(\[/u);
   assert.match(dashboard, /通知服务启动超时，请刷新页面后重试/u);

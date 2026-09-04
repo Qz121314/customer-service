@@ -45,10 +45,14 @@ export async function sendAgentPushForMessage(
      JOIN visitors visitor ON visitor.id = conversation.visitor_id
      JOIN agent_push_subscriptions subscription
        ON subscription.agent_id = conversation.assigned_agent
+     JOIN agent_sessions session
+       ON session.id = subscription.session_id
+      AND session.agent_id = conversation.assigned_agent
      JOIN visitor_push_vapid vapid
        ON vapid.id = 'default'
      WHERE conversation.id = ?1
        AND conversation.assigned_agent IS NOT NULL
+       AND datetime(session.expires_at) > CURRENT_TIMESTAMP
        AND (
          subscription.expiration_time IS NULL
          OR subscription.expiration_time > ?2

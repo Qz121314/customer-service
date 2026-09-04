@@ -125,6 +125,7 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'agent.badge.sync') return;
+  conversationUnread.clear();
   badgeTotal = Math.max(0, Number(event.data.unreadMessageCount) || 0);
   updateAppBadge(badgeTotal);
 });

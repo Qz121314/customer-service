@@ -5,7 +5,7 @@ const AGENT_NOTIFICATION_PARAM = 'notification';
 const AGENT_NOTIFICATION_TARGET = 'latest-unread';
 const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
 const AGENT_SERVICE_WORKER_SCOPE = '/agent';
-const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v3';
+const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v4';
 const AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
 
 type PushConfig = {

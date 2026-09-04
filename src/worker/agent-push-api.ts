@@ -49,16 +49,24 @@ agentPushApi.post('/api/agent/push/subscriptions', async (c) => {
 
   await c.env.DB.prepare(
     `INSERT INTO agent_push_subscriptions
-       (endpoint, agent_id, expiration_time, p256dh, auth, updated_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, CURRENT_TIMESTAMP)
+       (endpoint, agent_id, expiration_time, p256dh, auth, session_id, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, CURRENT_TIMESTAMP)
      ON CONFLICT(endpoint) DO UPDATE SET
        agent_id = excluded.agent_id,
        expiration_time = excluded.expiration_time,
        p256dh = excluded.p256dh,
        auth = excluded.auth,
+       session_id = excluded.session_id,
        updated_at = CURRENT_TIMESTAMP`,
   )
-    .bind(endpoint, agent.id, expirationTime, p256dh, auth)
+    .bind(
+      endpoint,
+      agent.id,
+      expirationTime,
+      p256dh,
+      auth,
+      agent.session_id,
+    )
     .run();
   return c.json({ ok: true });
 });
