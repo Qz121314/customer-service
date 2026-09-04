@@ -245,6 +245,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -263,15 +265,43 @@ jobs:
           name: ui-build
           path: dist
 
+      - name: Detect production D1 migration changes
+        id: d1-migrations
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required=true
+          if [ "$EVENT_NAME" = 'push' ] \
+            && [ -n "$BEFORE_SHA" ] \
+            && ! [[ "$BEFORE_SHA" =~ ^0+$ ]] \
+            && git diff --quiet "$BEFORE_SHA" "$CURRENT_SHA" -- migrations; then
+            required=false
+          fi
+
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+
       - name: Deploy production to Cloudflare
         id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          D1_MIGRATIONS_REQUIRED: ${{ steps.d1-migrations.outputs.required }}
         shell: bash
         run: |
           set -euo pipefail
-          pnpm deploy:cloudflare | tee /tmp/deploy.log
+          pnpm cf:provision
+          if [ "$D1_MIGRATIONS_REQUIRED" = 'true' ]; then
+            pnpm db:migrate:remote
+          else
+            echo 'Skipping production D1 access: no migration files changed.'
+          fi
+          pnpm exec wrangler deploy --keep-vars --x-provision --x-auto-create \
+            | tee /tmp/deploy.log
           url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/deploy.log | tail -n 1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -347,13 +377,19 @@ jobs:
       - name: Publish deployment handoff
         env:
           BASE_URL: ${{ steps.deploy.outputs.url }}
+          D1_MIGRATIONS_REQUIRED: ${{ steps.d1-migrations.outputs.required }}
         shell: bash
         run: |
+          if [ "$D1_MIGRATIONS_REQUIRED" = 'true' ]; then
+            d1_status='applied because migration files changed'
+          else
+            d1_status='skipped; this code-only deployment did not access production D1'
+          fi
           {
             echo '## Customer Service deployment ready'
             echo
             echo "- Worker: ${BASE_URL}"
-            echo '- D1 migrations: applied as part of production deployment'
+            echo "- D1 migrations: ${d1_status}"
             echo '- Automatic post-deploy verification: D1-free /api/health only'
             echo '- Production protocol smoke/performance audit: manual workflow_dispatch with production_verification=true'
             echo '- R2, Durable Object, Rate Limit, Cron and static assets: provisioned'
