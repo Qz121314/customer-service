@@ -49,6 +49,11 @@ import {
   createAgentDraftSaveScheduler,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
+  loadAgentVibrationEnabled,
+  saveAgentVibrationEnabled,
+  agentReminderVibrationPattern,
+  supportsAgentVibration,
+  rememberAgentReminderMessage,
   emitAgentMessageTone,
   type AgentReminderType,
   parseRealtimeEvent,
@@ -374,6 +379,10 @@ function AgentWorkspace({
   const [soundEnabled, setSoundEnabled] = useState(() =>
     loadAgentSoundEnabled(identity.id),
   );
+  const [vibrationEnabled, setVibrationEnabled] = useState(() =>
+    loadAgentVibrationEnabled(identity.id),
+  );
+  const vibrationSupported = supportsAgentVibration();
   const [availability, setAvailability] = useState<AgentAvailability>(
     identity.status === 'busy' ? 'busy' : 'online',
   );
@@ -430,6 +439,7 @@ function AgentWorkspace({
   const agentTypingTimerRef = useRef<number | null>(null);
   const visitorTypingTimerRef = useRef<number | null>(null);
   const soundEnabledRef = useRef(soundEnabled);
+  const vibrationEnabledRef = useRef(vibrationEnabled);
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
   const remindedMessageIdsRef = useRef(new Set<string>());
@@ -547,6 +557,11 @@ function AgentWorkspace({
     saveAgentSoundEnabled(identity.id, soundEnabled);
   }, [identity.id, soundEnabled]);
 
+  useEffect(() => {
+    vibrationEnabledRef.current = vibrationEnabled;
+    saveAgentVibrationEnabled(identity.id, vibrationEnabled);
+  }, [identity.id, vibrationEnabled]);
+
   const ensureSoundContext = useCallback((): AudioContext | null => {
     if (soundContextRef.current) {
       if (soundContextRef.current.state === 'running') setAudioUnlocked(true);
@@ -585,22 +600,23 @@ function AgentWorkspace({
 
   const alertForReminder = useCallback(
     (type: AgentReminderType, messageId: string) => {
-      const seen = remindedMessageIdsRef.current;
-      if (seen.has(messageId)) return;
-      seen.add(messageId);
-      if (seen.size > 500) seen.delete(seen.values().next().value!);
+      if (
+        !rememberAgentReminderMessage(remindedMessageIdsRef.current, messageId)
+      ) {
+        return;
+      }
       runBestEffortAgentCapability(() => playIncomingTone(type));
-      if (document.visibilityState === 'visible' && 'vibrate' in navigator) {
+      if (
+        document.visibilityState === 'visible' &&
+        vibrationSupported &&
+        vibrationEnabledRef.current
+      ) {
         runBestEffortAgentCapability(() => {
-          navigator.vibrate(
-            type === 'NEW_CONVERSATION'
-              ? [220, 100, 220, 100, 320]
-              : [220, 100, 220],
-          );
+          navigator.vibrate(agentReminderVibrationPattern(type));
         });
       }
     },
-    [playIncomingTone],
+    [playIncomingTone, vibrationSupported],
   );
 
   useEffect(() => {
@@ -1676,14 +1692,11 @@ function AgentWorkspace({
     }
   }
 
-  function toggleSound() {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    soundEnabledRef.current = next;
-    if (!next) return;
+  function testSound() {
     const context = ensureSoundContext();
     if (!context) return;
     if (context.state === 'running') {
+      setAudioUnlocked(true);
       emitAgentMessageTone(context, 'CUSTOMER_REPLY');
       return;
     }
@@ -1694,6 +1707,28 @@ function AgentWorkspace({
         emitAgentMessageTone(context, 'CUSTOMER_REPLY');
       })
       .catch(() => undefined);
+  }
+
+  function toggleSound() {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    soundEnabledRef.current = next;
+    if (next) testSound();
+  }
+
+  function toggleVibration() {
+    if (!vibrationSupported) return;
+    const next = !vibrationEnabled;
+    setVibrationEnabled(next);
+    vibrationEnabledRef.current = next;
+    if (next) testVibration();
+  }
+
+  function testVibration() {
+    if (!vibrationSupported) return;
+    runBestEffortAgentCapability(() => {
+      navigator.vibrate(agentReminderVibrationPattern('CUSTOMER_REPLY'));
+    });
   }
 
   async function logoutFromWorkspace() {
@@ -1709,6 +1744,9 @@ function AgentWorkspace({
     void toggleNotifications();
   });
   const handleToggleSound = useEventCallback(toggleSound);
+  const handleToggleVibration = useEventCallback(toggleVibration);
+  const handleTestSound = useEventCallback(testSound);
+  const handleTestVibration = useEventCallback(testVibration);
   const handleOpenStatistics = useEventCallback(() => {
     navigate(withOverlay(navigation, 'statistics'));
   });
@@ -1786,11 +1824,16 @@ function AgentWorkspace({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
+        vibrationEnabled={vibrationEnabled}
+        vibrationSupported={vibrationSupported}
         realtimeReady={inboxConnected}
         audioReady={soundEnabled && audioUnlocked}
         onNicknameChange={handleNicknameChange}
         onToggleNotifications={handleToggleNotifications}
         onToggleSound={handleToggleSound}
+        onToggleVibration={handleToggleVibration}
+        onTestSound={handleTestSound}
+        onTestVibration={handleTestVibration}
         overlay={navigation.overlay}
         onOpenCardSettings={handleOpenCardSettings}
         onOpenAutoReply={handleOpenAutoReply}

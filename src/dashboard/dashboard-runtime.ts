@@ -194,7 +194,54 @@ function saveAgentSoundEnabled(agentId: string, enabled: boolean): void {
   }
 }
 
+function loadAgentVibrationEnabled(agentId: string): boolean {
+  try {
+    return (
+      window.localStorage.getItem(`cs-agent-vibration:${agentId}`) !== 'off'
+    );
+  } catch {
+    return true;
+  }
+}
+
+function saveAgentVibrationEnabled(agentId: string, enabled: boolean): void {
+  try {
+    window.localStorage.setItem(
+      `cs-agent-vibration:${agentId}`,
+      enabled ? 'on' : 'off',
+    );
+  } catch {
+    // Vibration preference is local-only and must never interrupt reception work.
+  }
+}
+
 type AgentReminderType = 'NEW_CONVERSATION' | 'CUSTOMER_REPLY';
+
+function agentReminderVibrationPattern(type: AgentReminderType): number[] {
+  return type === 'NEW_CONVERSATION'
+    ? [220, 100, 220, 100, 320]
+    : [220, 100, 220];
+}
+
+function supportsAgentVibration(
+  value: { vibrate?: unknown } = navigator,
+): boolean {
+  return typeof value.vibrate === 'function';
+}
+
+function rememberAgentReminderMessage(
+  seen: Set<string>,
+  messageId: string,
+  maxRemembered = 500,
+): boolean {
+  if (!messageId || seen.has(messageId)) return false;
+  seen.add(messageId);
+  if (seen.size > maxRemembered) {
+    const oldest = seen.values().next().value;
+    if (oldest) seen.delete(oldest);
+  }
+  return true;
+}
 
 function emitAgentMessageTone(
   context: AudioContext,
@@ -474,6 +521,11 @@ export {
   createAgentDraftSaveScheduler,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
+  loadAgentVibrationEnabled,
+  saveAgentVibrationEnabled,
+  agentReminderVibrationPattern,
+  supportsAgentVibration,
+  rememberAgentReminderMessage,
   emitAgentMessageTone,
   type AgentReminderType,
   parseRealtimeEvent,

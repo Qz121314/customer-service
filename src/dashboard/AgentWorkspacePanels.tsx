@@ -31,10 +31,15 @@ export const AgentSidebar = memo(function AgentSidebar({
   notificationState,
   notificationBusy,
   soundEnabled,
+  vibrationEnabled,
+  vibrationSupported,
   realtimeReady,
   audioReady,
   onToggleNotifications,
   onToggleSound,
+  onToggleVibration,
+  onTestSound,
+  onTestVibration,
   onNicknameChange,
   overlay,
   onOpenCardSettings,
@@ -50,10 +55,15 @@ export const AgentSidebar = memo(function AgentSidebar({
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
   soundEnabled: boolean;
+  vibrationEnabled: boolean;
+  vibrationSupported: boolean;
   realtimeReady: boolean;
   audioReady: boolean;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
+  onToggleVibration: () => void;
+  onTestSound: () => void;
+  onTestVibration: () => void;
   onNicknameChange: (nickname: string) => Promise<void>;
   overlay: AgentOverlayView;
   onOpenCardSettings: () => void;
@@ -102,11 +112,16 @@ export const AgentSidebar = memo(function AgentSidebar({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
+        vibrationEnabled={vibrationEnabled}
+        vibrationSupported={vibrationSupported}
         realtimeReady={realtimeReady}
         audioReady={audioReady}
         onClose={onCloseOverlay}
         onToggleNotifications={onToggleNotifications}
         onToggleSound={onToggleSound}
+        onToggleVibration={onToggleVibration}
+        onTestSound={onTestSound}
+        onTestVibration={onTestVibration}
         onOpenCardSettings={onOpenCardSettings}
         onOpenAutoReply={onOpenAutoReply}
         onOpenStatistics={onOpenStatistics}
