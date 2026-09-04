@@ -83,4 +83,3 @@ test('agent push subscriptions follow device session lifetime', () => {
   );
   database.close();
 });
-
