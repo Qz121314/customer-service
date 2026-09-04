@@ -50,9 +50,7 @@ function seedPlannerFixture(database) {
     const createdAt = '2026-09-01T00:00:00.000Z';
     const currentAt = '2026-09-04T12:30:00.000Z';
     const expiresAt =
-      index % 2 === 0
-        ? '2026-09-03T00:00:00.000Z'
-        : '2026-09-06T00:00:00.000Z';
+      index % 2 === 0 ? '2026-09-03T00:00:00.000Z' : '2026-09-06T00:00:00.000Z';
     const visitorId = `visitor-${index}`;
     insertVisitor.run(
       visitorId,
@@ -331,3 +329,4 @@ test('JS cutoffs preserve stale media boundary and R2 cleanup semantics', async 
   );
   database.close();
 });
+
