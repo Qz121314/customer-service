@@ -56,13 +56,7 @@ function createMessageFixture(status = 'open') {
        ) VALUES (?1, 'default', ?2, ?3, ?4, 0, 0, ?5,
          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)`,
     )
-    .run(
-      CONVERSATION_ID,
-      VISITOR_DATABASE_ID,
-      status,
-      AGENT_ID,
-      expiresAt,
-    );
+    .run(CONVERSATION_ID, VISITOR_DATABASE_ID, status, AGENT_ID, expiresAt);
   const instrumentation = createInstrumentedD1(database);
   return { database, instrumentation };
 }
@@ -310,30 +304,33 @@ test('agent message conflict performs only the necessary idempotency lookup', as
 });
 
 test('agent closed conversation blocks writes while preserving duplicate behavior', async (t) => {
-  await t.test('new message is rejected without persistence or realtime', async () => {
-    const { database, instrumentation } = createMessageFixture('closed');
-    const rooms = fakeRooms();
-    const execution = createExecutionContext();
-    const response = await agentApi.request(
-      `/api/agent/conversations/${CONVERSATION_ID}/messages`,
-      agentRequest('agent-closed-cost-1'),
-      { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
-      execution.context,
-    );
+  await t.test(
+    'new message is rejected without persistence or realtime',
+    async () => {
+      const { database, instrumentation } = createMessageFixture('closed');
+      const rooms = fakeRooms();
+      const execution = createExecutionContext();
+      const response = await agentApi.request(
+        `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+        agentRequest('agent-closed-cost-1'),
+        { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
+        execution.context,
+      );
 
-    assert.equal(response.status, 409);
-    assert.deepEqual(await response.json(), { error: 'CONVERSATION_CLOSED' });
-    const metrics = instrumentation.metrics();
-    assert.equal(metrics.executed, 3);
-    assert.equal(metrics.select, 3);
-    assert.equal(metrics.insert, 0);
-    assert.equal(metrics.update, 0);
-    assert.equal(metrics.delete, 0);
-    assertMetricIntegrity(metrics);
-    assert.equal(execution.tasks.length, 0);
-    assert.equal(rooms.calls.length, 0);
-    database.close();
-  });
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { error: 'CONVERSATION_CLOSED' });
+      const metrics = instrumentation.metrics();
+      assert.equal(metrics.executed, 3);
+      assert.equal(metrics.select, 3);
+      assert.equal(metrics.insert, 0);
+      assert.equal(metrics.update, 0);
+      assert.equal(metrics.delete, 0);
+      assertMetricIntegrity(metrics);
+      assert.equal(execution.tasks.length, 0);
+      assert.equal(rooms.calls.length, 0);
+      database.close();
+    },
+  );
 
   await t.test('existing duplicate remains idempotent', async () => {
     const { database, instrumentation } = createMessageFixture('closed');
@@ -429,7 +426,10 @@ test('visitor text normal success uses persistence results for snapshot realtime
 
   rooms.release();
   await execution.drain();
-  assert.equal(broadcasterConversationReads(instrumentation.metrics()).length, 0);
+  assert.equal(
+    broadcasterConversationReads(instrumentation.metrics()).length,
+    0,
+  );
   assert.equal(rooms.calls.length, 3);
   assert.deepEqual(
     [...rooms.completed].sort(),
@@ -512,3 +512,4 @@ test('visitor duplicate returns the existing message without a second state muta
   );
   database.close();
 });
+

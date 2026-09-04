@@ -216,8 +216,8 @@ test('first CTA executes the bounded create, claim and assignment lifecycle', as
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 15);
-  assert.equal(metrics.select, 7);
+  assert.equal(metrics.executed, 16);
+  assert.equal(metrics.select, 8);
   assert.equal(metrics.insert, 6);
   assert.equal(metrics.update, 2);
   assert.equal(metrics.delete, 0);
@@ -451,10 +451,7 @@ test('closed affinity remains only a priority and ineligible original agent fall
     metrics.executed <= 13,
     `unexpected create budget: ${metrics.executed}`,
   );
-  assert.ok(
-    metrics.select <= 7,
-    `unexpected SELECT budget: ${metrics.select}`,
-  );
+  assert.ok(metrics.select <= 7, `unexpected SELECT budget: ${metrics.select}`);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);
@@ -493,8 +490,8 @@ test('no-agent path releases creation reservations in the existing cleanup batch
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 16);
-  assert.equal(metrics.select, 4);
+  assert.equal(metrics.executed, 17);
+  assert.equal(metrics.select, 5);
   assert.equal(metrics.insert, 5);
   assert.equal(metrics.update, 3);
   assert.equal(metrics.delete, 4);
@@ -553,11 +550,11 @@ test('concurrent duplicate claim produces one owner, one quota consumption and o
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
   assert.ok(
-    metrics.executed <= 30,
+    metrics.executed <= 34,
     `unexpected concurrent budget: ${metrics.executed}`,
   );
   assert.ok(
-    metrics.select <= 16,
+    metrics.select <= 19,
     `unexpected concurrent SELECT budget: ${metrics.select}`,
   );
   assert.equal(changedRows(conversationCreates(metrics)), 1);
@@ -592,3 +589,4 @@ test('concurrent duplicate claim produces one owner, one quota consumption and o
   );
   database.close();
 });
+

@@ -1,46 +1,9 @@
 import assert from 'node:assert/strict';
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  symlinkSync,
-  unlinkSync,
-} from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
-
-const workerDirectory = fileURLToPath(
-  new URL('../src/worker/', import.meta.url),
-);
-const shims = [];
-for (const name of [
-  'conversation-retention.ts',
-  'routing.ts',
-  'assignment-broadcast.ts',
-  'abuse-control.ts',
-  'no-agent-message.ts',
-  'message-attachments.ts',
-]) {
-  const shimPath = join(workerDirectory, name.slice(0, -3));
-  if (existsSync(shimPath)) continue;
-  symlinkSync(name, shimPath);
-  shims.push(shimPath);
-}
-
-let clientApi;
-try {
-  ({ clientApi } = await import('../src/worker/client-api.ts'));
-} catch (error) {
-  for (const shimPath of shims) unlinkSync(shimPath);
-  throw error;
-}
-process.once('exit', () => {
-  for (const shimPath of shims) {
-    if (existsSync(shimPath)) unlinkSync(shimPath);
-  }
-});
+import { clientApi } from './helpers/performance-runtime.mjs';
 
 function applyMigrations(database) {
   const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
@@ -282,3 +245,4 @@ test('only online agents participate in site-wide round robin across products', 
 
   database.close();
 });
+

@@ -40,19 +40,38 @@ const workerModule = (name) =>
 
 let agentApi;
 let clientApi;
+let broadcastClientConversationEvent;
+let loadAgentOverview;
+let routingBusinessDate;
 try {
-  [{ agentApi }, { clientApi }] = await Promise.all([
+  [
+    { agentApi },
+    { clientApi, broadcastClientConversationEvent },
+    { loadAgentOverview },
+    { routingBusinessDate },
+  ] = await Promise.all([
     import(workerModule('agent-api.ts')),
     import(workerModule('client-api.ts')),
+    import(workerModule('agent-inbox.ts')),
+    import(workerModule('routing.ts')),
   ]);
 } finally {
   rmSync(runtimeDirectory, { recursive: true, force: true });
 }
 
-export { agentApi, clientApi, DatabaseSync };
+export {
+  agentApi,
+  broadcastClientConversationEvent,
+  clientApi,
+  DatabaseSync,
+  loadAgentOverview,
+  routingBusinessDate,
+};
 
 export function applyMigrations(database) {
-  const directory = fileURLToPath(new URL('../../migrations/', import.meta.url));
+  const directory = fileURLToPath(
+    new URL('../../migrations/', import.meta.url),
+  );
   for (const name of readdirSync(directory)
     .filter((value) => /^\d+.*\.sql$/u.test(value))
     .sort()) {
@@ -82,7 +101,8 @@ export function createInstrumentedD1(database) {
     let value;
     if (method === 'first') {
       const row = prepared.get(...bindings) ?? null;
-      value = column === undefined || row === null ? row : (row[column] ?? null);
+      value =
+        column === undefined || row === null ? row : (row[column] ?? null);
     } else if (method === 'all') {
       value = { results: prepared.all(...bindings) };
     } else {
@@ -203,7 +223,7 @@ function createMetricState() {
 function statementKind(sql) {
   let depth = 0;
   let quote = null;
-  for (let index = 0; index < sql.length; ) {
+  for (let index = 0; index < sql.length;) {
     const char = sql[index];
     if (quote) {
       if (char === quote) {
@@ -334,3 +354,4 @@ export function executionsMatching(metrics, pattern, kind) {
 export function changedRows(executions) {
   return executions.reduce((sum, execution) => sum + execution.changes, 0);
 }
+
