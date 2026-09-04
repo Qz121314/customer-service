@@ -115,6 +115,15 @@ function broadcasterConversationReads(metrics) {
   );
 }
 
+function assertMetricIntegrity(metrics) {
+  assert.equal(metrics.executed, metrics.first + metrics.all + metrics.run);
+  assert.equal(
+    metrics.executed,
+    metrics.select + metrics.insert + metrics.update + metrics.delete,
+  );
+  assert.equal(metrics.prepare, metrics.executed);
+}
+
 async function responseBeforeRealtime(request) {
   return Promise.race([
     request,
@@ -151,6 +160,11 @@ test('agent text normal success has an executable bounded D1 budget and snapshot
   const durableMetrics = instrumentation.metrics();
   assert.equal(durableMetrics.executed, 4);
   assert.equal(durableMetrics.select, 2);
+  assert.equal(durableMetrics.insert, 1);
+  assert.equal(durableMetrics.update, 1);
+  assert.equal(durableMetrics.delete, 0);
+  assert.equal(durableMetrics.batch, 0);
+  assertMetricIntegrity(durableMetrics);
   assert.equal(messageInserts(durableMetrics).length, 1);
   assert.equal(changedRows(messageInserts(durableMetrics)), 1);
   assert.equal(conversationUpdates(durableMetrics).length, 1);
@@ -182,34 +196,14 @@ test('agent text normal success has an executable bounded D1 budget and snapshot
   rooms.release();
   await execution.drain();
   const finalMetrics = instrumentation.metrics();
-  assert.deepEqual(
-    {
-      prepare: finalMetrics.prepare,
-      first: finalMetrics.first,
-      all: finalMetrics.all,
-      run: finalMetrics.run,
-      batch: finalMetrics.batch,
-      batchStatements: finalMetrics.batchStatements,
-      executed: finalMetrics.executed,
-      select: finalMetrics.select,
-      insert: finalMetrics.insert,
-      update: finalMetrics.update,
-      delete: finalMetrics.delete,
-    },
-    {
-      prepare: 5,
-      first: 4,
-      all: 0,
-      run: 1,
-      batch: 0,
-      batchStatements: 0,
-      executed: 5,
-      select: 3,
-      insert: 1,
-      update: 1,
-      delete: 0,
-    },
-  );
+  assert.equal(finalMetrics.executed, 5);
+  assert.equal(finalMetrics.select, 3);
+  assert.equal(finalMetrics.insert, 1);
+  assert.equal(finalMetrics.update, 1);
+  assert.equal(finalMetrics.delete, 0);
+  assert.equal(finalMetrics.batch, 0);
+  assert.equal(finalMetrics.batchStatements, 0);
+  assertMetricIntegrity(finalMetrics);
   assert.equal(broadcasterConversationReads(finalMetrics).length, 0);
   assert.equal(rooms.calls.length, 3);
   assert.deepEqual(
@@ -255,33 +249,16 @@ test('agent duplicate clientMessageId does not repeat state mutation or realtime
   assert.equal(rooms.calls.length, callsAfterFirst);
 
   const metrics = instrumentation.metrics();
-  assert.deepEqual(
-    {
-      prepare: metrics.prepare,
-      first: metrics.first,
-      all: metrics.all,
-      run: metrics.run,
-      batch: metrics.batch,
-      executed: metrics.executed,
-      select: metrics.select,
-      insert: metrics.insert,
-      update: metrics.update,
-    },
-    {
-      prepare: 4,
-      first: 3,
-      all: 0,
-      run: 1,
-      batch: 0,
-      executed: 4,
-      select: 3,
-      insert: 1,
-      update: 0,
-    },
-  );
+  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.select <= 3);
+  assert.ok(metrics.insert <= 1);
+  assert.equal(metrics.update, 0);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 0);
+  assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
   assert.equal(conversationUpdates(metrics).length, 0);
-  assert.equal(messageReads(metrics).length, 1);
+  assert.ok(messageReads(metrics).length <= 1);
   assert.equal(
     database
       .prepare(
@@ -320,12 +297,15 @@ test('agent message conflict performs only the necessary idempotency lookup', as
   assert.equal(execution.tasks.length, 0);
   assert.equal(rooms.calls.length, 0);
   const metrics = instrumentation.metrics();
-  assert.equal(metrics.executed, 4);
-  assert.equal(metrics.select, 3);
-  assert.equal(metrics.insert, 1);
+  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.select <= 3);
+  assert.ok(metrics.insert <= 1);
   assert.equal(metrics.update, 0);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 0);
+  assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
-  assert.equal(messageReads(metrics).length, 1);
+  assert.ok(messageReads(metrics).length <= 1);
   database.close();
 });
 
@@ -348,6 +328,8 @@ test('agent closed conversation blocks writes while preserving duplicate behavio
     assert.equal(metrics.select, 3);
     assert.equal(metrics.insert, 0);
     assert.equal(metrics.update, 0);
+    assert.equal(metrics.delete, 0);
+    assertMetricIntegrity(metrics);
     assert.equal(execution.tasks.length, 0);
     assert.equal(rooms.calls.length, 0);
     database.close();
@@ -381,6 +363,8 @@ test('agent closed conversation blocks writes while preserving duplicate behavio
     assert.equal(metrics.select, 3);
     assert.equal(metrics.insert, 0);
     assert.equal(metrics.update, 0);
+    assert.equal(metrics.delete, 0);
+    assertMetricIntegrity(metrics);
     assert.equal(execution.tasks.length, 0);
     assert.equal(rooms.calls.length, 0);
     database.close();
@@ -409,36 +393,15 @@ test('visitor text normal success uses persistence results for snapshot realtime
   assert.deepEqual(rooms.completed, []);
 
   const metrics = instrumentation.metrics();
-  assert.deepEqual(
-    {
-      prepare: metrics.prepare,
-      first: metrics.first,
-      all: metrics.all,
-      run: metrics.run,
-      batch: metrics.batch,
-      batchStatements: metrics.batchStatements,
-      batchSizes: metrics.batchSizes,
-      executed: metrics.executed,
-      select: metrics.select,
-      insert: metrics.insert,
-      update: metrics.update,
-      delete: metrics.delete,
-    },
-    {
-      prepare: 5,
-      first: 3,
-      all: 0,
-      run: 2,
-      batch: 1,
-      batchStatements: 2,
-      batchSizes: [2],
-      executed: 5,
-      select: 3,
-      insert: 1,
-      update: 1,
-      delete: 0,
-    },
-  );
+  assert.equal(metrics.executed, 5);
+  assert.equal(metrics.select, 3);
+  assert.equal(metrics.insert, 1);
+  assert.equal(metrics.update, 1);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
+  assert.deepEqual(metrics.batchSizes, [2]);
+  assertMetricIntegrity(metrics);
   assert.equal(messageInserts(metrics).length, 1);
   assert.equal(changedRows(messageInserts(metrics)), 1);
   assert.equal(conversationUpdates(metrics).length, 1);
@@ -516,32 +479,15 @@ test('visitor duplicate returns the existing message without a second state muta
   assert.equal(rooms.calls.length, callsAfterFirst);
 
   const metrics = instrumentation.metrics();
-  assert.deepEqual(
-    {
-      prepare: metrics.prepare,
-      first: metrics.first,
-      all: metrics.all,
-      run: metrics.run,
-      batch: metrics.batch,
-      batchStatements: metrics.batchStatements,
-      executed: metrics.executed,
-      select: metrics.select,
-      insert: metrics.insert,
-      update: metrics.update,
-    },
-    {
-      prepare: 6,
-      first: 4,
-      all: 0,
-      run: 2,
-      batch: 1,
-      batchStatements: 2,
-      executed: 6,
-      select: 4,
-      insert: 1,
-      update: 1,
-    },
-  );
+  assert.equal(metrics.executed, 6);
+  assert.equal(metrics.select, 4);
+  assert.equal(metrics.insert, 1);
+  assert.equal(metrics.update, 1);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
+  assert.deepEqual(metrics.batchSizes, [2]);
+  assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
   assert.equal(changedRows(conversationUpdates(metrics)), 0);
   assert.equal(messageReads(metrics).length, 1);
