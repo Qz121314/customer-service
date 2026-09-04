@@ -31,6 +31,30 @@ function logBrowserErrors(page, label) {
   });
 }
 
+async function logAgentState(page, label) {
+  const sessionResponse = await page.request.get(url('/api/agent/auth/session'));
+  const bootstrapResponse = await page.request.get(url('/api/agent/bootstrap'));
+  const session = await sessionResponse.json();
+  const bootstrap = await bootstrapResponse.json();
+  console.error(
+    `[${label}] agent-state ${JSON.stringify({
+      sessionStatus: sessionResponse.status(),
+      session,
+      bootstrapStatus: bootstrapResponse.status(),
+      authenticated: bootstrap.authenticated,
+      agent: bootstrap.agent,
+      conversations: (bootstrap.inbox?.conversations ?? []).map(
+        (conversation) => ({
+          id: conversation.id,
+          title: conversation.product_title,
+          status: conversation.status,
+          assignedAgent: conversation.assigned_agent,
+        }),
+      ),
+    })}`,
+  );
+}
+
 test('desktop and phone share availability while logout remains device-local', async ({
   browser,
   page: adminPage,
@@ -120,6 +144,8 @@ test('desktop and phone share availability while logout remains device-local', a
     expect(createConversation.ok()).toBeTruthy();
     const created = await createConversation.json();
     const conversationId = created.conversation.id;
+    await logAgentState(desktop, 'desktop');
+    await logAgentState(phone, 'phone');
 
     for (const device of [desktop, phone]) {
       const conversation = device.getByRole('button', {
