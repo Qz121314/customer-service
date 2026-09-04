@@ -559,14 +559,22 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
   const requestedLastMessageId = normalizeMessageId(body?.lastMessageId);
   const [conversation, boundary] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT id
-       FROM conversations
-       WHERE id = ?1 AND assigned_agent = ?2
-         AND expires_at > CURRENT_TIMESTAMP
+      `SELECT c.id, c.site_id, c.visitor_id, c.status, c.assigned_agent,
+         a.name AS agent_name, a.avatar_version AS agent_avatar_version, c.subject,
+         c.product_id, c.section_id, c.section_name, c.category_id,
+         c.category_name, c.product_title, c.product_cover_url, c.product_href,
+         c.expires_at, c.visitor_unread_count, c.agent_unread_count,
+         c.last_message_at, c.created_at, c.last_message_preview AS last_message,
+         v.external_id, v.display_name AS visitor_name
+       FROM conversations c
+       JOIN visitors v ON v.id = c.visitor_id
+       LEFT JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
+       WHERE c.id = ?1 AND c.assigned_agent = ?2
+         AND c.expires_at > CURRENT_TIMESTAMP
        LIMIT 1`,
     )
       .bind(id, agent.id)
-      .first<{ id: string }>(),
+      .first<ConversationEventSnapshot>(),
     c.env.DB.prepare(
       `SELECT id, created_at
        FROM messages
@@ -609,13 +617,18 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
                agent_read_through_at = ?2
                AND agent_read_through_id < ?3
              )
-           )`,
+           )
+         RETURNING agent_unread_count`,
       )
         .bind(id, boundary.created_at, boundary.id)
-        .run()
+        .first<{ agent_unread_count: number }>()
     : null;
 
-  if (readResult?.meta.changes) {
+  if (readResult) {
+    const conversationSnapshot: ConversationEventSnapshot = {
+      ...conversation,
+      agent_unread_count: Number(readResult.agent_unread_count || 0),
+    };
     await deferAgentRealtime(
       c,
       Promise.allSettled([
@@ -624,10 +637,16 @@ agentApi.post('/api/agent/conversations/:id/read', async (c) => {
           reader: 'agent',
           lastMessageId: boundary?.id ?? null,
         }),
-        broadcastClientConversationEvent(c.env, id, 'message.read', {
-          reader: 'agent',
-          lastMessageId: boundary?.id ?? null,
-        }),
+        broadcastClientConversationEvent(
+          c.env,
+          id,
+          'message.read',
+          {
+            reader: 'agent',
+            lastMessageId: boundary?.id ?? null,
+          },
+          { conversationSnapshot },
+        ),
       ]).then((results) => {
         for (const result of results) {
           if (result.status === 'rejected') {
