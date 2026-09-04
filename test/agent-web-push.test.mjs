@@ -110,10 +110,19 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.match(dashboard, /通知服务启动超时，请刷新页面后重试/u);
   assert.match(chrome, /客户消息通知/u);
   assert.match(chrome, /切后台、锁屏或离开页面也会提醒/u);
-  assert.match(chrome, /工作台提示音/u);
+  assert.match(chrome, /消息提示音/u);
+  assert.match(chrome, /震动提醒/u);
+  assert.match(chrome, /测试提示音/u);
+  assert.match(chrome, /测试震动/u);
   assert.match(chrome, /消息提醒：/u);
+  assert.doesNotMatch(chrome, /新会话通知/u);
   assert.doesNotMatch(chrome, /前台提示音/u);
   assert.doesNotMatch(chrome, /后台可接收系统通知/u);
+  assert.match(portal, /loadAgentVibrationEnabled\(identity\.id\)/u);
+  assert.match(portal, /saveAgentVibrationEnabled\(identity\.id, vibrationEnabled\)/u);
+  assert.match(portal, /rememberAgentReminderMessage\(remindedMessageIdsRef\.current, messageId\)/u);
+  assert.match(portal, /vibrationEnabledRef\.current/u);
+  assert.match(portal, /agentReminderVibrationPattern\(type\)/u);
 });
 
 test('normal prepare deduplicates binding while logout makes same-device relogin bind again', () => {
