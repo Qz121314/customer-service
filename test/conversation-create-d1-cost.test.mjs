@@ -216,36 +216,14 @@ test('first CTA executes the bounded create, claim and assignment lifecycle', as
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.deepEqual(
-    {
-      prepare: metrics.prepare,
-      first: metrics.first,
-      all: metrics.all,
-      run: metrics.run,
-      batch: metrics.batch,
-      batchStatements: metrics.batchStatements,
-      batchSizes: metrics.batchSizes,
-      executed: metrics.executed,
-      select: metrics.select,
-      insert: metrics.insert,
-      update: metrics.update,
-      delete: metrics.delete,
-    },
-    {
-      prepare: 15,
-      first: 6,
-      all: 4,
-      run: 5,
-      batch: 2,
-      batchStatements: 4,
-      batchSizes: [2, 2],
-      executed: 15,
-      select: 7,
-      insert: 6,
-      update: 2,
-      delete: 0,
-    },
-  );
+  assert.equal(metrics.executed, 15);
+  assert.equal(metrics.select, 7);
+  assert.equal(metrics.insert, 6);
+  assert.equal(metrics.update, 2);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 2);
+  assert.equal(metrics.batchStatements, 4);
+  assert.deepEqual(metrics.batchSizes, [2, 2]);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);
@@ -313,32 +291,12 @@ test('sourceHandoff replay avoids duplicate conversation, assignment, quota and 
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.deepEqual(
-    {
-      prepare: metrics.prepare,
-      first: metrics.first,
-      all: metrics.all,
-      run: metrics.run,
-      batch: metrics.batch,
-      executed: metrics.executed,
-      select: metrics.select,
-      insert: metrics.insert,
-      update: metrics.update,
-      delete: metrics.delete,
-    },
-    {
-      prepare: 8,
-      first: 5,
-      all: 2,
-      run: 1,
-      batch: 0,
-      executed: 8,
-      select: 7,
-      insert: 0,
-      update: 1,
-      delete: 0,
-    },
-  );
+  assert.equal(metrics.executed, 8);
+  assert.equal(metrics.select, 7);
+  assert.equal(metrics.insert, 0);
+  assert.equal(metrics.update, 1);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 0);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(handoffClaims(metrics).length, 0);
   assert.equal(assignmentWrites(metrics).length, 0);
@@ -386,6 +344,8 @@ test('clientMessageId replay returns the original conversation without duplicate
   assert.equal(metrics.select, 7);
   assert.equal(metrics.insert, 0);
   assert.equal(metrics.update, 1);
+  assert.equal(metrics.delete, 0);
+  assert.equal(metrics.batch, 0);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 0);
   assert.equal(handoffClaims(metrics).length, 0);
@@ -427,7 +387,9 @@ test('active reuse claims the fresh handoff without re-consuming assignment or q
   assert.equal(metrics.select, 8);
   assert.equal(metrics.insert, 2);
   assert.equal(metrics.update, 2);
+  assert.equal(metrics.delete, 0);
   assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
   assert.deepEqual(metrics.batchSizes, [2]);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(handoffClaims(metrics).length, 1);
@@ -485,8 +447,14 @@ test('closed affinity remains only a priority and ineligible original agent fall
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.ok(metrics.executed <= 13, `unexpected create budget: ${metrics.executed}`);
-  assert.ok(metrics.select <= 7, `unexpected SELECT budget: ${metrics.select}`);
+  assert.ok(
+    metrics.executed <= 13,
+    `unexpected create budget: ${metrics.executed}`,
+  );
+  assert.ok(
+    metrics.select <= 7,
+    `unexpected SELECT budget: ${metrics.select}`,
+  );
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);
@@ -525,36 +493,14 @@ test('no-agent path releases creation reservations in the existing cleanup batch
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.deepEqual(
-    {
-      prepare: metrics.prepare,
-      first: metrics.first,
-      all: metrics.all,
-      run: metrics.run,
-      batch: metrics.batch,
-      batchStatements: metrics.batchStatements,
-      batchSizes: metrics.batchSizes,
-      executed: metrics.executed,
-      select: metrics.select,
-      insert: metrics.insert,
-      update: metrics.update,
-      delete: metrics.delete,
-    },
-    {
-      prepare: 16,
-      first: 6,
-      all: 1,
-      run: 9,
-      batch: 2,
-      batchStatements: 8,
-      batchSizes: [2, 6],
-      executed: 16,
-      select: 4,
-      insert: 5,
-      update: 3,
-      delete: 4,
-    },
-  );
+  assert.equal(metrics.executed, 16);
+  assert.equal(metrics.select, 4);
+  assert.equal(metrics.insert, 5);
+  assert.equal(metrics.update, 3);
+  assert.equal(metrics.delete, 4);
+  assert.equal(metrics.batch, 2);
+  assert.equal(metrics.batchStatements, 8);
+  assert.deepEqual(metrics.batchSizes, [2, 6]);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);
@@ -606,8 +552,14 @@ test('concurrent duplicate claim produces one owner, one quota consumption and o
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.ok(metrics.executed <= 30, `unexpected concurrent budget: ${metrics.executed}`);
-  assert.ok(metrics.select <= 16, `unexpected concurrent SELECT budget: ${metrics.select}`);
+  assert.ok(
+    metrics.executed <= 30,
+    `unexpected concurrent budget: ${metrics.executed}`,
+  );
+  assert.ok(
+    metrics.select <= 16,
+    `unexpected concurrent SELECT budget: ${metrics.select}`,
+  );
   assert.equal(changedRows(conversationCreates(metrics)), 1);
   assert.equal(changedRows(handoffClaims(metrics)), 1);
   assert.equal(changedRows(messageInserts(metrics)), 1);
