@@ -43,7 +43,8 @@
 }
 
 .workspace-shell .thread-pane > .thread-empty,
-.workspace-shell .thread-pane > .empty-state {
+.workspace-shell .thread-pane > .empty-state,
+.workspace-shell .thread-pane > .empty-panel {
   min-height: 0;
   grid-area: 1 / 1 / -1 / -1;
 }
