@@ -7,11 +7,19 @@ function source(path) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
+function cssRule(styles, selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = styles.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`));
+  assert.ok(match, `missing CSS rule: ${selector}`);
+  return match[1];
+}
+
 test('mobile agent follows the visual viewport without subtree layout work', () => {
   const main = source('../src/dashboard/main.tsx');
   const agentEntry = source('../src/dashboard/agent-entry.tsx');
   const navigation = source('../src/dashboard/agent-navigation.ts');
   const mobileLayout = source('../src/dashboard/agent-mobile-layout.css');
+  const routeLayout = source('../src/dashboard/agent-route.css');
 
   assert.ok(main.includes("import('./agent-entry')"));
 
@@ -61,6 +69,45 @@ test('mobile agent follows the visual viewport without subtree layout work', () 
     mobileLayout,
     /\.workspace-shell\.is-thread-open \.thread-pane\s*{[\s\S]*?height: auto;[\s\S]*?flex: 1 1 auto;/,
     'mobile thread must consume the remaining visual viewport',
+  );
+
+  const threadPaneRule = cssRule(routeLayout, '.workspace-shell .thread-pane');
+  assert.match(
+    threadPaneRule,
+    /display:\s*grid;/,
+    'active chat must use an explicit grid child contract',
+  );
+  assert.match(
+    threadPaneRule,
+    /grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+auto;/,
+    'only the message timeline may own the elastic chat row',
+  );
+  assert.match(
+    threadPaneRule,
+    /grid-template-areas:\s*'thread-head'\s*'thread-messages'\s*'thread-composer';/,
+    'chat rows must be named instead of depending on child order',
+  );
+
+  assert.match(
+    cssRule(routeLayout, '.workspace-shell .thread-pane > .thread-head'),
+    /grid-area:\s*thread-head;/,
+  );
+  assert.match(
+    cssRule(routeLayout, '.workspace-shell .thread-pane > .messages'),
+    /grid-area:\s*thread-messages;/,
+  );
+  assert.match(
+    cssRule(routeLayout, '.workspace-shell .thread-pane > .composer'),
+    /grid-area:\s*thread-composer;/,
+    'composer must never auto-place into the 1fr message row',
+  );
+  assert.match(
+    cssRule(
+      routeLayout,
+      '.workspace-shell.is-thread-open .thread-pane',
+    ),
+    /display:\s*grid;/,
+    'mobile thread-open override must preserve the chat grid contract',
   );
 
   const renderIndex = agentEntry.indexOf(
