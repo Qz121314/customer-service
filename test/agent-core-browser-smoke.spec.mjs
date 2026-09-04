@@ -30,8 +30,12 @@ async function installSystemNotificationStubs(context) {
     defineNoop(globalThis, 'AudioContext', undefined);
     defineNoop(globalThis, 'webkitAudioContext', undefined);
 
-    if (typeof ServiceWorker !== 'undefined') {
-      defineNoop(ServiceWorker.prototype, 'postMessage', () => undefined);
+    if (typeof globalThis.ServiceWorker !== 'undefined') {
+      defineNoop(
+        globalThis.ServiceWorker.prototype,
+        'postMessage',
+        () => undefined,
+      );
     }
   });
 }
@@ -182,6 +186,8 @@ test('core multi-device agent workflow remains usable', async ({
       phone.getByRole('main').getByText('Visitor reply on both devices'),
     ).toBeVisible();
 
+    await phone.getByRole('button', { name: '返回会话列表' }).click();
+    await expect(phone.getByText('我的会话')).toBeVisible();
     await phone.getByRole('button', { name: '打开功能菜单' }).click();
     await phone.getByRole('button', { name: /退出客服账号/u }).click();
     await expect(
