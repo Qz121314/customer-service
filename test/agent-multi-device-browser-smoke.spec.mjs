@@ -38,6 +38,19 @@ function attachBrowserDiagnostics(page, label) {
   });
 }
 
+async function disableVibration(context) {
+  await context.addInitScript(() => {
+    try {
+      Object.defineProperty(Navigator.prototype, 'vibrate', {
+        configurable: true,
+        value: () => false,
+      });
+    } catch {
+      // Diagnostic only: leave the native capability untouched if immutable.
+    }
+  });
+}
+
 async function logRenderedInbox(page, label) {
   try {
     const rendered = await page.evaluate(() => ({
@@ -138,6 +151,8 @@ test('desktop and phone share availability while logout remains device-local', a
     viewport: { width: 390, height: 844 },
     isMobile: true,
   });
+  await disableVibration(desktopContext);
+  await disableVibration(phoneContext);
   const desktop = await desktopContext.newPage();
   const phone = await phoneContext.newPage();
   attachBrowserDiagnostics(desktop, 'desktop');
