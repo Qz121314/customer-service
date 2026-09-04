@@ -49,5 +49,6 @@ test('media reservations are idempotent and abandoned uploads are quarantined', 
   assert.match(store, /INSERT OR IGNORE INTO media_items/u);
   assert.match(store, /MediaUploadIdConflictError/u);
   assert.match(retention, /status = 'failed'/u);
-  assert.match(retention, /'-2 hours'/u);
+  assert.match(retention, /now\.getTime\(\) - 2 \* HOUR_MS/u);
+  assert.match(retention, /updated_at <= \?2/u);
 });

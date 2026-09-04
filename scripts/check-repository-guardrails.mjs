@@ -158,6 +158,25 @@ const deployStep =
   ciWorkflow.match(
     /- name: Deploy production to Cloudflare[\s\S]*?(?=\n\s+- name:)/u,
   )?.[0] ?? '';
+const migrationDetectionStep =
+  ciWorkflow.match(
+    /- name: Detect production D1 migration changes[\s\S]*?(?=\n\s+- name:)/u,
+  )?.[0] ?? '';
+assert.match(
+  migrationDetectionStep,
+  /git diff --quiet "\$BEFORE_SHA" "\$CURRENT_SHA" -- migrations/u,
+  'Routine code-only deployment must detect migration changes without querying production D1',
+);
+assert.match(
+  deployStep,
+  /if \[ "\$D1_MIGRATIONS_REQUIRED" = 'true' \]; then[\s\S]*?pnpm db:migrate:remote/u,
+  'Production D1 migrations must run only when migration files changed or a manual deployment requests a conservative check',
+);
+assert.match(
+  deployStep,
+  /Skipping production D1 access: no migration files changed/u,
+  'Code-only production deployments must explicitly skip production D1 access',
+);
 const deploymentSecretReferences = [
   ...deployStep.matchAll(/secrets\.([A-Z0-9_]+)/gu),
 ].map((match) => match[1]);
