@@ -62,7 +62,8 @@ test('agent push subscriptions follow device session lifetime', () => {
          FROM agent_push_subscriptions
          ORDER BY endpoint ASC`,
       )
-      .all(),
+      .all()
+      .map((row) => ({ ...row })),
     [
       {
         endpoint: 'https://push.example/desktop',
@@ -82,3 +83,4 @@ test('agent push subscriptions follow device session lifetime', () => {
   );
   database.close();
 });
+
