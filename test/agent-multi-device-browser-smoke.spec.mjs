@@ -51,6 +51,19 @@ async function disableVibration(context) {
   });
 }
 
+async function disableAudioContext(context) {
+  await context.addInitScript(() => {
+    try {
+      Object.defineProperty(globalThis, 'AudioContext', {
+        configurable: true,
+        value: undefined,
+      });
+    } catch {
+      // Diagnostic only: leave the native capability untouched if immutable.
+    }
+  });
+}
+
 async function logRenderedInbox(page, label) {
   try {
     const rendered = await page.evaluate(() => ({
@@ -153,6 +166,8 @@ test('desktop and phone share availability while logout remains device-local', a
   });
   await disableVibration(desktopContext);
   await disableVibration(phoneContext);
+  await disableAudioContext(desktopContext);
+  await disableAudioContext(phoneContext);
   const desktop = await desktopContext.newPage();
   const phone = await phoneContext.newPage();
   attachBrowserDiagnostics(desktop, 'desktop');
