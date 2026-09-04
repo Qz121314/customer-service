@@ -58,12 +58,35 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(settingsPage.getByText(/消息提醒：/u)).toBeVisible();
   await expect(settingsPage.getByText('实时连接')).toBeVisible();
   await expect(settingsPage.getByText('后台 Push')).toBeVisible();
+
+  const soundRow = settingsPage
+    .locator('.mobile-agent-settings-item')
+    .filter({ hasText: '消息提示音' });
+  await expect(soundRow).toBeVisible();
   await expect(
-    settingsPage.getByText('消息提示音', { exact: true }),
+    soundRow.getByRole('button', {
+      name: /关闭消息提示音|开启消息提示音/u,
+    }),
   ).toBeVisible();
   await expect(
-    settingsPage.getByText('测试提示音', { exact: true }),
+    soundRow.getByRole('button', { name: '测试提示音' }),
   ).toBeVisible();
+  await expect(
+    settingsPage.getByRole('button', { name: '测试提示音' }),
+  ).toHaveCount(1);
+
+  const healthSummary = settingsPage.locator('.agent-notification-health');
+  await expect(healthSummary.locator('dd .ui-icon').first()).toBeVisible();
+  const healthColors = await healthSummary
+    .locator('dd > span')
+    .evaluateAll((rows) =>
+      rows.map(
+        (row) =>
+          row.ownerDocument.defaultView?.getComputedStyle(row).color ?? '',
+      ),
+    );
+  expect(new Set(healthColors).size).toBeGreaterThan(1);
+
   await expect(settingsPage.getByText('接待', { exact: true })).toBeVisible();
   await expect(settingsPage.getByText('账号', { exact: true })).toBeVisible();
 
