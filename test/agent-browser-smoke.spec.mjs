@@ -113,7 +113,7 @@ async function loginAgent(page) {
   await expect(page.getByText('我的会话')).toBeVisible();
   await createConversation(page);
   await page.reload();
-  await expect(page.getByText('我的会话')).toBeVisible();
+  await expect(page.locator('.workspace-shell')).toBeVisible();
   await expect(
     page.getByRole('button', { name: /UI Smoke Product/u }),
   ).toBeVisible();

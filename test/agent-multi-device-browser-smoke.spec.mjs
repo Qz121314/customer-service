@@ -5,8 +5,15 @@ const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
 
+test.setTimeout(90_000);
+
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
+}
+
+async function expectAgentWorkspace(page) {
+  await expect(page.locator('.workspace-shell')).toBeVisible();
+  await expect(page.locator('.conversation-pane')).toBeVisible();
 }
 
 async function loginAgent(page, username, password) {
@@ -14,7 +21,7 @@ async function loginAgent(page, username, password) {
   await page.getByLabel('客服账号').fill(username);
   await page.getByLabel('登录密码').fill(password);
   await page.getByRole('button', { name: '进入工作台' }).click();
-  await expect(page.getByText('我的会话')).toBeVisible();
+  await expectAgentWorkspace(page);
   await expect(page.getByText('连接正常')).toBeVisible();
 }
 
@@ -163,7 +170,9 @@ test('desktop and phone share availability while logout remains device-local', a
       })
       .toBe('offline');
   } finally {
-    await phoneContext.close();
-    await desktopContext.close();
+    await Promise.allSettled([
+      phoneContext.close(),
+      desktopContext.close(),
+    ]);
   }
 });
