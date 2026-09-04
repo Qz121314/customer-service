@@ -3,9 +3,9 @@ import {
   loadAgentSoundPreset,
   type AgentReminderType,
   type AgentSoundPreset,
-} from './dashboard-runtime-core';
+} from './dashboard-runtime-core.ts';
 
-export * from './dashboard-runtime-core';
+export * from './dashboard-runtime-core.ts';
 
 const AGENT_SOUND_PRESET_OPTIONS: readonly {
   id: AgentSoundPreset;

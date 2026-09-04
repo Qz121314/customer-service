@@ -27,7 +27,10 @@ test('typing signals stay ephemeral and use authenticated conversation sockets',
 
 test('agent workspace offers local sound and typing presence', () => {
   const agent = source('../src/dashboard/AgentPortal.tsx');
-  const runtime = source('../src/dashboard/dashboard-runtime.ts');
+  const runtime = [
+    source('../src/dashboard/dashboard-runtime.ts'),
+    source('../src/dashboard/dashboard-runtime-core.ts'),
+  ].join('\n');
 
   assert.ok(runtime.includes('cs-agent-sound:${agentId}'));
   assert.ok(runtime.includes('emitAgentMessageTone'));
