@@ -34,7 +34,7 @@ test('message writes maintain cached previews', async () => {
   assert.ok(clientApi.includes('last_message_preview = ?2,'));
   assert.ok(
     clientApi.includes(
-      '.bind(createdAt, input.body, input.conversationId, id)',
+      'input.productContext?.title ?? input.body,\n        input.conversationId,',
     ),
   );
   const imagePreviewWrites = mediaStore.match(/last_message_preview = '',/gu);

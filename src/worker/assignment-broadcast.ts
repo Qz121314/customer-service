@@ -3,6 +3,7 @@ import {
   publicMessageAttachment,
 } from './message-attachments';
 import { loadAgentOverview } from './agent-inbox';
+import type { ProductContextSnapshot } from './client-api';
 
 type AssignmentBroadcastEnv = {
   DB: D1Database;
@@ -17,6 +18,9 @@ export type AssignmentVisitorMessage = {
   sender_type: 'visitor';
   sender_id: string;
   body: string;
+  message_kind: 'product_context';
+  structured_payload_json: string;
+  product_context: ProductContextSnapshot;
   client_message_id: string | null;
   read_by_visitor_at: null;
   read_by_agent_at: null;
@@ -171,6 +175,14 @@ async function broadcastAssignment(
       conversationId: conversation.id,
       conversation: agentConversationSummary(conversation),
       overview,
+      ...(visitorMessage
+        ? {
+            reminder: {
+              type: 'NEW_CONVERSATION',
+              messageId: visitorMessage.id,
+            },
+          }
+        : {}),
     }),
   ];
   if (conversation.external_id) {
@@ -274,6 +286,8 @@ type GreetingMessage = {
   sender_type: 'agent';
   sender_id: string;
   body: string;
+  message_kind: 'text';
+  structured_payload_json: null;
   client_message_id: 'auto-greeting:v2';
   read_by_visitor_at: null;
   read_by_agent_at: null;
@@ -299,6 +313,8 @@ function greetingMessage(
     sender_type: 'agent',
     sender_id: conversation.assigned_agent,
     body: conversation.greeting_message_body,
+    message_kind: 'text',
+    structured_payload_json: null,
     client_message_id: 'auto-greeting:v2',
     read_by_visitor_at: null,
     read_by_agent_at: null,
@@ -313,6 +329,12 @@ function conversationRoomMessage(message: AssignmentMessage) {
     sender_type: message.sender_type,
     sender_id: message.sender_id,
     body: message.body,
+    message_kind: message.message_kind,
+    structured_payload_json: message.structured_payload_json,
+    product_context:
+      message.message_kind === 'product_context'
+        ? message.product_context
+        : null,
     read_by_visitor_at: message.read_by_visitor_at,
     read_by_agent_at: message.read_by_agent_at,
     created_at: message.created_at,
@@ -327,6 +349,11 @@ function clientRealtimeMessage(
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
+    kind: message.message_kind,
+    productContext:
+      message.message_kind === 'product_context'
+        ? message.product_context
+        : null,
     sentAt: toIso(message.created_at),
     delivery: 'sent',
     attachments,

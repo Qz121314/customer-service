@@ -5,7 +5,7 @@ const AGENT_NOTIFICATION_PARAM = 'notification';
 const AGENT_NOTIFICATION_TARGET = 'latest-unread';
 const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
 const AGENT_SERVICE_WORKER_SCOPE = '/agent';
-const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v2';
+const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v4';
 const AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
 
 type PushConfig = {
@@ -13,22 +13,63 @@ type PushConfig = {
   applicationServerKey: string;
 };
 
-export function hasAgentNotificationOpenIntent(): boolean {
+type NotificationConversation = {
+  id: string;
+  agent_unread_count: number;
+  last_message_at: string;
+  created_at: string;
+};
+
+export function runBestEffortAgentCapability(
+  action: () => void | Promise<void>,
+): void {
+  try {
+    const task = action();
+    void task?.catch(() => undefined);
+  } catch {
+    // Browser notification capabilities must never affect the core workspace.
+  }
+}
+
+export function resolveAgentNotificationConversation<
+  T extends NotificationConversation,
+>(conversations: T[], targetId: string): T | null {
+  if (targetId !== AGENT_NOTIFICATION_TARGET) {
+    const exact = conversations.find(
+      (conversation) => conversation.id === targetId,
+    );
+    if (exact) return exact;
+  }
   return (
-    new URLSearchParams(window.location.search).get(
-      AGENT_NOTIFICATION_PARAM,
-    ) === AGENT_NOTIFICATION_TARGET
+    conversations
+      .filter((conversation) => conversation.agent_unread_count > 0)
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.last_message_at || left.created_at);
+        const rightTime = Date.parse(right.last_message_at || right.created_at);
+        return rightTime - leftTime;
+      })[0] ?? null
   );
+}
+
+export function hasAgentNotificationOpenIntent(): boolean {
+  return agentNotificationOpenTarget() !== null;
+}
+
+export function agentNotificationOpenTarget(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  const conversationId = params.get('conversationId')?.trim();
+  if (conversationId) return conversationId;
+  return params.get(AGENT_NOTIFICATION_PARAM) === AGENT_NOTIFICATION_TARGET
+    ? AGENT_NOTIFICATION_TARGET
+    : null;
 }
 
 export function clearAgentNotificationOpenIntent(): void {
   const url = new URL(window.location.href);
-  if (
-    url.searchParams.get(AGENT_NOTIFICATION_PARAM) !== AGENT_NOTIFICATION_TARGET
-  ) {
-    return;
-  }
+  if (!agentNotificationOpenTarget()) return;
   url.searchParams.delete(AGENT_NOTIFICATION_PARAM);
+  url.searchParams.delete('conversationId');
+  url.searchParams.delete('messageId');
   window.history.replaceState(
     window.history.state,
     '',
@@ -39,10 +80,15 @@ export function clearAgentNotificationOpenIntent(): void {
 export function isAgentNotificationOpenMessage(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return (
-    record.type === AGENT_NOTIFICATION_MESSAGE_TYPE &&
-    record.target === AGENT_NOTIFICATION_TARGET
-  );
+  return record.type === AGENT_NOTIFICATION_MESSAGE_TYPE;
+}
+
+export function agentNotificationMessageTarget(value: unknown): string | null {
+  if (!isAgentNotificationOpenMessage(value)) return null;
+  const conversationId = (value as Record<string, unknown>).conversationId;
+  return typeof conversationId === 'string' && conversationId
+    ? conversationId
+    : AGENT_NOTIFICATION_TARGET;
 }
 
 export async function prepareAgentNotifications(
@@ -102,11 +148,29 @@ export async function disableAgentNotifications(): Promise<AgentNotificationStat
       removalError = error;
     }
     await subscription.unsubscribe();
-    clearAgentPushBinding();
+    clearAgentPushBindingMarker();
     if (removalError) throw removalError;
   }
-  clearAgentPushBinding();
+  clearAgentPushBindingMarker();
   return Notification.permission === 'denied' ? 'blocked' : 'disabled';
+}
+
+export function updateAgentAppBadge(unreadMessageCount: number): void {
+  const badgeNavigator = navigator as Navigator & {
+    setAppBadge?: (count?: number) => Promise<void>;
+    clearAppBadge?: () => Promise<void>;
+  };
+  runBestEffortAgentCapability(() =>
+    unreadMessageCount > 0
+      ? badgeNavigator.setAppBadge?.(unreadMessageCount)
+      : badgeNavigator.clearAppBadge?.(),
+  );
+  runBestEffortAgentCapability(() => {
+    navigator.serviceWorker?.controller?.postMessage({
+      type: 'agent.badge.sync',
+      unreadMessageCount,
+    });
+  });
 }
 
 function notificationPrerequisite(): AgentNotificationState | null {
@@ -180,8 +244,10 @@ async function bindAgentSubscription(
   agentId: string,
   force = false,
 ): Promise<void> {
-  const marker = `${agentId}\n${subscription.endpoint}`;
-  if (!force && readAgentPushBinding() === marker) return;
+  const marker = agentPushBindingMarker(agentId, subscription.endpoint);
+  if (!shouldBindAgentSubscription(readAgentPushBinding(), marker, force)) {
+    return;
+  }
   await request('/api/agent/push/subscriptions', {
     method: 'POST',
     body: JSON.stringify({ subscription: subscription.toJSON() }),
@@ -193,6 +259,21 @@ async function bindAgentSubscription(
   }
 }
 
+export function agentPushBindingMarker(
+  agentId: string,
+  endpoint: string,
+): string {
+  return `${agentId}\n${endpoint}`;
+}
+
+export function shouldBindAgentSubscription(
+  currentMarker: string | null,
+  expectedMarker: string,
+  force = false,
+): boolean {
+  return force || currentMarker !== expectedMarker;
+}
+
 function readAgentPushBinding(): string | null {
   try {
     return window.localStorage.getItem(AGENT_PUSH_BINDING_KEY);
@@ -201,7 +282,7 @@ function readAgentPushBinding(): string | null {
   }
 }
 
-function clearAgentPushBinding(): void {
+export function clearAgentPushBindingMarker(): void {
   try {
     window.localStorage.removeItem(AGENT_PUSH_BINDING_KEY);
   } catch {

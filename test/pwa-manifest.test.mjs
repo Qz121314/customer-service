@@ -75,7 +75,7 @@ test('agent service worker keeps every push user-visible and alerts in the backg
   );
   assert.match(source, /addEventListener\('install'/u);
   assert.match(source, /addEventListener\('fetch'/u);
-  assert.match(source, /agent-workspace-v4/u);
+  assert.match(source, /agent-workspace-v5/u);
   assert.match(source, /const AGENT_SHELL_URL = '\/index\.html';/u);
   assert.match(source, /const APP_SHELL = \[\s*AGENT_SHELL_URL,/u);
   assert.doesNotMatch(source, /const APP_SHELL = \[\s*AGENT_WORKSPACE_URL,/u);
@@ -86,8 +86,10 @@ test('agent service worker keeps every push user-visible and alerts in the backg
   assert.match(source, /const foreground = clients\.some/u);
   assert.match(source, /return self\.registration\.showNotification/u);
   assert.match(source, /silent: foreground/u);
-  assert.match(source, /vibrate: foreground \? undefined : \[200, 100, 200\]/u);
-  assert.match(source, /tag: foreground/u);
+  assert.match(source, /agent-message-\$\{payload\.messageId\}/u);
+  assert.match(source, /payload\.type !== 'NEW_CONVERSATION'/u);
+  assert.match(source, /conversationId: payload\.conversationId/u);
+  assert.match(source, /setAppBadge/u);
   assert.doesNotMatch(
     source,
     /if \(clients\.some\([\s\S]{0,140}visibilityState === 'visible'[\s\S]{0,80}\)\) \{\s*return undefined;/u,

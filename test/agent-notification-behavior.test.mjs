@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { URL } from 'node:url';
 import { emitAgentMessageTone } from '../src/dashboard/dashboard-runtime.ts';
 import {
   enableAgentNotifications,
   prepareAgentNotifications,
+  runBestEffortAgentCapability,
+  updateAgentAppBadge,
 } from '../src/dashboard/agent-push.ts';
 
 function replaceGlobal(name, value) {
@@ -28,7 +32,11 @@ function browserEnvironment({
   const subscription = {
     endpoint: 'https://push.example.test/subscription',
     toJSON() {
-      return { endpoint: this.endpoint, expirationTime: null };
+      return {
+        endpoint: this.endpoint,
+        expirationTime: null,
+        keys: { p256dh: 'p256dh', auth: 'auth' },
+      };
     },
     async unsubscribe() {
       return true;
@@ -239,5 +247,111 @@ test('agent message tone uses maximum in-app gain', () => {
   assert.deepEqual(
     frequencies.map((item) => item.value),
     [660, 880],
+  );
+});
+
+test('new conversation and customer reply use distinct foreground tones', () => {
+  const frequencies = [];
+  const context = {
+    currentTime: 0,
+    destination: {},
+    createGain() {
+      return {
+        gain: {
+          setValueAtTime() {},
+          exponentialRampToValueAtTime() {},
+        },
+        connect() {},
+      };
+    },
+    createOscillator() {
+      return {
+        type: 'sine',
+        frequency: {
+          setValueAtTime(value) {
+            frequencies.push(value);
+          },
+        },
+        connect() {},
+        start() {},
+        stop() {},
+      };
+    },
+  };
+
+  emitAgentMessageTone(context, 'NEW_CONVERSATION');
+  const newConversation = frequencies.splice(0);
+  emitAgentMessageTone(context, 'CUSTOMER_REPLY');
+
+  assert.deepEqual(newConversation, [880, 1175, 1320]);
+  assert.deepEqual(frequencies, [660, 880]);
+});
+
+test('app badge follows unread message total and clears at zero', () => {
+  const badgeCalls = [];
+  const messages = [];
+  const restoreNavigator = replaceGlobal('navigator', {
+    setAppBadge(count) {
+      badgeCalls.push(['set', count]);
+      return Promise.resolve();
+    },
+    clearAppBadge() {
+      badgeCalls.push(['clear']);
+      return Promise.resolve();
+    },
+    serviceWorker: {
+      controller: {
+        postMessage(message) {
+          messages.push(message);
+        },
+      },
+    },
+  });
+
+  try {
+    updateAgentAppBadge(5);
+    updateAgentAppBadge(2);
+    updateAgentAppBadge(0);
+    assert.deepEqual(badgeCalls, [['set', 5], ['set', 2], ['clear']]);
+    assert.deepEqual(
+      messages.map((message) => message.unreadMessageCount),
+      [5, 2, 0],
+    );
+  } finally {
+    restoreNavigator();
+  }
+});
+
+test('browser reminder failures cannot interrupt core realtime state updates', () => {
+  let continued = false;
+  assert.doesNotThrow(() => {
+    runBestEffortAgentCapability(() => {
+      throw new Error('sound unavailable');
+    });
+    runBestEffortAgentCapability(() => {
+      throw new Error('vibration unavailable');
+    });
+    continued = true;
+  });
+  assert.equal(continued, true);
+
+  const portal = readFileSync(
+    new URL('../src/dashboard/AgentPortal.tsx', import.meta.url),
+    'utf8',
+  );
+  const handlerStart = portal.indexOf(
+    "payload.type !== 'conversation.changed'",
+  );
+  const handlerEnd = portal.indexOf(
+    "socket.addEventListener('close'",
+    handlerStart,
+  );
+  assert.ok(handlerStart >= 0 && handlerEnd > handlerStart);
+  const handler = portal.slice(handlerStart, handlerEnd);
+  assert.ok(
+    handler.indexOf('setConversations') < handler.indexOf('alertForReminder'),
+  );
+  assert.ok(
+    handler.indexOf('setOverview') < handler.indexOf('alertForReminder'),
   );
 });

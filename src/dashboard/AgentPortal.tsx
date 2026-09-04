@@ -50,6 +50,7 @@ import {
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
   emitAgentMessageTone,
+  type AgentReminderType,
   parseRealtimeEvent,
   sortedConversationList,
   mergeAgentConversationPage,
@@ -82,7 +83,10 @@ import { sendAgentImage } from './agent-media';
 import {
   disableAgentNotifications,
   enableAgentNotifications,
+  clearAgentPushBindingMarker,
   prepareAgentNotifications,
+  runBestEffortAgentCapability,
+  updateAgentAppBadge,
   type AgentNotificationState,
 } from './agent-push';
 import { UiIcon } from './icons';
@@ -415,6 +419,7 @@ function AgentWorkspace({
   const [visitorTyping, setVisitorTyping] = useState(false);
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -427,6 +432,7 @@ function AgentWorkspace({
   const soundEnabledRef = useRef(soundEnabled);
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
+  const remindedMessageIdsRef = useRef(new Set<string>());
   const lastScrolledConversationRef = useRef<string | null>(null);
   const pendingHistoryScrollRef = useRef<{
     scrollHeight: number;
@@ -542,37 +548,70 @@ function AgentWorkspace({
   }, [identity.id, soundEnabled]);
 
   const ensureSoundContext = useCallback((): AudioContext | null => {
-    if (soundContextRef.current) return soundContextRef.current;
+    if (soundContextRef.current) {
+      if (soundContextRef.current.state === 'running') setAudioUnlocked(true);
+      return soundContextRef.current;
+    }
     try {
       soundContextRef.current = new AudioContext();
+      setAudioUnlocked(soundContextRef.current.state === 'running');
       return soundContextRef.current;
     } catch {
       return null;
     }
   }, []);
 
-  const playIncomingTone = useCallback(() => {
-    if (!soundEnabledRef.current || document.visibilityState !== 'visible') {
-      return;
-    }
-    const context = ensureSoundContext();
-    if (!context) return;
-    if (context.state === 'running') {
-      emitAgentMessageTone(context);
-      return;
-    }
-    void context
-      .resume()
-      .then(() => emitAgentMessageTone(context))
-      .catch(() => undefined);
-  }, [ensureSoundContext]);
+  const playIncomingTone = useCallback(
+    (type: AgentReminderType) => {
+      if (!soundEnabledRef.current || document.visibilityState !== 'visible') {
+        return;
+      }
+      const context = ensureSoundContext();
+      if (!context) return;
+      if (context.state === 'running') {
+        emitAgentMessageTone(context, type);
+        return;
+      }
+      void context
+        .resume()
+        .then(() => {
+          setAudioUnlocked(context.state === 'running');
+          emitAgentMessageTone(context, type);
+        })
+        .catch(() => undefined);
+    },
+    [ensureSoundContext],
+  );
+
+  const alertForReminder = useCallback(
+    (type: AgentReminderType, messageId: string) => {
+      const seen = remindedMessageIdsRef.current;
+      if (seen.has(messageId)) return;
+      seen.add(messageId);
+      if (seen.size > 500) seen.delete(seen.values().next().value!);
+      runBestEffortAgentCapability(() => playIncomingTone(type));
+      if (document.visibilityState === 'visible' && 'vibrate' in navigator) {
+        runBestEffortAgentCapability(() => {
+          navigator.vibrate(
+            type === 'NEW_CONVERSATION'
+              ? [220, 100, 220, 100, 320]
+              : [220, 100, 220],
+          );
+        });
+      }
+    },
+    [playIncomingTone],
+  );
 
   useEffect(() => {
     const primeSound = () => {
       if (!soundEnabledRef.current) return;
       const context = ensureSoundContext();
       if (context?.state === 'suspended') {
-        void context.resume().catch(() => undefined);
+        void context
+          .resume()
+          .then(() => setAudioUnlocked(context.state === 'running'))
+          .catch(() => undefined);
       }
     };
     window.addEventListener('pointerdown', primeSound, { once: true });
@@ -628,6 +667,10 @@ function AgentWorkspace({
     return () => {
       document.title = baseTitle;
     };
+  }, [totalUnread]);
+
+  useEffect(() => {
+    updateAgentAppBadge(totalUnread);
   }, [totalUnread]);
 
   const applyInbox = useCallback((inbox: AgentInbox) => {
@@ -759,6 +802,14 @@ function AgentWorkspace({
         const payload = parseRealtimeEvent<InboxRealtimeEvent>(event);
         if (!payload || payload.type === 'ready' || payload.type === 'pong')
           return;
+        if (
+          payload.type === 'agent.availability.changed' &&
+          payload.agentId === identity.id &&
+          (payload.availability === 'online' || payload.availability === 'busy')
+        ) {
+          setAvailability(payload.availability);
+          return;
+        }
         if (payload.type !== 'conversation.changed' || !payload.conversation) {
           void refresh().catch(() => undefined);
           return;
@@ -766,20 +817,10 @@ function AgentWorkspace({
 
         const next = payload.conversation;
         const belongsToAgent = next.assigned_agent === identity.id;
-        const isNewAssignment =
-          belongsToAgent && !unreadCountRef.current.has(next.id);
-        const previousUnread = unreadCountRef.current.get(next.id) ?? 0;
         if (belongsToAgent) {
           unreadCountRef.current.set(next.id, next.agent_unread_count);
         } else {
           unreadCountRef.current.delete(next.id);
-        }
-        if (
-          belongsToAgent &&
-          (isNewAssignment || next.agent_unread_count > previousUnread) &&
-          document.visibilityState === 'visible'
-        ) {
-          playIncomingTone();
         }
         setConversations((current) => {
           const withoutCurrent = current.filter((item) => item.id !== next.id);
@@ -790,6 +831,9 @@ function AgentWorkspace({
           setOverview((current) =>
             mergeAgentOverview(current, payload.overview!),
           );
+        }
+        if (belongsToAgent && payload.reminder?.messageId) {
+          alertForReminder(payload.reminder.type, payload.reminder.messageId);
         }
       });
       socket.addEventListener('close', () => {
@@ -821,7 +865,7 @@ function AgentWorkspace({
       if (timer !== null) window.clearTimeout(timer);
       if (stableTimer !== null) window.clearTimeout(stableTimer);
     };
-  }, [identity.id, playIncomingTone, recoverAgentInbox, refresh]);
+  }, [alertForReminder, identity.id, recoverAgentInbox, refresh]);
 
   const sendAgentTyping = useCallback((active: boolean) => {
     agentTypingDesiredRef.current = active;
@@ -1640,20 +1684,21 @@ function AgentWorkspace({
     const context = ensureSoundContext();
     if (!context) return;
     if (context.state === 'running') {
-      emitAgentMessageTone(context);
+      emitAgentMessageTone(context, 'CUSTOMER_REPLY');
       return;
     }
     void context
       .resume()
-      .then(() => emitAgentMessageTone(context))
+      .then(() => {
+        setAudioUnlocked(context.state === 'running');
+        emitAgentMessageTone(context, 'CUSTOMER_REPLY');
+      })
       .catch(() => undefined);
   }
 
   async function logoutFromWorkspace() {
-    if (notificationState === 'enabled') {
-      await disableAgentNotifications().catch(() => undefined);
-    }
     await onLogout();
+    clearAgentPushBindingMarker();
   }
 
   const handleNicknameChange = useEventCallback(async (nickname: string) => {
@@ -1741,6 +1786,8 @@ function AgentWorkspace({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
+        realtimeReady={inboxConnected}
+        audioReady={soundEnabled && audioUnlocked}
         onNicknameChange={handleNicknameChange}
         onToggleNotifications={handleToggleNotifications}
         onToggleSound={handleToggleSound}
@@ -1766,6 +1813,7 @@ function AgentWorkspace({
         totalUnread={totalUnread}
         overview={overview}
         busy={busy}
+        conversations={conversations}
         visibleConversations={visibleConversations}
         conversationCount={conversations.length}
         selectedId={selectedId}
@@ -1853,41 +1901,6 @@ function AgentWorkspace({
                 </button>
               </div>
             </header>
-            {detail.conversation.product_title && (
-              <div className="conversation-context-card">
-                {detail.conversation.product_cover_url ? (
-                  <img
-                    src={detail.conversation.product_cover_url}
-                    alt=""
-                    loading="lazy"
-                  />
-                ) : (
-                  <span className="conversation-context-placeholder">CS</span>
-                )}
-                <div>
-                  <span>咨询商品</span>
-                  <strong>{detail.conversation.product_title}</strong>
-                  <small>
-                    {[
-                      detail.conversation.section_name,
-                      detail.conversation.category_name,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || '商品咨询'}
-                  </small>
-                </div>
-                {detail.conversation.product_href && (
-                  <a
-                    href={detail.conversation.product_href}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    查看商品
-                    <UiIcon name="external" />
-                  </a>
-                )}
-              </div>
-            )}
             <div className="messages" ref={messagesRef}>
               {detail.page.hasMoreBefore && (
                 <div className="message-history-loader">

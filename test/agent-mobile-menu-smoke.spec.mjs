@@ -55,6 +55,9 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     'agent-overlay-page-in',
   );
   await expect(settingsPage.getByText('设备与提醒')).toBeVisible();
+  await expect(settingsPage.getByText(/消息提醒：/u)).toBeVisible();
+  await expect(settingsPage.getByText('实时连接')).toBeVisible();
+  await expect(settingsPage.getByText('后台 Push')).toBeVisible();
   await expect(settingsPage.getByText('接待', { exact: true })).toBeVisible();
   await expect(settingsPage.getByText('账号', { exact: true })).toBeVisible();
 

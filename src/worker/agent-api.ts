@@ -4,6 +4,7 @@ import { routingBusinessDate } from './routing';
 import { loadAgentInbox, loadAgentOverview } from './agent-inbox';
 import {
   broadcastClientConversationEvent,
+  productContextFromMessage,
   type ConversationEventSnapshot,
 } from './client-api';
 import { verifyAgentPassword } from './agent-password';
@@ -43,6 +44,7 @@ type AgentCredentialRow = AgentSession & {
   password_hash: string;
   password_salt: string;
   password_iterations: number;
+  has_active_session: number;
 };
 
 type MessageRow = {
@@ -51,6 +53,8 @@ type MessageRow = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
+  message_kind: 'text' | 'image' | 'product_context';
+  structured_payload_json: string | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
   read_by_agent_at: string | null;
@@ -125,12 +129,18 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     return c.json({ error: 'INVALID_CREDENTIALS' }, 401);
 
   const agent = await c.env.DB.prepare(
-    `SELECT id, name, username, status, is_enabled,
-       password_hash, password_salt, password_iterations
-     FROM agents
-     WHERE lower(username) = lower(?1)
-       AND password_hash IS NOT NULL
-       AND password_salt IS NOT NULL
+    `SELECT a.id, a.name, a.username, a.status, a.is_enabled,
+       a.password_hash, a.password_salt, a.password_iterations,
+       EXISTS (
+         SELECT 1
+         FROM agent_sessions session
+         WHERE session.agent_id = a.id
+           AND datetime(session.expires_at) > CURRENT_TIMESTAMP
+       ) AS has_active_session
+     FROM agents a
+     WHERE lower(a.username) = lower(?1)
+       AND a.password_hash IS NOT NULL
+       AND a.password_salt IS NOT NULL
      LIMIT 1`,
   )
     .bind(username)
@@ -153,6 +163,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     Date.now() + SESSION_TTL_SECONDS * 1000,
   ).toISOString();
   const now = new Date().toISOString();
+  const loginStatus = agent.has_active_session ? agent.status : 'online';
   await c.env.DB.batch([
     c.env.DB.prepare(
       `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
@@ -160,10 +171,10 @@ agentApi.post('/api/agent/auth/login', async (c) => {
     ).bind(sessionId, agent.id, await hashAgentSessionToken(token), expiresAt),
     c.env.DB.prepare(
       `UPDATE agents
-       SET status = 'online', last_login_at = ?1, last_seen_at = ?1,
+       SET status = ?2, last_login_at = ?1, last_seen_at = ?1,
            updated_at = ?1
-       WHERE id = ?2`,
-    ).bind(now, agent.id),
+       WHERE id = ?3`,
+    ).bind(now, loginStatus, agent.id),
     c.env.DB.prepare(
       `DELETE FROM agent_sessions
        WHERE datetime(expires_at) <= CURRENT_TIMESTAMP`,
@@ -183,7 +194,7 @@ agentApi.post('/api/agent/auth/login', async (c) => {
       id: agent.id,
       name: agent.name,
       username: agent.username,
-      status: 'online',
+      status: loginStatus,
     },
   });
 });
@@ -191,25 +202,63 @@ agentApi.post('/api/agent/auth/login', async (c) => {
 agentApi.post('/api/agent/auth/logout', async (c) => {
   const agent = await requireAgentSession(c);
   if (agent) {
-    const activeConversationIds = await activeConversationIdsForAgent(
-      c.env.DB,
-      agent.id,
-    );
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
-        agent.id,
-      ),
+    const results = await c.env.DB.batch([
+      c.env.DB.prepare(
+        'DELETE FROM agent_sessions WHERE id = ?1 AND agent_id = ?2',
+      ).bind(agent.session_id, agent.id),
       c.env.DB.prepare(
         `UPDATE agents
          SET status = 'offline', last_seen_at = NULL, updated_at = CURRENT_TIMESTAMP
-         WHERE id = ?1`,
+         WHERE id = ?1
+           AND NOT EXISTS (
+             SELECT 1
+             FROM agent_sessions session
+             WHERE session.agent_id = ?1
+               AND datetime(session.expires_at) > CURRENT_TIMESTAMP
+           )`,
       ).bind(agent.id),
     ]);
-    try {
-      await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
-    } catch (error) {
-      console.warn('agent realtime disconnect failed during logout', error);
+    const finalSessionLoggedOut = Boolean(results[1]?.meta.changes);
+    if (finalSessionLoggedOut) {
+      const activeConversationIds = await activeConversationIdsForAgent(
+        c.env.DB,
+        agent.id,
+      );
+      try {
+        await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
+      } catch (error) {
+        console.warn('agent realtime disconnect failed during logout', error);
+      }
     }
+  }
+  deleteCookie(c, AGENT_SESSION_COOKIE, { path: '/' });
+  return c.json({ ok: true });
+});
+
+agentApi.post('/api/agent/auth/revoke-all', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return unauthorized(c);
+  const activeConversationIds = await activeConversationIdsForAgent(
+    c.env.DB,
+    agent.id,
+  );
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM agent_sessions WHERE agent_id = ?1').bind(
+      agent.id,
+    ),
+    c.env.DB.prepare(
+      `UPDATE agents
+       SET status = 'offline', last_seen_at = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?1`,
+    ).bind(agent.id),
+  ]);
+  try {
+    await disconnectAgentRealtime(c.env, agent.id, activeConversationIds);
+  } catch (error) {
+    console.warn(
+      'agent realtime disconnect failed during session revoke',
+      error,
+    );
   }
   deleteCookie(c, AGENT_SESSION_COOKIE, { path: '/' });
   return c.json({ ok: true });
@@ -244,14 +293,25 @@ agentApi.post('/api/agent/auth/status', async (c) => {
     return c.json({ error: 'INVALID_AGENT_STATUS' }, 400);
   }
 
+  const updatedAt = new Date().toISOString();
   await c.env.DB.prepare(
     `UPDATE agents
-     SET status = ?1, last_seen_at = CURRENT_TIMESTAMP,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?2`,
+     SET status = ?1, last_seen_at = ?2,
+         updated_at = ?2
+     WHERE id = ?3`,
   )
-    .bind(body.status, agent.id)
+    .bind(body.status, updatedAt, agent.id)
     .run();
+
+  await deferAgentRealtime(
+    c,
+    broadcastConversationRoom(c.env, agentInboxRoom(agent.id), {
+      type: 'agent.availability.changed',
+      agentId: agent.id,
+      availability: body.status,
+      updatedAt,
+    }),
+  );
 
   return c.json({
     ok: true,
@@ -461,7 +521,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
   const limitParameter = pageCursor ? '?4' : '?2';
   const messageRequest = c.env.DB.prepare(
     `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
-       m.client_message_id,
+       m.message_kind, m.structured_payload_json, m.client_message_id,
        COALESCE(
          m.read_by_visitor_at,
          CASE
@@ -535,7 +595,7 @@ agentApi.get('/api/agent/conversations/:id/messages', async (c) => {
 
   return c.json({
     conversation,
-    messages: pageMessages,
+    messages: pageMessages.map(agentMessage),
     media,
     readState: readState.results ?? [],
     page: {
@@ -750,6 +810,8 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     sender_type: 'agent',
     sender_id: agent.id,
     body: text,
+    message_kind: 'text',
+    structured_payload_json: null,
     client_message_id: clientMessageId,
     read_by_visitor_at: null,
     read_by_agent_at: null,
@@ -913,7 +975,8 @@ async function findAgentMessageByClientId(
   return db
     .prepare(
       `SELECT id, conversation_id, sender_type, sender_id, body,
-         client_message_id, read_by_visitor_at, read_by_agent_at, created_at
+         message_kind, structured_payload_json, client_message_id,
+         read_by_visitor_at, read_by_agent_at, created_at
        FROM messages
        WHERE conversation_id = ?1
          AND client_message_id = ?2
@@ -963,6 +1026,8 @@ function clientRealtimeMessage(message: MessageRow) {
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
+    kind: message.message_kind,
+    productContext: productContextFromMessage(message),
     sentAt,
     delivery:
       message.sender_type === 'agent' && message.read_by_visitor_at
@@ -971,6 +1036,13 @@ function clientRealtimeMessage(message: MessageRow) {
           ? 'read'
           : 'sent',
     attachments: [],
+  };
+}
+
+function agentMessage(message: MessageRow) {
+  return {
+    ...message,
+    product_context: productContextFromMessage(message),
   };
 }
 

@@ -20,6 +20,11 @@ import { listConversationAttachmentsForMessageIds } from './message-attachments'
 import { createDownloadSigningContext, presignGet } from './media-signing.ts';
 import { clientConversationFanoutPlan } from './conversation-fanout-plan.ts';
 import { loadAgentOverview } from './agent-inbox';
+import {
+  agentNotificationForConversationStart,
+  type AgentNotificationEvent,
+  type AgentNotificationVariables,
+} from './agent-notification-event';
 
 type ClientBindings = {
   DB: D1Database;
@@ -31,7 +36,10 @@ type ClientBindings = {
   R2_BUCKET_NAME?: string;
 };
 
-type ClientEnv = { Bindings: ClientBindings };
+type ClientEnv = {
+  Bindings: ClientBindings;
+  Variables: AgentNotificationVariables;
+};
 type ConversationStatus = 'open' | 'pending' | 'closed';
 type SenderType = 'visitor' | 'agent' | 'system';
 
@@ -91,6 +99,8 @@ type MessageRow = {
   sender_type: SenderType;
   sender_id: string | null;
   body: string;
+  message_kind: 'text' | 'image' | 'product_context';
+  structured_payload_json: string | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
   read_by_agent_at: string | null;
@@ -115,6 +125,17 @@ type NormalizedProduct = {
   title: string;
   href: string;
   coverUrl: string | null;
+};
+
+export type ProductContextSnapshot = {
+  productId: string;
+  title: string;
+  coverUrl: string | null;
+  href: string;
+  sectionId: string;
+  sectionName: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
 };
 
 const CLIENT_MESSAGE_LIMIT = 4000;
@@ -265,18 +286,18 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Source handoff ID is required and must be a UUID v4.',
     );
   }
-  if (messageFieldPresent || clientMessageFieldPresent) {
+  if (messageFieldPresent) {
     if (!hasInitialMessage || !validMessage(initialMessage ?? undefined)) {
       return error(c, 400, 'INVALID_MESSAGE', 'Message is invalid.');
     }
-    if (!clientMessageId) {
-      return error(
-        c,
-        400,
-        'INVALID_CLIENT_MESSAGE_ID',
-        'Client message ID is invalid.',
-      );
-    }
+  }
+  if (clientMessageFieldPresent && !clientMessageId) {
+    return error(
+      c,
+      400,
+      'INVALID_CLIENT_MESSAGE_ID',
+      'Client message ID is invalid.',
+    );
   }
   if (!productInput)
     return error(c, 400, 'INVALID_PRODUCT', 'Product context is invalid.');
@@ -484,14 +505,22 @@ clientApi.post('/client/v1/conversations', async (c) => {
         if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
           return noAgentResponse(c, site);
         }
-        conversation = await continueConversationStart(c.env, {
+        const continuation = await continueConversationStart(c.env, {
           conversation,
           siteId: site.id,
           visitorId,
-          initialMessage,
-          clientMessageId,
+          productContext: productContextFromConversation(conversation),
+          productMessageBody: initialMessage,
+          productMessageClientId: ctaProductMessageClientId(
+            sourceHandoffId,
+            clientMessageId,
+          ),
           assignmentPolicy: 'preserve',
         });
+        conversation = continuation.conversation;
+        if (continuation.notification) {
+          c.set('agentNotification', continuation.notification);
+        }
         return c.json({
           conversation: await conversationDetail(c.env, conversation, 30, null),
         });
@@ -647,14 +676,22 @@ clientApi.post('/client/v1/conversations', async (c) => {
     }
     if (!conversation) throw new Error('Conversation replay failed');
 
-    conversation = await continueConversationStart(c.env, {
+    const continuation = await continueConversationStart(c.env, {
       conversation,
       siteId: site.id,
       visitorId,
-      initialMessage,
-      clientMessageId,
+      productContext: productContextFromConversation(conversation),
+      productMessageBody: initialMessage,
+      productMessageClientId: ctaProductMessageClientId(
+        sourceHandoffId,
+        clientMessageId,
+      ),
       assignmentPolicy: 'complete-new-claim',
     });
+    conversation = continuation.conversation;
+    if (continuation.notification) {
+      c.set('agentNotification', continuation.notification);
+    }
     if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
       await discardUnassignedConversation(c.env.DB, {
         siteId: site.id,
@@ -698,17 +735,18 @@ clientApi.post('/client/v1/conversations', async (c) => {
     );
   }
 
-  let createdMessage: MessageRow | null = null;
-  if (hasInitialMessage && clientMessageId && initialMessage) {
-    const persisted = await persistClientMessage(c.env.DB, {
-      conversationId,
-      senderType: 'visitor',
-      senderId: visitor.id,
-      body: initialMessage,
+  const persistedProductContext = await persistClientMessage(c.env.DB, {
+    conversationId,
+    senderType: 'visitor',
+    senderId: visitor.id,
+    body: initialMessage ?? product.title,
+    clientMessageId: ctaProductMessageClientId(
+      sourceHandoffId,
       clientMessageId,
-    });
-    createdMessage = persisted.message;
-  }
+    ),
+    productContext: productContextFromProduct(product),
+  });
+  const createdMessage = persistedProductContext.message;
 
   const assignment = await assignConversationAgent(c.env.DB, conversationId);
   let conversation: ConversationRow | null = null;
@@ -755,6 +793,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
 
   if (!conversation) throw new Error('Conversation persistence failed');
+  const notification = agentNotificationForConversationStart({
+    conversationId: conversation.id,
+    message: notificationMessage(createdMessage),
+    newlyAssigned: Boolean(assignment.newlyAssigned),
+  });
+  if (notification) c.set('agentNotification', notification);
   return c.json(
     {
       ...(issuedVisitorToken ? { visitorToken: issuedVisitorToken } : {}),
@@ -1106,6 +1150,7 @@ export async function broadcastClientConversationEvent(
     includeAgentInbox,
   });
   const inboxUpdates: Promise<void>[] = [];
+  const reminder = customerReplyReminder(type, details.message);
   if (
     fanoutRooms.includes(`agent-inbox:${conversation.assigned_agent ?? ''}`)
   ) {
@@ -1114,6 +1159,7 @@ export async function broadcastClientConversationEvent(
         type: 'conversation.changed',
         conversationId,
         conversation: agentConversationSummary(conversation),
+        ...(reminder ? { reminder } : {}),
         ...(overview ? { overview } : {}),
       }),
     );
@@ -1133,6 +1179,21 @@ export async function broadcastClientConversationEvent(
   }
   await Promise.all(inboxUpdates);
   return conversation;
+}
+
+function customerReplyReminder(
+  type: string,
+  message: Record<string, unknown> | undefined,
+): { type: 'CUSTOMER_REPLY'; messageId: string } | null {
+  if (
+    type !== 'message.created' ||
+    message?.direction !== 'customer' ||
+    typeof message.id !== 'string' ||
+    !message.id
+  ) {
+    return null;
+  }
+  return { type: 'CUSTOMER_REPLY', messageId: message.id };
 }
 
 function agentConversationSummary(
@@ -1214,6 +1275,87 @@ function normalizeProduct(value?: ProductInput): NormalizedProduct | null {
         coverUrl: null,
       }
     : null;
+}
+
+function ctaProductMessageClientId(
+  sourceHandoffId: string,
+  clientMessageId: string | null,
+): string {
+  return clientMessageId ?? `product-context:${sourceHandoffId}`;
+}
+
+function productContextFromProduct(
+  product: NormalizedProduct,
+): ProductContextSnapshot {
+  return {
+    productId: product.id,
+    title: product.title,
+    coverUrl: product.coverUrl,
+    href: product.href,
+    sectionId: product.sectionId,
+    sectionName: product.sectionName,
+    categoryId: product.categoryId,
+    categoryName: product.categoryName,
+  };
+}
+
+function productContextFromConversation(
+  conversation: ConversationRow,
+): ProductContextSnapshot {
+  return {
+    productId: conversation.product_id ?? '',
+    title: conversation.product_title ?? conversation.subject ?? '',
+    coverUrl: conversation.product_cover_url,
+    href: conversation.product_href ?? '',
+    sectionId: conversation.section_id ?? '',
+    sectionName: conversation.section_name,
+    categoryId: conversation.category_id,
+    categoryName: conversation.category_name,
+  };
+}
+
+export function productContextFromMessage(
+  message: Pick<MessageRow, 'message_kind' | 'structured_payload_json'>,
+): ProductContextSnapshot | null {
+  if (
+    message.message_kind !== 'product_context' ||
+    !message.structured_payload_json
+  ) {
+    return null;
+  }
+  try {
+    const value = JSON.parse(message.structured_payload_json) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+    const snapshot = value as Record<string, unknown>;
+    if (
+      typeof snapshot.productId !== 'string' ||
+      typeof snapshot.title !== 'string' ||
+      typeof snapshot.href !== 'string' ||
+      typeof snapshot.sectionId !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      productId: snapshot.productId,
+      title: snapshot.title,
+      coverUrl:
+        typeof snapshot.coverUrl === 'string' ? snapshot.coverUrl : null,
+      href: snapshot.href,
+      sectionId: snapshot.sectionId,
+      sectionName:
+        typeof snapshot.sectionName === 'string' ? snapshot.sectionName : null,
+      categoryId:
+        typeof snapshot.categoryId === 'string' ? snapshot.categoryId : null,
+      categoryName:
+        typeof snapshot.categoryName === 'string'
+          ? snapshot.categoryName
+          : null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 function validMessage(value?: string): value is string {
@@ -1830,29 +1972,32 @@ async function continueConversationStart(
     conversation: ConversationRow;
     siteId: string;
     visitorId: string;
-    initialMessage: string | null;
-    clientMessageId: string | null;
+    productContext: ProductContextSnapshot;
+    productMessageBody: string | null;
+    productMessageClientId: string;
     assignmentPolicy: 'preserve' | 'complete-new-claim';
   },
-): Promise<ConversationRow> {
+): Promise<{
+  conversation: ConversationRow;
+  notification: AgentNotificationEvent | null;
+}> {
   let conversation = input.conversation;
   let createdMessage: MessageRow | null = null;
 
   if (input.assignmentPolicy === 'preserve' && !conversation.assigned_agent) {
-    return conversation;
+    return { conversation, notification: null };
   }
 
-  if (input.initialMessage && input.clientMessageId) {
-    const persisted = await persistClientMessage(env.DB, {
-      conversationId: conversation.id,
-      senderType: 'visitor',
-      senderId: conversation.visitor_id,
-      body: input.initialMessage,
-      clientMessageId: input.clientMessageId,
-    });
-    if (!persisted.duplicate) {
-      createdMessage = persisted.message;
-    }
+  const persisted = await persistClientMessage(env.DB, {
+    conversationId: conversation.id,
+    senderType: 'visitor',
+    senderId: conversation.visitor_id,
+    body: input.productMessageBody ?? input.productContext.title,
+    clientMessageId: input.productMessageClientId,
+    productContext: input.productContext,
+  });
+  if (!persisted.duplicate) {
+    createdMessage = persisted.message;
   }
 
   const assignment =
@@ -1894,7 +2039,14 @@ async function continueConversationStart(
       )) ?? conversation;
   }
 
-  return conversation;
+  return {
+    conversation,
+    notification: agentNotificationForConversationStart({
+      conversationId: conversation.id,
+      message: notificationMessage(createdMessage),
+      newlyAssigned: Boolean(assignment?.newlyAssigned),
+    }),
+  };
 }
 
 function conversationSummary(conversation: ConversationRow) {
@@ -1926,7 +2078,7 @@ async function conversationDetail(
   const result = await db
     .prepare(
       `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
-       m.client_message_id,
+       m.message_kind, m.structured_payload_json, m.client_message_id,
        COALESCE(
          m.read_by_visitor_at,
          CASE
@@ -1977,7 +2129,9 @@ async function conversationDetail(
   const attachments = await listConversationAttachmentsForMessageIds(
     db,
     conversation.id,
-    page.map((message) => message.id),
+    page
+      .filter((message) => message.message_kind !== 'product_context')
+      .map((message) => message.id),
     signer ? (objectKey) => presignGet(signer, objectKey) : undefined,
   );
   const attachmentsByMessageId = new Map<string, typeof attachments>();
@@ -2010,6 +2164,7 @@ async function persistClientMessage(
     senderId: string;
     body: string;
     clientMessageId: string;
+    productContext?: ProductContextSnapshot;
   },
 ): Promise<{
   message: MessageRow;
@@ -2017,13 +2172,16 @@ async function persistClientMessage(
   conversationUpdated: boolean;
 }> {
   const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
+  const createdAt = new Date(
+    Date.now() - (input.productContext ? 1 : 0),
+  ).toISOString();
   const [inserted, conversationUpdate] = await db.batch([
     db
       .prepare(
         `INSERT OR IGNORE INTO messages (
-         id, conversation_id, sender_type, sender_id, body, client_message_id, created_at
-       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+         id, conversation_id, sender_type, sender_id, body,
+         message_kind, structured_payload_json, client_message_id, created_at
+       ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
       )
       .bind(
         id,
@@ -2031,6 +2189,8 @@ async function persistClientMessage(
         input.senderType,
         input.senderId,
         input.body,
+        input.productContext ? 'product_context' : 'text',
+        input.productContext ? JSON.stringify(input.productContext) : null,
         input.clientMessageId,
         createdAt,
       ),
@@ -2042,13 +2202,19 @@ async function persistClientMessage(
        WHERE id = ?3
          AND EXISTS (SELECT 1 FROM messages WHERE id = ?4)`,
       )
-      .bind(createdAt, input.body, input.conversationId, id),
+      .bind(
+        createdAt,
+        input.productContext?.title ?? input.body,
+        input.conversationId,
+        id,
+      ),
   ]);
 
   if (!inserted?.meta.changes) {
     const existing = await db
       .prepare(
-        `SELECT id, conversation_id, sender_type, sender_id, body, client_message_id,
+        `SELECT id, conversation_id, sender_type, sender_id, body,
+         message_kind, structured_payload_json, client_message_id,
          read_by_visitor_at, read_by_agent_at, created_at
        FROM messages
        WHERE conversation_id = ?1 AND client_message_id = ?2
@@ -2066,6 +2232,10 @@ async function persistClientMessage(
     sender_type: input.senderType,
     sender_id: input.senderId,
     body: input.body,
+    message_kind: input.productContext ? 'product_context' : 'text',
+    structured_payload_json: input.productContext
+      ? JSON.stringify(input.productContext)
+      : null,
     client_message_id: input.clientMessageId,
     read_by_visitor_at: null,
     read_by_agent_at: null,
@@ -2081,7 +2251,14 @@ async function persistClientMessage(
 function assignmentVisitorMessage(
   message: MessageRow,
 ): AssignmentVisitorMessage {
-  if (message.sender_type !== 'visitor' || !message.sender_id) {
+  const productContext = productContextFromMessage(message);
+  if (
+    message.sender_type !== 'visitor' ||
+    !message.sender_id ||
+    message.message_kind !== 'product_context' ||
+    !message.structured_payload_json ||
+    !productContext
+  ) {
     throw new Error('Assignment visitor message invariant failed');
   }
   return {
@@ -2090,6 +2267,9 @@ function assignmentVisitorMessage(
     sender_type: 'visitor',
     sender_id: message.sender_id,
     body: message.body,
+    message_kind: 'product_context',
+    structured_payload_json: message.structured_payload_json,
+    product_context: productContext,
     client_message_id: message.client_message_id,
     read_by_visitor_at: null,
     read_by_agent_at: null,
@@ -2110,9 +2290,19 @@ function clientMessage(message: MessageRow) {
     id: message.id,
     direction: message.sender_type === 'agent' ? 'agent' : 'customer',
     body: message.body,
+    kind: message.message_kind,
+    productContext: productContextFromMessage(message),
     sentAt: toIso(message.created_at)!,
     delivery,
     attachments: [],
+  };
+}
+
+function notificationMessage(message: MessageRow | null) {
+  if (!message) return null;
+  return {
+    id: message.id,
+    body: productContextFromMessage(message)?.title ?? message.body,
   };
 }
 
@@ -2123,6 +2313,9 @@ function adminMessage(message: MessageRow) {
     sender_type: message.sender_type,
     sender_id: message.sender_id,
     body: message.body,
+    message_kind: message.message_kind,
+    structured_payload_json: message.structured_payload_json,
+    product_context: productContextFromMessage(message),
     read_by_visitor_at: message.read_by_visitor_at,
     read_by_agent_at: message.read_by_agent_at,
     created_at: message.created_at,

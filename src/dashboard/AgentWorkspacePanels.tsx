@@ -8,8 +8,9 @@ import type {
 import type { AgentOverlayView } from './agent-navigation';
 import {
   clearAgentNotificationOpenIntent,
-  hasAgentNotificationOpenIntent,
-  isAgentNotificationOpenMessage,
+  agentNotificationMessageTarget,
+  agentNotificationOpenTarget,
+  resolveAgentNotificationConversation,
   type AgentNotificationState,
 } from './agent-push';
 import type { Filter } from './dashboard-runtime';
@@ -30,6 +31,8 @@ export const AgentSidebar = memo(function AgentSidebar({
   notificationState,
   notificationBusy,
   soundEnabled,
+  realtimeReady,
+  audioReady,
   onToggleNotifications,
   onToggleSound,
   onNicknameChange,
@@ -47,6 +50,8 @@ export const AgentSidebar = memo(function AgentSidebar({
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
   soundEnabled: boolean;
+  realtimeReady: boolean;
+  audioReady: boolean;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
   onNicknameChange: (nickname: string) => Promise<void>;
@@ -97,6 +102,8 @@ export const AgentSidebar = memo(function AgentSidebar({
         notificationState={notificationState}
         notificationBusy={notificationBusy}
         soundEnabled={soundEnabled}
+        realtimeReady={realtimeReady}
+        audioReady={audioReady}
         onClose={onCloseOverlay}
         onToggleNotifications={onToggleNotifications}
         onToggleSound={onToggleSound}
@@ -132,6 +139,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   totalUnread,
   overview,
   busy,
+  conversations,
   visibleConversations,
   conversationCount,
   selectedId,
@@ -152,6 +160,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   totalUnread: number;
   overview: AgentInbox['overview'];
   busy: boolean;
+  conversations: Conversation[];
   visibleConversations: Conversation[];
   conversationCount: number;
   selectedId: string | null;
@@ -161,9 +170,9 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   onToggleAvailability: () => void;
   onSelectConversation: (id: string, source?: 'inbox' | 'notification') => void;
 }) {
-  const [notificationOpenPending, setNotificationOpenPending] = useState(() =>
-    hasAgentNotificationOpenIntent(),
-  );
+  const [notificationOpenPending, setNotificationOpenPending] = useState<
+    string | null
+  >(() => agentNotificationOpenTarget());
   const overviewRef = useRef(overview);
   const notificationOverviewBaselineRef = useRef(overview);
   const lastOverviewChangeAtRef = useRef(Date.now());
@@ -188,9 +197,10 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
     const openNotificationConversation = (event: MessageEvent) => {
-      if (!isAgentNotificationOpenMessage(event.data)) return;
+      const target = agentNotificationMessageTarget(event.data);
+      if (!target) return;
       notificationOverviewBaselineRef.current = overviewRef.current;
-      setNotificationOpenPending(true);
+      setNotificationOpenPending(target);
     };
     navigator.serviceWorker.addEventListener(
       'message',
@@ -221,19 +231,17 @@ export const AgentInboxPane = memo(function AgentInboxPane({
     }
     if (resetInboxView) return;
 
-    const target = [...visibleConversations]
-      .filter((conversation) => conversation.agent_unread_count > 0)
-      .sort((left, right) => {
-        const leftTime = Date.parse(left.last_message_at || left.created_at);
-        const rightTime = Date.parse(right.last_message_at || right.created_at);
-        return rightTime - leftTime;
-      })[0];
+    const target = resolveAgentNotificationConversation(
+      conversations,
+      notificationOpenPending,
+    );
 
-    setNotificationOpenPending(false);
+    setNotificationOpenPending(null);
     clearAgentNotificationOpenIntent();
     if (target) selectConversation(target.id, 'notification');
   }, [
     busy,
+    conversations,
     filter,
     notificationOpenPending,
     onFilterChange,
@@ -241,7 +249,6 @@ export const AgentInboxPane = memo(function AgentInboxPane({
     overview,
     searchQuery,
     selectConversation,
-    visibleConversations,
   ]);
 
   return (

@@ -216,8 +216,8 @@ test('first CTA executes the bounded create, claim and assignment lifecycle', as
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 16);
-  assert.equal(metrics.select, 8);
+  assert.equal(metrics.executed, 15);
+  assert.equal(metrics.select, 7);
   assert.equal(metrics.insert, 6);
   assert.equal(metrics.update, 2);
   assert.equal(metrics.delete, 0);
@@ -291,8 +291,8 @@ test('sourceHandoff replay avoids duplicate conversation, assignment, quota and 
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 8);
-  assert.equal(metrics.select, 7);
+  assert.equal(metrics.executed, 7);
+  assert.equal(metrics.select, 6);
   assert.equal(metrics.insert, 0);
   assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
@@ -340,8 +340,8 @@ test('clientMessageId replay returns the original conversation without duplicate
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 8);
-  assert.equal(metrics.select, 7);
+  assert.equal(metrics.executed, 7);
+  assert.equal(metrics.select, 6);
   assert.equal(metrics.insert, 0);
   assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
@@ -383,8 +383,8 @@ test('active reuse claims the fresh handoff without re-consuming assignment or q
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 12);
-  assert.equal(metrics.select, 8);
+  assert.equal(metrics.executed, 11);
+  assert.equal(metrics.select, 7);
   assert.equal(metrics.insert, 2);
   assert.equal(metrics.update, 2);
   assert.equal(metrics.delete, 0);
@@ -448,7 +448,7 @@ test('closed affinity remains only a priority and ineligible original agent fall
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
   assert.ok(
-    metrics.executed <= 13,
+    metrics.executed <= 16,
     `unexpected create budget: ${metrics.executed}`,
   );
   assert.ok(metrics.select <= 7, `unexpected SELECT budget: ${metrics.select}`);
@@ -470,7 +470,7 @@ test('closed affinity remains only a priority and ineligible original agent fall
       .get().last_agent_id,
     'agent-affinity-b',
   );
-  assert.equal(rooms.calls.length, 2);
+  assert.equal(rooms.calls.length, 4);
   database.close();
 });
 
@@ -490,14 +490,14 @@ test('no-agent path releases creation reservations in the existing cleanup batch
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 17);
+  assert.equal(metrics.executed, 19);
   assert.equal(metrics.select, 5);
-  assert.equal(metrics.insert, 5);
-  assert.equal(metrics.update, 3);
+  assert.equal(metrics.insert, 6);
+  assert.equal(metrics.update, 4);
   assert.equal(metrics.delete, 4);
-  assert.equal(metrics.batch, 2);
-  assert.equal(metrics.batchStatements, 8);
-  assert.deepEqual(metrics.batchSizes, [2, 6]);
+  assert.equal(metrics.batch, 3);
+  assert.equal(metrics.batchStatements, 10);
+  assert.deepEqual(metrics.batchSizes, [2, 2, 6]);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);
@@ -509,6 +509,7 @@ test('no-agent path releases creation reservations in the existing cleanup batch
   assert.equal(metrics.batchSizes.filter((size) => size === 6).length, 1);
 
   assert.equal(count(database, 'conversations'), 0);
+  assert.equal(count(database, 'messages'), 0);
   assert.equal(count(database, 'conversation_source_handoffs'), 0);
   assert.equal(count(database, 'conversation_creation_quota_receipts'), 0);
   assert.equal(count(database, 'conversation_traffic_receipts'), 0);

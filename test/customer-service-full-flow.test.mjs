@@ -745,6 +745,10 @@ test('agent surfaces share one session lookup and preserve disabled-agent access
           subscription: {
             endpoint: 'https://push.example.test/shared-session',
             expirationTime: null,
+            keys: {
+              p256dh: Buffer.alloc(65, 1).toString('base64url'),
+              auth: Buffer.alloc(16, 2).toString('base64url'),
+            },
           },
         }),
       },
@@ -2234,7 +2238,7 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
     env,
   );
   const disabledLogin = await json(disabledLoginResponse);
-  assert.equal(disabledLogin.agent.status, 'online');
+  assert.equal(disabledLogin.agent.status, 'busy');
   const disabledCookie =
     disabledLoginResponse.headers.get('set-cookie')?.split(';', 1)[0] ?? '';
   assert.ok(disabledCookie.startsWith('cs_agent_session='));

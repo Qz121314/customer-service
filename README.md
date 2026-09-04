@@ -106,10 +106,12 @@ Site / 产品页
 客服业务状态只按以下操作切换：
 
 ```text
-登录成功       → online
+首个有效会话登录 → online
+已有会话时登录   → 保持当前 online / busy
 点击 Busy      → busy
 Busy 切回在线  → online
-正常 Logout    → offline
+当前设备 Logout → 仅撤销当前 session
+最后设备 Logout → offline
 ```
 
 系统不根据浏览器关闭、标签页可见性、WebSocket 或 heartbeat 新鲜度自动改写上述业务状态。
@@ -476,7 +478,7 @@ error.format = plain / markdown
 - 在坐席设置中维护 SMS、WhatsApp、Telegram 或网站名片与可选预设话术，并从聊天“+”和首次问候语中引用；
 - 消息已读状态和双方输入状态；
 - 商品上下文；
-- 新会话系统通知和工作台内提示音；
+- 每条客户消息的系统通知、工作台内分类提示音、震动与未读消息 Badge；
 - 个人统计；
 - 对外昵称和头像；
 - PWA 安装与移动端安全区适配。
@@ -485,9 +487,11 @@ error.format = plain / markdown
 
 账号“停用”只关闭新的自动分流资格，不等于禁止登录。停用客服仍可登录工作台、切换在线/忙碌、处理原有会话和使用个人设置；重新启用后，只有其本人状态为在线时才恢复接收新会话。
 
-客服正常 Logout 会删除该客服的全部登录会话并设置为 `offline`；永久删除仍有进行中会话的客服会被拒绝，避免清空归属后产生隐藏会话或假重分配。
+客服可在 PC、手机等多个设备同时保持独立 session，并共享同一个 `online / busy / offline` 业务状态。正常 Logout 只撤销当前设备的 session；仍有其他有效 session 时不改变业务状态，也不关闭其他设备的 realtime。最后一个有效 session 退出时才设置为 `offline` 并清理 agent-wide realtime。显式安全撤销使用 `/api/agent/auth/revoke-all`，管理员停用或安全操作仍可撤销全部 session。永久删除仍有进行中会话的客服会被拒绝，避免清空归属后产生隐藏会话或假重分配。
 
-这里的两种提醒都属于客服坐席工作台：工作台切换到其他应用或手机锁屏时，由“新会话通知”通过系统通知提醒；工作台正在屏幕上使用时，由“工作台提示音”在收到新分配会话或访客新消息时响铃。Android 可在支持 Web Push 的浏览器或已安装 PWA 中开启系统通知。iPhone / iPad 需要先把客服坐席添加到主屏幕，再从桌面图标打开并由客服主动授权通知。系统通知是否发声最终由 iOS / Android 的通知声音设置控制。
+客户点击 CTA 会持久化为一条 `product_context` 客户消息，消息携带 CTA 当时的产品快照并同时出现在坐席端和访客端时间线；历史渲染不重新查询当前产品目录。新会话先显示客户产品卡，再显示首次有效 assignment 触发且同会话最多一次的自动问候；两小时活动会话复用会新增产品消息但不重复问候。顶部只保留访客名和商品名的轻量上下文，不再重复大型商品卡。
+
+消息提醒只分为 `NEW_CONVERSATION`（新客户咨询）和 `CUSTOMER_REPLY`（已有会话回复），每一条成功持久化的客户文字、图片或 `product_context` 消息都携带唯一真实 `messageId` 触发一次提醒；禁止使用 `conversationId` 代替消息 ID。前台页面依靠 WebSocket 立即更新会话，并按类型播放不同提示音、在支持环境震动、更新未读消息 Badge；后台或锁屏依靠 Web Push 和 Service Worker 显示系统通知。Push 携带 `conversationId` 与 `messageId`，点击后直接进入对应会话；同一设备上可见的坐席页面只会让系统 Push 静音，不能影响其他设备。普通 Logout 只清除本机 Push 绑定 marker，不取消浏览器 PushSubscription；服务端 session 级订阅随 Logout 级联删除，同设备重新登录会复用浏览器订阅并绑定到新 session。Android 可在支持 Web Push 的浏览器或已安装 PWA 中开启系统通知。iPhone / iPad 需要先把客服坐席添加到主屏幕，再从桌面图标打开并由客服主动授权通知。系统声音、震动、投递时间和 Launcher 是否显示数字 Badge 最终由操作系统、浏览器、网络、勿扰模式与省电策略决定。
 
 **坐席端不存在人工转接按钮、转接菜单或转接 API。** 客服昵称和头像由客服维护并展示给访客；用户名只用于登录坐席工作台；客服标记只供管理员识别，不进入坐席端或访客端 API。
 
@@ -574,7 +578,8 @@ Cron
 - Service Worker 只控制 `/agent`；
 - 支持 standalone / minimal-ui；
 - 使用安全区和 Visual Viewport 处理移动键盘；
-- 后台新消息依靠 Web Push；
+- 后台和锁屏新消息依靠 Web Push；前台依靠 WebSocket，不维持锁屏 WebSocket，也不增加轮询；
+- Badge 表示未读客户消息总数，而不是未读会话数；不支持 Badge API 时静默降级；
 - 关闭子弹层后返回功能菜单，不直接跳回会话列表；
 - 会话、功能菜单和设置子页由同一浏览器 History 路由状态驱动；手机返回手势、页面返回按钮和浏览器前进/后退始终恢复同一层级，过期或不存在的会话自动回到会话列表；
 - 弹层动画不得因异步数据更新产生位置抖动。

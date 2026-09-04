@@ -14,7 +14,10 @@ test('push delivery keeps expired endpoints out of the hot path and batches term
   for (const source of [agentDelivery, visitorDelivery]) {
     assert.match(source, /subscription\.expiration_time IS NULL/u);
     assert.match(source, /subscription\.expiration_time > \?2/u);
-    assert.match(source, /\.bind\(conversationId, Date\.now\(\)\)/u);
+    assert.match(
+      source,
+      /\.bind\((?:conversationId|notification\.conversationId), Date\.now\(\)\)/u,
+    );
     assert.match(
       source,
       /response\.status === 404 \|\| response\.status === 410/u,

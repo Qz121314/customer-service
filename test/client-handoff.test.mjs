@@ -317,7 +317,20 @@ test('CTA assignment realtime uses the canonical complete overview without an ex
   assert.ok(value.visitorToken.length >= 32);
   assert.equal(value.conversation.status, 'active');
   assert.equal(value.conversation.agentName, 'CTA Agent');
-  assert.deepEqual(value.conversation.messages, []);
+  assert.equal(value.conversation.messages.length, 1);
+  const productMessage = value.conversation.messages[0];
+  assert.equal(productMessage.direction, 'customer');
+  assert.equal(productMessage.kind, 'product_context');
+  assert.deepEqual(productMessage.productContext, {
+    productId: 'product-1',
+    title: 'Product 1',
+    coverUrl: null,
+    href: 'https://storefront.example/sections/west/products/product-1/',
+    sectionId: 'west',
+    sectionName: 'West',
+    categoryId: 'category-1',
+    categoryName: 'Category 1',
+  });
   assert.equal(
     scalar(
       database,
@@ -347,7 +360,7 @@ test('CTA assignment realtime uses the canonical complete overview without an ex
       'count',
       value.conversation.id,
     ),
-    0,
+    1,
   );
   assert.equal(
     scalar(
@@ -383,6 +396,10 @@ test('CTA assignment realtime uses the canonical complete overview without an ex
       event.payload.cause === 'initial_assignment',
   );
   assert.equal(assignmentEvent?.payload.conversation.agent_unread_count, 1);
+  assert.deepEqual(assignmentEvent?.payload.reminder, {
+    type: 'NEW_CONVERSATION',
+    messageId: productMessage.id,
+  });
   assert.deepEqual(assignmentEvent?.payload.overview, {
     open: 0,
     pending: 1,
@@ -573,11 +590,14 @@ test('concurrent no-agent starts leave no reusable claim or handoff', async () =
     values.map((value) => value.error.code),
     ['NO_AGENT_AVAILABLE', 'NO_AGENT_AVAILABLE'],
   );
+  assert.equal(rooms.events.length, 0);
   for (const table of [
     'conversations',
+    'messages',
     'conversation_creation_quota_receipts',
     'conversation_source_handoffs',
     'conversation_traffic_receipts',
+    'conversation_automation_receipts',
   ]) {
     assert.equal(
       scalar(database, `SELECT COUNT(*) AS count FROM ${table}`, 'count'),
@@ -688,6 +708,11 @@ test('same visitor and product reuse one assigned conversation for two hours', a
     UPDATE agents
     SET last_seen_at = datetime('now', '-30 days')
     WHERE id = 'cta-agent';
+    UPDATE product_catalog
+    SET title = 'Product 1 Updated',
+        href = 'https://storefront.example/products/product-1-updated/',
+        cover_url = 'https://storefront.example/product-1-updated.jpg'
+    WHERE site_id = 'default' AND id = 'product-1';
   `);
   const repeated = await startConversation(
     database,
@@ -700,6 +725,12 @@ test('same visitor and product reuse one assigned conversation for two hours', a
   assert.equal(repeated.status, 200);
   assert.equal(repeatedValue.conversation.id, firstValue.conversation.id);
   assert.equal(repeatedValue.conversation.agentName, 'CTA Agent');
+  assert.deepEqual(
+    repeatedValue.conversation.messages.map(
+      (message) => message.productContext?.title,
+    ),
+    ['Product 1', 'Product 1'],
+  );
   assert.equal(
     scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
     1,
@@ -731,6 +762,35 @@ test('same visitor and product reuse one assigned conversation for two hours', a
     ),
     1,
   );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM messages
+       WHERE conversation_id = ? AND message_kind = 'product_context'`,
+      'count',
+      firstValue.conversation.id,
+    ),
+    2,
+  );
+  assert.equal(
+    scalar(
+      database,
+      `SELECT COUNT(*) AS count
+       FROM conversation_automation_receipts
+       WHERE conversation_id = ? AND automation_key = 'initial_greeting'`,
+      'count',
+      firstValue.conversation.id,
+    ),
+    1,
+  );
+  const reminders = rooms.events
+    .filter(
+      (event) =>
+        event.name === 'agent-inbox:cta-agent' && event.payload.reminder,
+    )
+    .map((event) => event.payload.reminder.type);
+  assert.deepEqual(reminders, ['NEW_CONVERSATION', 'CUSTOMER_REPLY']);
 
   database.close();
 });
@@ -1068,9 +1128,11 @@ test('configured greeting is returned immediately from the same CTA start reques
   const value = await response.json();
 
   assert.equal(response.status, 201);
-  assert.equal(value.conversation.messages.length, 1);
-  assert.equal(value.conversation.messages[0].direction, 'agent');
-  assert.equal(value.conversation.messages[0].body, '您好，我来为您服务。');
+  assert.equal(value.conversation.messages.length, 2);
+  assert.equal(value.conversation.messages[0].direction, 'customer');
+  assert.equal(value.conversation.messages[0].kind, 'product_context');
+  assert.equal(value.conversation.messages[1].direction, 'agent');
+  assert.equal(value.conversation.messages[1].body, '您好，我来为您服务。');
   assert.equal(value.conversation.unreadCount, 1);
   assert.equal(
     scalar(
@@ -1079,7 +1141,7 @@ test('configured greeting is returned immediately from the same CTA start reques
       'count',
       value.conversation.id,
     ),
-    1,
+    2,
   );
   assert.ok(
     rooms.events.some(
@@ -1090,11 +1152,13 @@ test('configured greeting is returned immediately from the same CTA start reques
     ),
   );
 
+  const eventCountBeforeReplay = rooms.events.length;
   const replay = await startConversation(database, rooms, handoff);
   const replayValue = await replay.json();
   assert.equal(replay.status, 200);
   assert.equal(replayValue.conversation.id, value.conversation.id);
-  assert.equal(replayValue.conversation.messages.length, 1);
+  assert.equal(replayValue.conversation.messages.length, 2);
+  assert.equal(rooms.events.length, eventCountBeforeReplay);
   assert.equal(
     scalar(
       database,

@@ -145,6 +145,8 @@ export function AgentMobileSettingsPage({
   notificationState,
   notificationBusy,
   soundEnabled,
+  realtimeReady,
+  audioReady,
   onClose,
   onToggleNotifications,
   onToggleSound,
@@ -157,6 +159,8 @@ export function AgentMobileSettingsPage({
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
   soundEnabled: boolean;
+  realtimeReady: boolean;
+  audioReady: boolean;
   onClose: () => void;
   onToggleNotifications: () => void;
   onToggleSound: () => void;
@@ -198,6 +202,9 @@ export function AgentMobileSettingsPage({
       : installState === 'available'
         ? '获得更接近 App 的全屏体验'
         : '通过浏览器菜单完成安装';
+  const notificationsReady = notificationState === 'enabled';
+  const pwaReady = installState === 'installed';
+  const reminderReady = realtimeReady && notificationsReady && audioReady;
 
   const openInstall = () => {
     if (installState === 'installed') return;
@@ -229,6 +236,44 @@ export function AgentMobileSettingsPage({
 
       <div className="mobile-agent-settings-content">
         <section className="mobile-agent-settings-group">
+          <h2 className="mobile-agent-settings-label">消息提醒</h2>
+          <div className="agent-notification-health" role="status">
+            <strong>消息提醒：{reminderReady ? '正常' : '需检查'}</strong>
+            <dl>
+              <div>
+                <dt>实时连接</dt>
+                <dd>{realtimeReady ? '● 正常' : '● 连接中'}</dd>
+              </div>
+              <div>
+                <dt>系统通知</dt>
+                <dd>{notificationsReady ? '● 已开启' : '● 未开启'}</dd>
+              </div>
+              <div>
+                <dt>后台 Push</dt>
+                <dd>{notificationsReady ? '● 已订阅' : '● 不可用'}</dd>
+              </div>
+              <div>
+                <dt>提示音</dt>
+                <dd>
+                  {audioReady
+                    ? '● 已开启'
+                    : soundEnabled
+                      ? '● 待解锁'
+                      : '● 已静音'}
+                </dd>
+              </div>
+              <div>
+                <dt>PWA</dt>
+                <dd>{pwaReady ? '● 已安装' : '● 建议安装'}</dd>
+              </div>
+            </dl>
+            {!notificationsReady && (
+              <p>锁屏或切后台后可能无法收到客户消息提醒。</p>
+            )}
+          </div>
+        </section>
+
+        <section className="mobile-agent-settings-group">
           <h2 className="mobile-agent-settings-label">设备与提醒</h2>
           <div className="mobile-agent-settings-card">
             <button
@@ -257,7 +302,7 @@ export function AgentMobileSettingsPage({
                 <UiIcon name="notification" />
               </i>
               <span>
-                <strong>新会话通知</strong>
+                <strong>客户消息通知</strong>
                 <small>
                   {notificationBusy
                     ? '正在设置…'
@@ -269,7 +314,7 @@ export function AgentMobileSettingsPage({
                           ? '已被浏览器阻止'
                           : notificationState === 'unsupported'
                             ? '当前浏览器不支持'
-                            : '接到新会话时显示系统通知'}
+                            : '每条客户消息到达时显示系统通知'}
                 </small>
               </span>
               <b aria-hidden="true" />
