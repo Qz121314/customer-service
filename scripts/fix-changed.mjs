@@ -42,6 +42,22 @@ function git(args) {
   return run('git', args, { capture: true });
 }
 
+function hasCommit(ref) {
+  return (
+    spawnSync('git', ['cat-file', '-e', `${ref}^{commit}`], {
+      stdio: 'ignore',
+    }).status === 0
+  );
+}
+
+function ensureCommit(ref) {
+  if (!ref || ref === 'HEAD' || hasCommit(ref)) {
+    return;
+  }
+
+  run('git', ['fetch', '--no-tags', '--depth=1', 'origin', ref]);
+}
+
 function splitLines(value) {
   return value
     .split('\n')
@@ -73,6 +89,8 @@ function changedFiles() {
   const files = new Set();
 
   if (base && !/^0+$/.test(base)) {
+    ensureCommit(base);
+    ensureCommit(head);
     for (const file of splitLines(
       git(['diff', '--name-only', '--diff-filter=ACMR', base, head]),
     )) {
