@@ -91,7 +91,9 @@ export function AdminRoutingDiagnoseDock({
   onClose,
 }: AdminRoutingDiagnoseDockProps) {
   const [productId, setProductId] = useState('');
-  const [diagnostics, setDiagnostics] = useState<RoutingDiagnostics | null>(null);
+  const [diagnostics, setDiagnostics] = useState<RoutingDiagnostics | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -286,7 +288,8 @@ export function AdminRoutingDiagnoseDock({
                           {agent.trafficQuotaEnabled
                             ? `${Math.max(
                                 0,
-                                agent.trafficQuotaTotal - agent.trafficQuotaUsed,
+                                agent.trafficQuotaTotal -
+                                  agent.trafficQuotaUsed,
                               )} 剩余`
                             : '不限'}
                         </span>
@@ -335,7 +338,9 @@ export function AdminRoutingDiagnoseDock({
   );
 }
 
-async function fetchDiagnostics(productId: string): Promise<RoutingDiagnostics> {
+async function fetchDiagnostics(
+  productId: string,
+): Promise<RoutingDiagnostics> {
   const response = await fetch(
     `/api/admin/routing-diagnose?productId=${encodeURIComponent(productId)}`,
     { credentials: 'same-origin' },
