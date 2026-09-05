@@ -27,7 +27,7 @@ export function useAdminStatisticsController(section: AdminSection) {
   );
 
   useEffect(() => {
-    if (section !== 'statistics') return;
+    if (section !== 'dashboard') return;
     let active = true;
     setStatsError('');
     setStatsBusy(true);
