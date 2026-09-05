@@ -10,11 +10,7 @@ import {
 } from './api';
 import type { AgentEditorModalProps } from './AgentEditorModalImpl';
 import type { AgentFilter } from './AdminAgentsPage';
-import {
-  type AgentDraft,
-  emptyAgentDraft,
-  message,
-} from './dashboard-runtime';
+import { type AgentDraft, emptyAgentDraft, message } from './dashboard-runtime';
 
 type AdminAgentsControllerOptions = {
   refresh: () => Promise<void>;
