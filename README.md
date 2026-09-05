@@ -491,7 +491,7 @@ error.format = plain / markdown
 
 客户点击 CTA 会持久化为一条 `product_context` 客户消息，消息携带 CTA 当时的产品快照并同时出现在坐席端和访客端时间线；历史渲染不重新查询当前产品目录。新会话先显示客户产品卡，再显示首次有效 assignment 触发且同会话最多一次的自动问候；两小时活动会话复用会新增产品消息但不重复问候。顶部只保留访客名和商品名的轻量上下文，不再重复大型商品卡。
 
-消息提醒只分为 `NEW_CONVERSATION`（新客户咨询）和 `CUSTOMER_REPLY`（已有会话回复），每一条成功持久化的客户文字、图片或 `product_context` 消息都携带唯一真实 `messageId` 触发一次提醒；禁止使用 `conversationId` 代替消息 ID。前台页面依靠 WebSocket 立即更新会话，并按类型播放不同提示音、在支持环境震动、更新未读消息 Badge；后台或锁屏依靠 Web Push 和 Service Worker 显示系统通知。Push 携带 `conversationId` 与 `messageId`，点击后直接进入对应会话；同一设备上可见的坐席页面只会让系统 Push 静音，不能影响其他设备。普通 Logout 只清除本机 Push 绑定 marker，不取消浏览器 PushSubscription；服务端 session 级订阅随 Logout 级联删除，同设备重新登录会复用浏览器订阅并绑定到新 session。Android 可在支持 Web Push 的浏览器或已安装 PWA 中开启系统通知。iPhone / iPad 需要先把客服坐席添加到主屏幕，再从桌面图标打开并由客服主动授权通知。系统声音、震动、投递时间和 Launcher 是否显示数字 Badge 最终由操作系统、浏览器、网络、勿扰模式与省电策略决定。
+消息提醒只分为 `NEW_CONVERSATION`（新客户咨询）和 `CUSTOMER_REPLY`（已有会话回复），每一条成功持久化的客户文字、图片或 `product_context` 消息都携带唯一真实 `messageId` 触发一次提醒；禁止使用 `conversationId` 代替消息 ID。前台页面依靠 WebSocket 立即更新会话，并触发逐消息提醒、更新未读消息 Badge；后台或锁屏依靠 Web Push 和 Service Worker 显示系统通知。Push 携带 `conversationId` 与 `messageId`，点击后直接进入对应会话；坐席没有本机静音开关，旧的声音或震动关闭偏好不再生效。系统通知获授权后，前台实时消息和后台 Push 共用 Service Worker 通知入口，始终请求非静音通知和震动；不根据窗口是否可见或正在查看会话抑制提醒。成功提交系统通知后，真实 messageId 在设备 IndexedDB 中保留 24 小时用于去重；失败不记为成功。系统通知不可用时，工作台尝试提示音与受支持的网页震动，并在用户操作、页面恢复可见或网络恢复时重试失败的部分。正在查看的会话通过增量恢复收到的客户消息也进入同一提醒入口，历史翻页不触发提醒。普通 Logout 只清除本机 Push 绑定 marker，不取消浏览器 PushSubscription；服务端 session 级订阅随 Logout 级联删除，同设备重新登录会复用浏览器订阅并绑定到新 session。Android 可在支持 Web Push 的浏览器或已安装 PWA 中开启系统通知。iPhone / iPad 需要先把客服坐席添加到主屏幕，再从桌面图标打开并由客服主动授权通知。系统声音、震动、投递时间和 Launcher 是否显示数字 Badge 最终由操作系统、浏览器、网络、勿扰模式与省电策略决定。
 
 **坐席端不存在人工转接按钮、转接菜单或转接 API。** 客服昵称和头像由客服维护并展示给访客；用户名只用于登录坐席工作台；客服标记只供管理员识别，不进入坐席端或访客端 API。
 

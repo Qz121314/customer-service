@@ -6,17 +6,13 @@ import {
   AGENT_SOUND_PRESET_OPTIONS,
   agentReminderVibrationPattern,
   emitAgentMessageTone,
-  loadAgentSoundEnabled,
   loadAgentSoundPreset,
-  loadAgentVibrationEnabled,
-  rememberAgentReminderMessage,
-  saveAgentSoundEnabled,
   saveAgentSoundPreset,
-  saveAgentVibrationEnabled,
   supportsAgentVibration,
 } from '../src/dashboard/dashboard-runtime.ts';
 import {
   enableAgentNotifications,
+  deliverAgentSystemReminder,
   prepareAgentNotifications,
   runBestEffortAgentCapability,
   updateAgentAppBadge,
@@ -152,6 +148,76 @@ test('an existing mobile push subscription is rebound to the current agent once'
   }
 });
 
+test('iOS standalone realtime delegates sound and vibration to its system notification worker', async () => {
+  const environment = browserEnvironment({ ios: true, standalone: true });
+  const sent = [];
+  environment.navigatorValue.serviceWorker.getRegistration = async () => ({
+    active: {
+      postMessage(message, ports) {
+        sent.push(message);
+        ports[0].postMessage({ delivered: true });
+      },
+    },
+    async showNotification() {
+      throw new Error('acknowledged messages need no fallback');
+    },
+  });
+  environment.windowValue.setTimeout = setTimeout;
+  environment.windowValue.clearTimeout = clearTimeout;
+  const restore = [
+    replaceGlobal('window', environment.windowValue),
+    replaceGlobal('navigator', environment.navigatorValue),
+    replaceGlobal('Notification', environment.notification),
+  ];
+  try {
+    assert.equal(
+      await deliverAgentSystemReminder({
+        type: 'CUSTOMER_REPLY',
+        messageId: 'm-ios',
+        conversationId: 'c-ios',
+      }),
+      true,
+    );
+    assert.equal(sent[0].type, 'agent.reminder.deliver');
+    assert.equal(sent[0].reminder.messageId, 'm-ios');
+  } finally {
+    for (const reset of restore.reverse()) reset();
+  }
+});
+
+test('an old service worker without acknowledgements falls back to the same non-silent notification tag', async () => {
+  const environment = browserEnvironment();
+  const shown = [];
+  environment.navigatorValue.serviceWorker.getRegistration = async () => ({
+    active: { postMessage() {} },
+    async showNotification(title, options) {
+      shown.push({ title, ...options });
+    },
+  });
+  environment.windowValue.setTimeout = (callback) => setTimeout(callback, 0);
+  environment.windowValue.clearTimeout = clearTimeout;
+  const restore = [
+    replaceGlobal('window', environment.windowValue),
+    replaceGlobal('navigator', environment.navigatorValue),
+    replaceGlobal('Notification', environment.notification),
+  ];
+  try {
+    assert.equal(
+      await deliverAgentSystemReminder({
+        type: 'NEW_CONVERSATION',
+        messageId: 'm1',
+        conversationId: 'c1',
+      }),
+      true,
+    );
+    assert.equal(shown[0].tag, 'agent-message-m1');
+    assert.equal(shown[0].silent, false);
+    assert.deepEqual(shown[0].vibrate, [220, 100, 220, 100, 320]);
+  } finally {
+    for (const reset of restore.reverse()) reset();
+  }
+});
+
 test('granted notification permission repairs a missing push subscription', async () => {
   const environment = browserEnvironment({ subscribed: false });
   const requests = [];
@@ -216,29 +282,20 @@ test('iOS browser tabs ask for Home Screen installation before notification perm
   }
 });
 
-test('agent reminder preferences default on and persist per agent on the current device', () => {
-  const environment = browserEnvironment();
-  const restoreWindow = replaceGlobal('window', environment.windowValue);
-
-  try {
-    assert.equal(loadAgentSoundEnabled('agent-a'), true);
-    assert.equal(loadAgentVibrationEnabled('agent-a'), true);
-
-    saveAgentSoundEnabled('agent-a', false);
-    saveAgentVibrationEnabled('agent-a', false);
-    assert.equal(loadAgentSoundEnabled('agent-a'), false);
-    assert.equal(loadAgentVibrationEnabled('agent-a'), false);
-
-    assert.equal(loadAgentSoundEnabled('agent-b'), true);
-    assert.equal(loadAgentVibrationEnabled('agent-b'), true);
-
-    saveAgentSoundEnabled('agent-a', true);
-    saveAgentVibrationEnabled('agent-a', true);
-    assert.equal(environment.storage.get('cs-agent-sound:agent-a'), 'on');
-    assert.equal(environment.storage.get('cs-agent-vibration:agent-a'), 'on');
-  } finally {
-    restoreWindow();
-  }
+test('agent reception has no local mute preference or mute action', () => {
+  const portal = readFileSync(
+    new URL('../src/dashboard/AgentPortal.tsx', import.meta.url),
+    'utf8',
+  );
+  const chrome = readFileSync(
+    new URL('../src/dashboard/AgentWorkspaceChrome.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.doesNotMatch(
+    portal,
+    /loadAgentSoundEnabled|loadAgentVibrationEnabled|disableAgentNotifications/u,
+  );
+  assert.doesNotMatch(chrome, /关闭消息提示音|关闭震动提醒|关闭客户消息通知/u);
 });
 
 test('sound preset defaults to strong and persists on the current device', () => {
@@ -265,22 +322,22 @@ test('vibration capability is exposed only when the device implements navigator.
   assert.equal(supportsAgentVibration({}), false);
   assert.equal(
     supportsAgentVibration({
+      userAgent: 'Mozilla/5.0 Android',
       vibrate() {
         return true;
       },
     }),
     true,
   );
-});
-
-test('each durable customer message alerts once while duplicate realtime delivery is ignored', () => {
-  const seen = new Set();
-
-  assert.equal(rememberAgentReminderMessage(seen, 'message-1'), true);
-  assert.equal(rememberAgentReminderMessage(seen, 'message-2'), true);
-  assert.equal(rememberAgentReminderMessage(seen, 'message-3'), true);
-  assert.equal(rememberAgentReminderMessage(seen, 'message-2'), false);
-  assert.equal(seen.size, 3);
+  assert.equal(
+    supportsAgentVibration({
+      userAgent: 'Windows Chrome',
+      vibrate() {
+        return false;
+      },
+    }),
+    false,
+  );
 });
 
 test('new conversation and customer reply use distinct vibration patterns', () => {

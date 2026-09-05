@@ -175,25 +175,6 @@ function createAgentDraftSaveScheduler(
   };
 }
 
-function loadAgentSoundEnabled(agentId: string): boolean {
-  try {
-    return window.localStorage.getItem(`cs-agent-sound:${agentId}`) !== 'off';
-  } catch {
-    return true;
-  }
-}
-
-function saveAgentSoundEnabled(agentId: string, enabled: boolean): void {
-  try {
-    window.localStorage.setItem(
-      `cs-agent-sound:${agentId}`,
-      enabled ? 'on' : 'off',
-    );
-  } catch {
-    // Sound preference is local-only and must never interrupt reception work.
-  }
-}
-
 type AgentSoundPreset = 'strong' | 'classic' | 'crisp' | 'triple' | 'soft';
 
 const AGENT_SOUND_PRESET_OPTIONS: readonly {
@@ -230,27 +211,6 @@ function saveAgentSoundPreset(preset: AgentSoundPreset): void {
   }
 }
 
-function loadAgentVibrationEnabled(agentId: string): boolean {
-  try {
-    return (
-      window.localStorage.getItem(`cs-agent-vibration:${agentId}`) !== 'off'
-    );
-  } catch {
-    return true;
-  }
-}
-
-function saveAgentVibrationEnabled(agentId: string, enabled: boolean): void {
-  try {
-    window.localStorage.setItem(
-      `cs-agent-vibration:${agentId}`,
-      enabled ? 'on' : 'off',
-    );
-  } catch {
-    // Vibration preference is local-only and must never interrupt reception work.
-  }
-}
-
 type AgentReminderType = 'NEW_CONVERSATION' | 'CUSTOMER_REPLY';
 
 function agentReminderVibrationPattern(type: AgentReminderType): number[] {
@@ -260,23 +220,17 @@ function agentReminderVibrationPattern(type: AgentReminderType): number[] {
 }
 
 function supportsAgentVibration(
-  value: { vibrate?: unknown } = navigator,
+  value: {
+    vibrate?: unknown;
+    userAgent?: string;
+    platform?: string;
+    maxTouchPoints?: number;
+  } = navigator,
 ): boolean {
-  return typeof value.vibrate === 'function';
-}
-
-function rememberAgentReminderMessage(
-  seen: Set<string>,
-  messageId: string,
-  maxRemembered = 500,
-): boolean {
-  if (!messageId || seen.has(messageId)) return false;
-  seen.add(messageId);
-  if (seen.size > maxRemembered) {
-    const oldest = seen.values().next().value;
-    if (oldest) seen.delete(oldest);
-  }
-  return true;
+  const mobile =
+    /Android|iPhone|iPad|iPod/u.test(value.userAgent ?? '') ||
+    (value.platform === 'MacIntel' && (value.maxTouchPoints ?? 0) > 1);
+  return mobile && typeof value.vibrate === 'function';
 }
 
 type AgentToneProfile = {
@@ -647,16 +601,11 @@ export {
   loadAgentConversationDrafts,
   saveAgentConversationDrafts,
   createAgentDraftSaveScheduler,
-  loadAgentSoundEnabled,
-  saveAgentSoundEnabled,
   AGENT_SOUND_PRESET_OPTIONS,
   loadAgentSoundPreset,
   saveAgentSoundPreset,
-  loadAgentVibrationEnabled,
-  saveAgentVibrationEnabled,
   agentReminderVibrationPattern,
   supportsAgentVibration,
-  rememberAgentReminderMessage,
   emitAgentMessageTone,
   type AgentReminderType,
   parseRealtimeEvent,

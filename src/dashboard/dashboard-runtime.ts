@@ -89,7 +89,10 @@ function agentSoundAssetPlan(
 }
 
 async function fetchAgentSoundAsset(path: string): Promise<ArrayBuffer> {
-  const response = await fetch(path, { cache: 'force-cache' });
+  const response = await fetch(path, {
+    cache: 'force-cache',
+    signal: AbortSignal.timeout(3_000),
+  });
   if (!response.ok) {
     throw new Error(`Unable to load agent sound asset: ${response.status}`);
   }
@@ -146,15 +149,36 @@ async function playAgentSoundAssetSequence(
       : await loadAgentSoundBuffer(context, preset);
 
     for (let index = 0; index < plan.repeats; index += 1) {
-      await new Promise<void>((resolve) => {
+      if (context.state && context.state !== 'running') return false;
+      await new Promise<void>((resolve, reject) => {
         const source = context.createBufferSource();
         const gain = context.createGain();
         source.buffer = buffer;
         gain.gain.setValueAtTime(plan.gain, context.currentTime);
         source.connect(gain);
         gain.connect(context.destination);
-        source.onended = () => resolve();
-        source.start();
+        const timeout = setTimeout(
+          () => {
+            source.onended = null;
+            try {
+              source.stop();
+            } catch {
+              /* Already stopped. */
+            }
+            reject(new Error('Audio playback interrupted'));
+          },
+          Math.max(1_000, (buffer.duration + 1) * 1_000),
+        );
+        source.onended = () => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        try {
+          source.start();
+        } catch (error) {
+          clearTimeout(timeout);
+          reject(error);
+        }
       });
       if (index + 1 < plan.repeats) await wait(plan.gapMs);
     }
@@ -164,23 +188,34 @@ async function playAgentSoundAssetSequence(
   }
 }
 
-function emitAgentMessageTone(
+async function emitAgentMessageTone(
   context: AudioContext,
   type: AgentReminderType = 'CUSTOMER_REPLY',
   preset: AgentSoundPreset = loadAgentSoundPreset(),
-): void {
+): Promise<boolean> {
+  if (context.state && context.state !== 'running') return false;
   if (
     typeof context.createBufferSource !== 'function' ||
     typeof context.decodeAudioData !== 'function' ||
     typeof fetch !== 'function'
   ) {
-    emitSyntheticAgentMessageTone(context, type, preset);
-    return;
+    try {
+      emitSyntheticAgentMessageTone(context, type, preset);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  void playAgentSoundAssetSequence(context, type, preset).then((played) => {
-    if (!played) emitSyntheticAgentMessageTone(context, type, preset);
-  });
+  const played = await playAgentSoundAssetSequence(context, type, preset);
+  if (played) return true;
+  if (context.state && context.state !== 'running') return false;
+  try {
+    emitSyntheticAgentMessageTone(context, type, preset);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export {
