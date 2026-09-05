@@ -16,7 +16,7 @@ export function Field({
   const Component = asChild ? Slot : 'div';
   return (
     <Component
-      data-ui="field"
+      data-ui={unstyled ? undefined : 'field'}
       className={cn(!unstyled && 'grid min-w-0 gap-1.5', className)}
       {...props}
     />
