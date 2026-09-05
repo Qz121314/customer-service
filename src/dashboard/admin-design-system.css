@@ -601,6 +601,11 @@
     border-radius: 0;
     box-shadow: none;
   }
+
+  .admin-console .agent-editor-footer .primary-button,
+  .admin-console .agent-editor-footer .secondary-button {
+    min-height: 48px;
+  }
 }
 
 @media (max-width: 560px) {
