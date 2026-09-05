@@ -20,6 +20,7 @@ import { AgentCardSettingsModal } from './AgentAttachmentTools';
 import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { UiIcon } from './icons';
+import { useAgentPullRefresh } from './useAgentPullRefresh';
 import {
   AgentActionToolbar,
   AgentMobileSettingsPage,
@@ -153,6 +154,8 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   onToggleUnreadFirst,
   onToggleAvailability,
   onSelectConversation,
+  pullRefreshEnabled,
+  onRefresh,
 }: {
   filter: Filter;
   searchQuery: string;
@@ -169,12 +172,18 @@ export const AgentInboxPane = memo(function AgentInboxPane({
   visibleConversations: Conversation[];
   conversationCount: number;
   selectedId: string | null;
+  pullRefreshEnabled: boolean;
+  onRefresh: () => Promise<void>;
   onFilterChange: (filter: Filter) => void;
   onSearchChange: (value: string) => void;
   onToggleUnreadFirst: () => void;
   onToggleAvailability: () => void;
   onSelectConversation: (id: string, source?: 'inbox' | 'notification') => void;
 }) {
+  const pullRefresh = useAgentPullRefresh(
+    pullRefreshEnabled && !busy,
+    onRefresh,
+  );
   const [notificationOpenPending, setNotificationOpenPending] = useState<
     string | null
   >(() => agentNotificationOpenTarget());
@@ -336,7 +345,15 @@ export const AgentInboxPane = memo(function AgentInboxPane({
           未读优先
         </button>
       </div>
-      <div className="conversation-list">
+      <div
+        className={`agent-pull-refresh is-${pullRefresh.phase}`}
+        style={{ height: pullRefresh.height }}
+        role="status"
+        aria-live="polite"
+      >
+        {pullRefresh.height > 0 && <span>{pullRefresh.label}</span>}
+      </div>
+      <div className="conversation-list" ref={pullRefresh.ref}>
         {busy ? (
           <div className="empty-state">正在加载…</div>
         ) : visibleConversations.length === 0 ? (

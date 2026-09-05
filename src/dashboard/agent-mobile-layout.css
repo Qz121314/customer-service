@@ -1696,3 +1696,41 @@
     z-index: 120;
   }
 }
+
+.agent-pull-refresh {
+  display: none;
+}
+@media (max-width: 760px) {
+  .agent-pull-refresh {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: var(--mobile-accent-strong);
+    background: var(--mobile-surface);
+    font-size: 12px;
+  }
+  .agent-pull-refresh.is-refreshing span::before {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 8px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -2px;
+    animation: agent-pull-refresh-spin 800ms linear infinite;
+  }
+  @keyframes agent-pull-refresh-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-pull-refresh.is-refreshing span::before {
+    animation: none;
+  }
+}

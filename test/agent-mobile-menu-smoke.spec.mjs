@@ -66,7 +66,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-async function seedAgent(page) {
+async function seedAgent(page, username = agentUsername) {
   const adminLogin = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
@@ -75,7 +75,7 @@ async function seedAgent(page) {
   const createAgent = await page.request.post(url('/api/admin/agents'), {
     data: {
       name: 'Mobile Menu Agent',
-      username: agentUsername,
+      username,
       password: agentPassword,
       routingScope: { type: 'none' },
       dailyConversationLimit: 0,
@@ -88,9 +88,9 @@ async function seedAgent(page) {
   expect(createAgent.ok()).toBeTruthy();
 }
 
-async function loginAgent(page) {
+async function loginAgent(page, username = agentUsername) {
   await page.goto(url('/agent'));
-  await page.getByLabel('客服账号').fill(agentUsername);
+  await page.getByLabel('客服账号').fill(username);
   await page.getByLabel('登录密码').fill(agentPassword);
   await page.getByRole('button', { name: '进入工作台' }).click();
   await expect(page.getByText('我的会话')).toBeVisible();
@@ -239,4 +239,130 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await settingsPage.getByRole('button', { name: '返回工作台' }).click();
   await expect(settingsPage).toBeHidden();
   await expect(page.getByText('我的会话')).toBeVisible();
+});
+
+test('mobile inbox pull refresh handles threshold, cancellation, retries and navigation', async ({
+  page,
+  context,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const username = `ui-pull-${randomUUID().slice(0, 8)}`;
+  await seedAgent(page, username);
+  await loginAgent(page, username);
+  const inbox = await (
+    await page.request.get(url('/api/agent/conversations'))
+  ).json();
+  let requests = 0;
+  let release;
+  let fail = false;
+  await page.route('**/api/agent/conversations', async (route) => {
+    requests += 1;
+    await new Promise((resolve) => {
+      release = resolve;
+    });
+    await route.fulfill({
+      status: fail ? 503 : 200,
+      json: fail ? { error: 'Unavailable' } : inbox,
+    });
+  });
+  const list = page.locator('.conversation-list');
+  const status = page.locator('.agent-pull-refresh');
+  const gesture = async (dy, dx = 0, cancel = false) => {
+    await list.evaluate(
+      (element, { dy, dx, cancel }) => {
+        const touch = (x, y) =>
+          new globalThis.Touch({
+            identifier: 1,
+            target: element,
+            clientX: x,
+            clientY: y,
+          });
+        element.dispatchEvent(
+          new globalThis.TouchEvent('touchstart', {
+            bubbles: true,
+            touches: [touch(100, 250)],
+          }),
+        );
+        element.dispatchEvent(
+          new globalThis.TouchEvent('touchmove', {
+            bubbles: true,
+            cancelable: true,
+            touches: [touch(100 + dx, 250 + dy)],
+          }),
+        );
+        element.dispatchEvent(
+          new globalThis.TouchEvent(cancel ? 'touchcancel' : 'touchend', {
+            bubbles: true,
+            touches: [],
+          }),
+        );
+      },
+      { dy, dx, cancel },
+    );
+  };
+  await gesture(60);
+  await gesture(160, 200);
+  await gesture(160, 0, true);
+  expect(requests).toBe(0);
+
+  // Real browser touch input must claim the downward gesture before native scrolling.
+  const session = await context.newCDPSession(page);
+  const box = await list.boundingBox();
+  const x = box.x + 80;
+  const y = box.y + 30;
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x, y }],
+  });
+  for (const offset of [20, 60, 100, 160]) {
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x, y: y + offset }],
+    });
+  }
+  await expect(status).toHaveText('松开刷新');
+  await session.send('Input.dispatchTouchEvent', {
+    type: 'touchEnd',
+    touchPoints: [],
+  });
+  await expect.poll(() => requests).toBe(1);
+  await expect(status).toHaveText('正在刷新…');
+  await gesture(160);
+  expect(requests).toBe(1);
+  // Completing a refresh under an overlay must not leave its spinner stuck.
+  await page.getByRole('button', { name: '打开功能菜单' }).click();
+  release();
+  await expect(status).toHaveClass(/is-success/);
+  await page.getByRole('button', { name: '返回工作台' }).click();
+  await expect(status).toHaveText('已刷新');
+
+  const search = page.locator('.inbox-search input');
+  await search.fill('保留搜索');
+  fail = true;
+  await gesture(160);
+  await expect.poll(() => requests).toBe(2);
+  release();
+  await expect(status).toHaveText('刷新失败，请下拉重试');
+  fail = false;
+  await gesture(160);
+  await expect.poll(() => requests).toBe(3);
+  release();
+  await expect(status).toHaveText('已刷新');
+  await expect(search).toHaveValue('保留搜索');
+
+  await list.evaluate((element) => {
+    const spacer = globalThis.document.createElement('div');
+    spacer.style.height = '2000px';
+    element.append(spacer);
+    element.scrollTop = 100;
+  });
+  await gesture(160);
+  expect(requests).toBe(3);
+  await list.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await gesture(160);
+  expect(requests).toBe(3);
+  await expect(status).toBeHidden();
 });

@@ -1814,6 +1814,8 @@ function AgentWorkspace({
       />
 
       <AgentInboxPane
+        pullRefreshEnabled={!selectedId && navigation.overlay === 'none'}
+        onRefresh={refresh}
         filter={filter}
         searchQuery={searchQuery}
         unreadFirst={unreadFirst}
