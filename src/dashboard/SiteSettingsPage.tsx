@@ -1,34 +1,45 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react';
 import type { NoAgentMessageSettings } from './api';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import {
   SITE_LOGO_ACCEPT,
-  SITE_LOGO_MAX_LABEL,
+  SITE_LOGO_MAX_EDGE,
+  SITE_LOGO_MAX_INPUT_BYTES,
+  SITE_LOGO_MAX_UPLOAD_BYTES,
+  SITE_LOGO_WEBP_QUALITY,
+  prepareSiteLogo,
+  type PreparedSiteLogo,
+} from './site-logo-image';
+import {
   removeSiteLogo,
-  siteLogoUrl,
   uploadSiteLogo,
+  type SiteLogoInfo,
 } from './site-logo-client';
 import { Button } from './ui';
+
+type LogoPhase = 'idle' | 'processing' | 'uploading' | 'saving' | 'removing';
 
 export function SiteSettingsPage({
   noAgentMessage,
   noAgentSaving,
-  logoRevision,
-  onLogoRevisionChange,
+  siteLogo,
+  onSiteLogoChange,
   onSaveNoAgentMessage,
 }: {
   noAgentMessage: NoAgentMessageSettings;
   noAgentSaving: boolean;
-  logoRevision: string;
-  onLogoRevisionChange: (revision: string) => void;
+  siteLogo: SiteLogoInfo | null;
+  onSiteLogoChange: (siteLogo: SiteLogoInfo | null) => void;
   onSaveNoAgentMessage: (settings: NoAgentMessageSettings) => Promise<void>;
 }) {
   return (
     <div className="site-settings-page">
-      <SiteLogoSettings
-        revision={logoRevision}
-        onRevisionChange={onLogoRevisionChange}
-      />
+      <SiteLogoSettings siteLogo={siteLogo} onChange={onSiteLogoChange} />
       <section
         className="site-settings-group"
         aria-labelledby="availability-title"
@@ -36,7 +47,7 @@ export function SiteSettingsPage({
         <header className="site-settings-group-head">
           <div>
             <span className="admin-section-kicker">客服可用性</span>
-            <h2 id="availability-title">访客侧客服体验</h2>
+            <h2 id="availability-title">无客服提示</h2>
             <p>管理没有可分配客服时，访客立即看到的响应内容。</p>
           </div>
         </header>
@@ -51,51 +62,104 @@ export function SiteSettingsPage({
 }
 
 function SiteLogoSettings({
-  revision,
-  onRevisionChange,
+  siteLogo,
+  onChange,
 }: {
-  revision: string;
-  onRevisionChange: (revision: string) => void;
+  siteLogo: SiteLogoInfo | null;
+  onChange: (siteLogo: SiteLogoInfo | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const previewRef = useRef('');
+  const [prepared, setPrepared] = useState<PreparedSiteLogo | null>(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [phase, setPhase] = useState<LogoPhase>('idle');
   const [error, setError] = useState('');
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const [warning, setWarning] = useState('');
+
+  useEffect(
+    () => () => {
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    },
+    [],
+  );
+
+  const busy = phase !== 'idle';
+  const activePreview = previewUrl || siteLogo?.url || '';
 
   async function onFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file || busy) return;
-    setBusy(true);
+    setPhase('processing');
     setError('');
+    setWarning('');
     try {
-      const nextRevision = await uploadSiteLogo(file);
-      setPreviewFailed(false);
-      onRevisionChange(nextRevision);
+      const next = await prepareSiteLogo(file);
+      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+      const objectUrl = URL.createObjectURL(next.blob);
+      previewRef.current = objectUrl;
+      setPrepared(next);
+      setPreviewUrl(objectUrl);
+    } catch (reason) {
+      setPrepared(null);
+      setPreviewUrl('');
+      setError(
+        reason instanceof Error ? reason.message : '处理站点 Logo 失败。',
+      );
+    } finally {
+      setPhase('idle');
+    }
+  }
+
+  async function savePreparedLogo() {
+    if (!prepared || busy) return;
+    setPhase('uploading');
+    setError('');
+    setWarning('');
+    try {
+      const result = await uploadSiteLogo(prepared.blob, () => {
+        setPhase('saving');
+      });
+      onChange(result.siteLogo);
+      clearPreparedPreview();
+      if (result.cleanupWarning) {
+        setWarning('新 Logo 已生效，但旧 Logo 对象清理失败；服务端已记录。');
+      }
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : '上传站点 Logo 失败。',
       );
     } finally {
-      setBusy(false);
+      setPhase('idle');
     }
   }
 
-  async function restoreDefault() {
-    if (busy) return;
-    setBusy(true);
+  async function removeConfiguredLogo() {
+    if (!siteLogo || busy) return;
+    setPhase('removing');
     setError('');
+    setWarning('');
     try {
-      const nextRevision = await removeSiteLogo();
-      setPreviewFailed(true);
-      onRevisionChange(nextRevision);
+      const result = await removeSiteLogo();
+      onChange(null);
+      clearPreparedPreview();
+      if (result.cleanupWarning) {
+        setWarning('已恢复默认 CS，但旧 Logo 对象清理失败；服务端已记录。');
+      }
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : '移除站点 Logo 失败。',
       );
     } finally {
-      setBusy(false);
+      setPhase('idle');
     }
+  }
+
+  function clearPreparedPreview() {
+    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+    previewRef.current = '';
+    setPrepared(null);
+    setPreviewUrl('');
   }
 
   return (
@@ -103,37 +167,45 @@ function SiteLogoSettings({
       <header className="site-settings-group-head">
         <div>
           <span className="admin-section-kicker">品牌</span>
-          <h2 id="branding-title">站点品牌</h2>
-          <p>
-            设置管理员后台侧栏使用的站点 Logo；未配置时继续显示默认 CS 标记。
-          </p>
+          <h2 id="branding-title">站点 Logo</h2>
+          <p>用于管理后台侧栏品牌标识；未配置时显示默认 CS。</p>
         </div>
       </header>
 
       <div className="site-logo-setting">
-        <div className="site-logo-preview" aria-label="当前站点 Logo">
+        <div className="site-logo-preview" aria-label="站点 Logo 预览">
           <span aria-hidden="true">CS</span>
-          {!previewFailed ? (
-            <img
-              key={revision || 'default'}
-              src={siteLogoUrl(revision)}
-              alt="当前站点 Logo"
-              onLoad={() => setPreviewFailed(false)}
-              onError={() => setPreviewFailed(true)}
-            />
-          ) : null}
+          {activePreview ? <img src={activePreview} alt="站点 Logo 预览" /> : null}
         </div>
         <div className="site-logo-copy">
-          <strong>站点 Logo</strong>
+          <strong>{prepared ? '压缩预览' : siteLogo ? '当前 Logo' : '默认品牌标记'}</strong>
           <p>
-            PNG、JPG 或 WebP，最大 {SITE_LOGO_MAX_LABEL}
-            。建议使用清晰的方形或横向品牌图。
+            PNG / JPG / WebP，原图最大 {formatBytes(SITE_LOGO_MAX_INPUT_BYTES)}；
+            保持比例缩放到 {SITE_LOGO_MAX_EDGE} × {SITE_LOGO_MAX_EDGE} 内，优先 WebP
+            （质量 {Math.round(SITE_LOGO_WEBP_QUALITY * 100)}%），上传结果不超过{' '}
+            {formatBytes(SITE_LOGO_MAX_UPLOAD_BYTES)}。
           </p>
+          {prepared ? (
+            <small className="site-logo-meta">
+              {prepared.width} × {prepared.height} · {formatBytes(prepared.originalBytes)} →{' '}
+              {formatBytes(prepared.blob.size)} · {prepared.contentType.replace('image/', '').toUpperCase()}
+            </small>
+          ) : siteLogo ? (
+            <small className="site-logo-meta">
+              已保存 · {formatBytes(siteLogo.byteSize)}
+            </small>
+          ) : null}
+          {phase !== 'idle' ? (
+            <span className="site-logo-status" role="status">
+              {phaseLabel(phase)}
+            </span>
+          ) : null}
           {error ? (
             <span className="site-logo-error" role="alert">
               {error}
             </span>
           ) : null}
+          {warning ? <span className="site-logo-warning">{warning}</span> : null}
         </div>
         <div className="site-logo-actions">
           <input
@@ -146,22 +218,61 @@ function SiteLogoSettings({
           />
           <Button
             type="button"
+            size="sm"
             variant="secondary"
             disabled={busy}
             onClick={() => inputRef.current?.click()}
           >
-            {busy ? '处理中…' : previewFailed ? '上传 Logo' : '替换 Logo'}
+            {siteLogo ? '替换图片' : '选择图片'}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={busy || previewFailed}
-            onClick={() => void restoreDefault()}
-          >
-            恢复默认
-          </Button>
+          {prepared ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy}
+                onClick={() => void savePreparedLogo()}
+              >
+                上传 Logo
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={busy}
+                onClick={clearPreparedPreview}
+              >
+                取消
+              </Button>
+            </>
+          ) : null}
+          {siteLogo && !prepared ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void removeConfiguredLogo()}
+            >
+              移除
+            </Button>
+          ) : null}
         </div>
       </div>
     </section>
   );
+}
+
+function phaseLabel(phase: LogoPhase): string {
+  if (phase === 'processing') return '正在压缩图片…';
+  if (phase === 'uploading') return '正在上传压缩后的 Logo…';
+  if (phase === 'saving') return '上传完成，正在保存站点设置…';
+  if (phase === 'removing') return '正在恢复默认品牌标记…';
+  return '';
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
+  if (bytes >= 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${bytes} B`;
 }
