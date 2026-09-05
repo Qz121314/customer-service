@@ -31,10 +31,7 @@ import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import { AdminShell, type AdminSection } from './AdminShell';
-import {
-  AdminAgentsPage,
-  type AgentFilter,
-} from './AdminAgentsPage';
+import { AdminAgentsPage, type AgentFilter } from './AdminAgentsPage';
 import {
   trafficRangePeriod,
   type TrafficRange,
