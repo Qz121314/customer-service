@@ -17,14 +17,41 @@ ALTER TABLE conversation_traffic_receipts
     OR assignment_reason IN ('round_robin', 'affinity')
   );
 
--- CTA affinity is an override, not a normal round-robin turn. Only normal
--- assignments advance the site cursor. COALESCE preserves safe rolling-deploy
--- behavior for an older Worker that does not yet populate assignment_reason.
+-- Record the reason after a fresh assignment without coupling the routing query
+-- itself to this reporting column. The CTA affinity fields are the authoritative
+-- source because they already drive candidate priority in routing.ts.
+DROP TRIGGER IF EXISTS trg_conversation_assignment_reason;
+CREATE TRIGGER trg_conversation_assignment_reason
+AFTER UPDATE OF assigned_agent ON conversations
+WHEN NEW.assigned_agent IS NOT NULL
+  AND (
+    OLD.assigned_agent IS NULL
+    OR OLD.assigned_agent <> NEW.assigned_agent
+  )
+BEGIN
+  UPDATE conversations
+  SET assignment_reason = CASE
+    WHEN NEW.cta_affinity_agent_id IS NOT NULL
+      AND NEW.assigned_agent = NEW.cta_affinity_agent_id
+      AND datetime(NEW.cta_affinity_expires_at) > CURRENT_TIMESTAMP
+    THEN 'affinity'
+    ELSE 'round_robin'
+  END
+  WHERE id = NEW.id;
+END;
+
+-- CTA affinity is an override, not a normal round-robin turn. Only a normal
+-- assignment advances the site cursor, so a returning CTA never consumes or
+-- changes the next normal traffic turn.
 DROP TRIGGER IF EXISTS trg_global_round_robin_cursor;
 CREATE TRIGGER trg_global_round_robin_cursor
 AFTER UPDATE OF assigned_agent ON conversations
 WHEN NEW.assigned_agent IS NOT NULL
-  AND COALESCE(NEW.assignment_reason, 'round_robin') = 'round_robin'
+  AND NOT (
+    NEW.cta_affinity_agent_id IS NOT NULL
+    AND NEW.assigned_agent = NEW.cta_affinity_agent_id
+    AND datetime(NEW.cta_affinity_expires_at) > CURRENT_TIMESTAMP
+  )
   AND (
     OLD.assigned_agent IS NULL
     OR OLD.assigned_agent <> NEW.assigned_agent
@@ -45,7 +72,8 @@ BEGIN
 END;
 
 -- Reporting outlives the short conversation retention window, so snapshot the
--- assignment reason together with the first immutable receiving agent.
+-- assignment reason together with the first immutable receiving agent. Derive
+-- the reason directly here as well so trigger execution order is irrelevant.
 DROP TRIGGER IF EXISTS trg_conversation_traffic_first_agent;
 CREATE TRIGGER trg_conversation_traffic_first_agent
 AFTER INSERT ON agent_traffic_receipts
@@ -58,12 +86,18 @@ BEGIN
         WHERE id = NEW.agent_id AND site_id = NEW.site_id
         LIMIT 1
       ),
-      assignment_reason = (
-        SELECT assignment_reason
-        FROM conversations
-        WHERE id = NEW.conversation_id AND site_id = NEW.site_id
+      assignment_reason = COALESCE((
+        SELECT CASE
+          WHEN c.cta_affinity_agent_id IS NOT NULL
+            AND c.assigned_agent = c.cta_affinity_agent_id
+            AND datetime(c.cta_affinity_expires_at) > datetime(c.assigned_at)
+          THEN 'affinity'
+          ELSE 'round_robin'
+        END
+        FROM conversations c
+        WHERE c.id = NEW.conversation_id AND c.site_id = NEW.site_id
         LIMIT 1
-      )
+      ), 'round_robin')
   WHERE conversation_id = NEW.conversation_id
     AND agent_id IS NULL;
 END;
