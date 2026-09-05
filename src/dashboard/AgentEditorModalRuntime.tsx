@@ -81,25 +81,30 @@ export function AgentEditorModal({
 
         <form className="agent-editor-form" onSubmit={onSubmit}>
           <div className="agent-editor-layout">
-            <section className="agent-editor-settings-pane agent-editor-workspace-card">
-              <AgentEditorAccountSection
-                draft={draft}
-                onDraftChange={onDraftChange}
-              />
-              <AgentEditorCapacitySection
-                draft={draft}
-                onDraftChange={onDraftChange}
-              />
-              <AgentEditorQuotaSection
-                draft={draft}
-                quotaAdjustments={quotaAdjustments}
-                quotaLedger={quotaLedger}
-                quotaHistoryBusy={quotaHistoryBusy}
-                quotaHistoryError={quotaHistoryError}
-                onDraftChange={onDraftChange}
-                onLoadQuotaLedger={onLoadQuotaLedger}
-              />
-            </section>
+            <div className="agent-editor-primary-grid">
+              <section className="agent-editor-account-pane agent-editor-workspace-card">
+                <AgentEditorAccountSection
+                  draft={draft}
+                  onDraftChange={onDraftChange}
+                />
+              </section>
+
+              <section className="agent-editor-operations-pane agent-editor-workspace-card">
+                <AgentEditorCapacitySection
+                  draft={draft}
+                  onDraftChange={onDraftChange}
+                />
+                <AgentEditorQuotaSection
+                  draft={draft}
+                  quotaAdjustments={quotaAdjustments}
+                  quotaLedger={quotaLedger}
+                  quotaHistoryBusy={quotaHistoryBusy}
+                  quotaHistoryError={quotaHistoryError}
+                  onDraftChange={onDraftChange}
+                  onLoadQuotaLedger={onLoadQuotaLedger}
+                />
+              </section>
+            </div>
 
             <AgentEditorRoutingSection
               draft={draft}
