@@ -17,6 +17,10 @@ import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
+import {
+  AdminRoutingDiagnoseDock,
+  AdminRoutingDiagnoseTrigger,
+} from './AdminRoutingDiagnoseDock';
 import { AdminShell, type AdminSection } from './AdminShell';
 import { AdminAgentsPage } from './AdminAgentsPage';
 import { useAdminAgentsController } from './useAdminAgentsController';
@@ -77,6 +81,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [section, setSection] = useState<AdminSection>('agents');
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [routingDiagnoseOpen, setRoutingDiagnoseOpen] = useState(false);
   const [error, setError] = useState('');
 
   const refresh = useCallback(async () => {
@@ -140,8 +145,20 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       onSectionChange={setSection}
       onLogout={onLogout}
       onCreateAgent={agentsController.pageProps.onCreateAgent}
+      actions={
+        section === 'agents' ? (
+          <AdminRoutingDiagnoseTrigger
+            onOpen={() => setRoutingDiagnoseOpen(true)}
+          />
+        ) : null
+      }
       overlays={
         <>
+          <AdminRoutingDiagnoseDock
+            products={products}
+            open={routingDiagnoseOpen}
+            onClose={() => setRoutingDiagnoseOpen(false)}
+          />
           {agentsController.editorOpen && (
             <AgentEditorModal
               products={products}
