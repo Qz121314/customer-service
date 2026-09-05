@@ -68,9 +68,7 @@ export function AdminRoutingDiagnoseDock() {
   const [open, setOpen] = useState(false);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [productId, setProductId] = useState('');
-  const [diagnostics, setDiagnostics] = useState<RoutingDiagnostics | null>(
-    null,
-  );
+  const [diagnostics, setDiagnostics] = useState<RoutingDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -263,7 +261,9 @@ export function AdminRoutingDiagnoseDock() {
                       {diagnostics.agents.map((agent) => (
                         <article
                           key={agent.id}
-                          className={`routing-diagnose-agent ${agent.eligible ? 'is-eligible' : 'is-excluded'} ${agent.nextRoundRobin ? 'is-next' : ''}`}
+                          className={`routing-diagnose-agent ${
+                            agent.eligible ? 'is-eligible' : 'is-excluded'
+                          } ${agent.nextRoundRobin ? 'is-next' : ''}`}
                         >
                           <div className="routing-diagnose-agent-main">
                             <div>
@@ -291,7 +291,11 @@ export function AdminRoutingDiagnoseDock() {
                             <span>
                               额度{' '}
                               {agent.trafficQuotaEnabled
-                                ? `${Math.max(0, agent.trafficQuotaTotal - agent.trafficQuotaUsed)} 剩余`
+                                ? `${Math.max(
+                                    0,
+                                    agent.trafficQuotaTotal -
+                                      agent.trafficQuotaUsed,
+                                  )} 剩余`
                                 : '不限'}
                             </span>
                           </div>
