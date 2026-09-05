@@ -63,7 +63,7 @@ export function Button({
             : 'primary-button';
   return (
     <Component
-      data-ui="button"
+      data-ui={unstyled ? undefined : 'button'}
       className={cn(
         !unstyled && buttonVariants({ size, variant }),
         !unstyled && legacyVariantClass,
