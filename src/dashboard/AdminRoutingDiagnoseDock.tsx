@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getProductCatalog, type ProductCatalogItem } from './api';
 import { UiIcon } from './icons';
 import { Button } from './ui';
@@ -64,7 +65,7 @@ const reasonLabels: Record<ExclusionReason, string> = {
 };
 
 export function AdminRoutingDiagnoseDock() {
-  const [adminVisible, setAdminVisible] = useState(false);
+  const [triggerHost, setTriggerHost] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [productId, setProductId] = useState('');
@@ -73,14 +74,57 @@ export function AdminRoutingDiagnoseDock() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const syncVisibility = () => {
-      setAdminVisible(Boolean(document.querySelector('.admin-console')));
+    let ownedHost: HTMLElement | null = null;
+
+    const syncTriggerHost = () => {
+      const header = document.querySelector<HTMLElement>('.admin-content-head');
+      const title = header?.querySelector('h1')?.textContent?.trim();
+
+      if (!header || title !== '客服坐席') {
+        if (ownedHost?.isConnected) ownedHost.remove();
+        ownedHost = null;
+        setTriggerHost(null);
+        return;
+      }
+
+      if (ownedHost?.isConnected && ownedHost.parentElement === header) {
+        setTriggerHost(ownedHost);
+        return;
+      }
+
+      ownedHost?.remove();
+      const host = document.createElement('div');
+      host.className = 'routing-diagnose-trigger-host';
+      const addAgentButton = Array.from(header.children).find((element) =>
+        element.textContent?.includes('新增客服'),
+      );
+      header.insertBefore(host, addAgentButton ?? null);
+      ownedHost = host;
+      setTriggerHost(host);
     };
-    syncVisibility();
-    const observer = new MutationObserver(syncVisibility);
-    observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+
+    syncTriggerHost();
+    const observer = new MutationObserver(syncTriggerHost);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => {
+      observer.disconnect();
+      ownedHost?.remove();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open]);
 
   useEffect(() => {
     if (!open || products.length > 0) return;
@@ -130,17 +174,20 @@ export function AdminRoutingDiagnoseDock() {
     [productId, products],
   );
 
-  if (!adminVisible) return null;
-
   return (
     <>
-      <button
-        type="button"
-        className="routing-diagnose-launcher"
-        onClick={() => setOpen(true)}
-      >
-        分流诊断
-      </button>
+      {triggerHost
+        ? createPortal(
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setOpen(true)}
+            >
+              分流诊断
+            </Button>,
+            triggerHost,
+          )
+        : null}
 
       {open ? (
         <div className="routing-diagnose-layer" role="presentation">
@@ -150,7 +197,7 @@ export function AdminRoutingDiagnoseDock() {
             aria-label="关闭分流诊断"
             onClick={() => setOpen(false)}
           />
-          <aside
+          <section
             className="routing-diagnose-drawer"
             role="dialog"
             aria-modal="true"
@@ -338,7 +385,7 @@ export function AdminRoutingDiagnoseDock() {
                 刷新
               </Button>
             </footer>
-          </aside>
+          </section>
         </div>
       ) : null}
     </>
