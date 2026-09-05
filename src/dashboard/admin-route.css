@@ -11,21 +11,10 @@
 @import './commercial-polish.css';
 @import './admin-design-system.css';
 
-.routing-diagnose-launcher {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 70;
-  min-height: 42px;
-  padding: 0 16px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-radius: 10px;
-  background: #111827;
-  color: #fff;
-  font: inherit;
-  font-weight: 700;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-  cursor: pointer;
+.routing-diagnose-trigger-host {
+  display: flex;
+  flex: none;
+  margin-left: auto;
 }
 
 .routing-diagnose-layer {
@@ -33,7 +22,9 @@
   inset: 0;
   z-index: 90;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
 }
 
 .routing-diagnose-backdrop {
@@ -48,11 +39,14 @@
   position: relative;
   z-index: 1;
   display: flex;
-  width: min(560px, 100vw);
-  height: 100%;
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(84vh, 820px);
   flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
   background: #f8fafc;
-  box-shadow: -18px 0 48px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
 }
 
 .routing-diagnose-head,
@@ -108,6 +102,7 @@
 .routing-diagnose-body {
   overflow: auto;
   flex: 1;
+  min-height: 0;
   padding: 18px 20px 28px;
 }
 
@@ -359,20 +354,14 @@
 }
 
 @media (max-width: 720px) {
-  .routing-diagnose-launcher {
-    right: 14px;
-    bottom: 14px;
-  }
-
   .routing-diagnose-layer {
-    align-items: flex-end;
+    padding: 10px;
   }
 
   .routing-diagnose-drawer {
     width: 100%;
-    height: min(86vh, 780px);
-    border-radius: 16px 16px 0 0;
-    box-shadow: 0 -14px 40px rgba(15, 23, 42, 0.2);
+    max-height: calc(100dvh - 20px);
+    border-radius: 14px;
   }
 
   .routing-diagnose-head,
