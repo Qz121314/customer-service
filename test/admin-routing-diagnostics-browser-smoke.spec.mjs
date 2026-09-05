@@ -46,7 +46,9 @@ test('admin routing diagnostics stays in header composition without duplicate bo
   expect(mobileCreateBox).not.toBeNull();
   if (mobileTriggerBox && mobileCreateBox) {
     expect(mobileTriggerBox.x).toBeGreaterThanOrEqual(0);
-    expect(mobileTriggerBox.x + mobileTriggerBox.width).toBeLessThanOrEqual(390);
+    expect(mobileTriggerBox.x + mobileTriggerBox.width).toBeLessThanOrEqual(
+      390,
+    );
     expect(mobileTriggerBox.height).toBeGreaterThanOrEqual(36);
     expect(mobileCreateBox.x).toBeGreaterThanOrEqual(0);
     expect(mobileCreateBox.x + mobileCreateBox.width).toBeLessThanOrEqual(390);
