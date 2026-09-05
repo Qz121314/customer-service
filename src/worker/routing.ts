@@ -3,9 +3,12 @@ export type AgentAssignment = {
   name: string;
 };
 
+export type AssignmentReason = 'round_robin' | 'affinity';
+
 export type AgentAssignmentResult = AgentAssignment & {
   newlyAssigned: boolean;
   assignedAt: string | null;
+  assignmentReason: AssignmentReason | null;
 };
 
 const ROUTING_TIME_ZONE = 'America/Los_Angeles';
@@ -25,12 +28,16 @@ export function routingBusinessDate(now = new Date()): string {
 /**
  * Attach Worker-internal lifecycle metadata without changing the serialized
  * assignment contract. Existing APIs still emit only { id, name } while the
- * initiating lifecycle can reuse the exact assignment timestamp without another
- * D1 read.
+ * initiating lifecycle can reuse the exact assignment timestamp and reason
+ * without another D1 read.
  */
 function assignmentResult(
   assignment: AgentAssignment,
-  lifecycle: { newlyAssigned: boolean; assignedAt: string | null },
+  lifecycle: {
+    newlyAssigned: boolean;
+    assignedAt: string | null;
+    assignmentReason: AssignmentReason | null;
+  },
 ): AgentAssignmentResult {
   const result = { ...assignment } as AgentAssignmentResult;
   Object.defineProperties(result, {
@@ -46,6 +53,12 @@ function assignmentResult(
       value: lifecycle.assignedAt,
       writable: false,
     },
+    assignmentReason: {
+      configurable: false,
+      enumerable: false,
+      value: lifecycle.assignmentReason,
+      writable: false,
+    },
   });
   return result;
 }
@@ -59,8 +72,9 @@ function assignmentResult(
  *
  * CTA affinity is the only priority override. Busy/offline/disabled/exhausted
  * seats are skipped without receiving catch-up priority when they later become
- * eligible again. Candidate selection and assignment remain one D1 statement;
- * the site cursor advances through a database trigger in the same write path.
+ * eligible again. Candidate selection and assignment remain one D1 statement.
+ * Only normal round-robin assignments advance the site cursor; an affinity
+ * override never consumes or changes the next normal round-robin turn.
  */
 export async function assignConversationAgent(
   db: D1Database,
@@ -124,7 +138,15 @@ export async function assignConversationAgent(
            )
        ),
        candidate AS (
-         SELECT a.id
+         SELECT
+           a.id,
+           CASE
+             WHEN ctx.cta_affinity_agent_id IS NOT NULL
+               AND datetime(ctx.cta_affinity_expires_at) > CURRENT_TIMESTAMP
+               AND a.id = ctx.cta_affinity_agent_id
+             THEN 'affinity'
+             ELSE 'round_robin'
+           END AS assignment_reason
          FROM matching m
          JOIN agents a ON a.id = m.agent_id
          JOIN context ctx ON ctx.site_id = a.site_id
@@ -167,6 +189,7 @@ export async function assignConversationAgent(
        )
        UPDATE conversations
        SET assigned_agent = (SELECT id FROM candidate),
+           assignment_reason = (SELECT assignment_reason FROM candidate),
            assigned_at = ?2,
            assigned_business_date = ?3,
            status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
@@ -176,18 +199,23 @@ export async function assignConversationAgent(
          AND expires_at > CURRENT_TIMESTAMP
          AND EXISTS (SELECT 1 FROM candidate)
        RETURNING assigned_agent AS id,
-         (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name`,
+         (SELECT name FROM agents WHERE id = assigned_agent LIMIT 1) AS name,
+         assignment_reason`,
     )
     .bind(conversationId, now, businessDate)
-    .first<AgentAssignment>();
+    .first<AgentAssignment & { assignment_reason: AssignmentReason }>();
   if (!assignment) {
     return assignedAgent(db, conversationId);
   }
 
-  return assignmentResult(assignment, {
-    newlyAssigned: true,
-    assignedAt: now,
-  });
+  return assignmentResult(
+    { id: assignment.id, name: assignment.name },
+    {
+      newlyAssigned: true,
+      assignedAt: now,
+      assignmentReason: assignment.assignment_reason,
+    },
+  );
 }
 
 async function assignedAgent(
@@ -196,18 +224,27 @@ async function assignedAgent(
 ): Promise<AgentAssignmentResult | null> {
   const assignment = await db
     .prepare(
-      `SELECT a.id, a.name, c.assigned_at
+      `SELECT a.id, a.name, c.assigned_at, c.assignment_reason
        FROM conversations c
        JOIN agents a ON a.id = c.assigned_agent AND a.site_id = c.site_id
        WHERE c.id = ?1
        LIMIT 1`,
     )
     .bind(conversationId)
-    .first<AgentAssignment & { assigned_at: string | null }>();
+    .first<
+      AgentAssignment & {
+        assigned_at: string | null;
+        assignment_reason: AssignmentReason | null;
+      }
+    >();
   if (!assignment) return null;
 
   return assignmentResult(
     { id: assignment.id, name: assignment.name },
-    { newlyAssigned: false, assignedAt: assignment.assigned_at },
+    {
+      newlyAssigned: false,
+      assignedAt: assignment.assigned_at,
+      assignmentReason: assignment.assignment_reason,
+    },
   );
 }
