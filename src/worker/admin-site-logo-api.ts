@@ -64,17 +64,26 @@ adminSiteLogoApi.get('/client/v1/site-logo', async (c) => {
 });
 
 function normalizeContentType(value?: string): string | null {
-  const contentType = (value ?? '').split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  const contentType =
+    (value ?? '').split(';', 1)[0]?.trim().toLowerCase() ?? '';
   return SITE_LOGO_TYPES.has(contentType) ? contentType : null;
 }
 
 function matchesImageSignature(bytes: Uint8Array, contentType: string): boolean {
   if (contentType === 'image/jpeg') {
-    return bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    return (
+      bytes.length >= 3 &&
+      bytes[0] === 0xff &&
+      bytes[1] === 0xd8 &&
+      bytes[2] === 0xff
+    );
   }
   if (contentType === 'image/png') {
     const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-    return bytes.length >= signature.length && signature.every((value, index) => bytes[index] === value);
+    return (
+      bytes.length >= signature.length &&
+      signature.every((value, index) => bytes[index] === value)
+    );
   }
   return (
     bytes.length >= 12 &&
@@ -113,7 +122,9 @@ function timingSafeEqual(left: string, right: string): boolean {
   const b = new TextEncoder().encode(right);
   if (a.length !== b.length) return false;
   let diff = 0;
-  for (let index = 0; index < a.length; index += 1) diff |= a[index] ^ b[index];
+  for (let index = 0; index < a.length; index += 1) {
+    diff |= a[index] ^ b[index];
+  }
   return diff === 0;
 }
 
@@ -126,7 +137,11 @@ async function hmac(secret: string, value: string): Promise<string> {
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(value),
+  );
   return toBase64Url(new Uint8Array(signature));
 }
 
