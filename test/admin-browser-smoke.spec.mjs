@@ -57,9 +57,10 @@ test('admin mobile defaults to Dashboard and keeps management flows touch-friend
   await page.goto(url('/'));
 
   await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: /仪表板/u }),
-  ).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: /仪表板/u })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   await expect(page.getByRole('button', { name: /流量统计/u })).toHaveCount(0);
   await expect(page.getByText('运营数据', { exact: true })).toBeVisible();
   await expect(page.getByText('会话总览', { exact: true })).toBeVisible();
@@ -452,7 +453,9 @@ test('admin desktop Dashboard is data-first and management sections remain opera
       contentBottom: contentRect.bottom,
       cardRight: cardRect.right,
       cardWidth: cardRect.width,
-      cardRadius: Number.parseFloat(browser.getComputedStyle(card).borderRadius),
+      cardRadius: Number.parseFloat(
+        browser.getComputedStyle(card).borderRadius,
+      ),
       textareaHeight: textarea.getBoundingClientRect().height,
       actionsBottom: actionsRect.bottom,
     };
