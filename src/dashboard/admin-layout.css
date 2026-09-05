@@ -1,5 +1,5 @@
-/* Admin shell geometry owner. Phase 10 establishes a compact operational shell
- * with a three-destination information architecture on desktop and mobile.
+/* Admin shell geometry owner. The shell keeps a compact three-destination IA
+ * while feature pages own their internal layout and responsive composition.
  */
 
 .admin-console {
@@ -146,7 +146,7 @@
 
 .admin-statistics-page,
 .admin-agent-layout,
-.no-agent-settings-card,
+.site-settings-page,
 .notice {
   margin-inline: auto;
 }
@@ -155,10 +155,6 @@
 .admin-agent-layout,
 .notice {
   width: min(100%, 1440px);
-}
-
-.no-agent-settings-card {
-  margin-left: max(0px, calc((100% - min(100%, 1440px)) / 2));
 }
 
 @media (max-width: 1180px) {
@@ -279,10 +275,6 @@
   .admin-content-head > .secondary-button,
   .admin-content-head > button {
     min-height: 44px;
-  }
-
-  .no-agent-settings-card {
-    margin-left: auto;
   }
 }
 
