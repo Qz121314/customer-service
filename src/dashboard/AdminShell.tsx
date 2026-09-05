@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { UiIcon } from './icons';
 import { Button } from './ui';
 
-export type AdminSection = 'agents' | 'statistics' | 'settings';
+export type AdminSection = 'dashboard' | 'agents' | 'settings';
 
 type AdminSidebarProps = {
   section: AdminSection;
@@ -43,13 +43,24 @@ export function AdminSidebar({
       <nav className="admin-nav" aria-label="客服管理导航">
         <button
           type="button"
+          className={section === 'dashboard' ? 'active' : ''}
+          aria-current={section === 'dashboard' ? 'page' : undefined}
+          onClick={() => onSectionChange('dashboard')}
+        >
+          <span className="admin-nav-label">
+            <UiIcon name="dashboard" />
+            <span>仪表板</span>
+          </span>
+        </button>
+        <button
+          type="button"
           className={section === 'agents' ? 'active' : ''}
           aria-current={section === 'agents' ? 'page' : undefined}
           onClick={() => onSectionChange('agents')}
         >
           <span className="admin-nav-label">
             <UiIcon name="agents" />
-            <span>客服账号</span>
+            <span>客服坐席</span>
           </span>
           <small>{agentCount}</small>
         </button>
@@ -63,18 +74,6 @@ export function AdminSidebar({
             <UiIcon name="settings" />
             <span>访客体验</span>
           </span>
-        </button>
-        <button
-          type="button"
-          className={section === 'statistics' ? 'active' : ''}
-          aria-current={section === 'statistics' ? 'page' : undefined}
-          onClick={() => onSectionChange('statistics')}
-        >
-          <span className="admin-nav-label">
-            <UiIcon name="statistics" />
-            <span>流量统计</span>
-          </span>
-          <small>日期</small>
         </button>
       </nav>
       <div className="admin-sidebar-foot">

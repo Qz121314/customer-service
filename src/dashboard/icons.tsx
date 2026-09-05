@@ -14,6 +14,7 @@ import {
   Globe2,
   Headphones,
   ImagePlus,
+  LayoutDashboard,
   Link,
   LogOut,
   MessageCircle,
@@ -34,6 +35,7 @@ import {
 } from 'lucide-react';
 
 export type UiIconName =
+  | 'dashboard'
   | 'agents'
   | 'statistics'
   | 'workspace'
@@ -68,6 +70,7 @@ export type UiIconName =
   | 'trash';
 
 const ICONS: Record<UiIconName, LucideIcon> = {
+  dashboard: LayoutDashboard,
   agents: Users,
   statistics: ChartNoAxesColumnIncreasing,
   workspace: Headphones,

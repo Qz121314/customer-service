@@ -78,7 +78,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [noAgentMessage, setNoAgentMessage] =
     useState<NoAgentMessageSettings | null>(null);
-  const [section, setSection] = useState<AdminSection>('agents');
+  const [section, setSection] = useState<AdminSection>('dashboard');
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [routingDiagnoseOpen, setRoutingDiagnoseOpen] = useState(false);
@@ -123,17 +123,17 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   }
 
   const sectionTitle =
-    section === 'agents'
-      ? '客服坐席'
-      : section === 'settings'
-        ? '访客体验'
-        : '流量统计';
+    section === 'dashboard'
+      ? '仪表板'
+      : section === 'agents'
+        ? '客服坐席'
+        : '访客体验';
   const sectionHint =
-    section === 'agents'
-      ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
-      : section === 'settings'
-        ? '配置产品无客服可用时返回给访客的提示语。'
-        : '按日期范围查看产品带来的首次有效咨询与流量转化分布。';
+    section === 'dashboard'
+      ? '客服系统运营概览：快速查看咨询总量、客服接待与产品会话分布。'
+      : section === 'agents'
+        ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
+        : '配置产品无客服可用时返回给访客的提示语。';
 
   return (
     <AdminShell
@@ -184,13 +184,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         </button>
       )}
 
-      {section === 'settings' && noAgentMessage ? (
-        <NoAgentMessageSettingsPanel
-          settings={noAgentMessage}
-          saving={settingsSaving}
-          onSave={saveNoAgentMessage}
+      {section === 'dashboard' && (
+        <AdminStatisticsPage
+          agents={agents}
+          products={products}
+          {...statisticsController.pageProps}
         />
-      ) : null}
+      )}
 
       {section === 'agents' && (
         <AdminAgentsPage
@@ -202,13 +202,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         />
       )}
 
-      {section === 'statistics' && (
-        <AdminStatisticsPage
-          agents={agents}
-          products={products}
-          {...statisticsController.pageProps}
+      {section === 'settings' && noAgentMessage ? (
+        <NoAgentMessageSettingsPanel
+          settings={noAgentMessage}
+          saving={settingsSaving}
+          onSave={saveNoAgentMessage}
         />
-      )}
+      ) : null}
     </AdminShell>
   );
 }
