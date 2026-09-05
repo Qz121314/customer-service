@@ -68,7 +68,9 @@ export function AdminRoutingDiagnoseDock() {
   const [open, setOpen] = useState(false);
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [productId, setProductId] = useState('');
-  const [diagnostics, setDiagnostics] = useState<RoutingDiagnostics | null>(null);
+  const [diagnostics, setDiagnostics] = useState<RoutingDiagnostics | null>(
+    null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -187,7 +189,9 @@ export function AdminRoutingDiagnoseDock() {
                 </select>
               </label>
 
-              {error ? <div className="routing-diagnose-error">{error}</div> : null}
+              {error ? (
+                <div className="routing-diagnose-error">{error}</div>
+              ) : null}
               {loading && !diagnostics ? (
                 <div className="routing-diagnose-empty">正在检查分流资格…</div>
               ) : null}
@@ -218,11 +222,15 @@ export function AdminRoutingDiagnoseDock() {
                     <div className="routing-diagnose-cursor">
                       <div>
                         <span>上一棒</span>
-                        <strong>{diagnostics.cursor.lastAgentId ?? '暂无'}</strong>
+                        <strong>
+                          {diagnostics.cursor.lastAgentId ?? '暂无'}
+                        </strong>
                       </div>
                       <div>
                         <span>下一棒</span>
-                        <strong>{diagnostics.cursor.nextAgentId ?? '无'}</strong>
+                        <strong>
+                          {diagnostics.cursor.nextAgentId ?? '无'}
+                        </strong>
                       </div>
                     </div>
                   </section>
@@ -266,13 +274,17 @@ export function AdminRoutingDiagnoseDock() {
                             </div>
                             <div className="routing-diagnose-agent-state">
                               {agent.nextRoundRobin ? <b>下一棒</b> : null}
-                              <span>{agent.eligible ? '可分配' : '已排除'}</span>
+                              <span>
+                                {agent.eligible ? '可分配' : '已排除'}
+                              </span>
                             </div>
                           </div>
 
                           <div className="routing-diagnose-agent-meta">
                             <span>
-                              {agent.status === 'online' ? 'Online' : agent.status}
+                              {agent.status === 'online'
+                                ? 'Online'
+                                : agent.status}
                             </span>
                             <span>
                               今日 {agent.todayConversationCount}
@@ -319,7 +331,9 @@ export function AdminRoutingDiagnoseDock() {
                   setError('');
                   void fetchDiagnostics(productId)
                     .then(setDiagnostics)
-                    .catch(() => setError('分流诊断加载失败，请稍后重试。'))
+                    .catch(() =>
+                      setError('分流诊断加载失败，请稍后重试。'),
+                    )
                     .finally(() => setLoading(false));
                 }}
               >
