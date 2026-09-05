@@ -106,7 +106,9 @@ export function AdminStatisticsTotalCard({
       </div>
       <div className="traffic-total-period">
         <span>统计区间</span>
-        <strong>{stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}</strong>
+        <strong>
+          {stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}
+        </strong>
       </div>
     </article>
   );
