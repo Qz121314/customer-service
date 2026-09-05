@@ -1,0 +1,43 @@
+name: P0 Format Helper
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  format-p0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: npm install --global pnpm@11.19.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format P0 files
+        run: |
+          pnpm exec prettier --write \
+            src/worker/routing-diagnostics.ts \
+            test/routing-p0-fairness.test.mjs
+
+      - name: Upload formatted files
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-formatted-files
+          path: |
+            src/worker/routing-diagnostics.ts
+            test/routing-p0-fairness.test.mjs
+          if-no-files-found: error
+          retention-days: 1
