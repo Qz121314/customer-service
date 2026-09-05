@@ -1,0 +1,501 @@
+/* Administrator-console visual refinements.
+ * Loaded last so existing component-specific styles remain intact. */
+
+.admin-console {
+  --admin-surface: #ffffff;
+  --admin-surface-subtle: #f7f8fa;
+  --admin-border: #e4e7eb;
+  --admin-border-soft: #eceef1;
+  --admin-text: #1d2024;
+  --admin-muted: #7d838c;
+  --admin-accent: #5455ad;
+  --admin-accent-soft: #f7f7fd;
+}
+
+/* Shell */
+@media (min-width: 1024px) {
+  .admin-console {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+
+  .admin-sidebar {
+    padding: 14px 12px;
+  }
+
+  .admin-nav button,
+  .admin-sidebar-foot a,
+  .admin-sidebar-foot button {
+    border-radius: 6px;
+  }
+
+  .admin-content {
+    padding: 18px 24px 22px;
+  }
+
+  .admin-content-head {
+    margin-bottom: 12px;
+  }
+
+  .admin-content-head h1 {
+    font-size: 23px;
+    letter-spacing: -0.025em;
+  }
+
+  .admin-content-head p {
+    max-width: 760px;
+    margin-top: 3px;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+}
+
+.admin-brand > span {
+  border-radius: 8px;
+}
+
+.admin-nav button.active {
+  border-color: #e0e0f0;
+  background: var(--admin-accent-soft);
+  color: #4b4ca7;
+}
+
+/* Agent overview */
+.admin-agent-layout {
+  gap: 12px;
+}
+
+.admin-overview-strip {
+  gap: 8px;
+}
+
+.admin-overview-strip > div {
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  background: var(--admin-surface);
+  box-shadow: 0 1px 2px rgb(17 24 39 / 3%);
+}
+
+.admin-overview-strip > div strong {
+  color: var(--admin-text);
+  font-size: 20px;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.admin-overview-strip > div span {
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.admin-table-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(17 24 39 / 3%);
+}
+
+.admin-table-title {
+  min-height: 46px;
+  padding: 10px 12px;
+}
+
+.admin-table-title > div > strong {
+  color: var(--admin-text);
+  font-size: 13px;
+  letter-spacing: -0.015em;
+}
+
+.admin-table-title > div > span,
+.admin-table-total {
+  font-size: 10px;
+}
+
+.admin-list-toolbar {
+  gap: 8px;
+  padding: 9px 12px;
+  background: #fafbfc;
+}
+
+.admin-agent-search {
+  min-width: 220px;
+}
+
+.admin-agent-search > span {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--admin-muted);
+}
+
+.admin-agent-search input {
+  min-height: 36px;
+  border-radius: 6px;
+}
+
+.admin-agent-filters {
+  padding: 3px;
+  gap: 3px;
+  border-radius: 7px;
+}
+
+.admin-agent-filters button {
+  min-height: 30px;
+  padding-inline: 9px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+
+.admin-agent-filters button.active {
+  background: #fff;
+  color: #4b4ca7;
+  box-shadow: 0 1px 2px rgb(17 24 39 / 6%);
+}
+
+.admin-agent-table th {
+  height: 38px;
+  padding-inline: 12px;
+  font-size: 9px;
+  letter-spacing: 0.045em;
+}
+
+.admin-agent-table td {
+  padding: 10px 12px;
+}
+
+.admin-agent-table tbody tr:hover {
+  background: #fafafe;
+}
+
+.admin-agent-cell {
+  gap: 9px;
+}
+
+.admin-agent-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 7px;
+}
+
+.admin-agent-name-line strong {
+  font-size: 12px;
+}
+
+.admin-agent-identity small {
+  font-size: 10px;
+}
+
+.admin-agent-label {
+  min-height: 22px;
+  padding: 0 7px;
+  border-radius: 5px;
+  border-color: #f0b7b7;
+  background: #fff5f5;
+  color: #c53d3d;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.account-status,
+.table-action {
+  border-radius: 5px;
+}
+
+.table-action {
+  min-height: 30px;
+  padding-inline: 9px;
+  font-size: 11px;
+}
+
+.admin-capacity-cell strong,
+.traffic-quota-cell strong {
+  font-size: 12px;
+}
+
+.admin-capacity-cell small,
+.traffic-quota-cell small,
+.agent-scope-summary small {
+  font-size: 10px;
+}
+
+/* Visitor experience */
+.no-agent-settings-card {
+  width: min(100%, 920px);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(17 24 39 / 3%);
+}
+
+.no-agent-settings-intro {
+  padding: 14px 16px 12px;
+}
+
+.no-agent-settings-intro h2 {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.no-agent-settings-intro p {
+  max-width: 680px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.no-agent-behavior-badge,
+.no-agent-format-switch,
+.no-agent-format-switch button {
+  border-radius: 6px;
+}
+
+.no-agent-settings-form {
+  padding: 16px;
+  gap: 14px;
+}
+
+.no-agent-message-field textarea {
+  min-height: 150px;
+  border-radius: 6px;
+}
+
+.no-agent-settings-actions {
+  margin-top: 0;
+  padding-top: 10px;
+}
+
+/* Statistics dashboard */
+.admin-statistics-page,
+.traffic-overview {
+  gap: 10px;
+}
+
+.traffic-overview-toolbar {
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.traffic-overview-toolbar > div:first-child > span {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.traffic-overview-toolbar > div:first-child > strong {
+  font-size: 14px;
+  letter-spacing: -0.015em;
+}
+
+.traffic-overview-toolbar > div:first-child > small {
+  font-size: 10px;
+}
+
+.traffic-range-switcher {
+  border-radius: 7px;
+}
+
+.traffic-range-switcher button {
+  min-height: 30px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+
+.traffic-overview-grid {
+  gap: 8px;
+}
+
+.traffic-total-card,
+.traffic-distribution-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(17 24 39 / 3%);
+}
+
+.traffic-distribution-card > header {
+  min-height: 44px;
+  padding: 9px 12px;
+}
+
+.traffic-card-label > span {
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.traffic-card-label > strong {
+  font-size: 13px;
+  letter-spacing: -0.015em;
+}
+
+.traffic-distribution-row {
+  min-height: 42px;
+  padding: 8px 12px;
+}
+
+.traffic-row-marker,
+.traffic-distribution-row > img {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.traffic-row-copy strong,
+.traffic-row-value strong {
+  font-size: 11px;
+}
+
+.traffic-row-copy small,
+.traffic-row-value small {
+  font-size: 9px;
+}
+
+.traffic-row-meter {
+  height: 5px;
+  border-radius: 3px;
+}
+
+.traffic-overview-foot {
+  padding: 8px 12px;
+  font-size: 9px;
+}
+
+/* Mobile admin */
+@media (max-width: 900px) {
+  .admin-sidebar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px 10px;
+    padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+    background: rgb(255 255 255 / 96%);
+    backdrop-filter: blur(18px) saturate(1.08);
+  }
+
+  .admin-brand {
+    min-height: 38px;
+  }
+
+  .admin-brand > span {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    border-radius: 7px;
+  }
+
+  .admin-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    padding: 3px;
+    border-radius: 9px;
+  }
+
+  .admin-nav button {
+    min-height: 40px;
+    padding: 0 8px;
+    border-radius: 6px;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .admin-nav button small {
+    display: none;
+  }
+
+  .admin-nav-label {
+    justify-content: center;
+  }
+
+  .admin-sidebar-foot {
+    gap: 4px;
+  }
+
+  .admin-sidebar-foot a,
+  .admin-sidebar-foot button {
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+    min-height: 38px;
+    border-radius: 7px;
+  }
+
+  .admin-content {
+    padding: 16px 14px calc(28px + env(safe-area-inset-bottom));
+  }
+
+  .admin-overview-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .admin-overview-strip > div {
+    padding: 9px 10px;
+    border-radius: 6px;
+  }
+
+  .admin-overview-strip > div strong {
+    font-size: 18px;
+  }
+
+  .admin-list-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-agent-search {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .admin-agent-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .admin-agent-filters button {
+    min-width: 0;
+    padding-inline: 5px;
+  }
+
+  .admin-agent-table {
+    min-width: 820px;
+  }
+
+  .traffic-overview-grid {
+    gap: 7px;
+  }
+
+  .no-agent-settings-card {
+    width: 100%;
+    border-radius: 7px;
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-sidebar {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .admin-brand small {
+    display: none;
+  }
+
+  .admin-nav {
+    border-radius: 8px;
+  }
+
+  .admin-nav button {
+    min-height: 39px;
+    padding-inline: 6px;
+    font-size: 12px;
+  }
+
+  .admin-content {
+    padding: 14px 10px calc(26px + env(safe-area-inset-bottom));
+  }
+
+  .admin-content-head p {
+    display: none;
+  }
+
+  .admin-content-head h1 {
+    font-size: 20px;
+  }
+
+  .traffic-overview-toolbar {
+    padding: 9px 10px;
+  }
+}
