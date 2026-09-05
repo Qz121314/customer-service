@@ -3,6 +3,81 @@
  * below retain their existing precedence.
  */
 
+.admin-console {
+  display: grid;
+}
+
+.admin-sidebar {
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.admin-brand > span {
+  display: grid;
+  place-items: center;
+}
+
+.admin-brand > div {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-nav {
+  display: grid;
+}
+
+.admin-nav button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 650;
+  text-align: left;
+}
+
+.admin-sidebar-foot {
+  margin-top: auto;
+  display: grid;
+}
+
+.admin-sidebar-foot a,
+.admin-sidebar-foot button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.admin-content {
+  overflow: hidden;
+}
+
+.admin-content-head {
+  display: flex;
+}
+
+.admin-content > .notice {
+  max-width: none;
+  margin: 0 0 18px;
+}
+
+@media (max-width: 620px) {
+  .admin-content-head {
+    flex-direction: column;
+  }
+
+  .admin-nav button small {
+    display: none;
+  }
+}
+
 .admin-content {
   width: min(1520px, 100%);
   padding: 26px 30px 44px;
