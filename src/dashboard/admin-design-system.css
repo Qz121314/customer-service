@@ -1,7 +1,7 @@
 /* Shared visual baseline for the management console.
- * This file is intentionally loaded last on the admin route. It owns shared
- * component finish and visual tokens; page geometry and business behavior stay
- * in their feature modules.
+ * This file remains last on the admin route for shared finish, focus and
+ * compatibility treatment. Page geometry and feature layout stay in their
+ * explicit owners.
  */
 
 .admin-console {
@@ -207,8 +207,6 @@
 }
 
 .admin-table-card,
-.admin-statistics-page .statistics-toolbar,
-.statistics-global-summary,
 .admin-agent-layout .admin-overview-strip > div,
 .agent-editor-workspace-card {
   border-color: var(--admin-border);
@@ -216,17 +214,12 @@
 }
 
 .admin-table-card,
-.admin-statistics-page .statistics-toolbar,
-.statistics-global-summary,
 .admin-agent-layout .admin-overview-strip > div {
   background-color: var(--admin-surface);
 }
 
 .admin-agent-layout .admin-overview-strip > div,
-.admin-table-card,
-.admin-statistics-page .statistics-toolbar,
-.statistics-global-summary,
-.admin-statistics-page .statistics-seat-layout {
+.admin-table-card {
   border-radius: var(--admin-radius-lg);
 }
 
@@ -235,31 +228,26 @@
   background: linear-gradient(180deg, #fff 0%, #fdfdfe 100%);
 }
 
-.admin-list-toolbar,
-.admin-agent-layout .admin-list-toolbar {
+.admin-list-toolbar {
   border-bottom-color: #e8ebef;
   background: #f7f8fa;
 }
 
-.admin-table th,
-.admin-agent-layout .admin-agent-table th {
+.admin-table th {
   border-bottom-color: #e5e8ed;
   background: #f5f6f8;
   color: #737b88;
 }
 
-.admin-table td,
-.admin-agent-layout .admin-agent-table td {
+.admin-table td {
   border-bottom-color: #eceff3;
 }
 
-.admin-table tbody tr,
-.admin-agent-layout .admin-agent-table tbody tr {
+.admin-table tbody tr {
   transition: background-color 120ms ease;
 }
 
 .admin-table tbody tr:hover,
-.admin-agent-layout .admin-agent-table tbody tr:hover,
 .admin-agent-layout .admin-agent-table tbody tr:focus-within {
   background: #f9f9fc;
 }
@@ -303,15 +291,13 @@
   box-shadow: var(--admin-shadow-focus);
 }
 
-.admin-agent-filters,
-.admin-agent-layout .admin-agent-filters {
+.admin-agent-filters {
   border-color: #dce1e8;
   background: #fff;
   box-shadow: var(--admin-shadow-xs);
 }
 
-.admin-agent-filters button.active,
-.admin-agent-layout .admin-agent-filters button.active {
+.admin-agent-filters button.active {
   background: var(--admin-accent);
   color: #fff;
   box-shadow: 0 1px 3px rgb(60 60 150 / 18%);
