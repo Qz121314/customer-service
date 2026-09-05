@@ -4,6 +4,61 @@
  * explicit owners.
  */
 
+.eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: #747985;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.notice {
+  width: 100%;
+  max-width: 1420px;
+  margin: 0 auto 16px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  text-align: left;
+}
+
+.notice.error {
+  border: 1px solid #f0c8c8;
+  background: #fff5f5;
+  color: #a13a3a;
+}
+
+.empty-state {
+  display: grid;
+  min-height: 150px;
+  place-content: center;
+  gap: 7px;
+  padding: 24px;
+  color: #8a8f99;
+  text-align: center;
+}
+
+.empty-state strong {
+  color: #444951;
+}
+
+.modal-close {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #e2e4e8;
+  border-radius: 9px;
+  background: #fff;
+  color: #777d87;
+}
+
+.modal-close .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
 .admin-console {
   --admin-bg: #f5f6f8;
   --admin-surface: #ffffff;
