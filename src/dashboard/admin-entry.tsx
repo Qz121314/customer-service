@@ -5,6 +5,7 @@ import { AdminRoutingDiagnoseDock } from './AdminRoutingDiagnoseDock';
 
 async function loadAdminStyles() {
   await import('./admin-route.css');
+  await import('./admin-ui-overrides.css');
 }
 
 export async function bootstrap() {
