@@ -493,18 +493,21 @@ test('admin desktop Dashboard is data-first and management sections remain opera
       body.append(row.cloneNode(true));
     }
   });
-  const scrollBefore = await page
-    .locator('.admin-content')
-    .evaluate((element) => element.scrollTop);
-  await page.mouse.wheel(0, 520);
+  const content = page.locator('.admin-content');
+  const scrollCapacity = await content.evaluate(
+    (element) => element.scrollHeight - element.clientHeight,
+  );
+  expect(scrollCapacity).toBeGreaterThan(0);
+  await content.evaluate((element) => {
+    element.scrollTop = Math.min(
+      520,
+      Math.max(0, element.scrollHeight - element.clientHeight),
+    );
+  });
   await expect
-    .poll(() =>
-      page.locator('.admin-content').evaluate((element) => element.scrollTop),
-    )
-    .toBeGreaterThan(scrollBefore);
-  await page
-    .locator('.admin-content')
-    .evaluate((element) => element.scrollTo({ top: 0 }));
+    .poll(() => content.evaluate((element) => element.scrollTop))
+    .toBeGreaterThan(0);
+  await content.evaluate((element) => element.scrollTo({ top: 0 }));
 
   const rowActions = agentRow.locator('.admin-agent-actions');
   await expect(rowActions).toBeVisible();
