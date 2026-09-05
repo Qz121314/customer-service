@@ -39,12 +39,14 @@ export interface ButtonProps
     ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  unstyled?: boolean;
 }
 
 export function Button({
   asChild = false,
   className,
   size,
+  unstyled = false,
   variant,
   ...props
 }: ButtonProps) {
@@ -61,10 +63,10 @@ export function Button({
             : 'primary-button';
   return (
     <Component
-      data-ui="button"
+      data-ui={unstyled ? undefined : 'button'}
       className={cn(
-        buttonVariants({ size, variant }),
-        legacyVariantClass,
+        !unstyled && buttonVariants({ size, variant }),
+        !unstyled && legacyVariantClass,
         className,
       )}
       {...props}
