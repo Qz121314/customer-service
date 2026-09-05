@@ -1,4 +1,12 @@
 import { Hono, type Context } from 'hono';
+import {
+  LEGACY_SITE_LOGO_KEY,
+  getCurrentSiteLogo,
+  isSiteLogoAssetId,
+  removeSiteLogo,
+  replaceSiteLogo,
+  siteLogoAssetKey,
+} from './site-logo-storage';
 
 type Bindings = {
   MEDIA: R2Bucket;
@@ -8,11 +16,20 @@ type Bindings = {
 type Env = { Bindings: Bindings };
 
 const SESSION_COOKIE = 'cs_session';
-const SITE_LOGO_KEY = 'site-branding/default/logo';
-const SITE_LOGO_MAX_BYTES = 512 * 1024;
+const SITE_LOGO_MAX_BYTES = 1024 * 1024;
 const SITE_LOGO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 export const adminSiteLogoApi = new Hono<Env>();
+
+adminSiteLogoApi.get('/api/admin/site-logo', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  try {
+    return c.json({ siteLogo: await getCurrentSiteLogo(c.env.MEDIA) });
+  } catch (error) {
+    console.error('site-logo.read.failed', error);
+    return c.json({ error: 'SITE_LOGO_READ_FAILED' }, 500);
+  }
+});
 
 adminSiteLogoApi.put('/api/admin/site-logo', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
@@ -32,36 +49,78 @@ adminSiteLogoApi.put('/api/admin/site-logo', async (c) => {
     return c.json({ error: 'INVALID_SITE_LOGO' }, 400);
   }
 
-  await c.env.MEDIA.put(SITE_LOGO_KEY, bytes, {
-    httpMetadata: {
-      contentType,
-      cacheControl: 'public, max-age=300, must-revalidate',
-    },
-    customMetadata: { owner: 'site-logo', siteId: 'default' },
-  });
-  return c.json({ ok: true });
+  try {
+    const result = await replaceSiteLogo(c.env.MEDIA, bytes, contentType);
+    return c.json({
+      ok: true,
+      siteLogo: result.logo,
+      cleanupWarning: result.cleanupWarning,
+    });
+  } catch (error) {
+    console.error('site-logo.replace.failed', error);
+    return c.json({ error: 'SITE_LOGO_SAVE_FAILED' }, 500);
+  }
 });
 
 adminSiteLogoApi.delete('/api/admin/site-logo', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  await c.env.MEDIA.delete(SITE_LOGO_KEY);
-  return c.json({ ok: true });
+  try {
+    const result = await removeSiteLogo(c.env.MEDIA);
+    return c.json({
+      ok: true,
+      siteLogo: null,
+      cleanupWarning: result.cleanupWarning,
+    });
+  } catch (error) {
+    console.error('site-logo.remove.failed', error);
+    return c.json({ error: 'SITE_LOGO_REMOVE_FAILED' }, 500);
+  }
 });
 
+adminSiteLogoApi.get('/client/v1/site-logo/:assetId', async (c) => {
+  const assetId = c.req.param('assetId');
+  if (!isSiteLogoAssetId(assetId)) return new Response(null, { status: 404 });
+  const object = await c.env.MEDIA.get(siteLogoAssetKey(assetId));
+  if (!object) return new Response(null, { status: 404 });
+  return siteLogoResponse(object, 'public, max-age=31536000, immutable');
+});
+
+// Backward-compatible entrypoint for the fixed-key logo shipped by the first
+// corrective. New configurations always use the immutable unique asset URL.
 adminSiteLogoApi.get('/client/v1/site-logo', async (c) => {
-  const object = await c.env.MEDIA.get(SITE_LOGO_KEY);
-  if (!object) {
+  let current;
+  try {
+    current = await getCurrentSiteLogo(c.env.MEDIA);
+  } catch {
+    return new Response(null, { status: 404 });
+  }
+  if (!current) {
     c.header('Cache-Control', 'no-store');
     return c.json({ error: 'SITE_LOGO_NOT_CONFIGURED' }, 404);
   }
+  if (current.assetId !== 'legacy') {
+    const location = new URL(current.url, c.req.url).toString();
+    return new Response(null, {
+      status: 302,
+      headers: { Location: location, 'Cache-Control': 'no-store' },
+    });
+  }
 
+  const object = await c.env.MEDIA.get(LEGACY_SITE_LOGO_KEY);
+  if (!object) return new Response(null, { status: 404 });
+  return siteLogoResponse(object, 'no-store');
+});
+
+function siteLogoResponse(object: R2ObjectBody, cacheControl: string): Response {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set('ETag', object.httpEtag);
-  headers.set('Cache-Control', 'public, max-age=300, must-revalidate');
+  headers.set('Cache-Control', cacheControl);
+  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Content-Security-Policy', "default-src 'none'; sandbox");
   headers.set('X-Content-Type-Options', 'nosniff');
   return new Response(object.body, { headers });
-});
+}
 
 function normalizeContentType(value?: string): string | null {
   const contentType =
