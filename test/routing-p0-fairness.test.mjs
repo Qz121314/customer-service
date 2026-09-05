@@ -53,7 +53,7 @@ function handoffId(index) {
 }
 
 function visitorId(index) {
-  return `V${index.toString(36).toUpperCase().padStart(5, '0')}`;
+  return `VIS${index.toString().padStart(3, '0')}`;
 }
 
 async function startConversation(
