@@ -16,6 +16,7 @@ type AdminPageHeaderProps = {
   hint: string;
   showCreateAgent: boolean;
   onCreateAgent: () => void;
+  actions?: ReactNode;
 };
 
 type AdminShellProps = AdminSidebarProps &
@@ -99,6 +100,7 @@ export function AdminPageHeader({
   hint,
   showCreateAgent,
   onCreateAgent,
+  actions,
 }: AdminPageHeaderProps) {
   return (
     <header className="admin-content-head">
@@ -106,6 +108,7 @@ export function AdminPageHeader({
         <h1>{title}</h1>
         <p>{hint}</p>
       </div>
+      {actions}
       {showCreateAgent && (
         <Button type="button" onClick={onCreateAgent}>
           <UiIcon name="plus" />
@@ -125,6 +128,7 @@ export function AdminShell({
   onSectionChange,
   onLogout,
   onCreateAgent,
+  actions,
   children,
   overlays,
 }: AdminShellProps) {
@@ -142,6 +146,7 @@ export function AdminShell({
           hint={hint}
           showCreateAgent={showCreateAgent}
           onCreateAgent={onCreateAgent}
+          actions={actions}
         />
         {children}
       </main>
