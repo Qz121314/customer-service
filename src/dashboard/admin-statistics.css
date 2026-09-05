@@ -121,7 +121,10 @@
 .traffic-overview-grid {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(230px, 0.72fr) minmax(0, 1.14fr) minmax(0, 1.14fr);
+  grid-template-columns: minmax(230px, 0.72fr) minmax(0, 1.14fr) minmax(
+      0,
+      1.14fr
+    );
   gap: 12px;
   align-items: stretch;
 }
@@ -512,7 +515,8 @@
   color: #fff;
 }
 
-.traffic-date-picker-grid button.is-today:not(.is-range-start):not(.is-range-end) {
+.traffic-date-picker-grid
+  button.is-today:not(.is-range-start):not(.is-range-end) {
   border-color: var(--admin-border-strong, #cfd3d8);
 }
 
