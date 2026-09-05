@@ -120,6 +120,7 @@ async function readEditorGeometry(page) {
 }
 
 async function captureSurfaceSet(page, key) {
+  await expect(page.getByText('运营数据', { exact: true })).toBeVisible();
   await capture(page, `${key}-dashboard`);
   await openSection(page, '客服坐席');
   await capture(page, `${key}-agents`);
@@ -131,6 +132,9 @@ async function captureSurfaceSet(page, key) {
     .getByRole('button', { name: '关闭' })
     .click();
   await openSection(page, '站点设置');
+  await expect(
+    page.getByRole('heading', { name: '无客服提示语' }),
+  ).toBeVisible();
   await capture(page, `${key}-site-settings`);
   await openSection(page, '客服坐席');
   await page.getByRole('button', { name: '分流诊断', exact: true }).click();
@@ -154,6 +158,7 @@ test('mobile corrective IA remains touch-safe', async ({ page }) => {
   await expect(page.getByRole('button', { name: /访客体验/u })).toHaveCount(0);
   await expect.poll(() => bootstrap).toBe(1);
   await expect.poll(() => stats).toBe(1);
+  await expect(page.getByText('运营数据', { exact: true })).toBeVisible();
   await noHorizontalOverflow(page);
   await capture(page, '390x844-dashboard');
 
@@ -179,6 +184,9 @@ test('mobile corrective IA remains touch-safe', async ({ page }) => {
   await capture(page, '390x844-agents');
 
   await openSection(page, '站点设置');
+  await expect(
+    page.getByRole('heading', { name: '无客服提示语' }),
+  ).toBeVisible();
   await noHorizontalOverflow(page);
   const textareaFont = await page
     .locator('.no-agent-message-field textarea')
