@@ -16,7 +16,7 @@ import { AdminLogin, AdminSetup, Startup } from './dashboard-ui';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
-import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
+import { SiteSettingsPage } from './SiteSettingsPage';
 import {
   AdminRoutingDiagnoseDock,
   AdminRoutingDiagnoseTrigger,
@@ -81,6 +81,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [section, setSection] = useState<AdminSection>('dashboard');
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [logoRevision, setLogoRevision] = useState('');
   const [routingDiagnoseOpen, setRoutingDiagnoseOpen] = useState(false);
   const [error, setError] = useState('');
 
@@ -127,18 +128,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       ? '仪表板'
       : section === 'agents'
         ? '客服坐席'
-        : '访客体验';
+        : '站点设置';
   const sectionHint =
     section === 'dashboard'
       ? '客服系统运营概览：快速查看咨询总量、客服接待与产品会话分布。'
       : section === 'agents'
         ? '管理登录身份、每日接待上限、咨询额度和产品负责范围。自动分流采用严格轮询。'
-        : '配置产品无客服可用时返回给访客的提示语。';
+        : '管理站点品牌和访客侧客服体验。';
 
   return (
     <AdminShell
       section={section}
       agentCount={agents.length}
+      logoRevision={logoRevision}
       title={sectionTitle}
       hint={sectionHint}
       showCreateAgent={section === 'agents'}
@@ -203,10 +205,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       )}
 
       {section === 'settings' && noAgentMessage ? (
-        <NoAgentMessageSettingsPanel
-          settings={noAgentMessage}
-          saving={settingsSaving}
-          onSave={saveNoAgentMessage}
+        <SiteSettingsPage
+          noAgentMessage={noAgentMessage}
+          noAgentSaving={settingsSaving}
+          logoRevision={logoRevision}
+          onLogoRevisionChange={setLogoRevision}
+          onSaveNoAgentMessage={saveNoAgentMessage}
         />
       ) : null}
     </AdminShell>
