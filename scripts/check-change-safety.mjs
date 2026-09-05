@@ -3,7 +3,12 @@ import { basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const allowedEnvFiles = new Set(['.env.example']);
-const riskyFileNames = [/^\.env(?:\..+)?$/u, /\.pem$/u, /\.key$/u, /id_(?:rsa|dsa|ecdsa|ed25519)$/u];
+const riskyFileNames = [
+  /^\.env(?:\..+)?$/u,
+  /\.pem$/u,
+  /\.key$/u,
+  /id_(?:rsa|dsa|ecdsa|ed25519)$/u,
+];
 const secretPatterns = [
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u,
   /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/u,
@@ -22,16 +27,39 @@ function git(args) {
 }
 
 function splitLines(value) {
-  return value.split('\n').map((line) => line.trim()).filter(Boolean);
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function githubRange() {
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
+  if (!eventPath || !existsSync(eventPath)) {
+    return {};
+  }
+
+  try {
+    const event = JSON.parse(readFileSync(eventPath, 'utf8'));
+    return {
+      base: event.pull_request?.base?.sha ?? event.before,
+      head: event.pull_request?.head?.sha ?? event.after ?? process.env.GITHUB_SHA,
+    };
+  } catch {
+    return {};
+  }
 }
 
 function changedFiles() {
-  const base = process.env.PREDEPLOY_BASE_SHA?.trim();
-  const head = process.env.PREDEPLOY_HEAD_SHA?.trim() || 'HEAD';
+  const github = githubRange();
+  const base = process.env.PREDEPLOY_BASE_SHA?.trim() || github.base;
+  const head = process.env.PREDEPLOY_HEAD_SHA?.trim() || github.head || 'HEAD';
   const files = new Set();
 
   if (base && !/^0+$/.test(base)) {
-    for (const file of splitLines(git(['diff', '--name-only', '--diff-filter=ACMR', base, head]))) {
+    for (const file of splitLines(
+      git(['diff', '--name-only', '--diff-filter=ACMR', base, head]),
+    )) {
       files.add(file);
     }
   } else {
@@ -54,7 +82,10 @@ const problems = [];
 for (const file of changed) {
   const name = basename(file);
 
-  if (!allowedEnvFiles.has(name) && riskyFileNames.some((pattern) => pattern.test(name))) {
+  if (
+    !allowedEnvFiles.has(name) &&
+    riskyFileNames.some((pattern) => pattern.test(name))
+  ) {
     problems.push(`${file}: sensitive file type must not be committed`);
     continue;
   }
@@ -70,7 +101,11 @@ for (const file of changed) {
     problems.push(`${file}: possible committed secret detected`);
   }
 
-  if (!file.startsWith('test/') && !file.startsWith('scripts/') && debugPatterns.some((pattern) => pattern.test(source))) {
+  if (
+    !file.startsWith('test/') &&
+    !file.startsWith('scripts/') &&
+    debugPatterns.some((pattern) => pattern.test(source))
+  ) {
     problems.push(`${file}: debug statement detected`);
   }
 }
@@ -83,4 +118,6 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-console.log(`Deployment safety checks passed for ${changed.length} changed file(s).`);
+console.log(
+  `Deployment safety checks passed for ${changed.length} changed file(s).`,
+);
