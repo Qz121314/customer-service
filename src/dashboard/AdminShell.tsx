@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { UiIcon } from './icons';
+import { siteLogoUrl } from './site-logo-client';
 import { Button } from './ui';
 
 export type AdminSection = 'dashboard' | 'agents' | 'settings';
@@ -7,6 +8,7 @@ export type AdminSection = 'dashboard' | 'agents' | 'settings';
 type AdminSidebarProps = {
   section: AdminSection;
   agentCount: number;
+  logoRevision: string;
   onSectionChange: (section: AdminSection) => void;
   onLogout: () => Promise<void>;
 };
@@ -25,16 +27,37 @@ type AdminShellProps = AdminSidebarProps &
     overlays?: ReactNode;
   };
 
+function AdminBrandMark({ revision }: { revision: string }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => setFailed(false), [revision]);
+
+  return (
+    <span className="admin-brand-mark" aria-label="站点 Logo">
+      <b aria-hidden="true">CS</b>
+      {!failed ? (
+        <img
+          key={revision || 'default'}
+          src={siteLogoUrl(revision)}
+          alt=""
+          onError={() => setFailed(true)}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 export function AdminSidebar({
   section,
   agentCount,
+  logoRevision,
   onSectionChange,
   onLogout,
 }: AdminSidebarProps) {
   return (
     <aside className="admin-sidebar">
       <div className="admin-brand">
-        <span>CS</span>
+        <AdminBrandMark revision={logoRevision} />
         <div>
           <strong>客服管理</strong>
           <small>管理员后台</small>
@@ -72,7 +95,7 @@ export function AdminSidebar({
         >
           <span className="admin-nav-label">
             <UiIcon name="settings" />
-            <span>访客体验</span>
+            <span>站点设置</span>
           </span>
         </button>
       </nav>
@@ -121,6 +144,7 @@ export function AdminPageHeader({
 export function AdminShell({
   section,
   agentCount,
+  logoRevision,
   title,
   hint,
   showCreateAgent,
@@ -136,6 +160,7 @@ export function AdminShell({
       <AdminSidebar
         section={section}
         agentCount={agentCount}
+        logoRevision={logoRevision}
         onSectionChange={onSectionChange}
         onLogout={onLogout}
       />
