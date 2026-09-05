@@ -426,3 +426,38 @@ When the same high-value failure class appears more than once, do not only repai
 4. a pre-commit, pre-push, or CI gate.
 
 Do not create guardrails for every isolated cosmetic defect. Guardrails are for recurring, cross-surface, expensive, or high-risk failure classes.
+
+## Remote GitHub development mode
+
+Remote GitHub development is an explicit alternative to the local-worktree gates above when the user chooses not to keep a local checkout or the active execution environment cannot provide one. This section supersedes local-only wording elsewhere in this file for that remote mode; repository preflight and contract reading remain mandatory.
+
+Remote mode must use this sequence:
+
+```text
+confirm repo / main HEAD / related PRs
+→ read current AGENTS.md first
+→ complete the same repository preflight and affected-contract review
+→ create a branch from current main
+→ edit and commit only on that branch through an authorized GitHub integration
+→ open a pull request
+→ require the latest PR HEAD to pass every required CI job
+→ require Chromium browser smoke to pass
+→ merge only after the PR is fully green
+→ verify the resulting main CI
+→ verify deploy-production
+→ verify Cloudflare deployment and the D1-free /api/health check
+```
+
+Remote-mode invariants:
+
+- Never commit or push development changes directly to `main`; the PR is the mandatory validation boundary.
+- A branch commit may be created before executable formatting/lint/type/test gates run only when no usable local worktree exists. This does not relax preflight, scope review, or contract review.
+- The PR workflow must cover the verification responsibilities normally provided by local gates: repository guardrails, `pnpm safety`, changed-file formatting/fixing, a clean-tree assertion after automatic fixes, lint, typecheck, local D1 migrations, tests, build, Worker dry-run, Agent Chromium smoke, and Admin Chromium smoke.
+- The formatter/ESLint fixer may rewrite only the ephemeral CI checkout. If `pnpm format` changes committed files, the clean-tree check must fail the PR. CI must never silently repair a commit and then report it as mergeable.
+- A failed remote format/safety/lint/type/test/build/smoke gate is fixed by updating the branch and rerunning CI; GitHub Actions must not commit, push, or open repair PRs.
+- All required checks must correspond to the latest PR HEAD SHA. A green run for an older commit is not sufficient.
+- Local hooks remain authoritative when a local checkout is used. Remote mode does not remove `.githooks/pre-commit`, `.githooks/pre-push`, `pnpm preflight`, or `pnpm verify`; it provides the equivalent no-local-checkout path.
+- For remote mode, any README or historical engineering prose that says “run `pnpm verify` before merge” describes the local-worktree path. The equivalent remote requirement is a fully green PR workflow containing the gates above.
+- Production protocol smoke and authenticated production performance audits remain manual `workflow_dispatch` operations. Routine PR/main validation must not consume production D1 for verification.
+
+In remote mode, GitHub Actions may be the first executable formatter/linter/type/test environment only after repository preflight and implementation review have already been completed. This is not permission to use CI as a repair bot: formatter/fixer-induced workspace changes must make the PR fail, and the branch itself must be corrected before merge.
