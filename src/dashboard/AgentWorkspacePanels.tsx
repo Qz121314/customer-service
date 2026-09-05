@@ -30,14 +30,11 @@ export const AgentSidebar = memo(function AgentSidebar({
   availability,
   notificationState,
   notificationBusy,
-  soundEnabled,
-  vibrationEnabled,
   vibrationSupported,
   realtimeReady,
   audioReady,
+  reminderPending,
   onToggleNotifications,
-  onToggleSound,
-  onToggleVibration,
   onTestSound,
   onTestVibration,
   onNicknameChange,
@@ -54,14 +51,11 @@ export const AgentSidebar = memo(function AgentSidebar({
   availability: AgentAvailability;
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
-  soundEnabled: boolean;
-  vibrationEnabled: boolean;
   vibrationSupported: boolean;
   realtimeReady: boolean;
   audioReady: boolean;
+  reminderPending: boolean;
   onToggleNotifications: () => void;
-  onToggleSound: () => void;
-  onToggleVibration: () => void;
   onTestSound: () => void;
   onTestVibration: () => void;
   onNicknameChange: (nickname: string) => Promise<void>;
@@ -97,9 +91,8 @@ export const AgentSidebar = memo(function AgentSidebar({
         <AgentActionToolbar
           notificationState={notificationState}
           notificationBusy={notificationBusy}
-          soundEnabled={soundEnabled}
+          onTestSound={onTestSound}
           onToggleNotifications={onToggleNotifications}
-          onToggleSound={onToggleSound}
           onOpenCardSettings={onOpenCardSettings}
           onOpenAutoReply={onOpenAutoReply}
           onOpenStatistics={onOpenStatistics}
@@ -111,15 +104,12 @@ export const AgentSidebar = memo(function AgentSidebar({
         open={overlay === 'menu'}
         notificationState={notificationState}
         notificationBusy={notificationBusy}
-        soundEnabled={soundEnabled}
-        vibrationEnabled={vibrationEnabled}
         vibrationSupported={vibrationSupported}
         realtimeReady={realtimeReady}
         audioReady={audioReady}
+        reminderPending={reminderPending}
         onClose={onCloseOverlay}
         onToggleNotifications={onToggleNotifications}
-        onToggleSound={onToggleSound}
-        onToggleVibration={onToggleVibration}
         onTestSound={onTestSound}
         onTestVibration={onTestVibration}
         onOpenCardSettings={onOpenCardSettings}

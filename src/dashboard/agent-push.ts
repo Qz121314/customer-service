@@ -1,3 +1,5 @@
+import type { AgentReminder } from './agent-reminders.ts';
+
 export type AgentNotificationState =
   'unsupported' | 'install-required' | 'disabled' | 'blocked' | 'enabled';
 
@@ -7,6 +9,64 @@ const AGENT_NOTIFICATION_MESSAGE_TYPE = 'agent.notification.open';
 const AGENT_SERVICE_WORKER_SCOPE = '/agent';
 const AGENT_PUSH_BINDING_KEY = 'cs-agent-push-binding:v4';
 const AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000;
+
+// Realtime uses the same non-silent system notification as background Push.
+// This also gives iOS a vibration-capable OS path instead of navigator.vibrate.
+export async function deliverAgentSystemReminder(
+  reminder: AgentReminder,
+): Promise<boolean> {
+  if (notificationPrerequisite() || Notification.permission !== 'granted')
+    return false;
+  const registration = await navigator.serviceWorker.getRegistration(
+    AGENT_SERVICE_WORKER_SCOPE,
+  );
+  const worker = registration?.active;
+  if (!worker || !registration) return false;
+  const channel = new MessageChannel();
+  let timeoutId: number | undefined;
+  try {
+    return await new Promise<boolean>((resolve, reject) => {
+      channel.port1.onmessage = (event) =>
+        resolve(event.data?.delivered === true);
+      channel.port1.onmessageerror = () =>
+        reject(new Error('Invalid reminder acknowledgement'));
+      // Older active SW versions do not acknowledge this protocol. Use the
+      // same system notification tag as the safe update/timeout fallback.
+      timeoutId = window.setTimeout(() => {
+        void registration
+          .showNotification(
+            reminder.type === 'NEW_CONVERSATION' ? '新客户咨询' : '客户回复',
+            {
+              body: '有新的客户消息等待处理',
+              tag: `agent-message-${reminder.messageId}`,
+              icon: '/icons/customer-service-192.svg',
+              silent: false,
+              ...{
+                renotify: false,
+                vibrate:
+                  reminder.type === 'NEW_CONVERSATION'
+                    ? [220, 100, 220, 100, 320]
+                    : [220, 100, 220],
+              },
+              data: {
+                url: `/agent?notification=message&conversationId=${encodeURIComponent(reminder.conversationId)}&messageId=${encodeURIComponent(reminder.messageId)}`,
+                conversationId: reminder.conversationId,
+                messageId: reminder.messageId,
+              },
+            },
+          )
+          .then(() => resolve(true), reject);
+      }, 2_000);
+      worker.postMessage({ type: 'agent.reminder.deliver', reminder }, [
+        channel.port2,
+      ]);
+    });
+  } finally {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    channel.port1.close();
+    channel.port2.close();
+  }
+}
 
 type PushConfig = {
   enabled: boolean;
@@ -129,30 +189,6 @@ export async function enableAgentNotifications(
     (await createAgentPushSubscription(registration));
   await bindAgentSubscription(subscription, agentId, true);
   return 'enabled';
-}
-
-export async function disableAgentNotifications(): Promise<AgentNotificationState> {
-  if (!supported()) return 'unsupported';
-  const registration = await navigator.serviceWorker.getRegistration(
-    AGENT_SERVICE_WORKER_SCOPE,
-  );
-  const subscription = await registration?.pushManager.getSubscription();
-  if (subscription) {
-    let removalError: unknown = null;
-    try {
-      await request('/api/agent/push/subscriptions/remove', {
-        method: 'POST',
-        body: JSON.stringify({ endpoint: subscription.endpoint }),
-      });
-    } catch (error) {
-      removalError = error;
-    }
-    await subscription.unsubscribe();
-    clearAgentPushBindingMarker();
-    if (removalError) throw removalError;
-  }
-  clearAgentPushBindingMarker();
-  return Notification.permission === 'denied' ? 'blocked' : 'disabled';
 }
 
 export function updateAgentAppBadge(unreadMessageCount: number): void {

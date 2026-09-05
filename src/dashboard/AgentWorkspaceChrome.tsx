@@ -13,9 +13,8 @@ import { Button } from './ui';
 export function AgentActionToolbar({
   notificationState,
   notificationBusy,
-  soundEnabled,
+  onTestSound,
   onToggleNotifications,
-  onToggleSound,
   onOpenCardSettings,
   onOpenAutoReply,
   onOpenStatistics,
@@ -24,9 +23,8 @@ export function AgentActionToolbar({
 }: {
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
-  soundEnabled: boolean;
+  onTestSound: () => void;
   onToggleNotifications: () => void;
-  onToggleSound: () => void;
   onOpenCardSettings: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
@@ -53,7 +51,7 @@ export function AgentActionToolbar({
           className={`full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
           aria-label={
             notificationState === 'enabled'
-              ? '关闭客户消息通知'
+              ? '重新确认客户消息通知'
               : '开启客户消息通知'
           }
           title={
@@ -86,14 +84,13 @@ export function AgentActionToolbar({
         <Button
           type="button"
           variant="ghost"
-          className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
-          aria-pressed={soundEnabled}
-          aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
-          title={soundEnabled ? '消息提示音已开启' : '消息提示音已关闭'}
-          onClick={onToggleSound}
+          className="full workspace-sound-button is-enabled"
+          aria-label="测试提示音"
+          title="测试提示音"
+          onClick={onTestSound}
         >
           <UiIcon name="sound" />
-          <span>{soundEnabled ? '消息提示音已开启' : '消息提示音已关闭'}</span>
+          <span>测试提示音</span>
         </Button>
         <Button
           type="button"
@@ -161,72 +158,22 @@ function AgentHealthState({ ready, label }: { ready: boolean; label: string }) {
   );
 }
 
-function AgentReminderToggleActions({
-  enabled,
-  toggleLabel,
-  testLabel,
-  onToggle,
+function AgentReminderTest({
+  label,
   onTest,
 }: {
-  enabled: boolean;
-  toggleLabel: string;
-  testLabel: string;
-  onToggle: () => void;
+  label: string;
   onTest: () => void;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <button
-        type="button"
-        aria-label={toggleLabel}
-        aria-pressed={enabled}
-        onClick={onToggle}
-        style={{
-          position: 'relative',
-          width: 38,
-          minWidth: 38,
-          height: 22,
-          padding: 0,
-          border: 0,
-          borderRadius: 999,
-          background: enabled ? 'var(--mobile-accent)' : '#dfe3e8',
-          transition: 'background 140ms ease',
-        }}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            top: 3,
-            left: 3,
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: '#fff',
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.16)',
-            transform: enabled ? 'translateX(16px)' : 'none',
-            transition: 'transform 140ms ease',
-          }}
-        />
-      </button>
-      <button
-        type="button"
-        className="secondary-button"
-        aria-label={testLabel}
-        onClick={onTest}
-        style={{
-          minWidth: 44,
-          minHeight: 30,
-          padding: '0 10px',
-          borderRadius: 9,
-          color: 'var(--mobile-accent-strong)',
-          fontSize: 10,
-          fontWeight: 720,
-        }}
-      >
-        测试
-      </button>
-    </div>
+    <button
+      type="button"
+      className="secondary-button"
+      aria-label={label}
+      onClick={onTest}
+    >
+      测试
+    </button>
   );
 }
 
@@ -234,15 +181,12 @@ export function AgentMobileSettingsPage({
   open,
   notificationState,
   notificationBusy,
-  soundEnabled,
-  vibrationEnabled,
   vibrationSupported,
   realtimeReady,
   audioReady,
+  reminderPending,
   onClose,
   onToggleNotifications,
-  onToggleSound,
-  onToggleVibration,
   onTestSound,
   onTestVibration,
   onOpenCardSettings,
@@ -253,15 +197,12 @@ export function AgentMobileSettingsPage({
   open: boolean;
   notificationState: AgentNotificationState;
   notificationBusy: boolean;
-  soundEnabled: boolean;
-  vibrationEnabled: boolean;
   vibrationSupported: boolean;
   realtimeReady: boolean;
   audioReady: boolean;
+  reminderPending: boolean;
   onClose: () => void;
   onToggleNotifications: () => void;
-  onToggleSound: () => void;
-  onToggleVibration: () => void;
   onTestSound: () => void;
   onTestVibration: () => void;
   onOpenCardSettings: () => void;
@@ -307,9 +248,8 @@ export function AgentMobileSettingsPage({
         : '通过浏览器菜单完成安装';
   const notificationsReady = notificationState === 'enabled';
   const pwaReady = installState === 'installed';
-  const audioStateReady = !soundEnabled || audioReady;
-  const reminderReady = realtimeReady && notificationsReady && audioStateReady;
-  const soundReady = soundEnabled && audioReady;
+  const soundReady = notificationsReady || audioReady;
+  const reminderReady = realtimeReady && notificationsReady && !reminderPending;
   const soundPresetLabel =
     AGENT_SOUND_PRESET_OPTIONS.find((option) => option.id === soundPreset)
       ?.label ?? '强提醒';
@@ -396,10 +336,10 @@ export function AgentMobileSettingsPage({
                   <AgentHealthState
                     ready={soundReady}
                     label={
-                      !soundEnabled
-                        ? '已关闭'
+                      notificationsReady
+                        ? '系统提醒'
                         : audioReady
-                          ? '已开启'
+                          ? '已解锁'
                           : '待解锁'
                     }
                   />
@@ -410,8 +350,8 @@ export function AgentMobileSettingsPage({
                   <dt>震动</dt>
                   <dd>
                     <AgentHealthState
-                      ready={vibrationEnabled}
-                      label={vibrationEnabled ? '已开启' : '已关闭'}
+                      ready={!reminderPending}
+                      label={reminderPending ? '待重试' : '每条提醒'}
                     />
                   </dd>
                 </div>
@@ -426,6 +366,11 @@ export function AgentMobileSettingsPage({
                 </dd>
               </div>
             </dl>
+            {reminderPending && (
+              <p role="status">
+                有消息提醒尚未成功，请点击测试或开启系统通知。
+              </p>
+            )}
             {!notificationsReady && (
               <p>锁屏或切后台后可能无法收到客户消息提醒。</p>
             )}
@@ -476,7 +421,7 @@ export function AgentMobileSettingsPage({
                             : '每条客户消息到达时显示系统通知'}
                 </small>
               </span>
-              <b aria-hidden="true" />
+              <UiIcon name="chevron" />
             </button>
             <div className="mobile-agent-settings-item">
               <i aria-hidden="true">
@@ -485,9 +430,9 @@ export function AgentMobileSettingsPage({
               <span>
                 <strong>消息提示音</strong>
                 <small>
-                  {soundEnabled
-                    ? `已开启 · ${soundPresetLabel}`
-                    : '已关闭 · 不播放工作台提示音'}
+                  {notificationsReady
+                    ? '每条消息使用系统通知声音'
+                    : `每条消息提醒 · ${soundPresetLabel}`}
                 </small>
               </span>
               <div
@@ -522,17 +467,15 @@ export function AgentMobileSettingsPage({
                     </option>
                   ))}
                 </select>
-                <AgentReminderToggleActions
-                  enabled={soundEnabled}
-                  toggleLabel={
-                    soundEnabled ? '关闭消息提示音' : '开启消息提示音'
-                  }
-                  testLabel="测试提示音"
-                  onToggle={onToggleSound}
-                  onTest={onTestSound}
-                />
+                <AgentReminderTest label="测试提示音" onTest={onTestSound} />
               </div>
             </div>
+            {!vibrationSupported && (
+              <p>
+                本浏览器不支持网页震动。iPhone/iPad
+                请从主屏幕打开并开启系统通知，由系统提供声音和震动。
+              </p>
+            )}
             {vibrationSupported && (
               <div className="mobile-agent-settings-item">
                 <i aria-hidden="true">
@@ -540,21 +483,9 @@ export function AgentMobileSettingsPage({
                 </i>
                 <span>
                   <strong>震动提醒</strong>
-                  <small>
-                    {vibrationEnabled
-                      ? '已开启 · 工作台前台时每条客户消息都会震动'
-                      : '已关闭 · 不触发工作台震动'}
-                  </small>
+                  <small>每条客户消息请求震动，实际效果由设备决定</small>
                 </span>
-                <AgentReminderToggleActions
-                  enabled={vibrationEnabled}
-                  toggleLabel={
-                    vibrationEnabled ? '关闭震动提醒' : '开启震动提醒'
-                  }
-                  testLabel="测试震动"
-                  onToggle={onToggleVibration}
-                  onTest={onTestVibration}
-                />
+                <AgentReminderTest label="测试震动" onTest={onTestVibration} />
               </div>
             )}
           </div>

@@ -32,7 +32,7 @@ test('agent workspace offers local sound and typing presence', () => {
     source('../src/dashboard/dashboard-runtime-core.ts'),
   ].join('\n');
 
-  assert.ok(runtime.includes('cs-agent-sound:${agentId}'));
+  assert.ok(!runtime.includes('cs-agent-sound:${agentId}'));
   assert.ok(runtime.includes('emitAgentMessageTone'));
   assert.ok(agent.includes("document.visibilityState !== 'visible'"));
   assert.ok(agent.includes('payload.reminder?.messageId'));

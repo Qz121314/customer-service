@@ -1,10 +1,66 @@
 import { test, expect } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
-const agentUsername = 'ui-mobile-menu-agent';
+const agentUsername = `ui-mobile-menu-${randomUUID().slice(0, 8)}`;
 const agentPassword = 'ui-mobile-menu-pass';
+
+test('realtime notifications remain non-silent and deduplicate through device storage', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['notifications']);
+  await page.goto(url('/agent'));
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.register('/agent-sw.js', { scope: '/agent' });
+    await navigator.serviceWorker.ready;
+  });
+  const worker = context
+    .serviceWorkers()
+    .find((item) => item.url().endsWith('/agent-sw.js'));
+  expect(worker).toBeTruthy();
+  await worker.evaluate(() => {
+    globalThis.reminderRequests = [];
+    globalThis.registration.showNotification = async (title, options) => {
+      globalThis.reminderRequests.push({ title, ...options });
+    };
+  });
+  const id = `browser-reminder-${Date.now()}`;
+  const deliver = (messageId) =>
+    page.evaluate(async (messageId) => {
+      const registration = await navigator.serviceWorker.ready;
+      return new Promise((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = (event) => {
+          channel.port1.close();
+          resolve(event.data.delivered);
+        };
+        registration.active.postMessage(
+          {
+            type: 'agent.reminder.deliver',
+            reminder: {
+              type: 'CUSTOMER_REPLY',
+              messageId,
+              conversationId: 'browser-conversation',
+            },
+          },
+          [channel.port2],
+        );
+      });
+    }, messageId);
+  expect(
+    await Promise.all([deliver(id), deliver(id), deliver(`${id}-2`)]),
+  ).toEqual([true, true, true]);
+  // Clear volatile state to exercise the same durable lookup used after an SW restart.
+  await worker.evaluate('deliveredMessages.clear()');
+  expect(await deliver(id)).toBe(true);
+  const shown = await worker.evaluate(() => globalThis.reminderRequests);
+  expect(shown).toHaveLength(2);
+  expect(shown.every((item) => item.silent === false)).toBe(true);
+  expect(shown[0].vibrate).toEqual([220, 100, 220]);
+});
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
@@ -79,7 +135,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     soundRow.getByRole('button', {
       name: /关闭消息提示音|开启消息提示音/u,
     }),
-  ).toBeVisible();
+  ).toHaveCount(0);
   await expect(
     soundRow.getByRole('button', { name: '测试提示音' }),
   ).toBeVisible();

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { URL } from 'node:url';
-import { rememberAgentReminderMessage } from '../src/dashboard/dashboard-runtime.ts';
+import { createAgentReminderDelivery } from '../src/dashboard/agent-reminders.ts';
 
 function threadMessageHandlerSource() {
   const portal = readFileSync(
@@ -31,13 +31,14 @@ test('live visitor thread messages trigger the shared customer reply reminder', 
   const visitorBlock = handler.slice(visitorStart, clientMessageStart);
   assert.match(
     visitorBlock,
-    /alertForReminder\('CUSTOMER_REPLY', incoming\.id\);/u,
+    /alertForReminder\('CUSTOMER_REPLY', incoming\.id, selectedId\);/u,
   );
 });
 
 test('thread reminder stays scoped to visitor messages, not agent or non-message events', () => {
   const handler = threadMessageHandlerSource();
-  const reminderCall = "alertForReminder('CUSTOMER_REPLY', incoming.id);";
+  const reminderCall =
+    "alertForReminder('CUSTOMER_REPLY', incoming.id, selectedId);";
   assert.equal(handler.split(reminderCall).length - 1, 1);
 
   const visitorStart = handler.indexOf(
@@ -48,12 +49,33 @@ test('thread reminder stays scoped to visitor messages, not agent or non-message
   assert.ok(reminderIndex > visitorStart && reminderIndex < visitorEnd);
 });
 
-test('thread and inbox delivery of the same message id still alerts only once', () => {
-  const seen = new Set();
-
-  assert.equal(rememberAgentReminderMessage(seen, 'message-a'), true);
-  assert.equal(rememberAgentReminderMessage(seen, 'message-a'), false);
-  assert.equal(rememberAgentReminderMessage(seen, 'message-b'), true);
-  assert.equal(rememberAgentReminderMessage(seen, 'message-c'), true);
-  assert.equal(seen.size, 3);
+test('thread and inbox delivery of the same message id still alerts only once', async () => {
+  const sent = [];
+  const delivery = createAgentReminderDelivery({
+    vibrationSupported: false,
+    async system(value) {
+      sent.push(value.messageId);
+      return true;
+    },
+    async sound() {
+      throw Error('unneeded fallback');
+    },
+    vibrate() {
+      throw Error('unsupported');
+    },
+  });
+  for (const messageId of [
+    'message-a',
+    'message-a',
+    'message-b',
+    'message-c',
+  ]) {
+    delivery.receive({
+      type: 'CUSTOMER_REPLY',
+      messageId,
+      conversationId: 'conversation-a',
+    });
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(sent, ['message-a', 'message-b', 'message-c']);
 });

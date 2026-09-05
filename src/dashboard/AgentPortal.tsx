@@ -47,13 +47,8 @@ import {
   REMOTE_TYPING_STALE_MS,
   loadAgentConversationDrafts,
   createAgentDraftSaveScheduler,
-  loadAgentSoundEnabled,
-  saveAgentSoundEnabled,
-  loadAgentVibrationEnabled,
-  saveAgentVibrationEnabled,
   agentReminderVibrationPattern,
   supportsAgentVibration,
-  rememberAgentReminderMessage,
   emitAgentMessageTone,
   type AgentReminderType,
   parseRealtimeEvent,
@@ -86,7 +81,6 @@ import {
 } from './agent-attachments-client';
 import { sendAgentImage } from './agent-media';
 import {
-  disableAgentNotifications,
   enableAgentNotifications,
   clearAgentPushBindingMarker,
   prepareAgentNotifications,
@@ -95,6 +89,11 @@ import {
   type AgentNotificationState,
 } from './agent-push';
 import { UiIcon } from './icons';
+import {
+  createAgentReminderDelivery,
+  resumeAgentAudio,
+} from './agent-reminders';
+import { deliverAgentSystemReminder } from './agent-push';
 
 type QuickAttachmentPreset = Exclude<AgentAttachmentPreset, { kind: 'image' }>;
 
@@ -376,12 +375,7 @@ function AgentWorkspace({
   const [notificationState, setNotificationState] =
     useState<AgentNotificationState>('disabled');
   const [notificationBusy, setNotificationBusy] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(() =>
-    loadAgentSoundEnabled(identity.id),
-  );
-  const [vibrationEnabled, setVibrationEnabled] = useState(() =>
-    loadAgentVibrationEnabled(identity.id),
-  );
+  const [reminderPending, setReminderPending] = useState(false);
   const vibrationSupported = supportsAgentVibration();
   const [availability, setAvailability] = useState<AgentAvailability>(
     identity.status === 'busy' ? 'busy' : 'online',
@@ -438,11 +432,11 @@ function AgentWorkspace({
   const agentTypingSentRef = useRef(false);
   const agentTypingTimerRef = useRef<number | null>(null);
   const visitorTypingTimerRef = useRef<number | null>(null);
-  const soundEnabledRef = useRef(soundEnabled);
-  const vibrationEnabledRef = useRef(vibrationEnabled);
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
-  const remindedMessageIdsRef = useRef(new Set<string>());
+  const reminderDeliveryRef = useRef<ReturnType<
+    typeof createAgentReminderDelivery
+  > | null>(null);
   const lastScrolledConversationRef = useRef<string | null>(null);
   const pendingHistoryScrollRef = useRef<{
     scrollHeight: number;
@@ -552,101 +546,89 @@ function AgentWorkspace({
     previousDraftConversationRef.current = selectedId;
   }, [draftSaveScheduler, selectedId]);
 
-  useEffect(() => {
-    soundEnabledRef.current = soundEnabled;
-    saveAgentSoundEnabled(identity.id, soundEnabled);
-  }, [identity.id, soundEnabled]);
-
-  useEffect(() => {
-    vibrationEnabledRef.current = vibrationEnabled;
-    saveAgentVibrationEnabled(identity.id, vibrationEnabled);
-  }, [identity.id, vibrationEnabled]);
-
   const ensureSoundContext = useCallback((): AudioContext | null => {
-    if (soundContextRef.current) {
-      if (soundContextRef.current.state === 'running') setAudioUnlocked(true);
-      return soundContextRef.current;
-    }
+    if (soundContextRef.current?.state === 'closed')
+      soundContextRef.current = null;
+    if (soundContextRef.current) return soundContextRef.current;
     try {
-      soundContextRef.current = new AudioContext();
-      setAudioUnlocked(soundContextRef.current.state === 'running');
-      return soundContextRef.current;
+      const Audio =
+        window.AudioContext ??
+        (window as Window & { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!Audio) return null;
+      const context = new Audio();
+      context.onstatechange = () =>
+        setAudioUnlocked(context.state === 'running');
+      soundContextRef.current = context;
+      setAudioUnlocked(context.state === 'running');
+      return context;
     } catch {
       return null;
     }
   }, []);
 
   const playIncomingTone = useCallback(
-    (type: AgentReminderType) => {
-      if (!soundEnabledRef.current || document.visibilityState !== 'visible') {
-        return;
-      }
+    async (type: AgentReminderType) => {
       const context = ensureSoundContext();
-      if (!context) return;
-      if (context.state === 'running') {
-        emitAgentMessageTone(context, type);
-        return;
-      }
-      void context
-        .resume()
-        .then(() => {
-          setAudioUnlocked(context.state === 'running');
-          emitAgentMessageTone(context, type);
-        })
-        .catch(() => undefined);
+      if (!context || !(await resumeAgentAudio(context))) return false;
+      setAudioUnlocked(context.state === 'running');
+      return emitAgentMessageTone(context, type);
     },
     [ensureSoundContext],
   );
 
-  const alertForReminder = useCallback(
-    (type: AgentReminderType, messageId: string) => {
-      if (
-        !rememberAgentReminderMessage(remindedMessageIdsRef.current, messageId)
-      ) {
-        return;
-      }
-      runBestEffortAgentCapability(() => playIncomingTone(type));
-      if (
-        document.visibilityState === 'visible' &&
-        vibrationSupported &&
-        vibrationEnabledRef.current
-      ) {
-        runBestEffortAgentCapability(() => {
-          navigator.vibrate(agentReminderVibrationPattern(type));
-        });
-      }
-    },
-    [playIncomingTone, vibrationSupported],
-  );
-
   useEffect(() => {
-    const primeSound = () => {
-      if (!soundEnabledRef.current) return;
-      const context = ensureSoundContext();
-      if (context?.state === 'suspended') {
-        void context
-          .resume()
-          .then(() => setAudioUnlocked(context.state === 'running'))
-          .catch(() => undefined);
-      }
-    };
-    window.addEventListener('pointerdown', primeSound, { once: true });
-    window.addEventListener('keydown', primeSound, { once: true });
+    const delivery = createAgentReminderDelivery({
+      system: deliverAgentSystemReminder,
+      sound: playIncomingTone,
+      vibrationSupported,
+      vibrate: (type) => navigator.vibrate(agentReminderVibrationPattern(type)),
+      changed: setReminderPending,
+    });
+    reminderDeliveryRef.current = delivery;
     return () => {
-      window.removeEventListener('pointerdown', primeSound);
-      window.removeEventListener('keydown', primeSound);
+      delivery.dispose();
+      reminderDeliveryRef.current = null;
     };
-  }, [ensureSoundContext]);
+  }, [playIncomingTone, vibrationSupported]);
 
-  useEffect(
-    () => () => {
-      if (soundContextRef.current) {
-        void soundContextRef.current.close().catch(() => undefined);
-        soundContextRef.current = null;
-      }
+  const alertForReminder = useCallback(
+    (type: AgentReminderType, messageId: string, conversationId: string) => {
+      reminderDeliveryRef.current?.receive({ type, messageId, conversationId });
     },
     [],
   );
+
+  useEffect(() => {
+    const retry = () => {
+      const context = ensureSoundContext();
+      if (context)
+        void resumeAgentAudio(context).then(() =>
+          reminderDeliveryRef.current?.retry(),
+        );
+      else reminderDeliveryRef.current?.retry();
+    };
+    const visible = () => {
+      if (document.visibilityState === 'visible') retry();
+    };
+    // Re-arm after refresh, audio interruption and failed first interaction.
+    window.addEventListener('pointerup', retry);
+    window.addEventListener('keydown', retry);
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      window.removeEventListener('pointerup', retry);
+      window.removeEventListener('keydown', retry);
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', visible);
+      const context = soundContextRef.current;
+      if (context) {
+        context.onstatechange = null;
+        void context.close().catch(() => undefined);
+      }
+      soundContextRef.current = null;
+    };
+  }, [ensureSoundContext]);
 
   useEffect(() => {
     detailRef.current = detail;
@@ -849,7 +831,11 @@ function AgentWorkspace({
           );
         }
         if (belongsToAgent && payload.reminder?.messageId) {
-          alertForReminder(payload.reminder.type, payload.reminder.messageId);
+          alertForReminder(
+            payload.reminder.type,
+            payload.reminder.messageId,
+            next.id,
+          );
         }
       });
       socket.addEventListener('close', () => {
@@ -972,6 +958,12 @@ function AgentWorkspace({
               }
               return mergeAgentConversationPage(currentDetail, value, 'after');
             });
+            if (incremental) {
+              for (const incoming of value.messages) {
+                if (incoming.sender_type === 'visitor')
+                  alertForReminder('CUSTOMER_REPLY', incoming.id, selectedId);
+              }
+            }
             const deliveredClientIds = new Set(
               value.messages
                 .map((item) => item.client_message_id)
@@ -1063,7 +1055,7 @@ function AgentWorkspace({
         if (payload.type === 'message' && payload.message) {
           const incoming = payload.message;
           if (incoming.sender_type === 'visitor') {
-            alertForReminder('CUSTOMER_REPLY', incoming.id);
+            alertForReminder('CUSTOMER_REPLY', incoming.id, selectedId);
             setVisitorTyping(false);
             if (visitorTypingTimerRef.current !== null) {
               window.clearTimeout(visitorTypingTimerRef.current);
@@ -1684,10 +1676,8 @@ function AgentWorkspace({
     }
     setNotificationBusy(true);
     try {
-      const nextState =
-        notificationState === 'enabled'
-          ? await disableAgentNotifications()
-          : await enableAgentNotifications(identity.id);
+      const nextState = await enableAgentNotifications(identity.id);
+      reminderDeliveryRef.current?.retry();
       setNotificationState(nextState);
       if (nextState === 'blocked') {
         setError('浏览器已阻止通知，请在站点权限中重新开启');
@@ -1700,41 +1690,18 @@ function AgentWorkspace({
   }
 
   function testSound() {
-    const context = ensureSoundContext();
-    if (!context) return;
-    if (context.state === 'running') {
-      setAudioUnlocked(true);
-      emitAgentMessageTone(context, 'CUSTOMER_REPLY');
-      return;
-    }
-    void context
-      .resume()
-      .then(() => {
-        setAudioUnlocked(context.state === 'running');
-        emitAgentMessageTone(context, 'CUSTOMER_REPLY');
-      })
-      .catch(() => undefined);
-  }
-
-  function toggleSound() {
-    const next = !soundEnabled;
-    setSoundEnabled(next);
-    soundEnabledRef.current = next;
-    if (next) testSound();
-  }
-
-  function toggleVibration() {
-    if (!vibrationSupported) return;
-    const next = !vibrationEnabled;
-    setVibrationEnabled(next);
-    vibrationEnabledRef.current = next;
-    if (next) testVibration();
+    void playIncomingTone('CUSTOMER_REPLY').then((played) => {
+      if (!played) setError('提示音未能播放，请检查设备声音设置并再次点击测试');
+      reminderDeliveryRef.current?.retry();
+    });
   }
 
   function testVibration() {
     if (!vibrationSupported) return;
     runBestEffortAgentCapability(() => {
-      navigator.vibrate(agentReminderVibrationPattern('CUSTOMER_REPLY'));
+      if (!navigator.vibrate(agentReminderVibrationPattern('CUSTOMER_REPLY'))) {
+        setError('设备未接受震动请求，请检查系统设置；iOS 请开启系统通知');
+      }
     });
   }
 
@@ -1750,8 +1717,6 @@ function AgentWorkspace({
   const handleToggleNotifications = useEventCallback(() => {
     void toggleNotifications();
   });
-  const handleToggleSound = useEventCallback(toggleSound);
-  const handleToggleVibration = useEventCallback(toggleVibration);
   const handleTestSound = useEventCallback(testSound);
   const handleTestVibration = useEventCallback(testVibration);
   const handleOpenStatistics = useEventCallback(() => {
@@ -1830,15 +1795,12 @@ function AgentWorkspace({
         availability={availability}
         notificationState={notificationState}
         notificationBusy={notificationBusy}
-        soundEnabled={soundEnabled}
-        vibrationEnabled={vibrationEnabled}
         vibrationSupported={vibrationSupported}
         realtimeReady={inboxConnected}
-        audioReady={soundEnabled && audioUnlocked}
+        audioReady={audioUnlocked}
+        reminderPending={reminderPending}
         onNicknameChange={handleNicknameChange}
         onToggleNotifications={handleToggleNotifications}
-        onToggleSound={handleToggleSound}
-        onToggleVibration={handleToggleVibration}
         onTestSound={handleTestSound}
         onTestVibration={handleTestVibration}
         overlay={navigation.overlay}
