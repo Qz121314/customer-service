@@ -159,7 +159,7 @@ export async function diagnoseProductRouting(
       .first<{ last_agent_id: string }>(),
   ]);
 
-  const agents = (agentResult.results ?? []).map((row) => {
+  const agents = (agentResult.results ?? []).map<RoutingDiagnosticAgent>((row) => {
     const isEnabled = row.is_enabled === 1;
     const online = row.status === 'online';
     const accountConfigured = row.account_configured === 1;
@@ -200,7 +200,7 @@ export async function diagnoseProductRouting(
       eligible: exclusionReasons.length === 0,
       exclusionReasons,
       nextRoundRobin: false,
-    } satisfies RoutingDiagnosticAgent;
+    };
   });
 
   const lastAgentId = cursorRow?.last_agent_id ?? null;
