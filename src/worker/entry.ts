@@ -4,6 +4,7 @@ import { clientApi } from './client-api';
 import { integrationApi } from './integration-api';
 import { adminConfigApi } from './admin-config-api';
 import { adminQuotaApi } from './admin-quota-api';
+import { adminRoutingApi } from './admin-routing-api';
 import { agentApi } from './agent-api';
 import { agentAttachmentApi } from './agent-attachment-api';
 import { agentCardIconApi } from './agent-card-icon-api';
@@ -155,6 +156,7 @@ app.use('/api/agent/*', async (c, next) => {
 
 app.route('/', adminQuotaApi);
 app.route('/', adminConfigApi);
+app.route('/', adminRoutingApi);
 app.route('/', mediaApi);
 app.route('/', agentAttachmentApi);
 app.route('/', agentCardIconApi);
