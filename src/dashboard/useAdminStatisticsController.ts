@@ -47,9 +47,7 @@ export function useAdminStatisticsController(section: AdminSection) {
   }, [section, trafficPeriod.from, trafficPeriod.to]);
 
   function handleAgentDeleted(agentId: string) {
-    setStatisticsAgent((current) =>
-      current?.id === agentId ? null : current,
-    );
+    if (statisticsAgent?.id === agentId) setStatisticsAgent(null);
   }
 
   return {
