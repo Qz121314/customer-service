@@ -86,13 +86,9 @@ async function readAgentsGeometry(page) {
         const b = value?.getBoundingClientRect();
         return {
           display: browser.getComputedStyle(metric).display,
-          whiteSpace: label
-            ? browser.getComputedStyle(label).whiteSpace
-            : '',
+          whiteSpace: label ? browser.getComputedStyle(label).whiteSpace : '',
           centerDelta:
-            a && b
-              ? Math.abs(a.top + a.height / 2 - b.top - b.height / 2)
-              : 99,
+            a && b ? Math.abs(a.top + a.height / 2 - b.top - b.height / 2) : 99,
         };
       }),
     };
@@ -112,9 +108,8 @@ async function readEditorGeometry(page) {
       top: rect.top,
       bottom: rect.bottom,
       height: rect.height,
-      columns: browser
-        .getComputedStyle(primary)
-        .gridTemplateColumns.split(' ').length,
+      columns: browser.getComputedStyle(primary).gridTemplateColumns.split(' ')
+        .length,
       routingHeight: routing.getBoundingClientRect().height,
       footerBottom: footer.getBoundingClientRect().bottom,
       scrollCapacity: layout.scrollHeight - layout.clientHeight,
@@ -131,7 +126,10 @@ async function captureSurfaceSet(page, key) {
   await page.getByRole('button', { name: '新增客服', exact: true }).click();
   await expect(page.getByRole('dialog', { name: '新增客服' })).toBeVisible();
   await capture(page, `${key}-new-agent-editor`);
-  await page.getByRole('dialog', { name: '新增客服' }).getByRole('button', { name: '关闭' }).click();
+  await page
+    .getByRole('dialog', { name: '新增客服' })
+    .getByRole('button', { name: '关闭' })
+    .click();
   await openSection(page, '站点设置');
   await capture(page, `${key}-site-settings`);
   await openSection(page, '客服坐席');
@@ -170,9 +168,13 @@ test('mobile corrective IA remains touch-safe', async ({ page }) => {
       expect(metric.centerDelta).toBeLessThan(8);
     }
   }
-  const row = page.getByRole('row').filter({ hasText: 'UI Admin Mobile Agent' });
+  const row = page
+    .getByRole('row')
+    .filter({ hasText: 'UI Admin Mobile Agent' });
   for (const button of await row.locator('.admin-agent-actions button').all()) {
-    expect((await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect((await button.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(
+      44,
+    );
   }
   await capture(page, '390x844-agents');
 
@@ -191,7 +193,9 @@ test('mobile corrective IA remains touch-safe', async ({ page }) => {
     const browser = globalThis;
     const rect = element.getBoundingClientRect();
     const input = element.querySelector('input');
-    const primary = element.querySelector('.agent-editor-footer .primary-button');
+    const primary = element.querySelector(
+      '.agent-editor-footer .primary-button',
+    );
     return {
       width: rect.width,
       height: rect.height,
@@ -213,7 +217,9 @@ test('mobile corrective IA remains touch-safe', async ({ page }) => {
   await capture(page, '390x844-routing-diagnose');
 });
 
-test('desktop corrective geometry holds at required viewports', async ({ page }) => {
+test('desktop corrective geometry holds at required viewports', async ({
+  page,
+}) => {
   await loginAndSeed(page, 'ui-corrective-agent', 'UI Corrective Agent');
   for (const viewport of [
     { width: 1440, height: 900 },
@@ -228,7 +234,9 @@ test('desktop corrective geometry holds at required viewports', async ({ page })
     const agents = await readAgentsGeometry(page);
     expect(agents).not.toBeNull();
     if (agents) {
-      expect(agents.overviewWidth).toBeGreaterThanOrEqual(agents.tableWidth * 0.95);
+      expect(agents.overviewWidth).toBeGreaterThanOrEqual(
+        agents.tableWidth * 0.95,
+      );
       expect(agents.overviewHeight).toBeLessThanOrEqual(72);
       expect(agents.tableTop).toBeGreaterThanOrEqual(agents.overviewBottom);
       expect(agents.tableHeight).toBeGreaterThan(agents.overviewHeight * 2);
@@ -252,13 +260,18 @@ test('desktop corrective geometry holds at required viewports', async ({ page })
       expect(editor.documentScrollCapacity).toBeLessThanOrEqual(1);
       evidence.geometry.push({ name: `${key}-editor`, ...editor });
     }
-    await page.getByRole('dialog', { name: '新增客服' }).getByRole('button', { name: '关闭' }).click();
+    await page
+      .getByRole('dialog', { name: '新增客服' })
+      .getByRole('button', { name: '关闭' })
+      .click();
     await page.goto(url('/'));
     await captureSurfaceSet(page, key);
   }
 });
 
-test('site logo uses explicit R2 upload/delete and management flows remain intact', async ({ page }) => {
+test('site logo uses explicit R2 upload/delete and management flows remain intact', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await loginAndSeed(page, 'ui-admin-smoke-agent', 'UI Admin Smoke Agent');
   await page.goto(url('/'));
@@ -277,7 +290,9 @@ test('site logo uses explicit R2 upload/delete and management flows remain intac
   expect(logoGet.headers()['content-type']).toContain('image/png');
   await expect(page.locator('.admin-brand-mark img')).toBeVisible();
   await page.getByRole('button', { name: '恢复默认' }).click();
-  expect((await page.request.get(url('/client/v1/site-logo'))).status()).toBe(404);
+  expect((await page.request.get(url('/client/v1/site-logo'))).status()).toBe(
+    404,
+  );
   await expect(page.locator('.admin-brand-mark')).toContainText('CS');
 
   await openSection(page, '客服坐席');
