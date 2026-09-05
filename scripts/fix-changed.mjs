@@ -147,6 +147,10 @@ if (eslintFiles.length > 0) {
   run('pnpm', ['exec', 'eslint', '--fix', ...eslintFiles]);
 }
 
+if (prettierFiles.length > 0) {
+  run('pnpm', ['exec', 'prettier', '--check', ...prettierFiles]);
+}
+
 const unrelated = [...dirtyPaths()].filter((file) => !allowedPaths.has(file));
 if (unrelated.length > 0) {
   throw new Error(
@@ -155,5 +159,5 @@ if (unrelated.length > 0) {
 }
 
 console.log(
-  `Automatic fixes completed for ${changed.length} changed file(s): ${prettierFiles.length} Prettier candidate(s), ${eslintFiles.length} ESLint candidate(s).`,
+  `Changed-file quality gate passed for ${changed.length} changed file(s): ${prettierFiles.length} Prettier candidate(s), ${eslintFiles.length} ESLint candidate(s).`,
 );
