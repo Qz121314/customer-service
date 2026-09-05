@@ -270,8 +270,8 @@ export function AgentEditorQuotaSection({
               <div className="traffic-quota-history-row quota-ledger-warning">
                 <strong>核对异常</strong>
                 <span>
-                  总额度 {quotaLedger.total}/{quotaLedger.expectedTotal} · 已使用额度{' '}
-                  {quotaLedger.used}/{quotaLedger.expectedUsed}
+                  总额度 {quotaLedger.total}/{quotaLedger.expectedTotal} ·
+                  已使用额度 {quotaLedger.used}/{quotaLedger.expectedUsed}
                 </span>
                 <time>请检查</time>
               </div>
@@ -325,9 +325,7 @@ export function AgentEditorRoutingSection({
         products={products}
         scope={draft.routingScope}
         disabled={saving || deleting}
-        onChange={(routingScope) =>
-          onDraftChange({ ...draft, routingScope })
-        }
+        onChange={(routingScope) => onDraftChange({ ...draft, routingScope })}
       />
     </section>
   );
