@@ -228,9 +228,7 @@ export function AdminRoutingDiagnoseDock() {
                       </div>
                       <div>
                         <span>下一棒</span>
-                        <strong>
-                          {diagnostics.cursor.nextAgentId ?? '无'}
-                        </strong>
+                        <strong>{diagnostics.cursor.nextAgentId ?? '无'}</strong>
                       </div>
                     </div>
                   </section>
@@ -274,9 +272,7 @@ export function AdminRoutingDiagnoseDock() {
                             </div>
                             <div className="routing-diagnose-agent-state">
                               {agent.nextRoundRobin ? <b>下一棒</b> : null}
-                              <span>
-                                {agent.eligible ? '可分配' : '已排除'}
-                              </span>
+                              <span>{agent.eligible ? '可分配' : '已排除'}</span>
                             </div>
                           </div>
 
@@ -331,9 +327,7 @@ export function AdminRoutingDiagnoseDock() {
                   setError('');
                   void fetchDiagnostics(productId)
                     .then(setDiagnostics)
-                    .catch(() =>
-                      setError('分流诊断加载失败，请稍后重试。'),
-                    )
+                    .catch(() => setError('分流诊断加载失败，请稍后重试。'))
                     .finally(() => setLoading(false));
                 }}
               >
