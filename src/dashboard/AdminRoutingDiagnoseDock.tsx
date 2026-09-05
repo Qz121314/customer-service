@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getProductCatalog, type ProductCatalogItem } from './api';
+import { UiIcon } from './icons';
 import { Button } from './ui';
 
 type ExclusionReason =
@@ -166,7 +167,7 @@ export function AdminRoutingDiagnoseDock() {
                 aria-label="关闭"
                 onClick={() => setOpen(false)}
               >
-                ×
+                <UiIcon name="close" />
               </button>
             </header>
 
@@ -196,7 +197,9 @@ export function AdminRoutingDiagnoseDock() {
                   <section className="routing-diagnose-summary">
                     <div className="routing-diagnose-product-title">
                       <div>
-                        <strong>{selectedProduct?.title ?? diagnostics.product.title}</strong>
+                        <strong>
+                          {selectedProduct?.title ?? diagnostics.product.title}
+                        </strong>
                         <span>业务日期 {diagnostics.businessDate}</span>
                       </div>
                       <span
@@ -224,7 +227,10 @@ export function AdminRoutingDiagnoseDock() {
                     </div>
                   </section>
 
-                  <section className="routing-diagnose-funnel" aria-label="资格漏斗">
+                  <section
+                    className="routing-diagnose-funnel"
+                    aria-label="资格漏斗"
+                  >
                     {[
                       ['总客服', diagnostics.funnel.total],
                       ['已启用', diagnostics.funnel.enabled],
@@ -265,7 +271,9 @@ export function AdminRoutingDiagnoseDock() {
                           </div>
 
                           <div className="routing-diagnose-agent-meta">
-                            <span>{agent.status === 'online' ? 'Online' : agent.status}</span>
+                            <span>
+                              {agent.status === 'online' ? 'Online' : agent.status}
+                            </span>
                             <span>
                               今日 {agent.todayConversationCount}
                               {agent.dailyConversationLimit > 0
