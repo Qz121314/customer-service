@@ -1,41 +1,26 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  AgentAccount,
-  AgentQuotaAdjustment,
-  AgentQuotaLedger,
-  ProductCatalogItem,
-  TrafficOverviewStats,
-  NoAgentMessageSettings,
+  type AgentAccount,
+  type NoAgentMessageSettings,
+  type ProductCatalogItem,
   adminLogin,
   adminLogout,
-  createAgent,
-  deleteAgent,
   getAdminSession,
-  getTrafficOverviewStats,
-  getAgentQuotaLedger,
   getAgents,
-  getProductCatalog,
   getNoAgentMessage,
-  updateAgent,
+  getProductCatalog,
   updateNoAgentMessage,
 } from './api';
-import {
-  LoadState,
-  AgentDraft,
-  emptyAgentDraft,
-  message,
-} from './dashboard-runtime';
+import { LoadState, message } from './dashboard-runtime';
 import { AdminLogin, AdminSetup, Startup } from './dashboard-ui';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import { AdminShell, type AdminSection } from './AdminShell';
-import { AdminAgentsPage, type AgentFilter } from './AdminAgentsPage';
-import {
-  trafficRangePeriod,
-  type TrafficRange,
-} from './traffic-statistics-range';
+import { AdminAgentsPage } from './AdminAgentsPage';
+import { useAdminAgentsController } from './useAdminAgentsController';
+import { useAdminStatisticsController } from './useAdminStatisticsController';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -90,34 +75,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [noAgentMessage, setNoAgentMessage] =
     useState<NoAgentMessageSettings | null>(null);
   const [section, setSection] = useState<AdminSection>('agents');
-  const [agentSearch, setAgentSearch] = useState('');
-  const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
-  const [draft, setDraft] = useState<AgentDraft>(emptyAgentDraft);
-  const [editorOpen, setEditorOpen] = useState(false);
   const [busy, setBusy] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [deletingAgentId, setDeletingAgentId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
-  const [trafficStats, setTrafficStats] = useState<TrafficOverviewStats | null>(
-    null,
-  );
-  const [statisticsAgent, setStatisticsAgent] = useState<AgentAccount | null>(
-    null,
-  );
-  const [statsBusy, setStatsBusy] = useState(false);
-  const [statsError, setStatsError] = useState('');
-  const [quotaAdjustments, setQuotaAdjustments] = useState<
-    AgentQuotaAdjustment[]
-  >([]);
-  const [quotaLedger, setQuotaLedger] = useState<AgentQuotaLedger | null>(null);
-  const [quotaHistoryBusy, setQuotaHistoryBusy] = useState(false);
-  const [quotaHistoryError, setQuotaHistoryError] = useState('');
-  const trafficPeriod = useMemo(
-    () => trafficRangePeriod(trafficRange),
-    [trafficRange],
-  );
 
   const refresh = useCallback(async () => {
     const [nextAgents, nextProducts, nextNoAgentMessage] = await Promise.all([
@@ -130,141 +90,18 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     setNoAgentMessage(nextNoAgentMessage);
   }, []);
 
+  const statisticsController = useAdminStatisticsController(section);
+  const agentsController = useAdminAgentsController({
+    refresh,
+    setError,
+    onAgentDeleted: statisticsController.handleAgentDeleted,
+  });
+
   useEffect(() => {
     refresh()
       .catch((reason) => setError(message(reason, '无法加载配置')))
       .finally(() => setBusy(false));
   }, [refresh]);
-
-  useEffect(() => {
-    if (section !== 'statistics') return;
-    let active = true;
-    setStatsError('');
-    setStatsBusy(true);
-    getTrafficOverviewStats(trafficPeriod.from, trafficPeriod.to)
-      .then((result) => {
-        if (active) setTrafficStats(result);
-      })
-      .catch((reason) => {
-        if (active) setStatsError(message(reason, '无法加载流量统计'));
-      })
-      .finally(() => {
-        if (active) setStatsBusy(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [section, trafficPeriod.from, trafficPeriod.to]);
-
-  useEffect(() => {
-    if (!editorOpen || saving) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setEditorOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [editorOpen, saving]);
-
-  function resetQuotaLedgerState() {
-    setQuotaAdjustments([]);
-    setQuotaLedger(null);
-    setQuotaHistoryBusy(false);
-    setQuotaHistoryError('');
-  }
-
-  function createNewAgent() {
-    setDraft({
-      ...emptyAgentDraft,
-      trafficQuotaRequestId: crypto.randomUUID(),
-    });
-    resetQuotaLedgerState();
-    setEditorOpen(true);
-    setError('');
-  }
-
-  function editAgent(agent: AgentAccount) {
-    setDraft({
-      id: agent.id,
-      name: agent.name,
-      adminLabel: agent.adminLabel,
-      username: agent.username ?? '',
-      password: '',
-      routingScope: agent.routingScope,
-      dailyConversationLimit: agent.dailyConversationLimit,
-      trafficQuotaEnabled: agent.trafficQuotaEnabled,
-      trafficQuotaTotal: agent.trafficQuotaTotal,
-      trafficQuotaUsed: agent.trafficQuotaUsed,
-      trafficQuotaTopUp: 0,
-      trafficQuotaRequestId: crypto.randomUUID(),
-      isEnabled: agent.isEnabled,
-    });
-    resetQuotaLedgerState();
-    setEditorOpen(true);
-    setError('');
-  }
-
-  async function loadQuotaLedger() {
-    if (!draft.id || quotaHistoryBusy) return;
-    setQuotaHistoryBusy(true);
-    setQuotaHistoryError('');
-    try {
-      const result = await getAgentQuotaLedger(draft.id);
-      setQuotaAdjustments(result.adjustments);
-      setQuotaLedger(result.ledger);
-    } catch (reason) {
-      setQuotaHistoryError(message(reason, '无法核对咨询额度账本'));
-    } finally {
-      setQuotaHistoryBusy(false);
-    }
-  }
-
-  async function saveAgent(event: FormEvent) {
-    event.preventDefault();
-    if (!draft.name.trim() || !draft.username.trim()) return;
-    if (!draft.id && draft.password.length < 4) {
-      setError('新客服必须设置至少 4 个字符的登录密码。');
-      return;
-    }
-    setSaving(true);
-    setError('');
-    try {
-      if (draft.id) {
-        await updateAgent(draft.id, {
-          name: draft.name,
-          adminLabel: draft.adminLabel,
-          username: draft.username,
-          password: draft.password || undefined,
-          routingScope: draft.routingScope,
-          dailyConversationLimit: draft.dailyConversationLimit,
-          trafficQuotaEnabled: draft.trafficQuotaEnabled,
-          trafficQuotaTopUp: draft.trafficQuotaTopUp,
-          trafficQuotaRequestId: draft.trafficQuotaRequestId,
-          isEnabled: draft.isEnabled,
-        });
-      } else {
-        await createAgent({
-          name: draft.name,
-          adminLabel: draft.adminLabel,
-          username: draft.username,
-          password: draft.password,
-          routingScope: draft.routingScope,
-          dailyConversationLimit: draft.dailyConversationLimit,
-          trafficQuotaEnabled: draft.trafficQuotaEnabled,
-          trafficQuotaTopUp: draft.trafficQuotaTopUp,
-          trafficQuotaRequestId: draft.trafficQuotaRequestId,
-          isEnabled: draft.isEnabled,
-        });
-      }
-      setEditorOpen(false);
-      setDraft(emptyAgentDraft);
-      resetQuotaLedgerState();
-      await refresh();
-    } catch (reason) {
-      setError(message(reason, '保存客服失败'));
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function saveNoAgentMessage(settings: NoAgentMessageSettings) {
     setSettingsSaving(true);
@@ -280,32 +117,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     }
   }
 
-  async function removeAgent(agent: Pick<AgentAccount, 'id' | 'name'>) {
-    if (deletingAgentId) return;
-    const confirmed = window.confirm(
-      `确定永久删除客服「${agent.name}」？\n\n仍有进行中的会话时系统会拒绝删除；请先停用账号并处理完会话。历史聊天与统计记录会保留。`,
-    );
-    if (!confirmed) return;
-
-    setDeletingAgentId(agent.id);
-    setError('');
-    try {
-      await deleteAgent(agent.id);
-      if (statisticsAgent?.id === agent.id) setStatisticsAgent(null);
-      if (draft.id === agent.id) {
-        setEditorOpen(false);
-        setDraft(emptyAgentDraft);
-        resetQuotaLedgerState();
-      }
-      await refresh();
-    } catch (reason) {
-      setError(message(reason, '删除客服失败'));
-    } finally {
-      setDeletingAgentId(null);
-    }
-  }
-
-  const editingAgentId = draft.id;
   const sectionTitle =
     section === 'agents'
       ? '客服坐席'
@@ -328,42 +139,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       showCreateAgent={section === 'agents'}
       onSectionChange={setSection}
       onLogout={onLogout}
-      onCreateAgent={createNewAgent}
+      onCreateAgent={agentsController.pageProps.onCreateAgent}
       overlays={
         <>
-          {editorOpen && (
+          {agentsController.editorOpen && (
             <AgentEditorModal
-              draft={draft}
               products={products}
-              saving={saving}
-              deleting={
-                editingAgentId !== null && deletingAgentId === editingAgentId
-              }
-              quotaAdjustments={quotaAdjustments}
-              quotaLedger={quotaLedger}
-              quotaHistoryBusy={quotaHistoryBusy}
-              quotaHistoryError={quotaHistoryError}
-              onDraftChange={setDraft}
-              onLoadQuotaLedger={() => void loadQuotaLedger()}
-              onDelete={
-                editingAgentId
-                  ? () =>
-                      void removeAgent({
-                        id: editingAgentId,
-                        name: draft.name,
-                      })
-                  : undefined
-              }
-              onClose={() => {
-                if (!saving && !deletingAgentId) setEditorOpen(false);
-              }}
-              onSubmit={(event) => void saveAgent(event)}
+              {...agentsController.editorProps}
             />
           )}
-          {statisticsAgent && (
+          {statisticsController.statisticsAgent && (
             <AdminAgentStatisticsModal
-              agent={statisticsAgent}
-              onClose={() => setStatisticsAgent(null)}
+              agent={statisticsController.statisticsAgent}
+              onClose={statisticsController.closeAgentStatistics}
             />
           )}
         </>
@@ -392,17 +180,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           agents={agents}
           products={products}
           busy={busy}
-          agentSearch={agentSearch}
-          agentFilter={agentFilter}
-          onSearchChange={setAgentSearch}
-          onFilterChange={setAgentFilter}
-          onClearFilters={() => {
-            setAgentSearch('');
-            setAgentFilter('all');
-          }}
-          onCreateAgent={createNewAgent}
-          onOpenStatistics={setStatisticsAgent}
-          onEditAgent={editAgent}
+          {...agentsController.pageProps}
+          onOpenStatistics={statisticsController.openAgentStatistics}
         />
       )}
 
@@ -410,15 +189,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <AdminStatisticsPage
           agents={agents}
           products={products}
-          range={trafficRange}
-          stats={trafficStats}
-          busy={statsBusy}
-          error={statsError}
-          onClearError={() => setStatsError('')}
-          onRangeChange={(range) => {
-            setStatsBusy(true);
-            setTrafficRange(range);
-          }}
+          {...statisticsController.pageProps}
         />
       )}
     </AdminShell>
