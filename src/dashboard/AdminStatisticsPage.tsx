@@ -9,7 +9,7 @@ const LazyAdminStatisticsPage = lazy(() =>
 
 export function AdminStatisticsPage(props: AdminStatisticsPageProps) {
   return (
-    <Suspense fallback={<div className="empty-state">正在加载流量统计…</div>}>
+    <Suspense fallback={<div className="empty-state">正在加载运营数据…</div>}>
       <LazyAdminStatisticsPage {...props} />
     </Suspense>
   );
