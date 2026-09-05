@@ -159,49 +159,51 @@ export async function diagnoseProductRouting(
       .first<{ last_agent_id: string }>(),
   ]);
 
-  const agents = (agentResult.results ?? []).map<RoutingDiagnosticAgent>((row) => {
-    const isEnabled = row.is_enabled === 1;
-    const online = row.status === 'online';
-    const accountConfigured = row.account_configured === 1;
-    const scopeMatched = row.scope_matched === 1;
-    const todayConversationCount = Number(row.today_count ?? 0);
-    const dailyConversationLimit = Number(row.daily_conversation_limit ?? 0);
-    const dailyLimitAvailable =
-      dailyConversationLimit <= 0 ||
-      todayConversationCount < dailyConversationLimit;
-    const trafficQuotaEnabled = row.traffic_quota_enabled === 1;
-    const trafficQuotaTotal = Number(row.traffic_quota_total ?? 0);
-    const trafficQuotaUsed = Number(row.traffic_quota_used ?? 0);
-    const quotaAvailable =
-      !trafficQuotaEnabled || trafficQuotaUsed < trafficQuotaTotal;
-    const exclusionReasons: RoutingExclusionReason[] = [];
-    if (!isEnabled) exclusionReasons.push('disabled');
-    if (!online) exclusionReasons.push('not_online');
-    if (!accountConfigured) exclusionReasons.push('account_unconfigured');
-    if (!scopeMatched) exclusionReasons.push('scope_mismatch');
-    if (!dailyLimitAvailable) exclusionReasons.push('daily_limit_reached');
-    if (!quotaAvailable) exclusionReasons.push('quota_exhausted');
+  const agents = (agentResult.results ?? []).map<RoutingDiagnosticAgent>(
+    (row) => {
+      const isEnabled = row.is_enabled === 1;
+      const online = row.status === 'online';
+      const accountConfigured = row.account_configured === 1;
+      const scopeMatched = row.scope_matched === 1;
+      const todayConversationCount = Number(row.today_count ?? 0);
+      const dailyConversationLimit = Number(row.daily_conversation_limit ?? 0);
+      const dailyLimitAvailable =
+        dailyConversationLimit <= 0 ||
+        todayConversationCount < dailyConversationLimit;
+      const trafficQuotaEnabled = row.traffic_quota_enabled === 1;
+      const trafficQuotaTotal = Number(row.traffic_quota_total ?? 0);
+      const trafficQuotaUsed = Number(row.traffic_quota_used ?? 0);
+      const quotaAvailable =
+        !trafficQuotaEnabled || trafficQuotaUsed < trafficQuotaTotal;
+      const exclusionReasons: RoutingExclusionReason[] = [];
+      if (!isEnabled) exclusionReasons.push('disabled');
+      if (!online) exclusionReasons.push('not_online');
+      if (!accountConfigured) exclusionReasons.push('account_unconfigured');
+      if (!scopeMatched) exclusionReasons.push('scope_mismatch');
+      if (!dailyLimitAvailable) exclusionReasons.push('daily_limit_reached');
+      if (!quotaAvailable) exclusionReasons.push('quota_exhausted');
 
-    return {
-      id: row.id,
-      name: row.name,
-      adminLabel: row.admin_label ?? '',
-      status: row.status,
-      isEnabled,
-      accountConfigured,
-      scopeMatched,
-      todayConversationCount,
-      dailyConversationLimit,
-      dailyLimitAvailable,
-      trafficQuotaEnabled,
-      trafficQuotaTotal,
-      trafficQuotaUsed,
-      quotaAvailable,
-      eligible: exclusionReasons.length === 0,
-      exclusionReasons,
-      nextRoundRobin: false,
-    };
-  });
+      return {
+        id: row.id,
+        name: row.name,
+        adminLabel: row.admin_label ?? '',
+        status: row.status,
+        isEnabled,
+        accountConfigured,
+        scopeMatched,
+        todayConversationCount,
+        dailyConversationLimit,
+        dailyLimitAvailable,
+        trafficQuotaEnabled,
+        trafficQuotaTotal,
+        trafficQuotaUsed,
+        quotaAvailable,
+        eligible: exclusionReasons.length === 0,
+        exclusionReasons,
+        nextRoundRobin: false,
+      };
+    },
+  );
 
   const lastAgentId = cursorRow?.last_agent_id ?? null;
   const eligible = agents.filter((agent) => agent.eligible);
