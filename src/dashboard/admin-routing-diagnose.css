@@ -1,0 +1,387 @@
+/* Admin Routing Diagnostics ownership. */
+.routing-diagnose-trigger {
+  display: flex;
+  flex: none;
+  margin-left: auto;
+}
+
+.routing-diagnose-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.routing-diagnose-backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 23, 42, 0.36);
+  cursor: default;
+}
+
+.routing-diagnose-drawer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(760px, calc(100vw - 48px));
+  max-height: min(84vh, 820px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+  background: #f8fafc;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.routing-diagnose-head,
+.routing-diagnose-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  background: #fff;
+}
+
+.routing-diagnose-head {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.routing-diagnose-head > div,
+.routing-diagnose-product-title > div,
+.routing-diagnose-section-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.routing-diagnose-head strong {
+  font-size: 18px;
+}
+
+.routing-diagnose-head span,
+.routing-diagnose-product-title span,
+.routing-diagnose-section-title span,
+.routing-diagnose-foot span,
+.routing-diagnose-agent-main span,
+.routing-diagnose-agent-meta,
+.routing-diagnose-product > span {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.routing-diagnose-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.routing-diagnose-body {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  padding: 18px 20px 28px;
+}
+
+.routing-diagnose-product {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.routing-diagnose-product select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid #dbe2ea;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+}
+
+.routing-diagnose-error,
+.routing-diagnose-empty {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+}
+
+.routing-diagnose-error {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #b91c1c;
+}
+
+.routing-diagnose-summary,
+.routing-diagnose-funnel,
+.routing-diagnose-agents {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.routing-diagnose-summary {
+  padding: 16px;
+}
+
+.routing-diagnose-product-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.routing-diagnose-product-title strong {
+  font-size: 16px;
+}
+
+.routing-diagnose-health {
+  flex: none;
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.routing-diagnose-health.is-ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.routing-diagnose-health.is-blocked {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.routing-diagnose-cursor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.routing-diagnose-cursor > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.routing-diagnose-cursor span {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.routing-diagnose-cursor strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.routing-diagnose-funnel {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.routing-diagnose-funnel > div {
+  display: flex;
+  min-height: 76px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.routing-diagnose-funnel > div:nth-child(4n) {
+  border-right: 0;
+}
+
+.routing-diagnose-funnel > div:nth-last-child(-n + 4) {
+  border-bottom: 0;
+}
+
+.routing-diagnose-funnel strong {
+  font-size: 20px;
+}
+
+.routing-diagnose-funnel span {
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+}
+
+.routing-diagnose-agents {
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.routing-diagnose-section-title {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.routing-diagnose-agent-list {
+  display: grid;
+}
+
+.routing-diagnose-agent {
+  padding: 14px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.routing-diagnose-agent:last-child {
+  border-bottom: 0;
+}
+
+.routing-diagnose-agent.is-next {
+  box-shadow: inset 3px 0 0 #111827;
+}
+
+.routing-diagnose-agent-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.routing-diagnose-agent-main > div:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.routing-diagnose-agent-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.routing-diagnose-agent-state {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.routing-diagnose-agent-state b,
+.routing-diagnose-agent-state span,
+.routing-diagnose-reasons span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.routing-diagnose-agent-state b {
+  background: #111827;
+  color: #fff;
+}
+
+.routing-diagnose-agent.is-eligible .routing-diagnose-agent-state span {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.routing-diagnose-agent.is-excluded .routing-diagnose-agent-state span {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.routing-diagnose-agent-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 9px;
+}
+
+.routing-diagnose-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.routing-diagnose-reasons span {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.routing-diagnose-reasons.is-clear span {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.routing-diagnose-foot {
+  border-top: 1px solid #e5e7eb;
+}
+
+@media (max-width: 720px) {
+  .routing-diagnose-layer {
+    padding: 10px;
+  }
+
+  .routing-diagnose-drawer {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    border-radius: 14px;
+  }
+
+  .routing-diagnose-head,
+  .routing-diagnose-foot {
+    padding: 14px 16px;
+  }
+
+  .routing-diagnose-body {
+    padding: 14px 16px 24px;
+  }
+
+  .routing-diagnose-funnel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .routing-diagnose-funnel > div:nth-child(4n) {
+    border-right: 1px solid #eef2f7;
+  }
+
+  .routing-diagnose-funnel > div:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .routing-diagnose-funnel > div:nth-last-child(-n + 4) {
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .routing-diagnose-funnel > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  .routing-diagnose-foot span {
+    display: none;
+  }
+}
