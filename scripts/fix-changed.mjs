@@ -35,7 +35,7 @@ function run(command, args, options = {}) {
     process.exit(result.status ?? 1);
   }
 
-  return options.capture ? result.stdout.trim() : '';
+  return options.capture ? result.stdout.trimEnd() : '';
 }
 
 function git(args) {
@@ -112,7 +112,10 @@ function changedFiles() {
 
 function dirtyPaths() {
   return new Set(
-    splitLines(git(['status', '--porcelain'])).map((line) => line.slice(3)),
+    git(['status', '--porcelain'])
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => line.slice(3)),
   );
 }
 
