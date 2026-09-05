@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -49,9 +49,27 @@ function splitLines(value) {
     .filter(Boolean);
 }
 
+function githubRange() {
+  const eventPath = process.env.GITHUB_EVENT_PATH?.trim();
+  if (!eventPath || !existsSync(eventPath)) {
+    return {};
+  }
+
+  try {
+    const event = JSON.parse(readFileSync(eventPath, 'utf8'));
+    return {
+      base: event.pull_request?.base?.sha ?? event.before,
+      head: event.pull_request?.head?.sha ?? event.after ?? process.env.GITHUB_SHA,
+    };
+  } catch {
+    return {};
+  }
+}
+
 function changedFiles() {
-  const base = process.env.PREDEPLOY_BASE_SHA?.trim();
-  const head = process.env.PREDEPLOY_HEAD_SHA?.trim() || 'HEAD';
+  const github = githubRange();
+  const base = process.env.PREDEPLOY_BASE_SHA?.trim() || github.base;
+  const head = process.env.PREDEPLOY_HEAD_SHA?.trim() || github.head || 'HEAD';
   const files = new Set();
 
   if (base && !/^0+$/.test(base)) {
