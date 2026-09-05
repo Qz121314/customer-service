@@ -52,11 +52,15 @@ function handoffId(index) {
   return `00000000-0000-4000-8000-${index.toString(16).padStart(12, '0')}`;
 }
 
+function visitorId(index) {
+  return `V${index.toString(36).toUpperCase().padStart(5, '0')}`;
+}
+
 async function startConversation(
   db,
   rooms,
   index,
-  visitorId,
+  visitor,
   productId = 'product-1',
 ) {
   const response = await clientApi.request(
@@ -65,7 +69,7 @@ async function startConversation(
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        visitorId,
+        visitorId: visitor,
         sourceHandoffId: handoffId(index),
         product: { id: productId },
       }),
@@ -95,7 +99,7 @@ test(
         instrumented.db,
         rooms,
         index,
-        `VIS${index.toString().padStart(4, '0')}`,
+        visitorId(index),
       );
     }
 
@@ -142,7 +146,7 @@ test(
       instrumented.db,
       rooms,
       1001,
-      'RETURNING_VISITOR',
+      'RET001',
     );
     assert.equal(first.agentName, 'agent-a');
     database
@@ -157,7 +161,7 @@ test(
       instrumented.db,
       rooms,
       1002,
-      'OTHER_VISITOR_1',
+      'OTH001',
     );
     assert.equal(second.agentName, 'agent-b');
 
@@ -165,7 +169,7 @@ test(
       instrumented.db,
       rooms,
       1003,
-      'RETURNING_VISITOR',
+      'RET001',
     );
     assert.equal(affinity.agentName, 'agent-a');
     assert.equal(
@@ -188,7 +192,7 @@ test(
       instrumented.db,
       rooms,
       1004,
-      'OTHER_VISITOR_2',
+      'OTH002',
     );
     assert.equal(nextNormal.agentName, 'agent-c');
     assert.equal(
@@ -235,7 +239,7 @@ test('busy agent is skipped and rejoins without catch-up priority', async () => 
     instrumented.db,
     rooms,
     2001,
-    'BUSY_A',
+    'BSY001',
   );
   assert.equal(first.agentName, 'agent-a');
 
@@ -244,7 +248,7 @@ test('busy agent is skipped and rejoins without catch-up priority', async () => 
     instrumented.db,
     rooms,
     2002,
-    'BUSY_B',
+    'BSY002',
   );
   assert.equal(second.agentName, 'agent-c');
 
@@ -253,14 +257,14 @@ test('busy agent is skipped and rejoins without catch-up priority', async () => 
     instrumented.db,
     rooms,
     2003,
-    'BUSY_C',
+    'BSY003',
   );
   assert.equal(third.agentName, 'agent-a');
   const fourth = await startConversation(
     instrumented.db,
     rooms,
     2004,
-    'BUSY_D',
+    'BSY004',
   );
   assert.equal(fourth.agentName, 'agent-b');
 
