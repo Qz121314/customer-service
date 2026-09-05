@@ -69,7 +69,10 @@ function normalizeContentType(value?: string): string | null {
   return SITE_LOGO_TYPES.has(contentType) ? contentType : null;
 }
 
-function matchesImageSignature(bytes: Uint8Array, contentType: string): boolean {
+function matchesImageSignature(
+  bytes: Uint8Array,
+  contentType: string,
+): boolean {
   if (contentType === 'image/jpeg') {
     return (
       bytes.length >= 3 &&
