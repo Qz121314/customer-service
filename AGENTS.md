@@ -68,7 +68,7 @@ For every code change after repository preflight:
 4. Identify the impact surface before implementation: UI behavior, API contract, routing, D1 schema/query shape, Worker request count, quota accounting, build, browser smoke, and deployment.
 5. Write down the expected behavior in terms of the existing executable contract. If the product rule intentionally changes, update the affected test expectation in the same change instead of discovering the mismatch after CI fails.
 6. Implement the root-cause fix only after the contract is clear.
-7. Format changed files with the repository-installed Prettier version **before the first push**.
+7. Run the repository-defined changed-file quality gate before the first push. The current executable contract is `pnpm format`, which delegates to `scripts/fix-changed.mjs`.
 8. Run the verification gate required by the change level before push/merge.
 
 Required implementation order:
@@ -79,7 +79,7 @@ locate owning implementation
 → read README / migration / cost constraints
 → define expected contract
 → implement root-cause fix
-→ format changed files
+→ changed-file quality gate
 → lint / typecheck / targeted tests
 → full required gate
 → push / PR / CI
@@ -91,29 +91,33 @@ The goal is not to make tests lead product decisions. Product decisions come fir
 
 Formatting is not a cleanup step after implementation. It is part of the repository contract that must be known before code is written.
 
-Before editing, read the current formatter and lint configuration. Before the first push, format changed files using the repository-installed tooling, for example:
-
-```bash
-pnpm exec prettier --write <changed-files>
-```
-
-Then verify the repository-wide format check:
+Before editing, read the current formatter and lint configuration. Before the first push, use the repository script contract from `package.json` rather than a remembered Prettier command:
 
 ```bash
 pnpm format
 ```
 
+Current `pnpm format` behavior is owned by `scripts/fix-changed.mjs` and applies only to the detected changed-file set. For supported files it runs the repository-installed tools in this order:
+
+```text
+Prettier --write on changed formatting candidates
+→ ESLint --fix on changed JS/TS candidates
+→ Prettier --check on changed formatting candidates
+→ verify automatic fixes did not modify unrelated files
+```
+
 Important distinctions:
 
-- `pnpm format` is a **check** (`prettier --check .`), not a formatter.
-- `pnpm format:write` formats the repository; for a small change, prefer formatting only changed files first.
-- Do not hand-guess long-line wrapping, nested calls, regular expressions, arrays, or trailing-comma layout when Prettier can decide it deterministically.
+- `pnpm format` is the changed-file automatic quality gate; it is **not** a repository-wide `prettier --check .` command.
+- `pnpm format:write` runs `prettier --write .` across the repository and should not be the default for a small change.
+- `scripts/fix-changed.mjs` derives its file range from the local worktree or the GitHub event/base range and may fetch the required base commit when necessary.
+- Do not hand-guess long-line wrapping, nested calls, regular expressions, arrays, or trailing-comma layout when the repository tooling can decide it deterministically.
 - Follow `.editorconfig` for line endings, indentation, final newline, and trailing whitespace.
 - Read `.prettierignore` before assuming every file is formatter-owned.
 - Read `eslint.config.mjs` before adding helpers, imports, generated variables, React exports, Node globals, or test utilities.
 - Do not call a change “ready” if formatting/lint has only been checked by remote CI.
 
-A remote `Format` failure means the local completion gate was skipped or the write path did not reproduce repository formatting. Fix only formatting when semantics are already correct; do not mix a formatting repair with assertion or production behavior changes.
+A remote `Format` failure means the local completion gate was skipped, the changed-file range differed, or the write path did not reproduce repository formatting. Fix only formatting when semantics are already correct; do not mix a formatting repair with assertion or production behavior changes.
 
 ## Local hooks and CI order
 
@@ -124,16 +128,19 @@ pre-commit → pnpm preflight
 pre-push   → pnpm verify
 ```
 
-`pnpm preflight` covers:
+`pnpm preflight` currently covers, in executable `package.json` order:
 
 ```text
 guardrails
-→ format
+→ safety
+→ changed-file format/fix/check
 → lint
 → typecheck
 ```
 
-`pnpm verify` extends that with:
+`pnpm safety` checks the changed-file set for sensitive file types, likely committed secrets, and non-test/non-script debug statements before the change proceeds.
+
+`pnpm verify` extends `preflight` with:
 
 ```text
 local D1 migrations
@@ -142,7 +149,7 @@ local D1 migrations
 → Worker dry-run
 ```
 
-The current GitHub Actions validation order is authoritative for remote CI and must be inspected before pipeline changes:
+The current GitHub Actions validation order is authoritative for remote CI and must be inspected before pipeline changes. Jobs may execute in parallel, but their validation responsibilities are:
 
 ```text
 Repository guardrails
@@ -165,8 +172,8 @@ Do not push merely to learn whether Prettier, ESLint, or TypeScript accepts the 
 
 Use the existing repository structure instead of duplicating rules:
 
-- Admin UI work: inspect the relevant `src/admin/` implementation and matching `test/admin-*.test.mjs` contracts.
-- Agent workspace/profile work: inspect the relevant agent UI/runtime and matching `test/agent-*.test.mjs` contracts, including browser smoke when user interaction is affected.
+- Admin UI work: inspect the relevant `src/dashboard/` Admin implementation and matching `test/admin-*.test.mjs` contracts.
+- Agent workspace/profile work: inspect the relevant `src/dashboard/` agent UI/runtime and matching `test/agent-*.test.mjs` contracts, including browser smoke when user interaction is affected.
 - Routing / assignment / no-agent work: inspect the Worker routing implementation plus routing, handoff, load, quota, lifecycle, and no-agent tests before changing SQL or assignment semantics.
 - Quota / billing work: inspect quota ledger tests, daily quota tests, migration history, and all D1 writes that consume or restore quota.
 - Conversation lifecycle work: inspect retention/lifecycle tests, API reuse logic, routing behavior, and cleanup triggers together.
@@ -221,11 +228,11 @@ logic edit
 → formatting-only follow-up commit
 ```
 
-Prevention: read formatting config during repository preflight and run Prettier on changed files before the first commit/push.
+Prevention: read formatting config during repository preflight and run `pnpm format` before the first commit/push so the current changed-file quality gate owns Prettier and ESLint fixing consistently.
 
 ### 2. ESLint discovered after Format repair
 
-A formatting repair can expose the next static-analysis failure only on the second CI run if lint was not run locally. After formatting succeeds, run lint and typecheck before pushing again; do not serially discover cheap gates through CI.
+The changed-file quality gate already runs ESLint `--fix` for supported changed JS/TS files, but repository-wide lint can still expose violations outside the automatic-fix scope. Run `pnpm lint` and `pnpm typecheck` before pushing; do not serially discover cheap gates through CI.
 
 ### 3. Brittle source slicing can produce false-green tests
 
@@ -259,11 +266,11 @@ Read package scripts before editing generated files. Worker type generation is p
 
 ### 9. GitHub Actions used as a repair bot
 
-Keep exactly one workflow, `.github/workflows/ci.yml`. CI validates and deploys the checked-out revision; it must not generate patches, commit code, push branches, or become a substitute for local formatting/fixing.
+Keep exactly one workflow, `.github/workflows/ci.yml`. CI validates and deploys the checked-out revision; it must not generate repository patches, commit code, push branches, or become a substitute for local formatting/fixing. Tooling may modify the ephemeral CI checkout while validating the revision, but those changes must never be persisted back to GitHub.
 
 ### 10. Routine CI consuming production D1
 
-Routine pull requests and `main` pushes must not use production D1 for smoke, performance, bootstrap, or data validation. Automated PR/main validation must use local D1. After a normal production deploy, the only automatic remote probe is a confirmed D1-free health endpoint such as `/api/health`.
+Routine pull requests and main pushes must not use production D1 for smoke, performance, bootstrap, or data validation. Automated PR/main validation must use local D1. After a normal production deploy, the only automatic remote probe is a confirmed D1-free health endpoint such as `/api/health`.
 
 Production D1 access from GitHub Actions is allowed only for:
 
@@ -288,7 +295,7 @@ Rules:
 
 - keep scope local;
 - do not refactor unrelated logic;
-- format changed files;
+- run the changed-file quality gate;
 - run the narrowest relevant check for the affected surface.
 
 ### M — application behavior
@@ -344,7 +351,7 @@ These principles apply unless the user explicitly changes the product rule:
 - Do not hard-code mutable configuration that already belongs to admin/runtime data.
 - Manual operational overrides must remain explicit and auditable; do not hide them inside automatic routing side effects.
 - Keep exactly one GitHub Actions workflow: `.github/workflows/ci.yml`. Do not add one-shot, temporary, diagnostic, formatting, patching, or branch-specific workflows. Make changes on a branch, run the repository gates locally, and let the existing PR/main workflow validate and deploy them.
-- GitHub Actions must remain a read-only consumer of repository contents. It may validate and deploy the checked-out revision, but it must not generate patches, commit code, or push branches.
+- GitHub Actions must remain a read-only consumer of repository contents. It may validate and deploy the checked-out revision, but it must not generate repository patches, commit code, or push branches. Ephemeral workspace rewrites performed by validation tooling are allowed only when they are not persisted.
 - For performance work, do not invent a phase outside `PERFORMANCE_OPTIMIZATION_PLAN.md`; continue only from phases that actually exist in the current plan.
 
 ## Performance-work discipline
@@ -379,11 +386,11 @@ If a test is stale because the product rule intentionally changed, update the te
 
 ### S
 
-Use changed-file formatting plus the narrowest affected lint/type/test/build check. Documentation-only changes need content review and formatting only, but the PR CI still remains the final independent gate.
+Use the changed-file quality gate plus the narrowest affected lint/type/test/build check. Documentation-only changes need content review and changed-file formatting only, but the PR CI still remains the final independent gate.
 
 ### M
 
-Run the affected formatting, lint, typecheck, relevant tests, build, and browser smoke when the changed interaction is covered there.
+Run the affected changed-file quality gate, lint, typecheck, relevant tests, build, and browser smoke when the changed interaction is covered there.
 
 ### L
 
@@ -393,11 +400,12 @@ Run:
 pnpm verify
 ```
 
-The full local gate covers:
+The full local gate currently covers:
 
 ```text
 guardrails
-→ format
+→ safety
+→ changed-file format/fix/check
 → lint
 → typecheck
 → local D1 migrations
