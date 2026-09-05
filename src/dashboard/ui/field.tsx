@@ -1,11 +1,23 @@
+import { Slot } from '@radix-ui/react-slot';
 import type { HTMLAttributes, LabelHTMLAttributes, ReactNode } from 'react';
 import { cn } from './utils';
 
-export function Field({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
+export interface FieldProps extends HTMLAttributes<HTMLDivElement> {
+  asChild?: boolean;
+  unstyled?: boolean;
+}
+
+export function Field({
+  asChild = false,
+  className,
+  unstyled = false,
+  ...props
+}: FieldProps) {
+  const Component = asChild ? Slot : 'div';
   return (
-    <div
+    <Component
       data-ui="field"
-      className={cn('grid min-w-0 gap-1.5', className)}
+      className={cn(!unstyled && 'grid min-w-0 gap-1.5', className)}
       {...props}
     />
   );
