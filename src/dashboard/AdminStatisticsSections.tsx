@@ -16,41 +16,6 @@ const RANGE_OPTIONS: Array<{ value: TrafficRangePreset; label: string }> = [
   { value: '90d', label: '近 90 天' },
 ];
 
-const TOTAL_PERIOD_BADGE_STYLE: CSSProperties = {
-  top: 18,
-  right: 18,
-  bottom: 'auto',
-  left: 'auto',
-  minWidth: 116,
-  padding: '7px 10px',
-  border: '1px solid rgb(255 255 255 / 12%)',
-  borderRadius: 11,
-  background: 'rgb(255 255 255 / 8%)',
-  alignItems: 'flex-end',
-  flexDirection: 'column',
-  gap: 2,
-  backdropFilter: 'blur(12px)',
-};
-
-const TOTAL_PERIOD_LABEL_STYLE: CSSProperties = {
-  color: 'rgb(255 255 255 / 58%)',
-  fontSize: 8,
-  fontWeight: 690,
-};
-
-const TOTAL_PERIOD_VALUE_STYLE: CSSProperties = {
-  maxWidth: 180,
-  color: '#fff',
-  fontSize: 10,
-  fontWeight: 780,
-  lineHeight: 1.2,
-  textAlign: 'right',
-};
-
-const TOTAL_BREAKDOWN_STYLE: CSSProperties = {
-  bottom: 18,
-};
-
 export type AdminStatisticsDistributionRow = {
   key: string;
   name: string;
@@ -75,8 +40,8 @@ export function AdminStatisticsOverviewHeader({
   return (
     <header className="traffic-overview-toolbar">
       <div>
-        <span>CONVERSATION FLOW</span>
-        <strong>会话流量分布</strong>
+        <span>OPERATIONS</span>
+        <strong>运营数据</strong>
         <small>总量、客服和产品使用同一批会话数据，结果始终能够对账。</small>
       </div>
       <div className="traffic-range-controls">
@@ -122,20 +87,14 @@ export function AdminStatisticsTotalCard({
   return (
     <article className="traffic-total-card">
       <div className="traffic-card-label">
-        <span>TOTAL</span>
-        <strong>会话总数</strong>
-      </div>
-      <div className="traffic-total-period" style={TOTAL_PERIOD_BADGE_STYLE}>
-        <span style={TOTAL_PERIOD_LABEL_STYLE}>统计区间</span>
-        <strong style={TOTAL_PERIOD_VALUE_STYLE}>
-          {stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}
-        </strong>
+        <span>SUMMARY</span>
+        <strong>会话总览</strong>
       </div>
       <div className="traffic-total-value">
         <strong>{busy ? '—' : total.toLocaleString('zh-CN')}</strong>
         <span>个前端会话</span>
       </div>
-      <div className="traffic-total-breakdown" style={TOTAL_BREAKDOWN_STYLE}>
+      <div className="traffic-total-breakdown">
         <div>
           <span>已接待</span>
           <strong>{busy ? '—' : accepted}</strong>
@@ -145,10 +104,9 @@ export function AdminStatisticsTotalCard({
           <strong>{busy ? '—' : pending}</strong>
         </div>
       </div>
-      <div className="traffic-total-visual" aria-hidden="true">
-        {[42, 68, 52, 82, 63, 94, 72].map((height, index) => (
-          <i key={index} style={{ height: `${height}%` }} />
-        ))}
+      <div className="traffic-total-period">
+        <span>统计区间</span>
+        <strong>{stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}</strong>
       </div>
     </article>
   );
@@ -207,7 +165,7 @@ export function AdminStatisticsDistributionCard({
                     {row.name}
                   </strong>
                   <small>{row.detail}</small>
-                  <div className="traffic-row-meter">
+                  <div className="traffic-row-meter" aria-hidden="true">
                     <i
                       style={{
                         width: `${Math.max(share ? 2 : 0, share)}%`,
