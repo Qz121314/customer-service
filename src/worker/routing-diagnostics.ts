@@ -165,9 +165,7 @@ export async function diagnoseProductRouting(
     const accountConfigured = row.account_configured === 1;
     const scopeMatched = row.scope_matched === 1;
     const todayConversationCount = Number(row.today_count ?? 0);
-    const dailyConversationLimit = Number(
-      row.daily_conversation_limit ?? 0,
-    );
+    const dailyConversationLimit = Number(row.daily_conversation_limit ?? 0);
     const dailyLimitAvailable =
       dailyConversationLimit <= 0 ||
       todayConversationCount < dailyConversationLimit;
@@ -217,9 +215,7 @@ export async function diagnoseProductRouting(
   const online = enabled.filter((agent) => agent.status === 'online');
   const configured = online.filter((agent) => agent.accountConfigured);
   const scoped = configured.filter((agent) => agent.scopeMatched);
-  const withinDailyLimit = scoped.filter(
-    (agent) => agent.dailyLimitAvailable,
-  );
+  const withinDailyLimit = scoped.filter((agent) => agent.dailyLimitAvailable);
   const withinQuota = withinDailyLimit.filter((agent) => agent.quotaAvailable);
 
   return {
