@@ -50,19 +50,7 @@ jobs:
         run: pnpm guardrails
 
       - name: Format
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm format 2>&1 | tee /tmp/p0-format.log
-
-      - name: Upload format diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: p0-format-diagnostics
-          path: /tmp/p0-format.log
-          if-no-files-found: ignore
-          retention-days: 1
+        run: pnpm format
 
       - name: Lint
         run: pnpm lint
@@ -92,19 +80,7 @@ jobs:
         run: pnpm db:migrate:local
 
       - name: Test
-        shell: bash
-        run: |
-          set -o pipefail
-          pnpm test 2>&1 | tee /tmp/p0-test.log
-
-      - name: Upload test diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: p0-test-diagnostics
-          path: /tmp/p0-test.log
-          if-no-files-found: ignore
-          retention-days: 1
+        run: pnpm test
 
   build-and-bundle:
     runs-on: ubuntu-latest
