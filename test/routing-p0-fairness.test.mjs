@@ -84,153 +84,132 @@ async function startConversation(
   return payload.conversation;
 }
 
-test(
-  'three equally eligible agents receive 300 normal conversations exactly evenly',
-  async () => {
-    const database = setup();
-    seedAgent(database, 'agent-a');
-    seedAgent(database, 'agent-b');
-    seedAgent(database, 'agent-c');
-    const instrumented = createInstrumentedD1(database);
-    const rooms = fakeRooms().namespace;
+test('three equally eligible agents receive 300 normal conversations exactly evenly', async () => {
+  const database = setup();
+  seedAgent(database, 'agent-a');
+  seedAgent(database, 'agent-b');
+  seedAgent(database, 'agent-c');
+  const instrumented = createInstrumentedD1(database);
+  const rooms = fakeRooms().namespace;
 
-    for (let index = 1; index <= 300; index += 1) {
-      await startConversation(
-        instrumented.db,
-        rooms,
-        index,
-        visitorId(index),
-      );
-    }
+  for (let index = 1; index <= 300; index += 1) {
+    await startConversation(instrumented.db, rooms, index, visitorId(index));
+  }
 
-    const rows = database
-      .prepare(
-        `SELECT assigned_agent AS agent_id, COUNT(*) AS count
+  const rows = database
+    .prepare(
+      `SELECT assigned_agent AS agent_id, COUNT(*) AS count
        FROM conversations
        GROUP BY assigned_agent
        ORDER BY assigned_agent ASC`,
-      )
-      .all()
-      .map((row) => ({ agent_id: row.agent_id, count: row.count }));
-    assert.deepEqual(rows, [
-      { agent_id: 'agent-a', count: 100 },
-      { agent_id: 'agent-b', count: 100 },
-      { agent_id: 'agent-c', count: 100 },
-    ]);
+    )
+    .all()
+    .map((row) => ({ agent_id: row.agent_id, count: row.count }));
+  assert.deepEqual(rows, [
+    { agent_id: 'agent-a', count: 100 },
+    { agent_id: 'agent-b', count: 100 },
+    { agent_id: 'agent-c', count: 100 },
+  ]);
 
-    const reasons = database
-      .prepare(
-        `SELECT assignment_reason, COUNT(*) AS count
+  const reasons = database
+    .prepare(
+      `SELECT assignment_reason, COUNT(*) AS count
        FROM conversations
        GROUP BY assignment_reason`,
-      )
-      .all()
-      .map((row) => ({
-        assignment_reason: row.assignment_reason,
-        count: row.count,
-      }));
-    assert.deepEqual(reasons, [
-      { assignment_reason: 'round_robin', count: 300 },
-    ]);
+    )
+    .all()
+    .map((row) => ({
+      assignment_reason: row.assignment_reason,
+      count: row.count,
+    }));
+  assert.deepEqual(reasons, [{ assignment_reason: 'round_robin', count: 300 }]);
 
-    database.close();
-  },
-);
+  database.close();
+});
 
-test(
-  'CTA affinity does not consume or move the next normal round-robin turn',
-  async () => {
-    const database = setup();
-    seedAgent(database, 'agent-a');
-    seedAgent(database, 'agent-b');
-    seedAgent(database, 'agent-c');
-    const instrumented = createInstrumentedD1(database);
-    const rooms = fakeRooms().namespace;
+test('CTA affinity does not consume or move the next normal round-robin turn', async () => {
+  const database = setup();
+  seedAgent(database, 'agent-a');
+  seedAgent(database, 'agent-b');
+  seedAgent(database, 'agent-c');
+  const instrumented = createInstrumentedD1(database);
+  const rooms = fakeRooms().namespace;
 
-    const first = await startConversation(
-      instrumented.db,
-      rooms,
-      1001,
-      'RET001',
-    );
-    assert.equal(first.agentName, 'agent-a');
-    database
-      .prepare(
-        `UPDATE conversations
+  const first = await startConversation(instrumented.db, rooms, 1001, 'RET001');
+  assert.equal(first.agentName, 'agent-a');
+  database
+    .prepare(
+      `UPDATE conversations
        SET status = 'closed', updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      )
-      .run(first.id);
+    )
+    .run(first.id);
 
-    const second = await startConversation(
-      instrumented.db,
-      rooms,
-      1002,
-      'OTH001',
-    );
-    assert.equal(second.agentName, 'agent-b');
+  const second = await startConversation(
+    instrumented.db,
+    rooms,
+    1002,
+    'OTH001',
+  );
+  assert.equal(second.agentName, 'agent-b');
 
-    const affinity = await startConversation(
-      instrumented.db,
-      rooms,
-      1003,
-      'RET001',
-    );
-    assert.equal(affinity.agentName, 'agent-a');
-    assert.equal(
-      database
-        .prepare('SELECT assignment_reason FROM conversations WHERE id = ?')
-        .get(affinity.id).assignment_reason,
-      'affinity',
-    );
+  const affinity = await startConversation(
+    instrumented.db,
+    rooms,
+    1003,
+    'RET001',
+  );
+  assert.equal(affinity.agentName, 'agent-a');
+  assert.equal(
+    database
+      .prepare('SELECT assignment_reason FROM conversations WHERE id = ?')
+      .get(affinity.id).assignment_reason,
+    'affinity',
+  );
 
-    const cursorAfterAffinity = database
-      .prepare(
-        `SELECT last_agent_id
+  const cursorAfterAffinity = database
+    .prepare(
+      `SELECT last_agent_id
        FROM routing_round_robin_cursors
        WHERE site_id = 'default'`,
-      )
-      .get();
-    assert.equal(cursorAfterAffinity.last_agent_id, 'agent-b');
+    )
+    .get();
+  assert.equal(cursorAfterAffinity.last_agent_id, 'agent-b');
 
-    const nextNormal = await startConversation(
-      instrumented.db,
-      rooms,
-      1004,
-      'OTH002',
-    );
-    assert.equal(nextNormal.agentName, 'agent-c');
-    assert.equal(
-      database
-        .prepare('SELECT assignment_reason FROM conversations WHERE id = ?')
-        .get(nextNormal.id).assignment_reason,
-      'round_robin',
-    );
+  const nextNormal = await startConversation(
+    instrumented.db,
+    rooms,
+    1004,
+    'OTH002',
+  );
+  assert.equal(nextNormal.agentName, 'agent-c');
+  assert.equal(
+    database
+      .prepare('SELECT assignment_reason FROM conversations WHERE id = ?')
+      .get(nextNormal.id).assignment_reason,
+    'round_robin',
+  );
 
-    const receiptReasons = database
-      .prepare(
-        `SELECT conversation_id, assignment_reason
+  const receiptReasons = database
+    .prepare(
+      `SELECT conversation_id, assignment_reason
        FROM conversation_traffic_receipts
        WHERE conversation_id IN (?, ?)
        ORDER BY conversation_id ASC`,
-      )
-      .all(affinity.id, nextNormal.id);
-    assert.deepEqual(
-      new Map(
-        receiptReasons.map((row) => [
-          row.conversation_id,
-          row.assignment_reason,
-        ]),
-      ),
-      new Map([
-        [affinity.id, 'affinity'],
-        [nextNormal.id, 'round_robin'],
-      ]),
-    );
+    )
+    .all(affinity.id, nextNormal.id);
+  assert.deepEqual(
+    new Map(
+      receiptReasons.map((row) => [row.conversation_id, row.assignment_reason]),
+    ),
+    new Map([
+      [affinity.id, 'affinity'],
+      [nextNormal.id, 'round_robin'],
+    ]),
+  );
 
-    database.close();
-  },
-);
+  database.close();
+});
 
 test('busy agent is skipped and rejoins without catch-up priority', async () => {
   const database = setup();
@@ -240,12 +219,7 @@ test('busy agent is skipped and rejoins without catch-up priority', async () => 
   const instrumented = createInstrumentedD1(database);
   const rooms = fakeRooms().namespace;
 
-  const first = await startConversation(
-    instrumented.db,
-    rooms,
-    2001,
-    'BSY001',
-  );
+  const first = await startConversation(instrumented.db, rooms, 2001, 'BSY001');
   assert.equal(first.agentName, 'agent-a');
 
   database.exec(`UPDATE agents SET status = 'busy' WHERE id = 'agent-b'`);
@@ -258,12 +232,7 @@ test('busy agent is skipped and rejoins without catch-up priority', async () => 
   assert.equal(second.agentName, 'agent-c');
 
   database.exec(`UPDATE agents SET status = 'online' WHERE id = 'agent-b'`);
-  const third = await startConversation(
-    instrumented.db,
-    rooms,
-    2003,
-    'BSY003',
-  );
+  const third = await startConversation(instrumented.db, rooms, 2003, 'BSY003');
   assert.equal(third.agentName, 'agent-a');
   const fourth = await startConversation(
     instrumented.db,
