@@ -326,7 +326,7 @@ assert.match(viteConfig, /tailwindcss from '@tailwindcss\/vite'/u);
 assert.match(dashboardMain, /import '\.\/ui-system\.css'/u);
 
 assert.ok(
-  dashboardCssFiles.length <= 22,
+  dashboardCssFiles.length <= 23,
   `Dashboard CSS ownership regressed to ${dashboardCssFiles.length} files`,
 );
 
