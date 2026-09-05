@@ -8,7 +8,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-test('admin routing diagnostics stays in header composition without duplicate bootstrap', async ({
+test('routing diagnostics stays on Agents without duplicate Admin bootstrap', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -18,14 +18,22 @@ test('admin routing diagnostics stays in header composition without duplicate bo
   expect(adminLogin.ok()).toBeTruthy();
 
   let adminBootstrapRequests = 0;
+  let trafficStatsRequests = 0;
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname === '/api/admin/bootstrap') {
-      adminBootstrapRequests += 1;
-    }
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === '/api/admin/bootstrap') adminBootstrapRequests += 1;
+    if (pathname === '/api/admin/traffic-stats') trafficStatsRequests += 1;
   });
 
   await page.goto(url('/'));
+  await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '分流诊断', exact: true }),
+  ).toHaveCount(0);
+  await expect.poll(() => adminBootstrapRequests).toBe(1);
+  await expect.poll(() => trafficStatsRequests).toBe(1);
 
+  await page.getByRole('button', { name: /客服坐席/u }).click();
   const heading = page.getByRole('heading', { name: '客服坐席' });
   const diagnoseTrigger = page.getByRole('button', {
     name: '分流诊断',
@@ -39,6 +47,7 @@ test('admin routing diagnostics stays in header composition without duplicate bo
   await expect(diagnoseTrigger).toBeVisible();
   await expect(createAgent).toBeVisible();
   await expect.poll(() => adminBootstrapRequests).toBe(1);
+  await expect.poll(() => trafficStatsRequests).toBe(1);
 
   const mobileTriggerBox = await diagnoseTrigger.boundingBox();
   const mobileCreateBox = await createAgent.boundingBox();
@@ -49,15 +58,17 @@ test('admin routing diagnostics stays in header composition without duplicate bo
     expect(mobileTriggerBox.x + mobileTriggerBox.width).toBeLessThanOrEqual(
       390,
     );
-    expect(mobileTriggerBox.height).toBeGreaterThanOrEqual(36);
+    expect(mobileTriggerBox.height).toBeGreaterThanOrEqual(40);
     expect(mobileCreateBox.x).toBeGreaterThanOrEqual(0);
     expect(mobileCreateBox.x + mobileCreateBox.width).toBeLessThanOrEqual(390);
+    expect(mobileCreateBox.height).toBeGreaterThanOrEqual(40);
   }
 
   await diagnoseTrigger.click();
   const diagnoseDialog = page.getByRole('dialog', { name: '分流诊断' });
   await expect(diagnoseDialog).toBeVisible();
   await expect.poll(() => adminBootstrapRequests).toBe(1);
+  await expect.poll(() => trafficStatsRequests).toBe(1);
 
   const mobileDialogBox = await diagnoseDialog.boundingBox();
   expect(mobileDialogBox).not.toBeNull();
@@ -84,6 +95,12 @@ test('admin routing diagnostics stays in header composition without duplicate bo
   await page.keyboard.press('Escape');
   await expect(diagnoseDialog).toBeHidden();
 
+  await page.getByRole('button', { name: /仪表板/u }).click();
+  await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
+  await expect(diagnoseTrigger).toHaveCount(0);
+  await expect.poll(() => adminBootstrapRequests).toBe(1);
+
+  await page.getByRole('button', { name: /客服坐席/u }).click();
   await page.setViewportSize({ width: 1440, height: 760 });
   await expect(diagnoseTrigger).toBeVisible();
   await expect(createAgent).toBeVisible();
@@ -127,4 +144,5 @@ test('admin routing diagnostics stays in header composition without duplicate bo
     .getByRole('button', { name: '关闭', exact: true })
     .click();
   await expect(diagnoseDialog).toBeHidden();
+  await expect.poll(() => adminBootstrapRequests).toBe(1);
 });
