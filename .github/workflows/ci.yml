@@ -49,8 +49,23 @@ jobs:
       - name: Repository guardrails
         run: pnpm guardrails
 
+      - name: Safety
+        run: pnpm safety
+
       - name: Format
         run: pnpm format
+
+      - name: Verify committed quality fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(git status --short)" ]; then
+            echo '::error::pnpm format modified the checked-out revision. Commit the formatter/ESLint fixes to the branch.'
+            git status --short
+            git diff --check || true
+            git diff
+            exit 1
+          fi
 
       - name: Lint
         run: pnpm lint
