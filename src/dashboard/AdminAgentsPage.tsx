@@ -144,24 +144,24 @@ function AgentOverview({
   enabledCount,
   assignedProductCount,
 }: AgentOverviewProps) {
+  const metrics = [
+    ['客服总数', agentCount, ''],
+    ['当前在线', onlineCount, 'is-online'],
+    ['已启用账号', enabledCount, ''],
+    ['已覆盖产品', assignedProductCount, ''],
+  ] as const;
+
   return (
     <section className="admin-overview-strip" aria-label="客服概览">
-      <div>
-        <strong>{agentCount}</strong>
-        <span>客服总数</span>
-      </div>
-      <div>
-        <strong>{onlineCount}</strong>
-        <span>当前在线</span>
-      </div>
-      <div>
-        <strong>{enabledCount}</strong>
-        <span>已启用账号</span>
-      </div>
-      <div>
-        <strong>{assignedProductCount}</strong>
-        <span>已覆盖产品</span>
-      </div>
+      {metrics.map(([label, value, tone]) => (
+        <div className="admin-overview-metric" key={label}>
+          <span className={`admin-overview-label ${tone}`}>
+            {tone ? <i aria-hidden="true" /> : null}
+            {label}
+          </span>
+          <strong>{value}</strong>
+        </div>
+      ))}
     </section>
   );
 }
