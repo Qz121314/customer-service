@@ -110,7 +110,8 @@ test(
        GROUP BY assigned_agent
        ORDER BY assigned_agent ASC`,
       )
-      .all();
+      .all()
+      .map((row) => ({ agent_id: row.agent_id, count: row.count }));
     assert.deepEqual(rows, [
       { agent_id: 'agent-a', count: 100 },
       { agent_id: 'agent-b', count: 100 },
@@ -123,7 +124,11 @@ test(
        FROM conversations
        GROUP BY assignment_reason`,
       )
-      .all();
+      .all()
+      .map((row) => ({
+        assignment_reason: row.assignment_reason,
+        count: row.count,
+      }));
     assert.deepEqual(reasons, [
       { assignment_reason: 'round_robin', count: 300 },
     ]);
