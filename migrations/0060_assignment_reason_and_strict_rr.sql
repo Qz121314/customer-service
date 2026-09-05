@@ -1,5 +1,7 @@
 PRAGMA foreign_keys = ON;
 
+-- P0 routing explainability: persist why a seat received traffic while keeping
+-- normal traffic fairness independent from the CTA affinity override.
 -- Distinguish normal site-wide round-robin traffic from the two-hour CTA
 -- affinity override. Historical rows remain NULL because their original reason
 -- cannot be reconstructed reliably after the fact.
