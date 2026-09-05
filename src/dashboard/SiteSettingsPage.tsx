@@ -29,7 +29,10 @@ export function SiteSettingsPage({
         revision={logoRevision}
         onRevisionChange={onLogoRevisionChange}
       />
-      <section className="site-settings-group" aria-labelledby="availability-title">
+      <section
+        className="site-settings-group"
+        aria-labelledby="availability-title"
+      >
         <header className="site-settings-group-head">
           <div>
             <span className="admin-section-kicker">客服可用性</span>
@@ -70,7 +73,9 @@ function SiteLogoSettings({
       setPreviewFailed(false);
       onRevisionChange(nextRevision);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '上传站点 Logo 失败。');
+      setError(
+        reason instanceof Error ? reason.message : '上传站点 Logo 失败。',
+      );
     } finally {
       setBusy(false);
     }
@@ -85,7 +90,9 @@ function SiteLogoSettings({
       setPreviewFailed(true);
       onRevisionChange(nextRevision);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '移除站点 Logo 失败。');
+      setError(
+        reason instanceof Error ? reason.message : '移除站点 Logo 失败。',
+      );
     } finally {
       setBusy(false);
     }
@@ -97,7 +104,9 @@ function SiteLogoSettings({
         <div>
           <span className="admin-section-kicker">品牌</span>
           <h2 id="branding-title">站点品牌</h2>
-          <p>设置管理员后台侧栏使用的站点 Logo；未配置时继续显示默认 CS 标记。</p>
+          <p>
+            设置管理员后台侧栏使用的站点 Logo；未配置时继续显示默认 CS 标记。
+          </p>
         </div>
       </header>
 
@@ -116,8 +125,15 @@ function SiteLogoSettings({
         </div>
         <div className="site-logo-copy">
           <strong>站点 Logo</strong>
-          <p>PNG、JPG 或 WebP，最大 {SITE_LOGO_MAX_LABEL}。建议使用清晰的方形或横向品牌图。</p>
-          {error ? <span className="site-logo-error" role="alert">{error}</span> : null}
+          <p>
+            PNG、JPG 或 WebP，最大 {SITE_LOGO_MAX_LABEL}
+            。建议使用清晰的方形或横向品牌图。
+          </p>
+          {error ? (
+            <span className="site-logo-error" role="alert">
+              {error}
+            </span>
+          ) : null}
         </div>
         <div className="site-logo-actions">
           <input
