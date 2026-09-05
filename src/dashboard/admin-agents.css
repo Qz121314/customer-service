@@ -3,6 +3,88 @@
  * longer depends on admin-commercial.css for presentation.
  */
 
+.admin-table-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-table th {
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-table td {
+  border-bottom: 1px solid #f0f1f3;
+  vertical-align: middle;
+}
+
+.admin-agent-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #202329;
+}
+
+.account-status {
+  white-space: nowrap;
+}
+
+.admin-empty {
+  min-height: 270px;
+}
+
+.admin-empty .primary-button {
+  width: max-content;
+  margin: 8px auto 0;
+}
+
+.agent-scope-summary {
+  display: grid;
+  min-width: 170px;
+}
+
+.agent-scope-summary strong,
+.agent-scope-summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-scope-summary.section strong::before,
+.agent-scope-summary.category strong::before,
+.agent-scope-summary.product strong::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #2f343b;
+  vertical-align: 1px;
+  content: '';
+}
+
+.agent-scope-summary.none strong,
+.agent-scope-summary.none small {
+  color: #a0a4ac;
+}
+
+@media (max-width: 620px) {
+  .agent-scope-summary {
+    min-width: 145px;
+  }
+}
+
 .admin-agent-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
