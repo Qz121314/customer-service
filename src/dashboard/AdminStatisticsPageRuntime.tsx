@@ -13,13 +13,13 @@ import {
 import type { TrafficRange } from './traffic-statistics-range';
 
 const DISTRIBUTION_COLORS = [
-  '#635bdf',
-  '#8478f2',
-  '#3a9f83',
-  '#d89547',
-  '#d86c8a',
-  '#6f8fc9',
-  '#9a7d68',
+  '#4263a8',
+  '#567087',
+  '#3f7d69',
+  '#8b6b46',
+  '#6f7280',
+  '#4f6f8d',
+  '#7b6b5e',
 ];
 
 export function AdminStatisticsPage({
@@ -68,7 +68,7 @@ export function AdminStatisticsPage({
       count: row.count,
       color: row.agentId
         ? DISTRIBUTION_COLORS[index % DISTRIBUTION_COLORS.length]
-        : '#d89547',
+        : '#b7791f',
       marker: row.agentId ? initials(agentMarker) : '待',
       emphasized: Boolean(row.agentId),
       pending: row.agentId === null,
