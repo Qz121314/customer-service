@@ -15,16 +15,21 @@ function callCount(source, functionName) {
   return matches?.length ?? 0;
 }
 
-test('Routing Diagnostics trigger is composed through AdminPageHeader actions', () => {
+test('Routing Diagnostics is composed through Admin contextual navigation', () => {
   assert.match(
     adminShell,
-    /actions\?: ReactNode;/u,
-    'AdminPageHeader should expose a controlled React actions composition point',
+    /contextNavigation\?: AdminContextNavigation \| null;/u,
+    'AdminShell should expose controlled contextual navigation composition',
   );
   assert.match(
     adminPortal,
-    /<AdminRoutingDiagnoseTrigger/u,
-    'AdminCenter should compose the Routing Diagnostics trigger',
+    /label: '分流诊断'[\s\S]*?onSelect: \(\) => setAgentsView\('diagnostics'\)/u,
+    'AdminCenter should expose Routing Diagnostics through 客服坐席 contextual navigation',
+  );
+  assert.match(
+    adminPortal,
+    /<AdminRoutingDiagnoseWorkspace products=\{products\} \/>/u,
+    'AdminCenter should compose Routing Diagnostics as an inline workspace',
   );
   assert.doesNotMatch(
     adminEntry,
@@ -67,7 +72,7 @@ test('Routing Diagnostics reuses the shared Admin product catalog', () => {
   );
   assert.match(
     adminPortal,
-    /<AdminRoutingDiagnoseDock[\s\S]*?products=\{products\}/u,
+    /<AdminRoutingDiagnoseWorkspace[\s\S]*?products=\{products\}/u,
     'AdminCenter should pass shared products into Routing Diagnostics',
   );
   assert.doesNotMatch(
