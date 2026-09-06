@@ -111,7 +111,10 @@ adminSiteLogoApi.get('/client/v1/site-logo', async (c) => {
   return siteLogoResponse(object, 'no-store');
 });
 
-function siteLogoResponse(object: R2ObjectBody, cacheControl: string): Response {
+function siteLogoResponse(
+  object: R2ObjectBody,
+  cacheControl: string,
+): Response {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set('ETag', object.httpEtag);
