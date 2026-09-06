@@ -365,7 +365,10 @@ test('agent directory lets the document own long-list vertical scrolling', async
   expect(geometry.tableMaxHeight).toBe('none');
   expect(['visible', 'auto']).toContain(geometry.tableOverflowY);
   await expectNoHorizontalOverflow(page);
-  evidence.geometry.push({ name: '1366x768-long-agent-directory', ...geometry });
+  evidence.geometry.push({
+    name: '1366x768-long-agent-directory',
+    ...geometry,
+  });
   await capture(page, '1366x768-long-agent-directory');
 });
 
@@ -447,7 +450,11 @@ test('mobile workbench remains touch-safe', async ({ page }) => {
   const contextButtons = page.locator('.admin-context-navigation nav button');
   await expect(contextButtons).toHaveCount(2);
   for (const button of await contextButtons.all()) {
-    expect(await button.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+    expect(
+      await button.evaluate(
+        (element) => element.getBoundingClientRect().height,
+      ),
+    ).toBeGreaterThanOrEqual(44);
   }
   await page.getByRole('button', { name: '新增客服', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '新增客服' });
