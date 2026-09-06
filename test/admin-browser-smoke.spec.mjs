@@ -66,8 +66,12 @@ async function expectNoHorizontalOverflow(page) {
 async function dashboardGeometry(page) {
   return page.evaluate(() => {
     const summary = globalThis.document.querySelector('.traffic-summary-strip');
-    const grid = globalThis.document.querySelector('.traffic-distribution-grid');
-    const cards = [...globalThis.document.querySelectorAll('.traffic-distribution-card')];
+    const grid = globalThis.document.querySelector(
+      '.traffic-distribution-grid',
+    );
+    const cards = [
+      ...globalThis.document.querySelectorAll('.traffic-distribution-card'),
+    ];
     if (!summary || !grid || cards.length !== 2) return null;
     const lists = cards.map((card) =>
       card.querySelector('.traffic-distribution-list'),
@@ -298,7 +302,9 @@ test('dashboard long distributions scroll independently without equal-height cou
 
   await page.goto(url('/'));
   await expect(page.getByText('客服接待分布', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await dashboardGeometry(page))?.cardHeights[0]).toBeGreaterThan(300);
+  await expect
+    .poll(async () => (await dashboardGeometry(page))?.cardHeights[0])
+    .toBeGreaterThan(300);
   let geometry = await dashboardGeometry(page);
   expect(geometry).not.toBeNull();
   expect(geometry.listScrollHeights[0]).toBeGreaterThan(
@@ -307,16 +313,23 @@ test('dashboard long distributions scroll independently without equal-height cou
   expect(geometry.listScrollHeights[1]).toBeLessThanOrEqual(
     geometry.listClientHeights[1] + 1,
   );
-  expect(geometry.cardHeights[0]).toBeGreaterThan(geometry.cardHeights[1] + 100);
+  expect(geometry.cardHeights[0]).toBeGreaterThan(
+    geometry.cardHeights[1] + 100,
+  );
   expect(geometry.cardHeights[0]).toBeLessThanOrEqual(430);
   await expectNoHorizontalOverflow(page);
-  evidence.geometry.push({ name: '1366x768-dashboard-long-agents', ...geometry });
+  evidence.geometry.push({
+    name: '1366x768-dashboard-long-agents',
+    ...geometry,
+  });
   await capture(page, '1366x768-dashboard-long-agents');
 
   fixture = statisticsFixture(2, 18);
   await page.reload();
   await expect(page.getByText('产品会话分布', { exact: true })).toBeVisible();
-  await expect.poll(async () => (await dashboardGeometry(page))?.cardHeights[1]).toBeGreaterThan(300);
+  await expect
+    .poll(async () => (await dashboardGeometry(page))?.cardHeights[1])
+    .toBeGreaterThan(300);
   geometry = await dashboardGeometry(page);
   expect(geometry).not.toBeNull();
   expect(geometry.listScrollHeights[0]).toBeLessThanOrEqual(
@@ -325,10 +338,15 @@ test('dashboard long distributions scroll independently without equal-height cou
   expect(geometry.listScrollHeights[1]).toBeGreaterThan(
     geometry.listClientHeights[1] + 40,
   );
-  expect(geometry.cardHeights[1]).toBeGreaterThan(geometry.cardHeights[0] + 100);
+  expect(geometry.cardHeights[1]).toBeGreaterThan(
+    geometry.cardHeights[0] + 100,
+  );
   expect(geometry.cardHeights[1]).toBeLessThanOrEqual(430);
   await expectNoHorizontalOverflow(page);
-  evidence.geometry.push({ name: '1366x768-dashboard-long-products', ...geometry });
+  evidence.geometry.push({
+    name: '1366x768-dashboard-long-products',
+    ...geometry,
+  });
   await capture(page, '1366x768-dashboard-long-products');
 });
 
