@@ -11,7 +11,9 @@ import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 
 const repositoryDirectory = fileURLToPath(new URL('../../', import.meta.url));
-const runtimeDirectory = mkdtempSync(join(tmpdir(), 'visitor-promotion-runtime-'));
+const runtimeDirectory = mkdtempSync(
+  join(tmpdir(), 'visitor-promotion-runtime-'),
+);
 symlinkSync(
   join(repositoryDirectory, 'node_modules'),
   join(runtimeDirectory, 'node_modules'),
@@ -33,9 +35,8 @@ for (const relativeDirectory of ['src/worker', 'src/shared']) {
 let visitorPromotionApi;
 try {
   ({ visitorPromotionApi } = await import(
-    pathToFileURL(
-      join(runtimeDirectory, 'src/worker/visitor-promotion-api.ts'),
-    ).href
+    pathToFileURL(join(runtimeDirectory, 'src/worker/visitor-promotion-api.ts'))
+      .href
   ));
 } finally {
   rmSync(runtimeDirectory, { recursive: true, force: true });
