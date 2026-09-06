@@ -180,10 +180,11 @@ function SiteLogoSettings({
         <div className="site-logo-copy">
           <strong>{prepared ? '压缩预览' : siteLogo ? '当前 Logo' : '默认品牌标记'}</strong>
           <p>
-            PNG / JPG / WebP，原图最大 {formatBytes(SITE_LOGO_MAX_INPUT_BYTES)}；
-            保持比例缩放到 {SITE_LOGO_MAX_EDGE} × {SITE_LOGO_MAX_EDGE} 内，优先 WebP
-            （质量 {Math.round(SITE_LOGO_WEBP_QUALITY * 100)}%），上传结果不超过{' '}
-            {formatBytes(SITE_LOGO_MAX_UPLOAD_BYTES)}。
+            支持 PNG / JPG / WebP，原图最大 {formatBytes(SITE_LOGO_MAX_INPUT_BYTES)}。
+            选择后浏览器会自动保持比例缩放到 {SITE_LOGO_MAX_EDGE} ×{' '}
+            {SITE_LOGO_MAX_EDGE} 内并压缩，优先 WebP（质量{' '}
+            {Math.round(SITE_LOGO_WEBP_QUALITY * 100)}%）；只有优化后的图片会上传至
+            R2，最终上传文件不超过 {formatBytes(SITE_LOGO_MAX_UPLOAD_BYTES)}。
           </p>
           {prepared ? (
             <small className="site-logo-meta">
