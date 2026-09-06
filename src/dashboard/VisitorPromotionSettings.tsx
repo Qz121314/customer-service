@@ -1,11 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { Button, Field, Input, Textarea } from './ui';
 import {
   getVisitorPromotion,
   updateVisitorPromotion,
   type VisitorPromotionDraft,
 } from './visitor-promotion-client';
-import './visitor-promotion-settings.css';
 
 const EMPTY_PROMOTION: VisitorPromotionDraft = {
   isEnabled: false,
@@ -114,110 +119,118 @@ export function VisitorPromotionSettingsPanel() {
   }
 
   return (
-    <section className="visitor-promotion-card" aria-labelledby="visitor-promotion-title">
-      <header className="visitor-promotion-intro">
+    <section
+      className="no-agent-settings-card"
+      aria-labelledby="visitor-promotion-title"
+    >
+      <header className="no-agent-settings-intro">
         <div>
           <span className="admin-section-kicker">Visitor Messages</span>
           <h2 id="visitor-promotion-title">访客推广</h2>
           <p>配置 Messages 顶部的独立置顶内容。它不是会话，也不会影响聊天未读数。</p>
         </div>
-        <span className="visitor-promotion-revision">
+        <span className="no-agent-behavior-badge">
           {revision ? `Revision ${revision}` : '未发布'}
         </span>
       </header>
 
       {loading ? <p role="status">正在加载配置…</p> : null}
       {error ? (
-        <p className="visitor-promotion-error" role="alert">
+        <p className="notice error" role="alert">
           {error}
         </p>
       ) : null}
 
       {!loading ? (
-        <form className="visitor-promotion-form" onSubmit={submit}>
-          <label className="visitor-promotion-toggle">
-            <input
-              type="checkbox"
-              checked={draft.isEnabled}
+        <form className="no-agent-settings-form" onSubmit={submit}>
+          <Field asChild unstyled>
+            <label className="no-agent-message-field">
+              <span className="no-agent-message-label">
+                <strong>状态</strong>
+                <small>{draft.isEnabled ? 'Enabled' : 'Disabled'}</small>
+              </span>
+              <span>
+                <input
+                  type="checkbox"
+                  checked={draft.isEnabled}
+                  disabled={saving}
+                  onChange={(event) => {
+                    setSaved(false);
+                    setDraft((current) => ({
+                      ...current,
+                      isEnabled: event.target.checked,
+                    }));
+                  }}
+                />{' '}
+                只有启用且处于有效时间窗口时才向访客返回。
+              </span>
+            </label>
+          </Field>
+
+          <PromotionField label="Title">
+            <Input
+              value={draft.title}
+              maxLength={160}
               disabled={saving}
-              onChange={(event) => {
-                setSaved(false);
-                setDraft((current) => ({
-                  ...current,
-                  isEnabled: event.target.checked,
-                }));
-              }}
+              required
+              onChange={(event) => update('title', event.target.value)}
             />
-            <span>
-              <strong>Enabled</strong>
-              <small>只有启用且处于有效时间窗口时才向访客返回。</small>
-            </span>
-          </label>
-
-          <div className="visitor-promotion-grid">
-            <PromotionField label="Title">
-              <Input
-                value={draft.title}
-                maxLength={160}
-                disabled={saving}
-                required
-                onChange={(event) => update('title', event.target.value)}
-              />
-            </PromotionField>
-            <PromotionField label="Summary">
-              <Input
-                value={draft.summary}
-                maxLength={320}
-                disabled={saving}
-                required
-                onChange={(event) => update('summary', event.target.value)}
-              />
-            </PromotionField>
-            <PromotionField label="Cover URL" hint="可选；仅 http/https。">
-              <Input
-                type="url"
-                value={draft.coverUrl ?? ''}
-                disabled={saving}
-                placeholder="https://…"
-                onChange={(event) => updateNullable('coverUrl', event.target.value)}
-              />
-            </PromotionField>
-            <PromotionField label="CTA Label" hint="可选；与 CTA URL 同时填写。">
-              <Input
-                value={draft.ctaLabel ?? ''}
-                maxLength={80}
-                disabled={saving}
-                onChange={(event) => updateNullable('ctaLabel', event.target.value)}
-              />
-            </PromotionField>
-            <PromotionField label="CTA URL" hint="可选；仅 http/https。">
-              <Input
-                type="url"
-                value={draft.ctaUrl ?? ''}
-                disabled={saving}
-                placeholder="https://…"
-                onChange={(event) => updateNullable('ctaUrl', event.target.value)}
-              />
-            </PromotionField>
-            <PromotionField label="Start" hint="留空表示立即可用。">
-              <Input
-                type="datetime-local"
-                value={toLocalDateTime(draft.startsAt)}
-                disabled={saving}
-                onChange={(event) => updateTimestamp('startsAt', event.target.value)}
-              />
-            </PromotionField>
-            <PromotionField label="End" hint="留空表示不自动结束。">
-              <Input
-                type="datetime-local"
-                value={toLocalDateTime(draft.endsAt)}
-                disabled={saving}
-                onChange={(event) => updateTimestamp('endsAt', event.target.value)}
-              />
-            </PromotionField>
-          </div>
-
-          <PromotionField label="Article" hint="Markdown；访客端使用现有安全 Markdown renderer。">
+          </PromotionField>
+          <PromotionField label="Summary">
+            <Input
+              value={draft.summary}
+              maxLength={320}
+              disabled={saving}
+              required
+              onChange={(event) => update('summary', event.target.value)}
+            />
+          </PromotionField>
+          <PromotionField label="Cover URL" hint="可选；仅 http/https。">
+            <Input
+              type="url"
+              value={draft.coverUrl ?? ''}
+              disabled={saving}
+              placeholder="https://…"
+              onChange={(event) => updateNullable('coverUrl', event.target.value)}
+            />
+          </PromotionField>
+          <PromotionField label="CTA Label" hint="可选；与 CTA URL 同时填写。">
+            <Input
+              value={draft.ctaLabel ?? ''}
+              maxLength={80}
+              disabled={saving}
+              onChange={(event) => updateNullable('ctaLabel', event.target.value)}
+            />
+          </PromotionField>
+          <PromotionField label="CTA URL" hint="可选；仅 http/https。">
+            <Input
+              type="url"
+              value={draft.ctaUrl ?? ''}
+              disabled={saving}
+              placeholder="https://…"
+              onChange={(event) => updateNullable('ctaUrl', event.target.value)}
+            />
+          </PromotionField>
+          <PromotionField label="Start" hint="留空表示立即可用。">
+            <Input
+              type="datetime-local"
+              value={toLocalDateTime(draft.startsAt)}
+              disabled={saving}
+              onChange={(event) => updateTimestamp('startsAt', event.target.value)}
+            />
+          </PromotionField>
+          <PromotionField label="End" hint="留空表示不自动结束。">
+            <Input
+              type="datetime-local"
+              value={toLocalDateTime(draft.endsAt)}
+              disabled={saving}
+              onChange={(event) => updateTimestamp('endsAt', event.target.value)}
+            />
+          </PromotionField>
+          <PromotionField
+            label="Article"
+            hint="Markdown；访客端使用现有安全 Markdown renderer。"
+          >
             <Textarea
               value={draft.bodyMarkdown}
               rows={12}
@@ -228,7 +241,7 @@ export function VisitorPromotionSettingsPanel() {
             />
           </PromotionField>
 
-          <footer className="visitor-promotion-actions">
+          <footer className="no-agent-settings-actions">
             <span role="status" aria-live="polite">
               {saved
                 ? '已保存；新 revision 将重新显示 NEW。'
@@ -274,12 +287,14 @@ function PromotionField({
 }: {
   label: string;
   hint?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <Field asChild unstyled>
-      <label className="visitor-promotion-field">
-        <strong>{label}</strong>
+      <label className="no-agent-message-field">
+        <span className="no-agent-message-label">
+          <strong>{label}</strong>
+        </span>
         {children}
         {hint ? <small>{hint}</small> : null}
       </label>
