@@ -24,11 +24,15 @@ async function capture(page, name) {
   saveEvidence();
 }
 
-async function loginAndSeed(page, username, name) {
+async function loginAdmin(page) {
   const login = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
   expect(login.ok()).toBeTruthy();
+}
+
+async function loginAndSeed(page, username, name) {
+  await loginAdmin(page);
   const create = await page.request.post(url('/api/admin/agents'), {
     data: {
       name,
@@ -57,6 +61,29 @@ async function expectNoHorizontalOverflow(page) {
     return root ? [root.clientWidth, root.scrollWidth] : [0, 1];
   });
   expect(geometry[1]).toBeLessThanOrEqual(geometry[0] + 1);
+}
+
+async function dashboardGeometry(page) {
+  return page.evaluate(() => {
+    const summary = globalThis.document.querySelector('.traffic-summary-strip');
+    const grid = globalThis.document.querySelector('.traffic-distribution-grid');
+    const cards = [...globalThis.document.querySelectorAll('.traffic-distribution-card')];
+    if (!summary || !grid || cards.length !== 2) return null;
+    const lists = cards.map((card) =>
+      card.querySelector('.traffic-distribution-list'),
+    );
+    if (lists.some((list) => !list)) return null;
+    const summaryRect = summary.getBoundingClientRect();
+    const gridRect = grid.getBoundingClientRect();
+    return {
+      summaryHeight: summaryRect.height,
+      summaryBottom: summaryRect.bottom,
+      distributionsTop: gridRect.top,
+      cardHeights: cards.map((card) => card.getBoundingClientRect().height),
+      listClientHeights: lists.map((list) => list.clientHeight),
+      listScrollHeights: lists.map((list) => list.scrollHeight),
+    };
+  });
 }
 
 async function agentsGeometry(page) {
@@ -92,6 +119,8 @@ async function editorGeometry(dialog) {
       return null;
     }
     const rect = element.getBoundingClientRect();
+    const primaryRect = primary.getBoundingClientRect();
+    const routingRect = routing.getBoundingClientRect();
     return {
       top: rect.top,
       bottom: rect.bottom,
@@ -101,7 +130,9 @@ async function editorGeometry(dialog) {
         .gridTemplateColumns.split(' ').length,
       accountHeight: account.getBoundingClientRect().height,
       operationsHeight: operations.getBoundingClientRect().height,
-      routingHeight: routing.getBoundingClientRect().height,
+      routingHeight: routingRect.height,
+      routingTop: routingRect.top,
+      primaryBottom: primaryRect.bottom,
       footerBottom: footer.getBoundingClientRect().bottom,
       scrollCapacity: layout.scrollHeight - layout.clientHeight,
     };
@@ -138,8 +169,41 @@ async function generatedPng(page, width, height, fill) {
   return Buffer.from(encoded, 'base64');
 }
 
+function distributedCounts(count, total = 100) {
+  const base = Math.floor(total / count);
+  const remainder = total % count;
+  return Array.from({ length: count }, (_, index) =>
+    index < remainder ? base + 1 : base,
+  );
+}
+
+function statisticsFixture(agentCount, productCount) {
+  return {
+    from: '2026-09-01',
+    to: '2026-09-05',
+    total: 100,
+    retainedFrom: '2026-06-08',
+    agents: distributedCounts(agentCount).map((count, index) => ({
+      agentId: `fixture-agent-${index}`,
+      agentName: `Fixture Agent ${index + 1}`,
+      count,
+    })),
+    products: distributedCounts(productCount).map((count, index) => ({
+      productId: `fixture-product-${index}`,
+      productTitle: `Fixture Product ${index + 1}`,
+      count,
+    })),
+  };
+}
+
 async function captureCoreSurfaces(page, key, seedName) {
-  await expect(page.getByText('运营数据', { exact: true })).toBeVisible();
+  await expect(page.locator('.traffic-summary-strip')).toBeVisible();
+  await expect(page.getByText('客服接待分布', { exact: true })).toBeVisible();
+  await expect(page.getByText('产品会话分布', { exact: true })).toBeVisible();
+  await expect(page.getByText('运营数据', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('SUMMARY', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('AGENTS', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('PRODUCTS', { exact: true })).toHaveCount(0);
   await capture(page, `${key}-dashboard`);
 
   await openSection(page, '客服坐席');
@@ -176,8 +240,16 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto(url('/'));
     await expectNoHorizontalOverflow(page);
-    await openSection(page, '客服坐席');
 
+    const dashboard = await dashboardGeometry(page);
+    expect(dashboard).not.toBeNull();
+    expect(dashboard.summaryHeight).toBeLessThanOrEqual(72);
+    expect(dashboard.distributionsTop).toBeGreaterThanOrEqual(
+      dashboard.summaryBottom,
+    );
+    evidence.geometry.push({ name: `${key}-dashboard`, ...dashboard });
+
+    await openSection(page, '客服坐席');
     const agents = await agentsGeometry(page);
     expect(agents).not.toBeNull();
     expect(agents.summaryHeight).toBeLessThanOrEqual(60);
@@ -197,7 +269,9 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     expect(editor.bottom).toBeLessThanOrEqual(viewport.height + 1);
     expect(editor.footerBottom).toBeLessThanOrEqual(viewport.height + 1);
     expect(editor.columns).toBe(2);
-    expect(editor.operationsHeight).toBeGreaterThan(editor.accountHeight + 12);
+    expect(editor.accountHeight).toBeGreaterThan(0);
+    expect(editor.operationsHeight).toBeGreaterThan(0);
+    expect(editor.routingTop).toBeGreaterThanOrEqual(editor.primaryBottom);
     expect(editor.routingHeight).toBeLessThan(editor.height * 0.4);
     expect(editor.scrollCapacity).toBeLessThanOrEqual(48);
     evidence.geometry.push({ name: `${key}-editor`, ...editor });
@@ -206,6 +280,56 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     await page.goto(url('/'));
     await captureCoreSurfaces(page, key, seedName);
   }
+});
+
+test('dashboard long distributions scroll independently without equal-height coupling', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await loginAdmin(page);
+  let fixture = statisticsFixture(18, 2);
+  await page.route('**/api/admin/traffic-stats?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(fixture),
+    });
+  });
+
+  await page.goto(url('/'));
+  await expect(page.getByText('客服接待分布', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await dashboardGeometry(page))?.cardHeights[0]).toBeGreaterThan(300);
+  let geometry = await dashboardGeometry(page);
+  expect(geometry).not.toBeNull();
+  expect(geometry.listScrollHeights[0]).toBeGreaterThan(
+    geometry.listClientHeights[0] + 40,
+  );
+  expect(geometry.listScrollHeights[1]).toBeLessThanOrEqual(
+    geometry.listClientHeights[1] + 1,
+  );
+  expect(geometry.cardHeights[0]).toBeGreaterThan(geometry.cardHeights[1] + 100);
+  expect(geometry.cardHeights[0]).toBeLessThanOrEqual(430);
+  await expectNoHorizontalOverflow(page);
+  evidence.geometry.push({ name: '1366x768-dashboard-long-agents', ...geometry });
+  await capture(page, '1366x768-dashboard-long-agents');
+
+  fixture = statisticsFixture(2, 18);
+  await page.reload();
+  await expect(page.getByText('产品会话分布', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await dashboardGeometry(page))?.cardHeights[1]).toBeGreaterThan(300);
+  geometry = await dashboardGeometry(page);
+  expect(geometry).not.toBeNull();
+  expect(geometry.listScrollHeights[0]).toBeLessThanOrEqual(
+    geometry.listClientHeights[0] + 1,
+  );
+  expect(geometry.listScrollHeights[1]).toBeGreaterThan(
+    geometry.listClientHeights[1] + 40,
+  );
+  expect(geometry.cardHeights[1]).toBeGreaterThan(geometry.cardHeights[0] + 100);
+  expect(geometry.cardHeights[1]).toBeLessThanOrEqual(430);
+  await expectNoHorizontalOverflow(page);
+  evidence.geometry.push({ name: '1366x768-dashboard-long-products', ...geometry });
+  await capture(page, '1366x768-dashboard-long-products');
 });
 
 test('mobile workbench remains touch-safe', async ({ page }) => {
