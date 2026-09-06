@@ -39,11 +39,7 @@ export function AdminStatisticsOverviewHeader({
 
   return (
     <header className="traffic-overview-toolbar">
-      <div>
-        <span>OPERATIONS</span>
-        <strong>运营数据</strong>
-        <small>总量、客服和产品使用同一批会话数据，结果始终能够对账。</small>
-      </div>
+      <span className="traffic-range-label">统计范围</span>
       <div className="traffic-range-controls">
         <div
           className="traffic-range-switcher"
@@ -84,45 +80,40 @@ export function AdminStatisticsTotalCard({
   accepted: number;
   pending: number;
 }) {
+  const metrics = [
+    ['会话总数', busy ? '—' : total.toLocaleString('zh-CN'), ''],
+    ['已接待', busy ? '—' : accepted.toLocaleString('zh-CN'), ''],
+    [
+      '待接待',
+      busy ? '—' : pending.toLocaleString('zh-CN'),
+      pending ? 'is-warning' : '',
+    ],
+    [
+      '统计区间',
+      stats ? formatPeriod(stats.from, stats.to) : '正在读取…',
+      'is-period',
+    ],
+  ] as const;
+
   return (
-    <article className="traffic-total-card">
-      <div className="traffic-card-label">
-        <span>SUMMARY</span>
-        <strong>会话总览</strong>
-      </div>
-      <div className="traffic-total-value">
-        <strong>{busy ? '—' : total.toLocaleString('zh-CN')}</strong>
-        <span>个前端会话</span>
-      </div>
-      <div className="traffic-total-breakdown">
-        <div>
-          <span>已接待</span>
-          <strong>{busy ? '—' : accepted}</strong>
+    <section className="traffic-summary-strip" aria-label="会话总览">
+      {metrics.map(([label, value, tone]) => (
+        <div className={`traffic-summary-metric ${tone}`} key={label}>
+          <span>{label}</span>
+          <strong title={value}>{value}</strong>
         </div>
-        <div className={pending ? 'has-pending' : ''}>
-          <span>待接待</span>
-          <strong>{busy ? '—' : pending}</strong>
-        </div>
-      </div>
-      <div className="traffic-total-period">
-        <span>统计区间</span>
-        <strong>
-          {stats ? formatPeriod(stats.from, stats.to) : '正在读取…'}
-        </strong>
-      </div>
-    </article>
+      ))}
+    </section>
   );
 }
 
 export function AdminStatisticsDistributionCard({
-  eyebrow,
   title,
   emptyLabel,
   total,
   busy,
   rows,
 }: {
-  eyebrow: string;
   title: string;
   emptyLabel: string;
   total: number;
@@ -132,10 +123,7 @@ export function AdminStatisticsDistributionCard({
   return (
     <article className="traffic-distribution-card">
       <header>
-        <div className="traffic-card-label">
-          <span>{eyebrow}</span>
-          <strong>{title}</strong>
-        </div>
+        <strong>{title}</strong>
         <small>{rows.length} 项</small>
       </header>
       <div className="traffic-distribution-list">
@@ -185,7 +173,6 @@ export function AdminStatisticsDistributionCard({
           })
         ) : (
           <div className="traffic-distribution-empty">
-            <span>—</span>
             <strong>{busy ? '正在读取' : emptyLabel}</strong>
             <small>产生新会话后会自动形成分布</small>
           </div>
@@ -195,25 +182,10 @@ export function AdminStatisticsDistributionCard({
   );
 }
 
-export function AdminStatisticsFooter({
-  busy,
-  agentTotal,
-  productTotal,
-  total,
-}: {
-  busy: boolean;
-  agentTotal: number;
-  productTotal: number;
-  total: number;
-}) {
+export function AdminStatisticsFooter() {
   return (
     <footer className="traffic-overview-foot">
-      <span>数据按 America/Los_Angeles 自然日统计，保留 90 天。</span>
-      <strong>
-        {busy
-          ? '正在核对分布…'
-          : `客服分布 ${agentTotal} / 产品分布 ${productTotal} / 总量 ${total}`}
-      </strong>
+      数据按 America/Los_Angeles 自然日统计，保留 90 天。
     </footer>
   );
 }

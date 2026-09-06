@@ -104,17 +104,16 @@ export function AdminStatisticsPage({
           onRangeChange={onRangeChange}
         />
 
-        <div className="traffic-overview-grid">
-          <AdminStatisticsTotalCard
-            stats={stats}
-            busy={busy}
-            total={total}
-            accepted={accepted}
-            pending={pending}
-          />
+        <AdminStatisticsTotalCard
+          stats={stats}
+          busy={busy}
+          total={total}
+          accepted={accepted}
+          pending={pending}
+        />
 
+        <div className="traffic-distribution-grid">
           <AdminStatisticsDistributionCard
-            eyebrow="AGENTS"
             title="客服接待分布"
             emptyLabel="暂无客服接待"
             total={total}
@@ -123,7 +122,6 @@ export function AdminStatisticsPage({
           />
 
           <AdminStatisticsDistributionCard
-            eyebrow="PRODUCTS"
             title="产品会话分布"
             emptyLabel="暂无产品会话"
             total={total}
@@ -132,12 +130,7 @@ export function AdminStatisticsPage({
           />
         </div>
 
-        <AdminStatisticsFooter
-          busy={busy}
-          agentTotal={sumCounts(agentRows)}
-          productTotal={sumCounts(productRows)}
-          total={total}
-        />
+        <AdminStatisticsFooter />
       </section>
     </section>
   );
@@ -146,8 +139,4 @@ export function AdminStatisticsPage({
 function initials(value: string): string {
   const normalized = value.trim();
   return normalized ? normalized.slice(0, 2).toUpperCase() : '客';
-}
-
-function sumCounts(rows: Array<{ count: number }>): number {
-  return rows.reduce((sum, row) => sum + row.count, 0);
 }

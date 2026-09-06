@@ -61,12 +61,9 @@ export function AgentEditorModal({
       >
         <header className="agent-editor-header">
           <div className="agent-editor-title-block">
-            <span className="agent-editor-kicker">客服账号</span>
-            <div>
-              <h2 id="agent-editor-title">
-                {draft.id ? '编辑客服' : '新增客服'}
-              </h2>
-            </div>
+            <h2 id="agent-editor-title">
+              {draft.id ? '编辑客服' : '新增客服'}
+            </h2>
           </div>
           <button
             type="button"

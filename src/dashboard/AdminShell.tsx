@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { UiIcon } from './icons';
-import { siteLogoUrl } from './site-logo-client';
+import type { SiteLogoInfo } from './site-logo-client';
 import { Button } from './ui';
 
 export type AdminSection = 'dashboard' | 'agents' | 'settings';
@@ -8,7 +8,7 @@ export type AdminSection = 'dashboard' | 'agents' | 'settings';
 type AdminSidebarProps = {
   section: AdminSection;
   agentCount: number;
-  logoRevision: string;
+  siteLogo: SiteLogoInfo | null;
   onSectionChange: (section: AdminSection) => void;
   onLogout: () => Promise<void>;
 };
@@ -27,18 +27,18 @@ type AdminShellProps = AdminSidebarProps &
     overlays?: ReactNode;
   };
 
-function AdminBrandMark({ revision }: { revision: string }) {
+function AdminBrandMark({ siteLogo }: { siteLogo: SiteLogoInfo | null }) {
   const [failed, setFailed] = useState(false);
 
-  useEffect(() => setFailed(false), [revision]);
+  useEffect(() => setFailed(false), [siteLogo?.url]);
 
   return (
     <span className="admin-brand-mark" aria-label="站点 Logo">
       <b aria-hidden="true">CS</b>
-      {!failed ? (
+      {siteLogo && !failed ? (
         <img
-          key={revision || 'default'}
-          src={siteLogoUrl(revision)}
+          key={siteLogo.url}
+          src={siteLogo.url}
           alt=""
           onError={() => setFailed(true)}
         />
@@ -50,14 +50,14 @@ function AdminBrandMark({ revision }: { revision: string }) {
 export function AdminSidebar({
   section,
   agentCount,
-  logoRevision,
+  siteLogo,
   onSectionChange,
   onLogout,
 }: AdminSidebarProps) {
   return (
     <aside className="admin-sidebar">
       <div className="admin-brand">
-        <AdminBrandMark revision={logoRevision} />
+        <AdminBrandMark siteLogo={siteLogo} />
         <div>
           <strong>客服管理</strong>
           <small>管理员后台</small>
@@ -144,7 +144,7 @@ export function AdminPageHeader({
 export function AdminShell({
   section,
   agentCount,
-  logoRevision,
+  siteLogo,
   title,
   hint,
   showCreateAgent,
@@ -160,7 +160,7 @@ export function AdminShell({
       <AdminSidebar
         section={section}
         agentCount={agentCount}
-        logoRevision={logoRevision}
+        siteLogo={siteLogo}
         onSectionChange={onSectionChange}
         onLogout={onLogout}
       />

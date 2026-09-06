@@ -23,6 +23,7 @@ import {
 } from './AdminRoutingDiagnoseDock';
 import { AdminShell, type AdminSection } from './AdminShell';
 import { AdminAgentsPage } from './AdminAgentsPage';
+import { getSiteLogo, type SiteLogoInfo } from './site-logo-client';
 import { useAdminAgentsController } from './useAdminAgentsController';
 import { useAdminStatisticsController } from './useAdminStatisticsController';
 
@@ -78,10 +79,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [products, setProducts] = useState<ProductCatalogItem[]>([]);
   const [noAgentMessage, setNoAgentMessage] =
     useState<NoAgentMessageSettings | null>(null);
+  const [siteLogo, setSiteLogo] = useState<SiteLogoInfo | null>(null);
   const [section, setSection] = useState<AdminSection>('dashboard');
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
-  const [logoRevision, setLogoRevision] = useState('');
   const [routingDiagnoseOpen, setRoutingDiagnoseOpen] = useState(false);
   const [error, setError] = useState('');
 
@@ -107,6 +108,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     refresh()
       .catch((reason) => setError(message(reason, '无法加载配置')))
       .finally(() => setBusy(false));
+    getSiteLogo()
+      .then(setSiteLogo)
+      .catch((reason) => setError(message(reason, '无法加载站点 Logo')));
   }, [refresh]);
 
   async function saveNoAgentMessage(settings: NoAgentMessageSettings) {
@@ -140,7 +144,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
     <AdminShell
       section={section}
       agentCount={agents.length}
-      logoRevision={logoRevision}
+      siteLogo={siteLogo}
       title={sectionTitle}
       hint={sectionHint}
       showCreateAgent={section === 'agents'}
@@ -208,8 +212,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <SiteSettingsPage
           noAgentMessage={noAgentMessage}
           noAgentSaving={settingsSaving}
-          logoRevision={logoRevision}
-          onLogoRevisionChange={setLogoRevision}
+          siteLogo={siteLogo}
+          onSiteLogoChange={setSiteLogo}
           onSaveNoAgentMessage={saveNoAgentMessage}
         />
       ) : null}

@@ -46,7 +46,7 @@ test('site settings owns branding and the existing no-agent message setting', ()
   assert.match(portal, /: '站点设置';/u);
   assert.match(portal, /管理站点品牌和访客侧客服体验。/u);
   assert.match(portal, /<SiteSettingsPage/u);
-  assert.match(siteSettings, /站点品牌/u);
+  assert.match(siteSettings, />品牌<\/span>/u);
   assert.match(siteSettings, /站点 Logo/u);
   assert.match(siteSettings, /客服可用性/u);
   assert.match(siteSettings, /<NoAgentMessageSettingsPanel/u);
