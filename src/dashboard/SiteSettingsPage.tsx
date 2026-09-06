@@ -20,12 +20,14 @@ import { Button } from './ui';
 type LogoPhase = 'idle' | 'processing' | 'uploading' | 'saving' | 'removing';
 
 export function SiteSettingsPage({
+  view,
   noAgentMessage,
   noAgentSaving,
   siteLogo,
   onSiteLogoChange,
   onSaveNoAgentMessage,
 }: {
+  view: 'branding' | 'availability';
   noAgentMessage: NoAgentMessageSettings;
   noAgentSaving: boolean;
   siteLogo: SiteLogoInfo | null;
@@ -33,25 +35,16 @@ export function SiteSettingsPage({
   onSaveNoAgentMessage: (settings: NoAgentMessageSettings) => Promise<void>;
 }) {
   return (
-    <div className="site-settings-page">
-      <SiteLogoSettings siteLogo={siteLogo} onChange={onSiteLogoChange} />
-      <section
-        className="site-settings-group"
-        aria-labelledby="availability-title"
-      >
-        <header className="site-settings-group-head">
-          <div>
-            <span className="admin-section-kicker">客服可用性</span>
-            <h2 id="availability-title">无客服提示</h2>
-            <p>管理没有可分配客服时，访客立即看到的响应内容。</p>
-          </div>
-        </header>
+    <div className={`site-settings-page is-${view}`}>
+      {view === 'branding' ? (
+        <SiteLogoSettings siteLogo={siteLogo} onChange={onSiteLogoChange} />
+      ) : (
         <NoAgentMessageSettingsPanel
           settings={noAgentMessage}
           saving={noAgentSaving}
           onSave={onSaveNoAgentMessage}
         />
-      </section>
+      )}
     </div>
   );
 }
@@ -161,9 +154,8 @@ function SiteLogoSettings({
     <section className="site-settings-group" aria-labelledby="branding-title">
       <header className="site-settings-group-head">
         <div>
-          <span className="admin-section-kicker">品牌</span>
           <h2 id="branding-title">站点 Logo</h2>
-          <p>用于管理后台侧栏品牌标识；未配置时显示默认 CS。</p>
+          <p>用于管理后台品牌标识；未配置时显示默认 CS。</p>
         </div>
       </header>
 
