@@ -21,8 +21,9 @@ export type VisitorPromotionDraft = Omit<
 type PromotionEnvelope = { promotion: VisitorPromotionSettings | null };
 
 export async function getVisitorPromotion(): Promise<VisitorPromotionSettings | null> {
-  return (await promotionRequest<PromotionEnvelope>('/api/admin/visitor-promotion'))
-    .promotion;
+  return (
+    await promotionRequest<PromotionEnvelope>('/api/admin/visitor-promotion')
+  ).promotion;
 }
 
 export async function updateVisitorPromotion(
@@ -39,7 +40,10 @@ export async function updateVisitorPromotion(
   return response.promotion;
 }
 
-async function promotionRequest<T>(path: string, init?: RequestInit): Promise<T> {
+async function promotionRequest<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
   if (init?.body !== undefined) headers.set('Content-Type', 'application/json');
