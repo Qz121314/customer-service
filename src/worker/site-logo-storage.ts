@@ -11,10 +11,16 @@ export type SiteLogoInfo = {
 };
 
 type SiteLogoPointer = {
+  state?: 'active';
   assetId: string;
   key: string;
   contentType: string;
   byteSize: number;
+  updatedAt: string;
+};
+
+type SiteLogoDefaultPointer = {
+  state: 'default';
   updatedAt: string;
 };
 
@@ -42,6 +48,7 @@ export async function replaceSiteLogo(
   const key = siteLogoAssetKey(assetId);
   const updatedAt = new Date().toISOString();
   const pointer: SiteLogoPointer = {
+    state: 'active',
     assetId,
     key,
     contentType,
@@ -58,13 +65,7 @@ export async function replaceSiteLogo(
   });
 
   try {
-    await bucket.put(SITE_LOGO_POINTER_KEY, JSON.stringify(pointer), {
-      httpMetadata: {
-        contentType: 'application/json',
-        cacheControl: 'no-store',
-      },
-      customMetadata: { owner: 'site-logo-pointer', siteId: 'default' },
-    });
+    await putPointer(bucket, pointer);
   } catch (error) {
     const orphanRemoved = await deleteWithRetry(bucket, key);
     if (!orphanRemoved) {
@@ -93,9 +94,11 @@ export async function removeSiteLogo(
   const previous = await readCurrentSiteLogo(bucket);
   if (!previous) return { logo: null, cleanupWarning: false };
 
-  if (!previous.legacy) {
-    await bucket.delete(SITE_LOGO_POINTER_KEY);
-  }
+  const defaultPointer: SiteLogoDefaultPointer = {
+    state: 'default',
+    updatedAt: new Date().toISOString(),
+  };
+  await putPointer(bucket, defaultPointer);
 
   const cleanupWarning = !(await deleteWithRetry(bucket, previous.key));
   if (cleanupWarning) {
@@ -134,12 +137,15 @@ async function readCurrentSiteLogo(
 ): Promise<CurrentSiteLogo | null> {
   const pointerObject = await bucket.get(SITE_LOGO_POINTER_KEY);
   if (pointerObject) {
-    let parsed: SiteLogoPointer;
+    let parsed: SiteLogoPointer | SiteLogoDefaultPointer;
     try {
-      parsed = JSON.parse(await pointerObject.text()) as SiteLogoPointer;
+      parsed = JSON.parse(await pointerObject.text()) as
+        | SiteLogoPointer
+        | SiteLogoDefaultPointer;
     } catch {
       throw new Error('SITE_LOGO_POINTER_INVALID');
     }
+    if (parsed.state === 'default') return null;
     if (
       !isSiteLogoAssetId(parsed.assetId) ||
       parsed.key !== siteLogoAssetKey(parsed.assetId) ||
@@ -174,6 +180,19 @@ function publicInfo(current: CurrentSiteLogo): SiteLogoInfo {
     byteSize: current.byteSize,
     updatedAt: current.updatedAt,
   };
+}
+
+async function putPointer(
+  bucket: R2Bucket,
+  pointer: SiteLogoPointer | SiteLogoDefaultPointer,
+): Promise<void> {
+  await bucket.put(SITE_LOGO_POINTER_KEY, JSON.stringify(pointer), {
+    httpMetadata: {
+      contentType: 'application/json',
+      cacheControl: 'no-store',
+    },
+    customMetadata: { owner: 'site-logo-pointer', siteId: 'default' },
+  });
 }
 
 function isSupportedContentType(contentType: string): boolean {
