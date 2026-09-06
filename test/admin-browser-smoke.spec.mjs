@@ -244,6 +244,8 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     await page.setViewportSize(viewport);
     await page.goto(url('/'));
     await expectNoHorizontalOverflow(page);
+    await expect(page.locator('.traffic-summary-strip')).toBeVisible();
+    await expect(page.locator('.traffic-distribution-card')).toHaveCount(2);
 
     const dashboard = await dashboardGeometry(page);
     expect(dashboard).not.toBeNull();
