@@ -1,4 +1,4 @@
-import { rebuildTrafficDailyRollups } from './traffic-statistics';
+import { rebuildTrafficDailyRollups } from './traffic-statistics.ts';
 
 export const CONVERSATION_LIFETIME_HOURS = 24;
 export const CONVERSATION_LIFETIME_MS =
