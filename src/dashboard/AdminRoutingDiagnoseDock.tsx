@@ -115,10 +115,7 @@ export function AdminRoutingDiagnoseWorkspace({
   }
 
   return (
-    <section
-      className="routing-diagnose-workspace"
-      aria-label="分流诊断工作区"
-    >
+    <section className="routing-diagnose-workspace" aria-label="分流诊断工作区">
       <header className="routing-diagnose-head">
         <label className="routing-diagnose-product">
           <span>诊断产品</span>
@@ -163,10 +160,7 @@ export function AdminRoutingDiagnoseWorkspace({
               className="routing-diagnose-context"
               aria-label="诊断上下文"
             >
-              <ContextItem
-                label="业务日期"
-                value={diagnostics.businessDate}
-              />
+              <ContextItem label="业务日期" value={diagnostics.businessDate} />
               <ContextItem
                 label="当前产品"
                 value={diagnostics.product.title}
@@ -186,10 +180,7 @@ export function AdminRoutingDiagnoseWorkspace({
               />
             </section>
 
-            <section
-              className="routing-diagnose-funnel"
-              aria-label="资格漏斗"
-            >
+            <section className="routing-diagnose-funnel" aria-label="资格漏斗">
               {[
                 ['总客服', diagnostics.funnel.total],
                 ['已启用', diagnostics.funnel.enabled],
