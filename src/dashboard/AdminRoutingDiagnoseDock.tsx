@@ -212,7 +212,10 @@ export function AdminRoutingDiagnoseDock({
                 className="routing-diagnose-context"
                 aria-label="诊断上下文"
               >
-                <ContextItem label="业务日期" value={diagnostics.businessDate} />
+                <ContextItem
+                  label="业务日期"
+                  value={diagnostics.businessDate}
+                />
                 <ContextItem
                   label="当前产品"
                   value={diagnostics.product.title}
@@ -222,8 +225,14 @@ export function AdminRoutingDiagnoseDock({
                   label="可分配客服"
                   value={`${diagnostics.funnel.eligible} / ${diagnostics.funnel.total} 总数`}
                 />
-                <CursorItem label="上一棒" value={diagnostics.cursor.lastAgentId} />
-                <CursorItem label="下一棒" value={diagnostics.cursor.nextAgentId} />
+                <CursorItem
+                  label="上一棒"
+                  value={diagnostics.cursor.lastAgentId}
+                />
+                <CursorItem
+                  label="下一棒"
+                  value={diagnostics.cursor.nextAgentId}
+                />
               </section>
 
               <section
@@ -293,7 +302,9 @@ export function AdminRoutingDiagnoseDock({
                             <div className="routing-diagnose-agent-name">
                               <span aria-hidden="true">{initials(agent)}</span>
                               <div>
-                                <strong>{agent.adminLabel || agent.name}</strong>
+                                <strong>
+                                  {agent.adminLabel || agent.name}
+                                </strong>
                                 <small>{agent.name}</small>
                               </div>
                               {agent.nextRoundRobin ? <b>下一棒</b> : null}
@@ -318,7 +329,8 @@ export function AdminRoutingDiagnoseDock({
                             {agent.trafficQuotaEnabled
                               ? Math.max(
                                   0,
-                                  agent.trafficQuotaTotal - agent.trafficQuotaUsed,
+                                  agent.trafficQuotaTotal -
+                                    agent.trafficQuotaUsed,
                                 )
                               : '不限'}
                           </td>
@@ -391,7 +403,9 @@ function CursorItem({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="routing-diagnose-cursor-item">
       <span>{label}</span>
-      <strong title={value ?? undefined}>{value ? compactId(value) : '暂无'}</strong>
+      <strong title={value ?? undefined}>
+        {value ? compactId(value) : '暂无'}
+      </strong>
       {value ? (
         <button
           type="button"
