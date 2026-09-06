@@ -60,7 +60,7 @@ test('dashboard rollups add zero visitor-create and assignment hot-path writes',
   );
   assert.match(
     trafficStatisticsSource,
-    /for \(let offset = 1; offset <= TRAFFIC_STATS_LIVE_BUSINESS_DAYS/u,
+    /for \(\s*let offset = 1;\s*offset <= TRAFFIC_STATS_LIVE_BUSINESS_DAYS/u,
   );
 });
 
