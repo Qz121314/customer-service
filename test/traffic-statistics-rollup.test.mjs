@@ -222,8 +222,7 @@ function apiShape(rows, from, to) {
     agents: rows
       .filter((row) => row.dimension === 'agent')
       .map((row) => ({
-        agentId:
-          row.item_id === TRAFFIC_PENDING_AGENT_ID ? null : row.item_id,
+        agentId: row.item_id === TRAFFIC_PENDING_AGENT_ID ? null : row.item_id,
         agentName: row.item_name ?? '待接待',
         count: Number(row.count),
       })),
@@ -243,7 +242,8 @@ function assertUsesIndex(plan, table, index) {
   assert.ok(
     plan.some(
       (detail) =>
-        detail.includes(`SEARCH ${table} USING INDEX`) && detail.includes(index),
+        detail.includes(`SEARCH ${table} USING INDEX`) &&
+        detail.includes(index),
     ),
     `expected ${index}; got:\n${plan.join('\n')}`,
   );
@@ -326,7 +326,10 @@ test('0061 creates one indexed daily rollup table and backfills retained facts w
       },
     ],
   );
-  assert.doesNotMatch(readFileSync(rollupMigrationUrl, 'utf8'), /CREATE TRIGGER/iu);
+  assert.doesNotMatch(
+    readFileSync(rollupMigrationUrl, 'utf8'),
+    /CREATE TRIGGER/iu,
+  );
   database.close();
 });
 
@@ -472,10 +475,19 @@ test('legacy raw aggregation and the production hybrid read are strict-equal acr
   for (const [label, from, to] of ranges) {
     const legacy = apiShape(legacyRows(database, from, to), from, to);
     const db = d1(database);
-    const hybridRows = await loadTrafficStatisticsRows(db, from, to, FIXED_TODAY);
+    const hybridRows = await loadTrafficStatisticsRows(
+      db,
+      from,
+      to,
+      FIXED_TODAY,
+    );
     const hybrid = apiShape(hybridRows, from, to);
     assert.deepEqual(hybrid, legacy, `${label} must reconcile exactly`);
-    assert.equal(db.counter.queries, 1, `${label} must use one D1 read statement`);
+    assert.equal(
+      db.counter.queries,
+      1,
+      `${label} must use one D1 read statement`,
+    );
   }
 
   const emptyDatabase = createDatabaseThrough0060();
@@ -485,12 +497,7 @@ test('legacy raw aggregation and the production hybrid read are strict-equal acr
   const emptyTo = dateShift(FIXED_TODAY, -10);
   assert.deepEqual(
     apiShape(
-      await loadTrafficStatisticsRows(
-        emptyDb,
-        emptyFrom,
-        emptyTo,
-        FIXED_TODAY,
-      ),
+      await loadTrafficStatisticsRows(emptyDb, emptyFrom, emptyTo, FIXED_TODAY),
       emptyFrom,
       emptyTo,
     ),
@@ -523,7 +530,11 @@ test('historical-only and 90-day hybrid plans use indexed bounded sources', () =
     `historical-only range must not scan raw receipts:\n${historicalPlan.join('\n')}`,
   );
 
-  const plan = trafficStatisticsReadPlan(RETAINED_FROM, FIXED_TODAY, FIXED_TODAY);
+  const plan = trafficStatisticsReadPlan(
+    RETAINED_FROM,
+    FIXED_TODAY,
+    FIXED_TODAY,
+  );
   assert.equal(plan.mode, 'hybrid');
   assert.equal(plan.rawFrom, dateShift(FIXED_TODAY, -2));
   assert.equal(plan.rawTo, FIXED_TODAY);
@@ -564,7 +575,11 @@ test('1/7/30/90-day synthetic cost contracts keep one D1 query and cap raw facts
     for (const days of [1, 7, 30, 90]) {
       const from = dateShift(FIXED_TODAY, -(days - 1));
       const legacyFactRows = rawRows(database, from, FIXED_TODAY);
-      const readPlan = trafficStatisticsReadPlan(from, FIXED_TODAY, FIXED_TODAY);
+      const readPlan = trafficStatisticsReadPlan(
+        from,
+        FIXED_TODAY,
+        FIXED_TODAY,
+      );
       const liveFactRows =
         readPlan.mode === 'rollup'
           ? 0
