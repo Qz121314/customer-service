@@ -35,8 +35,7 @@ export function uploadSiteLogo(
     });
     request.addEventListener('load', () => {
       const payload = request.response as
-        | (SiteLogoMutationResult & { error?: string })
-        | null;
+        (SiteLogoMutationResult & { error?: string }) | null;
       if (request.status >= 200 && request.status < 300 && payload) {
         resolve({
           siteLogo: payload.siteLogo ?? null,
