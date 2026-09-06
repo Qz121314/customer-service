@@ -472,11 +472,11 @@
 
   .routing-diagnose-head {
     grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
     padding: 8px;
   }
 
   .routing-diagnose-product {
-    grid-column: 1 / -1;
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
   }
