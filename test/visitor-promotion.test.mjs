@@ -174,8 +174,16 @@ test('public API returns null for disabled, future and expired promotion', async
 
 test('public active lookup is site-isolated and costs one SELECT', async () => {
   const { database, db, metrics, reset } = setup();
-  await savePromotion(db);
   database.exec(`
+    INSERT INTO visitor_promotions (
+      site_id, id, is_enabled, title, summary, cover_url, body_markdown,
+      cta_label, cta_url, updated_at
+    ) VALUES (
+      'default', 'promo-default', 1, 'New Customer Offer',
+      'Get 10% off your first order', 'https://example.com/cover.webp',
+      '# Welcome', 'Shop now', 'https://example.com/offer',
+      '2026-09-06T12:00:00.000Z'
+    );
     INSERT INTO sites (id, name, public_key, is_enabled)
     VALUES ('site-b', 'Site B', 'pk_site_b', 1);
     INSERT INTO visitor_promotions (
@@ -197,7 +205,11 @@ test('public active lookup is site-isolated and costs one SELECT', async () => {
   assert.equal(payload.promotion.title, 'New Customer Offer');
   assert.equal('isNew' in payload.promotion, false);
   assert.equal('revision' in payload.promotion, false);
-  assert.equal(metrics().select, 1);
+  assert.equal(
+    metrics().select,
+    1,
+    JSON.stringify(metrics().executions, null, 2),
+  );
   assert.equal(metrics().insert, 0);
   assert.equal(metrics().update, 0);
 
