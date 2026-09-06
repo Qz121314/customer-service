@@ -57,8 +57,7 @@ async function promotionRequest<T>(
     },
   });
   const value = (await response.json().catch(() => null)) as
-    | ({ error?: string } & Partial<T>)
-    | null;
+    ({ error?: string } & Partial<T>) | null;
   if (!response.ok) {
     throw new Error(promotionError(value?.error));
   }
@@ -67,9 +66,11 @@ async function promotionRequest<T>(
 
 function promotionError(code?: string): string {
   if (code === 'UNAUTHORIZED') return '登录已失效，请重新登录';
-  if (code === 'INVALID_PROMOTION') return '标题、摘要和文章内容不能为空或超出长度限制';
+  if (code === 'INVALID_PROMOTION')
+    return '标题、摘要和文章内容不能为空或超出长度限制';
   if (code === 'INVALID_PROMOTION_URL') return '封面地址必须使用 http 或 https';
-  if (code === 'INVALID_PROMOTION_CTA') return 'CTA 文案和地址必须同时填写，地址需使用 http 或 https';
+  if (code === 'INVALID_PROMOTION_CTA')
+    return 'CTA 文案和地址必须同时填写，地址需使用 http 或 https';
   if (code === 'INVALID_PROMOTION_TIME') return '推广起止时间无效';
   return code ?? '保存访客推广失败';
 }

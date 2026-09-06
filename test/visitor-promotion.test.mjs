@@ -110,7 +110,10 @@ test('admin promotion API reuses admin session and validates content', async () 
   assert.equal(invalidCover.response.status, 400);
   assert.equal(invalidCover.body.error, 'INVALID_PROMOTION_URL');
 
-  const invalidCta = await savePromotion(db, { ctaLabel: 'Shop', ctaUrl: null });
+  const invalidCta = await savePromotion(db, {
+    ctaLabel: 'Shop',
+    ctaUrl: null,
+  });
   assert.equal(invalidCta.response.status, 400);
   assert.equal(invalidCta.body.error, 'INVALID_PROMOTION_CTA');
 
@@ -219,7 +222,10 @@ test('updating content preserves id and advances updatedAt', async () => {
   const first = await savePromotion(db);
   const second = await savePromotion(db, { title: 'Updated offer' });
   assert.equal(second.body.promotion.id, first.body.promotion.id);
-  assert.notEqual(second.body.promotion.updatedAt, first.body.promotion.updatedAt);
+  assert.notEqual(
+    second.body.promotion.updatedAt,
+    first.body.promotion.updatedAt,
+  );
 });
 
 test('promotion source stays outside chat, identity, routing, quota and statistics', () => {
@@ -235,7 +241,10 @@ test('promotion source stays outside chat, identity, routing, quota and statisti
   );
 
   assert.doesNotMatch(promotionSource, /visitor_promotion_views/iu);
-  assert.doesNotMatch(promotionSource, /resolveVisitor|visitorToken|visitorId/iu);
+  assert.doesNotMatch(
+    promotionSource,
+    /resolveVisitor|visitorToken|visitorId/iu,
+  );
   assert.doesNotMatch(
     promotionSource,
     /INSERT\s+INTO\s+(?:conversations|messages)\b/iu,
@@ -244,6 +253,9 @@ test('promotion source stays outside chat, identity, routing, quota and statisti
     promotionSource,
     /conversation_traffic_receipts|traffic_daily_rollups/iu,
   );
-  assert.doesNotMatch(promotionSource, /from ['"]\.\/(?:routing|abuse-control)/iu);
+  assert.doesNotMatch(
+    promotionSource,
+    /from ['"]\.\/(?:routing|abuse-control)/iu,
+  );
   assert.doesNotMatch(clientSource, /visitor_promotions/iu);
 });

@@ -42,7 +42,9 @@ export function VisitorPromotionSettingsPanel() {
       .finally(() => setLoading(false));
   }, []);
 
-  const changed = saved ? JSON.stringify(saved) !== JSON.stringify(draft) : false;
+  const changed = saved
+    ? JSON.stringify(saved) !== JSON.stringify(draft)
+    : false;
   const canSave =
     changed &&
     Boolean(draft.title.trim()) &&
@@ -96,7 +98,9 @@ export function VisitorPromotionSettingsPanel() {
         <div>
           <span className="admin-section-kicker">访客端内容</span>
           <h2 id="visitor-promotion-title">Visitor Promotion</h2>
-          <p>配置 Messages 顶部的置顶文章入口。推广内容独立于客服会话和未读消息。</p>
+          <p>
+            配置 Messages 顶部的置顶文章入口。推广内容独立于客服会话和未读消息。
+          </p>
         </div>
         <span className="no-agent-behavior-badge">
           {draft.isEnabled ? '已启用' : '未启用'}
@@ -113,7 +117,9 @@ export function VisitorPromotionSettingsPanel() {
               type="checkbox"
               checked={draft.isEnabled}
               disabled={saving}
-              onChange={(event) => updateDraft({ isEnabled: event.target.checked })}
+              onChange={(event) =>
+                updateDraft({ isEnabled: event.target.checked })
+              }
             />
           </label>
         </Field>
@@ -156,9 +162,13 @@ export function VisitorPromotionSettingsPanel() {
               disabled={saving}
               required
               placeholder="# Promotion article"
-              onChange={(event) => updateDraft({ bodyMarkdown: event.target.value })}
+              onChange={(event) =>
+                updateDraft({ bodyMarkdown: event.target.value })
+              }
             />
-            <small>使用 Markdown；Storefront 使用现有安全 Markdown renderer 显示。</small>
+            <small>
+              使用 Markdown；Storefront 使用现有安全 Markdown renderer 显示。
+            </small>
           </label>
         </Field>
 
@@ -239,7 +249,11 @@ function PromotionTextField({
       <label className="no-agent-message-field">
         <span className="no-agent-message-label">
           <strong>{label}</strong>
-          {maxLength ? <small>{value.length}/{maxLength}</small> : null}
+          {maxLength ? (
+            <small>
+              {value.length}/{maxLength}
+            </small>
+          ) : null}
         </span>
         <Input
           type={type}

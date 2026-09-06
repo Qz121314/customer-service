@@ -184,9 +184,7 @@ visitorPromotionApi.get('/client/v1/promotion', async (c) => {
 
 async function adminAuthorized(c: Context<Env>): Promise<boolean> {
   const password = c.env.ADMIN_PASSWORD;
-  return Boolean(
-    password && (await verifyAdminSession(c.req.raw, password)),
-  );
+  return Boolean(password && (await verifyAdminSession(c.req.raw, password)));
 }
 
 function unauthorized(c: Context<Env>) {
@@ -227,9 +225,9 @@ function serializeAdminPromotion(row: PromotionRow) {
   };
 }
 
-function normalizePromotionInput(body: PromotionInput | null):
-  | { ok: true; value: NormalizedPromotion }
-  | { ok: false; error: string } {
+function normalizePromotionInput(
+  body: PromotionInput | null,
+): { ok: true; value: NormalizedPromotion } | { ok: false; error: string } {
   if (!body || typeof body.isEnabled !== 'boolean') {
     return { ok: false, error: 'INVALID_PROMOTION' };
   }
@@ -319,7 +317,9 @@ function optionalTimestamp(value: unknown): string | null | undefined {
   if (value === null || value === undefined || value === '') return null;
   if (typeof value !== 'string') return undefined;
   const timestamp = new Date(value);
-  return Number.isNaN(timestamp.getTime()) ? undefined : timestamp.toISOString();
+  return Number.isNaN(timestamp.getTime())
+    ? undefined
+    : timestamp.toISOString();
 }
 
 function normalizeProjectId(value: unknown): string {
