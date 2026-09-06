@@ -2,8 +2,10 @@ import { writeFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
-const adminPassword =
-  process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
+const adminPassword = process.env.UI_SMOKE_ADMIN_PASSWORD;
+if (!adminPassword) {
+  throw new Error('UI_SMOKE_ADMIN_PASSWORD is required for admin browser smoke');
+}
 const evidence = { screenshots: {}, geometry: [] };
 
 function url(path) {
@@ -42,7 +44,7 @@ async function seedAgent(page, username, name) {
       name,
       adminLabel: '1号',
       username,
-      password: 'ui-admin-smoke-pass',
+      password: adminPassword,
       routingScope: { type: 'none' },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
@@ -333,16 +335,24 @@ test('agent directory lets the document own long-list vertical scrolling', async
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await loginAdmin(page);
-  for (let index = 0; index < 14; index += 1) {
+  const runId = Date.now().toString(36);
+  const seedPrefix = `UI Scroll ${runId} Agent`;
+  for (let index = 0; index < 100; index += 1) {
     await seedAgent(
       page,
-      `ui-scroll-agent-${index}`,
-      `UI Scroll Agent ${index + 1}`,
+      `ui-scroll-${runId}-${index}`,
+      `${seedPrefix} ${index + 1}`,
     );
   }
   await page.goto(url('/'));
   await openSection(page, '客服坐席', '客服账号');
-  await expect(page.getByRole('row')).toHaveCount(15);
+  const seededRows = page.getByRole('row').filter({ hasText: seedPrefix });
+  await expect(seededRows).toHaveCount(100);
+  const lastSeededRow = page
+    .getByRole('row')
+    .filter({ hasText: `${seedPrefix} 100` });
+  await lastSeededRow.scrollIntoViewIfNeeded();
+  await expect(lastSeededRow).toBeVisible();
 
   const geometry = await page.evaluate(() => {
     const root = globalThis.document.scrollingElement;
