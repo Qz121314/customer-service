@@ -17,6 +17,19 @@ export type PreparedSiteLogo = {
   contentType: string;
 };
 
+export function validateSiteLogoSource(input: {
+  type: string;
+  size: number;
+}): void {
+  if (!SITE_LOGO_INPUT_TYPES.has(input.type)) {
+    throw new Error('站点 Logo 仅支持 PNG、JPG 或 WebP。');
+  }
+  if (input.size === 0) throw new Error('站点 Logo 文件为空。');
+  if (input.size > SITE_LOGO_MAX_INPUT_BYTES) {
+    throw new Error('原始站点 Logo 不能超过 5 MB。');
+  }
+}
+
 export function fitSiteLogoDimensions(
   width: number,
   height: number,
@@ -57,13 +70,7 @@ export function shouldKeepOriginalSiteLogo({
 }
 
 export async function prepareSiteLogo(file: File): Promise<PreparedSiteLogo> {
-  if (!SITE_LOGO_INPUT_TYPES.has(file.type)) {
-    throw new Error('站点 Logo 仅支持 PNG、JPG 或 WebP。');
-  }
-  if (file.size === 0) throw new Error('站点 Logo 文件为空。');
-  if (file.size > SITE_LOGO_MAX_INPUT_BYTES) {
-    throw new Error('原始站点 Logo 不能超过 5 MB。');
-  }
+  validateSiteLogoSource(file);
 
   let image: ImageBitmap;
   try {
