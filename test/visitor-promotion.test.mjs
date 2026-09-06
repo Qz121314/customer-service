@@ -234,7 +234,10 @@ test('public promotion lookup is isolated by site', async () => {
     undefined,
     { DB: d1 },
   );
-  assert.equal((await defaultResponse.json()).promotion.title, 'New Customer Offer');
+  assert.equal(
+    (await defaultResponse.json()).promotion.title,
+    'New Customer Offer',
+  );
 
   const siteBResponse = await visitorPromotionApi.request(
     '/client/v1/promotion?visitorId=ABC123&projectId=pk_site_b',
@@ -264,5 +267,8 @@ test('promotion source stays outside chat, routing, quota and statistics owners'
     /conversation_traffic_receipts|traffic_daily_rollups/iu,
   );
   assert.doesNotMatch(promotionSource, /from ['"]\.\/routing/iu);
-  assert.doesNotMatch(clientSource, /visitor_promotions|visitor_promotion_views/iu);
+  assert.doesNotMatch(
+    clientSource,
+    /visitor_promotions|visitor_promotion_views/iu,
+  );
 });
