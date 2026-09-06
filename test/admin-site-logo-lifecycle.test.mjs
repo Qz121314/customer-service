@@ -18,6 +18,7 @@ import {
 class FakeR2 {
   objects = new Map();
   failPointerPut = false;
+  failAssetPut = false;
   failDelete = new Set();
 
   async get(key) {
@@ -34,6 +35,9 @@ class FakeR2 {
   async put(key, body, options = {}) {
     if (key === SITE_LOGO_POINTER_KEY && this.failPointerPut) {
       throw new Error('pointer write failed');
+    }
+    if (key.startsWith(SITE_LOGO_ASSET_PREFIX) && this.failAssetPut) {
+      throw new Error('asset write failed');
     }
     const bytes =
       typeof body === 'string'
@@ -127,6 +131,17 @@ test('replace uses a new unique object and deletes the previous object', async (
   assert.equal(bucket.objects.has(firstKey), false);
   assert.equal(assetKeys(bucket).length, 1);
   assert.equal(second.cleanupWarning, false);
+});
+
+test('new asset upload failure leaves the old logo unchanged', async () => {
+  const bucket = new FakeR2();
+  const original = await replaceSiteLogo(bucket, bytes(1), 'image/webp');
+  bucket.failAssetPut = true;
+  await assert.rejects(replaceSiteLogo(bucket, bytes(2), 'image/webp'));
+  bucket.failAssetPut = false;
+  const current = await getCurrentSiteLogo(bucket);
+  assert.equal(current?.assetId, original.logo.assetId);
+  assert.equal(assetKeys(bucket).length, 1);
 });
 
 test('remove clears the active pointer before deleting the active logo', async () => {
