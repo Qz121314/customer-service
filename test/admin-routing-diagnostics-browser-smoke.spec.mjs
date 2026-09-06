@@ -89,7 +89,8 @@ async function readGeometry(dialog) {
     const table = element.querySelector('.routing-diagnose-table');
     const head = element.querySelector('.routing-diagnose-head');
     const foot = element.querySelector('.routing-diagnose-foot');
-    if (!context || !funnel || !tableWrap || !table || !head || !foot) return null;
+    if (!context || !funnel || !tableWrap || !table || !head || !foot)
+      return null;
     const rect = element.getBoundingClientRect();
     return {
       width: rect.width,
@@ -114,7 +115,9 @@ async function expectNoDocumentOverflow(page) {
   expect(widths[1]).toBeLessThanOrEqual(widths[0] + 1);
 }
 
-test('routing diagnostics is a compact table-first workbench', async ({ page }) => {
+test('routing diagnostics is a compact table-first workbench', async ({
+  page,
+}) => {
   await seedDiagnostics(page);
   let bootstrapRequests = 0;
   page.on('request', (request) => {
@@ -136,11 +139,19 @@ test('routing diagnostics is a compact table-first workbench', async ({ page }) 
     const beforeOpen = bootstrapRequests;
     const dialog = await openDiagnostics(page);
     await expect.poll(() => bootstrapRequests).toBe(beforeOpen);
-    await expect(dialog.getByText('下一棒', { exact: true }).first()).toBeVisible();
-    await expect(dialog.getByText('可分配', { exact: true }).first()).toBeVisible();
-    await expect(dialog.getByText('当前不在线', { exact: true }).first()).toBeVisible();
+    await expect(
+      dialog.getByText('下一棒', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText('可分配', { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText('当前不在线', { exact: true }).first(),
+    ).toBeVisible();
     await expect(dialog.getByLabel('诊断产品')).toBeVisible();
-    await expect(dialog.getByRole('button', { name: '刷新', exact: true })).toBeVisible();
+    await expect(
+      dialog.getByRole('button', { name: '刷新', exact: true }),
+    ).toBeVisible();
 
     const geometry = await readGeometry(dialog);
     expect(geometry).not.toBeNull();
@@ -165,7 +176,10 @@ test('routing diagnostics is a compact table-first workbench', async ({ page }) 
     await expectNoDocumentOverflow(page);
     await capture(page, key, geometry);
 
-    await dialog.getByRole('button', { name: '关闭', exact: true }).last().click();
+    await dialog
+      .getByRole('button', { name: '关闭', exact: true })
+      .last()
+      .click();
     await expect(dialog).toBeHidden();
   }
 
