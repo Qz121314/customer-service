@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { NoAgentMessageSettings } from './api';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
+import { VisitorPromotionSettingsPanel } from './VisitorPromotionSettings';
 import {
   SITE_LOGO_ACCEPT,
   prepareSiteLogo,
@@ -23,7 +24,7 @@ export function SiteSettingsPage({
   onSiteLogoChange,
   onSaveNoAgentMessage,
 }: {
-  view: 'branding' | 'availability';
+  view: 'branding' | 'availability' | 'promotion';
   noAgentMessage: NoAgentMessageSettings;
   noAgentSaving: boolean;
   siteLogo: SiteLogoInfo | null;
@@ -34,12 +35,14 @@ export function SiteSettingsPage({
     <div className={`site-settings-page is-${view}`}>
       {view === 'branding' ? (
         <SiteLogoSettings siteLogo={siteLogo} onChange={onSiteLogoChange} />
-      ) : (
+      ) : view === 'availability' ? (
         <NoAgentMessageSettingsPanel
           settings={noAgentMessage}
           saving={noAgentSaving}
           onSave={onSaveNoAgentMessage}
         />
+      ) : (
+        <VisitorPromotionSettingsPanel />
       )}
     </div>
   );
