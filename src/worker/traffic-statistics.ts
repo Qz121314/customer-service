@@ -74,15 +74,11 @@ export const TRAFFIC_STATS_ROLLUP_SQL = `SELECT dimension,
      ORDER BY dimension ASC, count DESC, item_name ASC`;
 
 export const TRAFFIC_STATS_HYBRID_SQL = `WITH historical AS (
-       SELECT dimension,
-         item_id,
-         MAX(NULLIF(TRIM(item_name), '')) AS item_name,
-         SUM(count) AS count
+       SELECT dimension, item_id, item_name, count
        FROM traffic_daily_rollups
        WHERE site_id = 'default'
          AND business_date >= ?1
          AND business_date <= ?2
-       GROUP BY dimension, item_id
      ),
      live_scoped AS MATERIALIZED (
        SELECT product_id, product_title, agent_id, agent_name
@@ -194,7 +190,11 @@ export async function rebuildTrafficDailyRollups(
   currentBusinessDate: string,
 ): Promise<void> {
   const statements: D1PreparedStatement[] = [];
-  for (let offset = 1; offset <= TRAFFIC_STATS_LIVE_BUSINESS_DAYS; offset += 1) {
+  for (
+    let offset = 1;
+    offset <= TRAFFIC_STATS_LIVE_BUSINESS_DAYS;
+    offset += 1
+  ) {
     const businessDate = shiftReportingDate(currentBusinessDate, -offset);
     statements.push(
       db
