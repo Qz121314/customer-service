@@ -96,8 +96,9 @@ async function editorGeometry(dialog) {
       top: rect.top,
       bottom: rect.bottom,
       height: rect.height,
-      columns: globalThis.getComputedStyle(primary).gridTemplateColumns.split(' ')
-        .length,
+      columns: globalThis
+        .getComputedStyle(primary)
+        .gridTemplateColumns.split(' ').length,
       accountHeight: account.getBoundingClientRect().height,
       operationsHeight: operations.getBoundingClientRect().height,
       routingHeight: routing.getBoundingClientRect().height,
@@ -120,7 +121,8 @@ async function generatedPng(page, width, height, fill) {
       context.clearRect(Math.floor(w / 4), Math.floor(h / 4), 8, 8);
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
-          (result) => (result ? resolve(result) : reject(new Error('png failed'))),
+          (result) =>
+            result ? resolve(result) : reject(new Error('png failed')),
           'image/png',
         );
       });
@@ -179,7 +181,9 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     const agents = await agentsGeometry(page);
     expect(agents).not.toBeNull();
     expect(agents.summaryHeight).toBeLessThanOrEqual(60);
-    expect(agents.summaryWidth).toBeGreaterThanOrEqual(agents.tableWidth * 0.98);
+    expect(agents.summaryWidth).toBeGreaterThanOrEqual(
+      agents.tableWidth * 0.98,
+    );
     expect(agents.tableHeight).toBeGreaterThan(agents.summaryHeight * 2);
     expect(agents.tableTop).toBeGreaterThanOrEqual(agents.summaryBottom);
     expect(agents.toolbarHeight).toBeLessThanOrEqual(58);
@@ -219,12 +223,16 @@ test('mobile workbench remains touch-safe', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: '新增客服' });
   const geometry = await dialog.evaluate((element) => {
     const input = element.querySelector('input');
-    const primary = element.querySelector('.agent-editor-footer .primary-button');
+    const primary = element.querySelector(
+      '.agent-editor-footer .primary-button',
+    );
     const rect = element.getBoundingClientRect();
     return {
       width: rect.width,
       height: rect.height,
-      radius: Number.parseFloat(globalThis.getComputedStyle(element).borderRadius),
+      radius: Number.parseFloat(
+        globalThis.getComputedStyle(element).borderRadius,
+      ),
       inputSize: input
         ? Number.parseFloat(globalThis.getComputedStyle(input).fontSize)
         : 0,
@@ -257,7 +265,9 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
   await expect(page.locator('.site-logo-meta')).toContainText('WEBP');
   await page.getByRole('button', { name: '上传 Logo', exact: true }).click();
   await expect(page.getByText('当前 Logo', { exact: true })).toBeVisible();
-  const firstUrl = await page.locator('.admin-brand-mark img').getAttribute('src');
+  const firstUrl = await page
+    .locator('.admin-brand-mark img')
+    .getAttribute('src');
   expect(firstUrl).toMatch(/^\/client\/v1\/site-logo\/[0-9a-f-]+$/u);
 
   const second = await generatedPng(page, 900, 900, '#3730a3');
@@ -269,7 +279,9 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
   });
   await page.getByRole('button', { name: '上传 Logo', exact: true }).click();
   await expect(page.getByText('当前 Logo', { exact: true })).toBeVisible();
-  const secondUrl = await page.locator('.admin-brand-mark img').getAttribute('src');
+  const secondUrl = await page
+    .locator('.admin-brand-mark img')
+    .getAttribute('src');
   expect(secondUrl).not.toBe(firstUrl);
   expect((await page.request.get(url(firstUrl))).status()).toBe(404);
 
@@ -282,5 +294,7 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
     mimeType: 'text/plain',
     buffer: Buffer.from('not an image'),
   });
-  await expect(page.getByRole('alert')).toContainText('仅支持 PNG、JPG 或 WebP');
+  await expect(page.getByRole('alert')).toContainText(
+    '仅支持 PNG、JPG 或 WebP',
+  );
 });
