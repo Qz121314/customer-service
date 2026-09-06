@@ -47,7 +47,9 @@ visitorPromotionApi.use(
 visitorPromotionApi.get('/api/admin/visitor-promotion', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const promotion = await loadPromotion(c.env.DB, 'default');
-  return c.json({ promotion: promotion ? serializePromotion(promotion, false) : null });
+  return c.json({
+    promotion: promotion ? serializePromotion(promotion, false) : null,
+  });
 });
 
 visitorPromotionApi.put('/api/admin/visitor-promotion', async (c) => {
@@ -108,7 +110,9 @@ visitorPromotionApi.put('/api/admin/visitor-promotion', async (c) => {
   }
 
   const promotion = await loadPromotion(c.env.DB, 'default');
-  return c.json({ promotion: promotion ? serializePromotion(promotion, false) : null });
+  return c.json({
+    promotion: promotion ? serializePromotion(promotion, false) : null,
+  });
 });
 
 visitorPromotionApi.get('/client/v1/promotion', async (c) => {
@@ -187,7 +191,12 @@ visitorPromotionApi.put('/client/v1/promotion/:id/view', async (c) => {
     return clientError(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
   const promotion = await loadActivePromotion(c.env.DB, site.id);
   if (!promotion || promotion.id !== id) {
-    return clientError(c, 404, 'PROMOTION_NOT_FOUND', 'Promotion was not found.');
+    return clientError(
+      c,
+      404,
+      'PROMOTION_NOT_FOUND',
+      'Promotion was not found.',
+    );
   }
   if (promotion.revision !== revision) {
     return clientError(
@@ -210,7 +219,8 @@ visitorPromotionApi.put('/client/v1/promotion/:id/view', async (c) => {
       'Visitor access token is invalid.',
     );
   }
-  if (!visitor) visitor = await createPromotionVisitor(c.env.DB, site.id, visitorId);
+  if (!visitor)
+    visitor = await createPromotionVisitor(c.env.DB, site.id, visitorId);
 
   await c.env.DB.prepare(
     `INSERT INTO visitor_promotion_views (
@@ -398,13 +408,13 @@ function normalizeVisitorId(value: unknown): string | null {
 function normalizeVisitorToken(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
-  return normalized.length >= 32 && normalized.length <= 200 ? normalized : null;
+  return normalized.length >= 32 && normalized.length <= 200
+    ? normalized
+    : null;
 }
 
 function normalizeProjectId(value: unknown): string {
-  return typeof value === 'string' &&
-    value.trim() &&
-    value.trim().length <= 200
+  return typeof value === 'string' && value.trim() && value.trim().length <= 200
     ? value.trim()
     : 'default';
 }
@@ -428,7 +438,10 @@ async function createPromotionVisitor(
   externalId: string,
 ) {
   const id = crypto.randomUUID();
-  const tokenHash = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll('-', '');
+  const tokenHash = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll(
+    '-',
+    '',
+  );
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   await db
     .prepare(
@@ -498,7 +511,11 @@ async function hmac(secret: string, value: string): Promise<string> {
     false,
     ['sign'],
   );
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(value));
+  const signature = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode(value),
+  );
   return toBase64Url(new Uint8Array(signature));
 }
 
