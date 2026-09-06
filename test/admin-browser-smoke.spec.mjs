@@ -4,7 +4,9 @@ import { test, expect } from '@playwright/test';
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword = process.env.UI_SMOKE_ADMIN_PASSWORD;
 if (!adminPassword) {
-  throw new Error('UI_SMOKE_ADMIN_PASSWORD is required for admin browser smoke');
+  throw new Error(
+    'UI_SMOKE_ADMIN_PASSWORD is required for admin browser smoke',
+  );
 }
 const evidence = { screenshots: {}, geometry: [] };
 
