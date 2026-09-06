@@ -597,8 +597,9 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
     buffer: first,
   });
   await expect(page.getByText('待上传 Logo', { exact: true })).toBeVisible();
-  const preview = await page.locator('.site-logo-preview img').evaluate(
-    async (image) => {
+  const preview = await page
+    .locator('.site-logo-preview img')
+    .evaluate(async (image) => {
       await image.decode();
       const response = await fetch(image.src);
       const blob = await response.blob();
@@ -607,8 +608,7 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
         height: image.naturalHeight,
         type: blob.type,
       };
-    },
-  );
+    });
   expect(preview).toEqual({ width: 512, height: 128, type: 'image/webp' });
   await expect(page.locator('.site-logo-meta')).toHaveCount(0);
   await expect(page.getByText(/R2/u)).toHaveCount(0);
