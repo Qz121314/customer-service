@@ -502,12 +502,37 @@
     padding-inline: 8px;
   }
 
-  .routing-diagnose-context > .is-wide {
-    grid-column: 1 / -1;
+  .routing-diagnose-context > div:nth-child(1) {
+    grid-column: 1;
+    grid-row: 1;
+    border-top: 0;
+    border-left: 0;
   }
 
-  .routing-diagnose-context > .is-wide + div {
+  .routing-diagnose-context > div:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    border-top: 1px solid var(--admin-border-subtle, #edf0f3);
     border-left: 0;
+  }
+
+  .routing-diagnose-context > div:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1;
+    border-top: 0;
+    border-left: 1px solid var(--admin-border-subtle, #edf0f3);
+  }
+
+  .routing-diagnose-context > div:nth-child(4) {
+    grid-column: 1;
+    grid-row: 3;
+    border-left: 0;
+  }
+
+  .routing-diagnose-context > div:nth-child(5) {
+    grid-column: 2;
+    grid-row: 3;
+    border-left: 1px solid var(--admin-border-subtle, #edf0f3);
   }
 
   .routing-diagnose-funnel > div {
