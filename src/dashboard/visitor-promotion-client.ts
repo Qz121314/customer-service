@@ -52,10 +52,9 @@ async function promotionRequest<T>(
     headers,
     credentials: 'same-origin',
   });
-  const value = (await response.json().catch(() => null)) as
-    | { error?: string }
-    | T
-    | null;
+  const value = (await response.json().catch(() => null)) as {
+    error?: string;
+  } | T | null;
   if (!response.ok) {
     const code = value && 'error' in value ? value.error : null;
     throw new Error(code || 'PROMOTION_REQUEST_FAILED');
