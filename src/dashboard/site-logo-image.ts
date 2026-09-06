@@ -22,7 +22,12 @@ export function fitSiteLogoDimensions(
   height: number,
   maxEdge = SITE_LOGO_MAX_EDGE,
 ): { width: number; height: number } {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     throw new Error('无法读取站点 Logo 尺寸。');
   }
   const scale = Math.min(1, maxEdge / Math.max(width, height));
