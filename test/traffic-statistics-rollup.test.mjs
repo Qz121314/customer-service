@@ -292,7 +292,8 @@ test('0061 creates one indexed daily rollup table and backfills retained facts w
          WHERE business_date = '2026-08-10'
          ORDER BY dimension, item_id`,
       )
-      .all(),
+      .all()
+      .map((row) => ({ ...row })),
     [
       {
         dimension: 'agent',
