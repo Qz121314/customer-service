@@ -29,7 +29,7 @@ import { useAdminAgentsController } from './useAdminAgentsController';
 import { useAdminStatisticsController } from './useAdminStatisticsController';
 
 type AgentsView = 'accounts' | 'diagnostics';
-type SettingsView = 'branding' | 'availability';
+type SettingsView = 'branding' | 'availability' | 'promotion';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -179,6 +179,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 active: settingsView === 'availability',
                 onSelect: () => setSettingsView('availability'),
               },
+              {
+                id: 'promotion',
+                label: '访客推广',
+                description: 'Messages 置顶推广与文章内容',
+                active: settingsView === 'promotion',
+                onSelect: () => setSettingsView('promotion'),
+              },
             ],
           }
         : null;
@@ -192,7 +199,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           : '分流诊断'
         : settingsView === 'branding'
           ? '品牌'
-          : '客服可用性';
+          : settingsView === 'availability'
+            ? '客服可用性'
+            : '访客推广';
   const sectionHint =
     section === 'dashboard'
       ? '客服系统运营概览：快速查看咨询总量、客服接待与产品会话分布。'
@@ -202,7 +211,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           : '按产品只读检查当前严格轮询资格、排除原因和下一棒。'
         : settingsView === 'branding'
           ? '管理管理员后台使用的站点 Logo；未配置时继续显示默认 CS。'
-          : '管理没有可分配客服时，访客立即看到的提示内容。';
+          : settingsView === 'availability'
+            ? '管理没有可分配客服时，访客立即看到的提示内容。'
+            : '管理 Storefront Messages 顶部的公开推广文章内容。';
 
   return (
     <AdminShell

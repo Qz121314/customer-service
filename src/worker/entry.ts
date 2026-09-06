@@ -6,6 +6,7 @@ import { adminConfigApi } from './admin-config-api';
 import { adminQuotaApi } from './admin-quota-api';
 import { adminRoutingApi } from './admin-routing-api';
 import { adminSiteLogoApi } from './admin-site-logo-api';
+import { visitorPromotionApi } from './visitor-promotion-api';
 import { agentApi } from './agent-api';
 import { agentAttachmentApi } from './agent-attachment-api';
 import { agentCardIconApi } from './agent-card-icon-api';
@@ -75,9 +76,6 @@ const AGENT_ATTACHMENT_MESSAGE_PATH =
   /^\/api\/agent\/conversations\/([^/]+)\/attachments$/u;
 const AGENT_MEDIA_COMPLETE_PATH = /^\/api\/agent\/media\/[^/]+\/complete$/u;
 
-// Authentication is deliberately rate-limited before any D1 lookup or password
-// derivation. The Cloudflare Rate Limiter binding keeps this guard off D1's
-// write quota while protecting both administrator and agent login endpoints.
 app.use('*', async (c, next) => {
   if (c.req.method === 'POST') {
     const pathname = new URL(c.req.url).pathname;
@@ -99,8 +97,6 @@ app.use('*', async (c, next) => {
 
 app.route('/', integrationApi);
 
-// Visitor writes notify only the assigned seat. Delivery runs after the chat
-// response and never blocks or changes the result of the message transaction.
 app.use('/client/v1/*', async (c, next) => {
   await next();
   if (c.req.method !== 'POST' || !c.res.ok) return;
@@ -118,9 +114,6 @@ app.use('/client/v1/*', async (c, next) => {
   );
 });
 
-// Agent replies are persisted first. A successful text, structured attachment,
-// or image reply then wakes subscribed visitor devices without owning the chat
-// transaction.
 app.use('/api/agent/*', async (c, next) => {
   await next();
   if (c.req.method !== 'POST' || !c.res.ok) return;
@@ -159,6 +152,7 @@ app.route('/', adminQuotaApi);
 app.route('/', adminConfigApi);
 app.route('/', adminRoutingApi);
 app.route('/', adminSiteLogoApi);
+app.route('/', visitorPromotionApi);
 app.route('/', mediaApi);
 app.route('/', agentAttachmentApi);
 app.route('/', agentCardIconApi);
@@ -170,16 +164,12 @@ app.route('/', agentPushApi);
 app.route('/', pushApi);
 app.route('/', clientApi);
 
-// Core owns health, admin authentication, Durable Object implementation,
-// unknown API rejection, and direct asset lookup. SPA shell fallback is kept
-// explicit below so protocol requests can never inherit an HTML 200 response.
 app.route('/', coreApp);
 
 export default {
   async fetch(request: Request, env: Bindings, ctx: ExecutionContext) {
     const pathname = new URL(request.url).pathname;
 
-    // Removed protocols are rejected before Hono and before any asset lookup.
     if (isRemovedProtocolPath(pathname)) {
       return removedProtocolResponse();
     }
