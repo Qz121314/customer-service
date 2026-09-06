@@ -5,6 +5,10 @@ import test from 'node:test';
 const shell = readFileSync('src/dashboard/AdminShell.tsx', 'utf8');
 const portal = readFileSync('src/dashboard/AdminPortal.tsx', 'utf8');
 const siteSettings = readFileSync('src/dashboard/SiteSettingsPage.tsx', 'utf8');
+const diagnostics = readFileSync(
+  'src/dashboard/AdminRoutingDiagnoseDock.tsx',
+  'utf8',
+);
 const statisticsController = readFileSync(
   'src/dashboard/useAdminStatisticsController.ts',
   'utf8',
@@ -23,7 +27,7 @@ test('admin IA owns dashboard, agents and site settings without a statistics des
   assert.doesNotMatch(shell, /<span>流量统计<\/span>/u);
 });
 
-test('admin defaults to dashboard and dashboard composes statistics', () => {
+test('admin defaults to dashboard and dashboard composes statistics without a context rail', () => {
   assert.match(
     portal,
     /useState<AdminSection>\('dashboard'\)/u,
@@ -39,16 +43,32 @@ test('admin defaults to dashboard and dashboard composes statistics', () => {
     /if \(section !== 'dashboard'\) return;/u,
     'Statistics requests should only run while Dashboard is active',
   );
+  assert.match(portal, /: null;[\s\S]*?contextNavigation=/u);
   assert.doesNotMatch(statisticsController, /section !== 'statistics'/u);
 });
 
-test('site settings owns branding and the existing no-agent message setting', () => {
-  assert.match(portal, /: '站点设置';/u);
-  assert.match(portal, /管理站点品牌和访客侧客服体验。/u);
-  assert.match(portal, /<SiteSettingsPage/u);
-  assert.match(siteSettings, />品牌<\/span>/u);
+test('agents owns contextual account and inline routing-diagnostics workspaces', () => {
+  assert.match(portal, /type AgentsView = 'accounts' \| 'diagnostics';/u);
+  assert.match(portal, /label: '客服账号'/u);
+  assert.match(portal, /label: '分流诊断'/u);
+  assert.match(
+    portal,
+    /section === 'agents' && agentsView === 'diagnostics'[\s\S]*?<AdminRoutingDiagnoseWorkspace/u,
+  );
+  assert.match(diagnostics, /className="routing-diagnose-workspace"/u);
+  assert.doesNotMatch(diagnostics, /role="dialog"/u);
+  assert.doesNotMatch(diagnostics, /routing-diagnose-backdrop/u);
+  assert.doesNotMatch(portal, /routingDiagnoseOpen/u);
+  assert.doesNotMatch(portal, /AdminRoutingDiagnoseTrigger/u);
+});
+
+test('site settings owns contextual branding and no-agent availability workspaces', () => {
+  assert.match(portal, /type SettingsView = 'branding' \| 'availability';/u);
+  assert.match(portal, /label: '品牌'/u);
+  assert.match(portal, /label: '客服可用性'/u);
+  assert.match(portal, /<SiteSettingsPage[\s\S]*?view=\{settingsView\}/u);
+  assert.match(siteSettings, /view: 'branding' \| 'availability'/u);
   assert.match(siteSettings, /站点 Logo/u);
-  assert.match(siteSettings, /客服可用性/u);
   assert.match(siteSettings, /<NoAgentMessageSettingsPanel/u);
   assert.doesNotMatch(portal, /<NoAgentMessageSettingsPanel/u);
 });
