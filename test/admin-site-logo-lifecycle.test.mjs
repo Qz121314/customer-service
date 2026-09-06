@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   SITE_LOGO_MAX_EDGE,
+  SITE_LOGO_MAX_INPUT_BYTES,
   fitSiteLogoDimensions,
   shouldKeepOriginalSiteLogo,
+  validateSiteLogoSource,
 } from '../src/dashboard/site-logo-image.ts';
 import {
   SITE_LOGO_ASSET_PREFIX,
@@ -82,6 +84,27 @@ function assetKeys(bucket) {
     key.startsWith(SITE_LOGO_ASSET_PREFIX),
   );
 }
+
+test('site logo source validation rejects unsupported and oversized originals', () => {
+  assert.throws(
+    () => validateSiteLogoSource({ type: 'image/svg+xml', size: 2000 }),
+    /仅支持 PNG、JPG 或 WebP/u,
+  );
+  assert.throws(
+    () =>
+      validateSiteLogoSource({
+        type: 'image/png',
+        size: SITE_LOGO_MAX_INPUT_BYTES + 1,
+      }),
+    /不能超过 5 MB/u,
+  );
+  assert.doesNotThrow(() =>
+    validateSiteLogoSource({
+      type: 'image/webp',
+      size: SITE_LOGO_MAX_INPUT_BYTES,
+    }),
+  );
+});
 
 test('site logo resize keeps aspect ratio within 512 square', () => {
   assert.deepEqual(fitSiteLogoDimensions(1200, 600), {
