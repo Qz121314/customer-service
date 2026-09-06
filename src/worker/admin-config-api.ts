@@ -7,6 +7,11 @@ import {
   normalizeNoAgentMessageFormat,
   type NoAgentMessageFormat,
 } from './no-agent-message';
+import {
+  loadTrafficStatisticsRows,
+  TRAFFIC_PENDING_AGENT_ID,
+  TRAFFIC_UNKNOWN_PRODUCT_ID,
+} from './traffic-statistics';
 
 type Bindings = {
   DB: D1Database;
@@ -139,43 +144,7 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
   const from = requestedFrom < retainedFrom ? retainedFrom : requestedFrom;
   const to = requestedTo > today ? today : requestedTo;
   if (from > to) return c.json({ error: 'REPORTING_RANGE_EXPIRED' }, 400);
-  const result = await c.env.DB.prepare(
-    `WITH scoped AS MATERIALIZED (
-       SELECT product_id, product_title, agent_id, agent_name
-       FROM conversation_traffic_receipts
-       WHERE site_id = 'default'
-         AND business_date >= ?1
-         AND business_date <= ?2
-     )
-     SELECT 'summary' AS dimension,
-       NULL AS item_id,
-       NULL AS item_name,
-       COUNT(*) AS count
-     FROM scoped
-     UNION ALL
-     SELECT 'agent' AS dimension,
-       COALESCE(agent_id, '__pending__') AS item_id,
-       COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
-       COUNT(*) AS count
-     FROM scoped
-     GROUP BY agent_id
-     UNION ALL
-     SELECT 'product' AS dimension,
-       COALESCE(product_id, '__unknown__') AS item_id,
-       COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
-       COUNT(*) AS count
-     FROM scoped
-     GROUP BY product_id
-     ORDER BY dimension ASC, count DESC, item_name ASC`,
-  )
-    .bind(from, to)
-    .all<{
-      dimension: 'summary' | 'agent' | 'product';
-      item_id: string | null;
-      item_name: string | null;
-      count: number;
-    }>();
-  const rows = result.results ?? [];
+  const rows = await loadTrafficStatisticsRows(c.env.DB, from, to, today);
 
   return c.json({
     from,
@@ -184,14 +153,15 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
     agents: rows
       .filter((row) => row.dimension === 'agent')
       .map((row) => ({
-        agentId: row.item_id === '__pending__' ? null : row.item_id,
+        agentId: row.item_id === TRAFFIC_PENDING_AGENT_ID ? null : row.item_id,
         agentName: row.item_name ?? '待接待',
         count: Number(row.count),
       })),
     products: rows
       .filter((row) => row.dimension === 'product')
       .map((row) => ({
-        productId: row.item_id === '__unknown__' ? null : row.item_id,
+        productId:
+          row.item_id === TRAFFIC_UNKNOWN_PRODUCT_ID ? null : row.item_id,
         productTitle: row.item_name ?? '未知产品',
         count: Number(row.count),
       })),

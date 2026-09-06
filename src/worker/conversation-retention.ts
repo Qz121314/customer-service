@@ -1,3 +1,5 @@
+import { rebuildTrafficDailyRollups } from './traffic-statistics.ts';
+
 export const CONVERSATION_LIFETIME_HOURS = 24;
 export const CONVERSATION_LIFETIME_MS =
   CONVERSATION_LIFETIME_HOURS * 60 * 60 * 1000;
@@ -150,6 +152,10 @@ export async function purgeExpiredConversations(
     now.getUTCHours() === REPORTING_HISTORY_CLEANUP_UTC_HOUR &&
     now.getUTCMinutes() === 0
   ) {
+    // This maintenance window is 04:00/05:00 in Los Angeles, so the UTC
+    // calendar date is also the active reporting business date. Rebuild the
+    // previous three completed dates before they age out of the live raw window.
+    await rebuildTrafficDailyRollups(env.DB, nowIso.slice(0, 10));
     await purgeReportingHistory(env.DB, nowIso);
   }
   return { conversations, mediaObjects, staleMediaObjects, visitors };
@@ -276,10 +282,10 @@ async function purgeReportingHistory(
 ): Promise<void> {
   // 12:00 UTC is 04:00/05:00 in Los Angeles, so UTC and reporting-local dates
   // are already aligned. Keep the current reporting day plus the prior 89.
-  // Archive only receipts that actually consumed paid quota. The four
-  // statements run in one D1 batch so a failed cleanup can never count an old
-  // receipt in the archive while also leaving that same receipt to be counted
-  // again on the next daily pass.
+  // Archive only receipts that actually consumed paid quota. The reporting
+  // retention statements run in one D1 batch so a failed cleanup can never
+  // count an old receipt in the archive while also leaving that same receipt to
+  // be counted again on the next daily pass.
   await db.batch([
     db
       .prepare(
@@ -321,6 +327,13 @@ async function purgeReportingHistory(
     db
       .prepare(
         `DELETE FROM conversation_traffic_receipts
+         WHERE site_id = 'default'
+           AND business_date < date(?1, '-89 days')`,
+      )
+      .bind(nowIso),
+    db
+      .prepare(
+        `DELETE FROM traffic_daily_rollups
          WHERE site_id = 'default'
            AND business_date < date(?1, '-89 days')`,
       )
