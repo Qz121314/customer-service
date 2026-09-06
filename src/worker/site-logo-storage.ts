@@ -139,9 +139,7 @@ async function readCurrentSiteLogo(
   if (pointerObject) {
     let parsed: SiteLogoPointer | SiteLogoDefaultPointer;
     try {
-      parsed = JSON.parse(await pointerObject.text()) as
-        | SiteLogoPointer
-        | SiteLogoDefaultPointer;
+      parsed = JSON.parse(await pointerObject.text()) as SiteLogoPointer | SiteLogoDefaultPointer;
     } catch {
       throw new Error('SITE_LOGO_POINTER_INVALID');
     }
