@@ -574,8 +574,7 @@
     padding: 10px 12px;
   }
 
-  .routing-diagnose-context,
-  .routing-diagnose-funnel {
+  .routing-diagnose-context {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -589,20 +588,18 @@
     min-height: 20px;
   }
 
-  .routing-diagnose-funnel > div:nth-child(4n + 1) {
-    border-left: 1px solid var(--admin-border-subtle, #edf0f3);
+  .routing-diagnose-funnel > div {
+    min-height: 46px;
+    gap: 3px;
+    padding: 6px 7px;
   }
 
-  .routing-diagnose-funnel > div:nth-child(2n + 1) {
-    border-left: 0;
+  .routing-diagnose-funnel span {
+    font-size: 9px;
   }
 
-  .routing-diagnose-funnel > div:nth-last-child(-n + 4) {
-    border-bottom: 1px solid var(--admin-border-subtle, #edf0f3);
-  }
-
-  .routing-diagnose-funnel > div:nth-last-child(-n + 2) {
-    border-bottom: 0;
+  .routing-diagnose-funnel strong {
+    font-size: 14px;
   }
 
   .routing-diagnose-table-wrap {
@@ -701,10 +698,5 @@
 
   .routing-diagnose-context strong {
     font-size: 11px;
-  }
-
-  .routing-diagnose-funnel > div {
-    min-height: 46px;
-    padding: 7px 8px;
   }
 }
