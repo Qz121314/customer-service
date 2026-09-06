@@ -184,7 +184,10 @@ function isSupportedContentType(contentType: string): boolean {
   );
 }
 
-async function deleteWithRetry(bucket: R2Bucket, key: string): Promise<boolean> {
+async function deleteWithRetry(
+  bucket: R2Bucket,
+  key: string,
+): Promise<boolean> {
   if (!isAllowedSiteLogoKey(key)) return false;
   try {
     await bucket.delete(key);
