@@ -127,7 +127,9 @@ export function VisitorPromotionSettingsPanel() {
         <div>
           <span className="admin-section-kicker">Visitor Messages</span>
           <h2 id="visitor-promotion-title">访客推广</h2>
-          <p>配置 Messages 顶部的独立置顶内容。它不是会话，也不会影响聊天未读数。</p>
+          <p>
+            配置 Messages 顶部的独立置顶内容。它不是会话，也不会影响聊天未读数。
+          </p>
         </div>
         <span className="no-agent-behavior-badge">
           {revision ? `Revision ${revision}` : '未发布'}
@@ -191,7 +193,9 @@ export function VisitorPromotionSettingsPanel() {
               value={draft.coverUrl ?? ''}
               disabled={saving}
               placeholder="https://…"
-              onChange={(event) => updateNullable('coverUrl', event.target.value)}
+              onChange={(event) =>
+                updateNullable('coverUrl', event.target.value)
+              }
             />
           </PromotionField>
           <PromotionField label="CTA Label" hint="可选；与 CTA URL 同时填写。">
@@ -199,7 +203,9 @@ export function VisitorPromotionSettingsPanel() {
               value={draft.ctaLabel ?? ''}
               maxLength={80}
               disabled={saving}
-              onChange={(event) => updateNullable('ctaLabel', event.target.value)}
+              onChange={(event) =>
+                updateNullable('ctaLabel', event.target.value)
+              }
             />
           </PromotionField>
           <PromotionField label="CTA URL" hint="可选；仅 http/https。">
@@ -216,7 +222,9 @@ export function VisitorPromotionSettingsPanel() {
               type="datetime-local"
               value={toLocalDateTime(draft.startsAt)}
               disabled={saving}
-              onChange={(event) => updateTimestamp('startsAt', event.target.value)}
+              onChange={(event) =>
+                updateTimestamp('startsAt', event.target.value)
+              }
             />
           </PromotionField>
           <PromotionField label="End" hint="留空表示不自动结束。">
@@ -224,7 +232,9 @@ export function VisitorPromotionSettingsPanel() {
               type="datetime-local"
               value={toLocalDateTime(draft.endsAt)}
               disabled={saving}
-              onChange={(event) => updateTimestamp('endsAt', event.target.value)}
+              onChange={(event) =>
+                updateTimestamp('endsAt', event.target.value)
+              }
             />
           </PromotionField>
           <PromotionField
