@@ -8,6 +8,7 @@ import {
   validateSiteLogoSource,
 } from '../src/dashboard/site-logo-image.ts';
 import {
+  LEGACY_SITE_LOGO_KEY,
   SITE_LOGO_ASSET_PREFIX,
   SITE_LOGO_POINTER_KEY,
   getCurrentSiteLogo,
@@ -83,6 +84,11 @@ function assetKeys(bucket) {
   return [...bucket.objects.keys()].filter((key) =>
     key.startsWith(SITE_LOGO_ASSET_PREFIX),
   );
+}
+
+async function pointerState(bucket) {
+  const pointer = await bucket.get(SITE_LOGO_POINTER_KEY);
+  return pointer ? JSON.parse(await pointer.text()).state : null;
 }
 
 test('site logo source validation rejects unsupported and oversized originals', () => {
@@ -167,15 +173,41 @@ test('new asset upload failure leaves the old logo unchanged', async () => {
   assert.equal(assetKeys(bucket).length, 1);
 });
 
-test('remove clears the active pointer before deleting the active logo', async () => {
+test('remove persists default before deleting the active logo', async () => {
   const bucket = new FakeR2();
   const saved = await replaceSiteLogo(bucket, bytes(), 'image/webp');
   const key = siteLogoAssetKey(saved.logo.assetId);
   const removed = await removeSiteLogo(bucket);
   assert.equal(removed.logo, null);
-  assert.equal(bucket.objects.has(SITE_LOGO_POINTER_KEY), false);
+  assert.equal(await pointerState(bucket), 'default');
   assert.equal(bucket.objects.has(key), false);
   assert.equal(await getCurrentSiteLogo(bucket), null);
+});
+
+test('remove cleanup failure keeps fallback default active', async () => {
+  const bucket = new FakeR2();
+  const saved = await replaceSiteLogo(bucket, bytes(), 'image/webp');
+  const key = siteLogoAssetKey(saved.logo.assetId);
+  bucket.failDelete.add(key);
+  const removed = await removeSiteLogo(bucket);
+  assert.equal(removed.cleanupWarning, true);
+  assert.equal(await pointerState(bucket), 'default');
+  assert.equal(await getCurrentSiteLogo(bucket), null);
+  assert.equal(bucket.objects.has(key), true);
+});
+
+test('default pointer prevents failed legacy cleanup from reactivating old logo', async () => {
+  const bucket = new FakeR2();
+  await bucket.put(LEGACY_SITE_LOGO_KEY, bytes(), {
+    httpMetadata: { contentType: 'image/webp' },
+  });
+  assert.equal((await getCurrentSiteLogo(bucket))?.assetId, 'legacy');
+  bucket.failDelete.add(LEGACY_SITE_LOGO_KEY);
+  const removed = await removeSiteLogo(bucket);
+  assert.equal(removed.cleanupWarning, true);
+  assert.equal(await pointerState(bucket), 'default');
+  assert.equal(await getCurrentSiteLogo(bucket), null);
+  assert.equal(bucket.objects.has(LEGACY_SITE_LOGO_KEY), true);
 });
 
 test('pointer persistence failure removes the new orphan and preserves old logo', async () => {
