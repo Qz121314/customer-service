@@ -88,7 +88,11 @@ export function AdminStatisticsTotalCard({
       busy ? '—' : pending.toLocaleString('zh-CN'),
       pending ? 'is-warning' : '',
     ],
-    ['统计区间', stats ? formatPeriod(stats.from, stats.to) : '正在读取…', 'is-period'],
+    [
+      '统计区间',
+      stats ? formatPeriod(stats.from, stats.to) : '正在读取…',
+      'is-period',
+    ],
   ] as const;
 
   return (
