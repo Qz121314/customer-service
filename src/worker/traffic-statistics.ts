@@ -111,9 +111,9 @@ type D1Statement = {
 
 type D1Database = {
   prepare(sql: string): D1Statement;
-  batch(statements: Array<{ executeRun(): { meta: { changes: number } } }>): Promise<
-    Array<{ meta: { changes: number } }>
-  >;
+  batch(
+    statements: Array<{ executeRun(): { meta: { changes: number } } }>,
+  ): Promise<Array<{ meta: { changes: number } }>>;
 };
 
 /**
@@ -136,8 +136,14 @@ export function trafficStatisticsReadPlan(
   to: string,
   fixedToday: string,
 ): ReadPlan {
-  const rawFrom = shiftReportingDate(fixedToday, -(TRAFFIC_STATS_LIVE_BUSINESS_DAYS - 1));
-  const rollupCutoff = shiftReportingDate(fixedToday, -TRAFFIC_STATS_LIVE_BUSINESS_DAYS);
+  const rawFrom = shiftReportingDate(
+    fixedToday,
+    -(TRAFFIC_STATS_LIVE_BUSINESS_DAYS - 1),
+  );
+  const rollupCutoff = shiftReportingDate(
+    fixedToday,
+    -TRAFFIC_STATS_LIVE_BUSINESS_DAYS,
+  );
 
   // If the entire range is within the raw window, use rollup mode
   if (from >= rawFrom) {
@@ -202,28 +208,33 @@ export async function rebuildTrafficDailyRollups(
 
     // Delete existing rollup entries for this date
     statements.push(
-      db.prepare(
-        `DELETE FROM traffic_daily_rollups
+      db
+        .prepare(
+          `DELETE FROM traffic_daily_rollups
          WHERE site_id = 'default' AND business_date = ?1`,
-      ).bind(rebuildDate),
+        )
+        .bind(rebuildDate),
     );
 
     // Rebuild summary dimension
     statements.push(
-      db.prepare(
-        `INSERT INTO traffic_daily_rollups (
+      db
+        .prepare(
+          `INSERT INTO traffic_daily_rollups (
           site_id, business_date, dimension, item_id, item_name, count, updated_at
         )
         SELECT 'default', ?1, 'summary', 'total', NULL, COUNT(*), CURRENT_TIMESTAMP
         FROM conversation_traffic_receipts
         WHERE site_id = 'default' AND business_date = ?1`,
-      ).bind(rebuildDate),
+        )
+        .bind(rebuildDate),
     );
 
     // Rebuild agent dimension
     statements.push(
-      db.prepare(
-        `INSERT INTO traffic_daily_rollups (
+      db
+        .prepare(
+          `INSERT INTO traffic_daily_rollups (
           site_id, business_date, dimension, item_id, item_name, count, updated_at
         )
         SELECT 'default', ?1, 'agent',
@@ -234,13 +245,15 @@ export async function rebuildTrafficDailyRollups(
         FROM conversation_traffic_receipts
         WHERE site_id = 'default' AND business_date = ?1
         GROUP BY agent_id`,
-      ).bind(rebuildDate),
+        )
+        .bind(rebuildDate),
     );
 
     // Rebuild product dimension
     statements.push(
-      db.prepare(
-        `INSERT INTO traffic_daily_rollups (
+      db
+        .prepare(
+          `INSERT INTO traffic_daily_rollups (
           site_id, business_date, dimension, item_id, item_name, count, updated_at
         )
         SELECT 'default', ?1, 'product',
@@ -251,14 +264,16 @@ export async function rebuildTrafficDailyRollups(
         FROM conversation_traffic_receipts
         WHERE site_id = 'default' AND business_date = ?1
         GROUP BY product_id`,
-      ).bind(rebuildDate),
+        )
+        .bind(rebuildDate),
     );
   }
 
   // Execute all updates in a single batch transaction
   await db.batch(
     statements.map((stmt) => ({
-      executeRun: () => stmt.run() as unknown as { meta: { changes: number } },
+      executeRun: () =>
+        stmt.run() as unknown as { meta: { changes: number } },
     })),
   );
 }
