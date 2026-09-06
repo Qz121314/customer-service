@@ -3,10 +3,6 @@ import type { NoAgentMessageSettings } from './api';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import {
   SITE_LOGO_ACCEPT,
-  SITE_LOGO_MAX_EDGE,
-  SITE_LOGO_MAX_INPUT_BYTES,
-  SITE_LOGO_MAX_UPLOAD_BYTES,
-  SITE_LOGO_WEBP_QUALITY,
   prepareSiteLogo,
   type PreparedSiteLogo,
 } from './site-logo-image';
@@ -111,7 +107,7 @@ function SiteLogoSettings({
       onChange(result.siteLogo);
       clearPreparedPreview();
       if (result.cleanupWarning) {
-        setWarning('新 Logo 已生效，但旧 Logo 对象清理失败；服务端已记录。');
+        setWarning('新 Logo 已生效，但清理旧图片时出现问题。');
       }
     } catch (reason) {
       setError(
@@ -132,7 +128,7 @@ function SiteLogoSettings({
       onChange(null);
       clearPreparedPreview();
       if (result.cleanupWarning) {
-        setWarning('已恢复默认 CS，但旧 Logo 对象清理失败；服务端已记录。');
+        setWarning('已恢复默认 CS，但清理旧图片时出现问题。');
       }
     } catch (reason) {
       setError(
@@ -168,29 +164,9 @@ function SiteLogoSettings({
         </div>
         <div className="site-logo-copy">
           <strong>
-            {prepared ? '压缩预览' : siteLogo ? '当前 Logo' : '默认品牌标记'}
+            {prepared ? '待上传 Logo' : siteLogo ? '当前 Logo' : '默认品牌标记'}
           </strong>
-          <p>
-            支持 PNG / JPG / WebP，原图最大{' '}
-            {formatBytes(SITE_LOGO_MAX_INPUT_BYTES)}。
-            选择后浏览器会自动保持比例缩放到 {SITE_LOGO_MAX_EDGE} ×{' '}
-            {SITE_LOGO_MAX_EDGE} 内并压缩，优先 WebP（质量{' '}
-            {Math.round(SITE_LOGO_WEBP_QUALITY * 100)}
-            %）；只有优化后的图片会上传至 R2，最终上传文件不超过{' '}
-            {formatBytes(SITE_LOGO_MAX_UPLOAD_BYTES)}。
-          </p>
-          {prepared ? (
-            <small className="site-logo-meta">
-              {prepared.width} × {prepared.height} ·{' '}
-              {formatBytes(prepared.originalBytes)} →{' '}
-              {formatBytes(prepared.blob.size)} ·{' '}
-              {prepared.contentType.replace('image/', '').toUpperCase()}
-            </small>
-          ) : siteLogo ? (
-            <small className="site-logo-meta">
-              已保存 · {formatBytes(siteLogo.byteSize)}
-            </small>
-          ) : null}
+          <p>支持 PNG、JPG 或 WebP。选择图片后可先预览，确认后再上传。</p>
           {phase !== 'idle' ? (
             <span className="site-logo-status" role="status">
               {phaseLabel(phase)}
@@ -262,15 +238,9 @@ function SiteLogoSettings({
 }
 
 function phaseLabel(phase: LogoPhase): string {
-  if (phase === 'processing') return '正在压缩图片…';
-  if (phase === 'uploading') return '正在上传压缩后的 Logo…';
-  if (phase === 'saving') return '上传完成，正在保存站点设置…';
+  if (phase === 'processing') return '正在处理图片…';
+  if (phase === 'uploading') return '正在上传 Logo…';
+  if (phase === 'saving') return '正在保存站点设置…';
   if (phase === 'removing') return '正在恢复默认品牌标记…';
   return '';
-}
-
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(0)} MB`;
-  if (bytes >= 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${bytes} B`;
 }

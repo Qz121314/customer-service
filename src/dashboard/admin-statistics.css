@@ -189,7 +189,7 @@
 
 .traffic-distribution-list {
   min-width: 0;
-  max-height: min(360px, 42dvh);
+  max-height: 560px;
   display: grid;
   align-content: start;
   overflow-y: auto;
@@ -580,7 +580,7 @@
   }
 
   .traffic-distribution-list {
-    max-height: min(300px, 38dvh);
+    max-height: 520px;
   }
 
   .traffic-distribution-row {

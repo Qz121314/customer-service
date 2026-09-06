@@ -127,6 +127,28 @@ async function agentsGeometry(page) {
   });
 }
 
+async function contextNavigationGeometry(page) {
+  return page.evaluate(() => {
+    const shell = globalThis.document.querySelector('.admin-console');
+    const sidebar = globalThis.document.querySelector('.admin-sidebar');
+    const context = globalThis.document.querySelector(
+      '.admin-context-navigation',
+    );
+    const head = context?.querySelector('.admin-context-head');
+    const nav = context?.querySelector('nav');
+    if (!shell || !sidebar || !context || !head || !nav) return null;
+    return {
+      shellDisplay: globalThis.getComputedStyle(shell).display,
+      sidebarPosition: globalThis.getComputedStyle(sidebar).position,
+      contextPosition: globalThis.getComputedStyle(context).position,
+      contextHeadDisplay: globalThis.getComputedStyle(head).display,
+      contextNavDisplay: globalThis.getComputedStyle(nav).display,
+      contextHeight: context.getBoundingClientRect().height,
+      contextWidth: context.getBoundingClientRect().width,
+    };
+  });
+}
+
 async function editorGeometry(dialog) {
   return dialog.evaluate((element) => {
     const layout = element.querySelector('.agent-editor-layout');
@@ -332,6 +354,37 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
   }
 });
 
+test('1024 tablet context navigation switches at the exact breakpoint', async ({
+  page,
+}) => {
+  await loginAndSeed(page, 'ui-tablet-workbench-agent', 'UI Tablet Agent');
+
+  await page.setViewportSize({ width: 1025, height: 768 });
+  await page.goto(url('/'));
+  await openSection(page, '客服坐席', '客服账号');
+  let geometry = await contextNavigationGeometry(page);
+  expect(geometry).not.toBeNull();
+  expect(geometry.shellDisplay).toBe('grid');
+  expect(geometry.contextPosition).toBe('sticky');
+
+  await page.setViewportSize({ width: 1024, height: 768 });
+  geometry = await contextNavigationGeometry(page);
+  expect(geometry).not.toBeNull();
+  expect(geometry.shellDisplay).toBe('block');
+  expect(geometry.sidebarPosition).toBe('sticky');
+  expect(geometry.contextPosition).toBe('static');
+  expect(geometry.contextHeadDisplay).toBe('none');
+  expect(geometry.contextNavDisplay).toBe('flex');
+  expect(geometry.contextWidth).toBeGreaterThan(1000);
+  expect(geometry.contextHeight).toBeLessThanOrEqual(62);
+  await expectNoHorizontalOverflow(page);
+  evidence.geometry.push({
+    name: '1024x768-tablet-context-navigation',
+    ...geometry,
+  });
+  await capture(page, '1024x768-tablet-context-navigation');
+});
+
 test('agent directory lets the document own long-list vertical scrolling', async ({
   page,
 }) => {
@@ -384,6 +437,40 @@ test('agent directory lets the document own long-list vertical scrolling', async
   await capture(page, '1366x768-long-agent-directory');
 });
 
+test('dashboard regular distributions up to 10 rows do not scroll internally', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await loginAdmin(page);
+  const fixture = statisticsFixture(10, 10);
+  await page.route('**/api/admin/traffic-stats?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(fixture),
+    });
+  });
+
+  await page.goto(url('/'));
+  await expect(page.getByText('客服接待分布', { exact: true })).toBeVisible();
+  const geometry = await dashboardGeometry(page);
+  expect(geometry).not.toBeNull();
+  expect(geometry.listScrollHeights[0]).toBeLessThanOrEqual(
+    geometry.listClientHeights[0] + 1,
+  );
+  expect(geometry.listScrollHeights[1]).toBeLessThanOrEqual(
+    geometry.listClientHeights[1] + 1,
+  );
+  expect(geometry.cardHeights[0]).toBeGreaterThan(520);
+  expect(geometry.cardHeights[1]).toBeGreaterThan(520);
+  await expectNoHorizontalOverflow(page);
+  evidence.geometry.push({
+    name: '1366x768-dashboard-regular-10-items',
+    ...geometry,
+  });
+  await capture(page, '1366x768-dashboard-regular-10-items');
+});
+
 test('dashboard long distributions scroll independently without equal-height coupling', async ({
   page,
 }) => {
@@ -402,7 +489,7 @@ test('dashboard long distributions scroll independently without equal-height cou
   await expect(page.getByText('客服接待分布', { exact: true })).toBeVisible();
   await expect
     .poll(async () => (await dashboardGeometry(page))?.cardHeights[0])
-    .toBeGreaterThan(300);
+    .toBeGreaterThan(500);
   let geometry = await dashboardGeometry(page);
   expect(geometry).not.toBeNull();
   expect(geometry.listScrollHeights[0]).toBeGreaterThan(
@@ -414,7 +501,7 @@ test('dashboard long distributions scroll independently without equal-height cou
   expect(geometry.cardHeights[0]).toBeGreaterThan(
     geometry.cardHeights[1] + 100,
   );
-  expect(geometry.cardHeights[0]).toBeLessThanOrEqual(430);
+  expect(geometry.cardHeights[0]).toBeLessThanOrEqual(630);
   await expectNoHorizontalOverflow(page);
   evidence.geometry.push({
     name: '1366x768-dashboard-long-agents',
@@ -427,7 +514,7 @@ test('dashboard long distributions scroll independently without equal-height cou
   await expect(page.getByText('产品会话分布', { exact: true })).toBeVisible();
   await expect
     .poll(async () => (await dashboardGeometry(page))?.cardHeights[1])
-    .toBeGreaterThan(300);
+    .toBeGreaterThan(500);
   geometry = await dashboardGeometry(page);
   expect(geometry).not.toBeNull();
   expect(geometry.listScrollHeights[0]).toBeLessThanOrEqual(
@@ -439,7 +526,7 @@ test('dashboard long distributions scroll independently without equal-height cou
   expect(geometry.cardHeights[1]).toBeGreaterThan(
     geometry.cardHeights[0] + 100,
   );
-  expect(geometry.cardHeights[1]).toBeLessThanOrEqual(430);
+  expect(geometry.cardHeights[1]).toBeLessThanOrEqual(630);
   await expectNoHorizontalOverflow(page);
   evidence.geometry.push({
     name: '1366x768-dashboard-long-products',
@@ -509,9 +596,23 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
     mimeType: 'image/png',
     buffer: first,
   });
-  await expect(page.getByText('压缩预览', { exact: true })).toBeVisible();
-  await expect(page.locator('.site-logo-meta')).toContainText('512 × 128');
-  await expect(page.locator('.site-logo-meta')).toContainText('WEBP');
+  await expect(page.getByText('待上传 Logo', { exact: true })).toBeVisible();
+  const preview = await page
+    .locator('.site-logo-preview img')
+    .evaluate(async (image) => {
+      await image.decode();
+      const response = await fetch(image.src);
+      const blob = await response.blob();
+      return {
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+        type: blob.type,
+      };
+    });
+  expect(preview).toEqual({ width: 512, height: 128, type: 'image/webp' });
+  await expect(page.locator('.site-logo-meta')).toHaveCount(0);
+  await expect(page.getByText(/R2/u)).toHaveCount(0);
+  await expect(page.getByText(/质量/u)).toHaveCount(0);
   await page.getByRole('button', { name: '上传 Logo', exact: true }).click();
   await expect(page.getByText('当前 Logo', { exact: true })).toBeVisible();
   const firstUrl = await page
