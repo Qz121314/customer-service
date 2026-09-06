@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import type { NoAgentMessageSettings } from './api';
 import { NoAgentMessageSettingsPanel } from './NoAgentMessageSettings';
 import {
@@ -175,21 +170,29 @@ function SiteLogoSettings({
       <div className="site-logo-setting">
         <div className="site-logo-preview" aria-label="站点 Logo 预览">
           <span aria-hidden="true">CS</span>
-          {activePreview ? <img src={activePreview} alt="站点 Logo 预览" /> : null}
+          {activePreview ? (
+            <img src={activePreview} alt="站点 Logo 预览" />
+          ) : null}
         </div>
         <div className="site-logo-copy">
-          <strong>{prepared ? '压缩预览' : siteLogo ? '当前 Logo' : '默认品牌标记'}</strong>
+          <strong>
+            {prepared ? '压缩预览' : siteLogo ? '当前 Logo' : '默认品牌标记'}
+          </strong>
           <p>
-            支持 PNG / JPG / WebP，原图最大 {formatBytes(SITE_LOGO_MAX_INPUT_BYTES)}。
+            支持 PNG / JPG / WebP，原图最大{' '}
+            {formatBytes(SITE_LOGO_MAX_INPUT_BYTES)}。
             选择后浏览器会自动保持比例缩放到 {SITE_LOGO_MAX_EDGE} ×{' '}
             {SITE_LOGO_MAX_EDGE} 内并压缩，优先 WebP（质量{' '}
-            {Math.round(SITE_LOGO_WEBP_QUALITY * 100)}%）；只有优化后的图片会上传至
-            R2，最终上传文件不超过 {formatBytes(SITE_LOGO_MAX_UPLOAD_BYTES)}。
+            {Math.round(SITE_LOGO_WEBP_QUALITY * 100)}
+            %）；只有优化后的图片会上传至 R2，最终上传文件不超过{' '}
+            {formatBytes(SITE_LOGO_MAX_UPLOAD_BYTES)}。
           </p>
           {prepared ? (
             <small className="site-logo-meta">
-              {prepared.width} × {prepared.height} · {formatBytes(prepared.originalBytes)} →{' '}
-              {formatBytes(prepared.blob.size)} · {prepared.contentType.replace('image/', '').toUpperCase()}
+              {prepared.width} × {prepared.height} ·{' '}
+              {formatBytes(prepared.originalBytes)} →{' '}
+              {formatBytes(prepared.blob.size)} ·{' '}
+              {prepared.contentType.replace('image/', '').toUpperCase()}
             </small>
           ) : siteLogo ? (
             <small className="site-logo-meta">
@@ -206,7 +209,9 @@ function SiteLogoSettings({
               {error}
             </span>
           ) : null}
-          {warning ? <span className="site-logo-warning">{warning}</span> : null}
+          {warning ? (
+            <span className="site-logo-warning">{warning}</span>
+          ) : null}
         </div>
         <div className="site-logo-actions">
           <input
