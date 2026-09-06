@@ -57,7 +57,20 @@ class FakeR2 {
 }
 
 function bytes(seed = 1) {
-  return new Uint8Array([0x52, 0x49, 0x46, 0x46, seed, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+  return new Uint8Array([
+    0x52,
+    0x49,
+    0x46,
+    0x46,
+    seed,
+    0,
+    0,
+    0,
+    0x57,
+    0x45,
+    0x42,
+    0x50,
+  ]);
 }
 
 function assetKeys(bucket) {
@@ -148,7 +161,10 @@ test('old-object cleanup failure never rolls back the newly active logo', async 
   bucket.failDelete.add(oldKey);
   const second = await replaceSiteLogo(bucket, bytes(2), 'image/webp');
   assert.equal(second.cleanupWarning, true);
-  assert.equal((await getCurrentSiteLogo(bucket))?.assetId, second.logo.assetId);
+  assert.equal(
+    (await getCurrentSiteLogo(bucket))?.assetId,
+    second.logo.assetId,
+  );
   assert.equal(bucket.objects.has(oldKey), true);
 });
 
