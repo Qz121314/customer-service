@@ -93,6 +93,18 @@ function createRetentionDatabase() {
     );
     CREATE INDEX idx_conversation_traffic_receipts_date
       ON conversation_traffic_receipts(site_id, business_date);
+    CREATE TABLE traffic_daily_rollups (
+      site_id TEXT NOT NULL,
+      business_date TEXT NOT NULL,
+      dimension TEXT NOT NULL CHECK (dimension IN ('summary', 'agent', 'product')),
+      item_id TEXT NOT NULL,
+      item_name TEXT,
+      count INTEGER NOT NULL CHECK (count >= 0),
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (site_id, business_date, dimension, item_id)
+    );
+    CREATE INDEX idx_traffic_daily_rollups_site_date
+      ON traffic_daily_rollups(site_id, business_date);
 
     INSERT INTO sites (id) VALUES ('default');
   `);
@@ -243,7 +255,7 @@ test('cron cleanup removes conversation trees with bounded D1 work', async () =>
   database.close();
 });
 
-test('reporting history cleanup archives paid usage before pruning receipts', async () => {
+test('reporting history cleanup archives paid usage and keeps all reporting stores at 90 natural days', async () => {
   const database = createRetentionDatabase();
   const db = d1(database);
   const env = {
@@ -274,6 +286,11 @@ test('reporting history cleanup archives paid usage before pruning receipts', as
     ) VALUES
       ('old-conversation', 'default', '2026-05-18', '2026-05-18T08:00:00Z'),
       ('boundary-conversation', 'default', '2026-05-19', '2026-05-19T08:00:00Z');
+    INSERT INTO traffic_daily_rollups (
+      site_id, business_date, dimension, item_id, count
+    ) VALUES
+      ('default', '2026-05-18', 'summary', 'total', 1),
+      ('default', '2026-05-19', 'summary', 'total', 1);
   `);
 
   await purgeExpiredConversations(env, new Date('2026-08-16T12:00:00.000Z'));
@@ -281,9 +298,16 @@ test('reporting history cleanup archives paid usage before pruning receipts', as
   assert.equal(rowCount(database, 'agent_daily_stats'), 1);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 1);
   assert.equal(rowCount(database, 'conversation_traffic_receipts'), 1);
+  assert.equal(rowCount(database, 'traffic_daily_rollups'), 1);
   assert.equal(
     database
       .prepare('SELECT business_date FROM agent_daily_stats LIMIT 1')
+      .get().business_date,
+    '2026-05-19',
+  );
+  assert.equal(
+    database
+      .prepare('SELECT business_date FROM traffic_daily_rollups LIMIT 1')
       .get().business_date,
     '2026-05-19',
   );
@@ -330,6 +354,9 @@ test('reporting history cleanup archives paid usage before pruning receipts', as
     ) VALUES (
       'late-old-conversation', 'default', '2026-05-18', '2026-05-18T08:00:00Z'
     );
+    INSERT INTO traffic_daily_rollups (
+      site_id, business_date, dimension, item_id, count
+    ) VALUES ('default', '2026-05-18', 'summary', 'total', 1);
   `);
 
   await purgeExpiredConversations(env, new Date('2026-08-16T12:01:00.000Z'));
@@ -337,6 +364,7 @@ test('reporting history cleanup archives paid usage before pruning receipts', as
   assert.equal(rowCount(database, 'agent_daily_stats'), 2);
   assert.equal(rowCount(database, 'agent_traffic_receipts'), 2);
   assert.equal(rowCount(database, 'conversation_traffic_receipts'), 2);
+  assert.equal(rowCount(database, 'traffic_daily_rollups'), 2);
   assert.equal(
     database
       .prepare(

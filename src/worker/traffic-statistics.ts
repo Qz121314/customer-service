@@ -1,279 +1,253 @@
-// Traffic statistics configuration
 export const TRAFFIC_STATS_LIVE_BUSINESS_DAYS = 3;
 export const TRAFFIC_PENDING_AGENT_ID = '__pending__';
 export const TRAFFIC_UNKNOWN_PRODUCT_ID = '__unknown__';
 
-// SQL for querying raw traffic receipts
-export const TRAFFIC_STATS_RAW_SQL = `
-WITH scoped AS MATERIALIZED (
-  SELECT product_id, product_title, agent_id, agent_name
-  FROM conversation_traffic_receipts
-  WHERE site_id = 'default'
-    AND business_date >= ?1
-    AND business_date <= ?2
-)
-SELECT 'summary' AS dimension,
-  NULL AS item_id,
-  NULL AS item_name,
-  COUNT(*) AS count
-FROM scoped
-UNION ALL
-SELECT 'agent' AS dimension,
-  COALESCE(agent_id, '__pending__') AS item_id,
-  COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
-  COUNT(*) AS count
-FROM scoped
-GROUP BY agent_id
-UNION ALL
-SELECT 'product' AS dimension,
-  COALESCE(product_id, '__unknown__') AS item_id,
-  COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
-  COUNT(*) AS count
-FROM scoped
-GROUP BY product_id
-ORDER BY dimension ASC, count DESC, item_name ASC
-`;
-
-// SQL for querying pre-aggregated rollup table
-export const TRAFFIC_STATS_ROLLUP_SQL = `
-SELECT dimension, item_id, item_name, SUM(count) AS count
-FROM traffic_daily_rollups
-WHERE site_id = 'default'
-  AND business_date >= ?1
-  AND business_date <= ?2
-GROUP BY dimension, item_id
-ORDER BY dimension ASC, count DESC, item_name ASC
-`;
-
-// SQL for hybrid query combining rollup and raw data
-export const TRAFFIC_STATS_HYBRID_SQL = `
-SELECT dimension, item_id, item_name, SUM(count) AS count
-FROM (
-  SELECT dimension, item_id, item_name, count
-  FROM traffic_daily_rollups
-  WHERE site_id = 'default'
-    AND business_date >= ?1
-    AND business_date <= ?2
-  UNION ALL
-  SELECT 'summary' AS dimension,
-    NULL AS item_id,
-    NULL AS item_name,
-    COUNT(*) AS count
-  FROM conversation_traffic_receipts
-  WHERE site_id = 'default'
-    AND business_date >= ?3
-    AND business_date <= ?4
-  UNION ALL
-  SELECT 'agent' AS dimension,
-    COALESCE(agent_id, '__pending__') AS item_id,
-    COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
-    COUNT(*) AS count
-  FROM conversation_traffic_receipts
-  WHERE site_id = 'default'
-    AND business_date >= ?3
-    AND business_date <= ?4
-  GROUP BY agent_id
-  UNION ALL
-  SELECT 'product' AS dimension,
-    COALESCE(product_id, '__unknown__') AS item_id,
-    COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
-    COUNT(*) AS count
-  FROM conversation_traffic_receipts
-  WHERE site_id = 'default'
-    AND business_date >= ?3
-    AND business_date <= ?4
-  GROUP BY product_id
-)
-GROUP BY dimension, item_id
-ORDER BY dimension ASC, count DESC, item_name ASC
-`;
-
-type ReadPlan = {
-  mode: 'rollup' | 'hybrid';
-  rollupFrom?: string;
-  rollupTo?: string;
-  rawFrom?: string;
-  rawTo?: string;
-};
-
-type TrafficStatsRow = {
-  dimension: string;
+export type TrafficStatisticsRow = {
+  dimension: 'summary' | 'agent' | 'product';
   item_id: string | null;
   item_name: string | null;
   count: number;
 };
 
-type D1Statement = {
-  bind(...values: unknown[]): D1Statement;
-  all<T>(): Promise<{ results: T[] }>;
-  run(): Promise<{ meta: { changes: number } }>;
-};
+type TrafficStatisticsReadPlan =
+  | {
+      mode: 'raw';
+      rawFrom: string;
+      rawTo: string;
+    }
+  | {
+      mode: 'rollup';
+      rollupFrom: string;
+      rollupTo: string;
+    }
+  | {
+      mode: 'hybrid';
+      rollupFrom: string;
+      rollupTo: string;
+      rawFrom: string;
+      rawTo: string;
+    };
 
-type D1Database = {
-  prepare(sql: string): D1Statement;
-  batch(
-    statements: Array<{ executeRun(): { meta: { changes: number } } }>,
-  ): Promise<Array<{ meta: { changes: number } }>>;
-};
+export const TRAFFIC_STATS_RAW_SQL = `WITH scoped AS MATERIALIZED (
+       SELECT product_id, product_title, agent_id, agent_name
+       FROM conversation_traffic_receipts
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     )
+     SELECT 'summary' AS dimension,
+       NULL AS item_id,
+       NULL AS item_name,
+       COUNT(*) AS count
+     FROM scoped
+     UNION ALL
+     SELECT 'agent' AS dimension,
+       COALESCE(agent_id, '__pending__') AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
+       COUNT(*) AS count
+     FROM scoped
+     GROUP BY agent_id
+     UNION ALL
+     SELECT 'product' AS dimension,
+       COALESCE(product_id, '__unknown__') AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
+       COUNT(*) AS count
+     FROM scoped
+     GROUP BY product_id
+     ORDER BY dimension ASC, count DESC, item_name ASC`;
 
-/**
- * Shift a business date (YYYY-MM-DD) by a number of days.
- * Positive offsets move forward in time, negative offsets move backward.
- */
-export function shiftReportingDate(day: string, offset: number): string {
-  const date = new Date(`${day}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + offset);
-  return date.toISOString().slice(0, 10);
+export const TRAFFIC_STATS_ROLLUP_SQL = `SELECT dimension,
+       CASE WHEN dimension = 'summary' THEN NULL ELSE item_id END AS item_id,
+       CASE
+         WHEN dimension = 'agent'
+           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '待接待')
+         WHEN dimension = 'product'
+           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '未知产品')
+         ELSE NULL
+       END AS item_name,
+       SUM(count) AS count
+     FROM traffic_daily_rollups
+     WHERE site_id = 'default'
+       AND business_date >= ?1
+       AND business_date <= ?2
+     GROUP BY dimension, item_id
+     ORDER BY dimension ASC, count DESC, item_name ASC`;
+
+export const TRAFFIC_STATS_HYBRID_SQL = `WITH historical AS (
+       SELECT dimension, item_id, item_name, count
+       FROM traffic_daily_rollups
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     ),
+     live_scoped AS MATERIALIZED (
+       SELECT product_id, product_title, agent_id, agent_name
+       FROM conversation_traffic_receipts
+       WHERE site_id = 'default'
+         AND business_date >= ?3
+         AND business_date <= ?4
+     ),
+     live AS (
+       SELECT 'summary' AS dimension,
+         'total' AS item_id,
+         NULL AS item_name,
+         COUNT(*) AS count
+       FROM live_scoped
+       UNION ALL
+       SELECT 'agent' AS dimension,
+         COALESCE(agent_id, '__pending__') AS item_id,
+         MAX(NULLIF(TRIM(agent_name), '')) AS item_name,
+         COUNT(*) AS count
+       FROM live_scoped
+       GROUP BY agent_id
+       UNION ALL
+       SELECT 'product' AS dimension,
+         COALESCE(product_id, '__unknown__') AS item_id,
+         MAX(NULLIF(TRIM(product_title), '')) AS item_name,
+         COUNT(*) AS count
+       FROM live_scoped
+       GROUP BY product_id
+     ),
+     combined AS (
+       SELECT dimension, item_id, item_name, count FROM historical
+       UNION ALL
+       SELECT dimension, item_id, item_name, count FROM live
+     )
+     SELECT dimension,
+       CASE WHEN dimension = 'summary' THEN NULL ELSE item_id END AS item_id,
+       CASE
+         WHEN dimension = 'agent'
+           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '待接待')
+         WHEN dimension = 'product'
+           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '未知产品')
+         ELSE NULL
+       END AS item_name,
+       SUM(count) AS count
+     FROM combined
+     GROUP BY dimension, item_id
+     ORDER BY dimension ASC, count DESC, item_name ASC`;
+
+export function shiftReportingDate(date: string, days: number): string {
+  const shifted = new Date(`${date}T00:00:00.000Z`);
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return shifted.toISOString().slice(0, 10);
 }
 
-/**
- * Determine the optimal read plan for traffic statistics.
- * Combines pre-aggregated historical data (from rollup table)
- * with fresh raw data for the last few days.
- */
 export function trafficStatisticsReadPlan(
   from: string,
   to: string,
-  fixedToday: string,
-): ReadPlan {
-  const rawFrom = shiftReportingDate(
-    fixedToday,
+  today: string,
+): TrafficStatisticsReadPlan {
+  const earliestLiveDate = shiftReportingDate(
+    today,
     -(TRAFFIC_STATS_LIVE_BUSINESS_DAYS - 1),
   );
-  const rollupCutoff = shiftReportingDate(
-    fixedToday,
-    -TRAFFIC_STATS_LIVE_BUSINESS_DAYS,
-  );
-
-  // If the entire range is within the raw window, use rollup mode
-  if (from >= rawFrom) {
-    return { mode: 'rollup' };
+  if (to < earliestLiveDate) {
+    return { mode: 'rollup', rollupFrom: from, rollupTo: to };
   }
-
-  // Hybrid: use rollup for historical data and raw for recent data
+  if (from >= earliestLiveDate) {
+    return { mode: 'raw', rawFrom: from, rawTo: to };
+  }
   return {
     mode: 'hybrid',
     rollupFrom: from,
-    rollupTo: rollupCutoff,
-    rawFrom,
+    rollupTo: shiftReportingDate(earliestLiveDate, -1),
+    rawFrom: earliestLiveDate,
     rawTo: to,
   };
 }
 
-/**
- * Load traffic statistics for a given date range.
- * Automatically chooses between rollup-only, raw-only, or hybrid reads
- * based on the date range.
- */
 export async function loadTrafficStatisticsRows(
   db: D1Database,
   from: string,
   to: string,
-  fixedToday: string,
-): Promise<TrafficStatsRow[]> {
-  const plan = trafficStatisticsReadPlan(from, to, fixedToday);
-
+  today: string,
+): Promise<TrafficStatisticsRow[]> {
+  const plan = trafficStatisticsReadPlan(from, to, today);
+  if (plan.mode === 'raw') {
+    const result = await db
+      .prepare(TRAFFIC_STATS_RAW_SQL)
+      .bind(plan.rawFrom, plan.rawTo)
+      .all<TrafficStatisticsRow>();
+    return result.results ?? [];
+  }
   if (plan.mode === 'rollup') {
     const result = await db
       .prepare(TRAFFIC_STATS_ROLLUP_SQL)
-      .bind(from, to)
-      .all<TrafficStatsRow>();
+      .bind(plan.rollupFrom, plan.rollupTo)
+      .all<TrafficStatisticsRow>();
     return result.results ?? [];
   }
-
-  // Hybrid mode
   const result = await db
     .prepare(TRAFFIC_STATS_HYBRID_SQL)
     .bind(plan.rollupFrom, plan.rollupTo, plan.rawFrom, plan.rawTo)
-    .all<TrafficStatsRow>();
+    .all<TrafficStatisticsRow>();
   return result.results ?? [];
 }
 
-/**
- * Rebuild the traffic daily rollups for the previous three completed business days.
- * This is called daily during the reporting maintenance window (12:00 UTC).
- *
- * The rebuild ensures that late-arriving traffic receipts are captured in the
- * pre-aggregated rollup table before they age out of the raw window.
- */
 export async function rebuildTrafficDailyRollups(
   db: D1Database,
-  businessDate: string,
+  currentBusinessDate: string,
 ): Promise<void> {
-  // Delete and rebuild the previous 3 completed business days
-  const statements = [];
-
-  for (let offset = 1; offset <= TRAFFIC_STATS_LIVE_BUSINESS_DAYS; offset++) {
-    const rebuildDate = shiftReportingDate(businessDate, -offset);
-
-    // Delete existing rollup entries for this date
+  const statements: D1PreparedStatement[] = [];
+  for (
+    let offset = 1;
+    offset <= TRAFFIC_STATS_LIVE_BUSINESS_DAYS;
+    offset += 1
+  ) {
+    const businessDate = shiftReportingDate(currentBusinessDate, -offset);
     statements.push(
       db
         .prepare(
           `DELETE FROM traffic_daily_rollups
-         WHERE site_id = 'default' AND business_date = ?1`,
+           WHERE site_id = 'default'
+             AND business_date = ?1`,
         )
-        .bind(rebuildDate),
-    );
-
-    // Rebuild summary dimension
-    statements.push(
+        .bind(businessDate),
       db
         .prepare(
           `INSERT INTO traffic_daily_rollups (
-          site_id, business_date, dimension, item_id, item_name, count, updated_at
+             site_id, business_date, dimension, item_id, item_name, count, updated_at
+           )
+           SELECT site_id, business_date, 'summary', 'total', NULL,
+             COUNT(*), CURRENT_TIMESTAMP
+           FROM conversation_traffic_receipts
+           WHERE site_id = 'default'
+             AND business_date = ?1
+           GROUP BY site_id, business_date`,
         )
-        SELECT 'default', ?1, 'summary', 'total', NULL, COUNT(*), CURRENT_TIMESTAMP
-        FROM conversation_traffic_receipts
-        WHERE site_id = 'default' AND business_date = ?1`,
-        )
-        .bind(rebuildDate),
-    );
-
-    // Rebuild agent dimension
-    statements.push(
+        .bind(businessDate),
       db
         .prepare(
           `INSERT INTO traffic_daily_rollups (
-          site_id, business_date, dimension, item_id, item_name, count, updated_at
+             site_id, business_date, dimension, item_id, item_name, count, updated_at
+           )
+           SELECT site_id, business_date, 'agent',
+             COALESCE(agent_id, '__pending__'),
+             MAX(NULLIF(TRIM(agent_name), '')),
+             COUNT(*), CURRENT_TIMESTAMP
+           FROM conversation_traffic_receipts
+           WHERE site_id = 'default'
+             AND business_date = ?1
+           GROUP BY site_id, business_date, agent_id`,
         )
-        SELECT 'default', ?1, 'agent',
-          COALESCE(agent_id, '__pending__'),
-          MAX(NULLIF(TRIM(agent_name), '')),
-          COUNT(*),
-          CURRENT_TIMESTAMP
-        FROM conversation_traffic_receipts
-        WHERE site_id = 'default' AND business_date = ?1
-        GROUP BY agent_id`,
-        )
-        .bind(rebuildDate),
-    );
-
-    // Rebuild product dimension
-    statements.push(
+        .bind(businessDate),
       db
         .prepare(
           `INSERT INTO traffic_daily_rollups (
-          site_id, business_date, dimension, item_id, item_name, count, updated_at
+             site_id, business_date, dimension, item_id, item_name, count, updated_at
+           )
+           SELECT site_id, business_date, 'product',
+             COALESCE(product_id, '__unknown__'),
+             MAX(NULLIF(TRIM(product_title), '')),
+             COUNT(*), CURRENT_TIMESTAMP
+           FROM conversation_traffic_receipts
+           WHERE site_id = 'default'
+             AND business_date = ?1
+           GROUP BY site_id, business_date, product_id`,
         )
-        SELECT 'default', ?1, 'product',
-          COALESCE(product_id, '__unknown__'),
-          MAX(NULLIF(TRIM(product_title), '')),
-          COUNT(*),
-          CURRENT_TIMESTAMP
-        FROM conversation_traffic_receipts
-        WHERE site_id = 'default' AND business_date = ?1
-        GROUP BY product_id`,
-        )
-        .bind(rebuildDate),
+        .bind(businessDate),
     );
   }
-
-  // Execute all updates in a single batch transaction
-  await db.batch(
-    statements.map((stmt) => ({
-      executeRun: () =>
-        stmt.run() as unknown as { meta: { changes: number } },
-    })),
-  );
+  await db.batch(statements);
 }
