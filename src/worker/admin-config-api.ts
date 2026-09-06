@@ -153,8 +153,7 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
     agents: rows
       .filter((row) => row.dimension === 'agent')
       .map((row) => ({
-        agentId:
-          row.item_id === TRAFFIC_PENDING_AGENT_ID ? null : row.item_id,
+        agentId: row.item_id === TRAFFIC_PENDING_AGENT_ID ? null : row.item_id,
         agentName: row.item_name ?? '待接待',
         count: Number(row.count),
       })),
@@ -787,8 +786,8 @@ async function assignedActiveConversationIds(
          AND COALESCE(expires_at, datetime(created_at, '+1 day')) > CURRENT_TIMESTAMP
        ORDER BY last_message_at ASC, id ASC`,
     )
-      .bind(agentId)
-      .all<{ id: string }>();
+    .bind(agentId)
+    .all<{ id: string }>();
   return (result.results ?? []).map((conversation) => conversation.id);
 }
 
@@ -805,8 +804,8 @@ async function currentRoutingScope(
          AND is_enabled = 1
        ORDER BY scope_type ASC, section_id ASC, category_id ASC, product_id ASC`,
     )
-      .bind(agentId)
-      .all<ScopeRow>();
+    .bind(agentId)
+    .all<ScopeRow>();
   return scopeFromRows(result.results ?? []);
 }
 
