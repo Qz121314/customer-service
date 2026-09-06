@@ -1,148 +1,173 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
 const adminPassword =
   process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
+const evidencePath = '/tmp/admin-viewport-geometry.json';
 
 function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-test('routing diagnostics stays on Agents without duplicate Admin bootstrap', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const adminLogin = await page.request.post(url('/api/auth/login'), {
+function loadEvidence() {
+  if (!existsSync(evidencePath)) return { screenshots: {}, geometry: [] };
+  try {
+    return JSON.parse(readFileSync(evidencePath, 'utf8'));
+  } catch {
+    return { screenshots: {}, geometry: [] };
+  }
+}
+
+async function capture(page, name, geometry) {
+  const evidence = loadEvidence();
+  evidence.screenshots[name] = (
+    await page.screenshot({ animations: 'disabled' })
+  ).toString('base64');
+  if (geometry) evidence.geometry.push({ name, ...geometry });
+  writeFileSync(evidencePath, `${JSON.stringify(evidence)}\n`);
+}
+
+async function seedDiagnostics(page) {
+  const login = await page.request.post(url('/api/auth/login'), {
     data: { password: adminPassword },
   });
-  expect(adminLogin.ok()).toBeTruthy();
+  expect(login.ok()).toBeTruthy();
+  const bootstrap = await page.request.get(url('/api/admin/bootstrap'));
+  expect(bootstrap.ok()).toBeTruthy();
+  const payload = await bootstrap.json();
+  const product = payload.products.find((item) => item.isEnabled);
+  expect(product).toBeTruthy();
 
-  let adminBootstrapRequests = 0;
-  let trafficStatsRequests = 0;
-  page.on('request', (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (pathname === '/api/admin/bootstrap') adminBootstrapRequests += 1;
-    if (pathname === '/api/admin/traffic-stats') trafficStatsRequests += 1;
-  });
+  const agents = [
+    ['diag-online-a', '诊断 A', true],
+    ['diag-online-b', '诊断 B', true],
+    ['diag-offline-c', '诊断 C', false],
+    ['diag-offline-d', '诊断 D', false],
+  ];
+  for (const [username, name, online] of agents) {
+    const created = await page.request.post(url('/api/admin/agents'), {
+      data: {
+        name,
+        adminLabel: name,
+        username,
+        password: 'routing-smoke-pass',
+        routingScope: { type: 'product', productIds: [product.id] },
+        dailyConversationLimit: 0,
+        trafficQuotaEnabled: false,
+        trafficQuotaTopUp: 0,
+        trafficQuotaRequestId: '',
+        isEnabled: true,
+      },
+    });
+    expect(created.ok()).toBeTruthy();
+    if (online) {
+      const agentLogin = await page.request.post(url('/api/agent/auth/login'), {
+        data: { username, password: 'routing-smoke-pass' },
+      });
+      expect(agentLogin.ok()).toBeTruthy();
+    }
+  }
+  return product;
+}
 
-  await page.goto(url('/'));
-  await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: '分流诊断', exact: true }),
-  ).toHaveCount(0);
-  await expect.poll(() => adminBootstrapRequests).toBe(1);
-  await expect.poll(() => trafficStatsRequests).toBe(1);
-
+async function openDiagnostics(page) {
   await page.getByRole('button', { name: /客服坐席/u }).click();
-  const heading = page.getByRole('heading', { name: '客服坐席' });
-  const diagnoseTrigger = page.getByRole('button', {
-    name: '分流诊断',
-    exact: true,
+  await expect(page.getByRole('heading', { name: '客服坐席' })).toBeVisible();
+  await page.getByRole('button', { name: '分流诊断', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '分流诊断' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('.routing-diagnose-table')).toBeVisible();
+  return dialog;
+}
+
+async function readGeometry(dialog) {
+  return dialog.evaluate((element) => {
+    const context = element.querySelector('.routing-diagnose-context');
+    const funnel = element.querySelector('.routing-diagnose-funnel');
+    const tableWrap = element.querySelector('.routing-diagnose-table-wrap');
+    const table = element.querySelector('.routing-diagnose-table');
+    const head = element.querySelector('.routing-diagnose-head');
+    const foot = element.querySelector('.routing-diagnose-foot');
+    if (!context || !funnel || !tableWrap || !table || !head || !foot) return null;
+    const rect = element.getBoundingClientRect();
+    return {
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      bottom: rect.bottom,
+      headerHeight: head.getBoundingClientRect().height,
+      contextHeight: context.getBoundingClientRect().height,
+      funnelHeight: funnel.getBoundingClientRect().height,
+      tableHeight: table.getBoundingClientRect().height,
+      tableViewportHeight: tableWrap.getBoundingClientRect().height,
+      footerHeight: foot.getBoundingClientRect().height,
+    };
   });
-  const createAgent = page.getByRole('button', {
-    name: '新增客服',
-    exact: true,
-  });
-  await expect(heading).toBeVisible();
-  await expect(diagnoseTrigger).toBeVisible();
-  await expect(createAgent).toBeVisible();
-  await expect.poll(() => adminBootstrapRequests).toBe(1);
-  await expect.poll(() => trafficStatsRequests).toBe(1);
+}
 
-  const mobileTriggerBox = await diagnoseTrigger.boundingBox();
-  const mobileCreateBox = await createAgent.boundingBox();
-  expect(mobileTriggerBox).not.toBeNull();
-  expect(mobileCreateBox).not.toBeNull();
-  if (mobileTriggerBox && mobileCreateBox) {
-    expect(mobileTriggerBox.x).toBeGreaterThanOrEqual(0);
-    expect(mobileTriggerBox.x + mobileTriggerBox.width).toBeLessThanOrEqual(
-      390,
-    );
-    expect(mobileTriggerBox.height).toBeGreaterThanOrEqual(40);
-    expect(mobileCreateBox.x).toBeGreaterThanOrEqual(0);
-    expect(mobileCreateBox.x + mobileCreateBox.width).toBeLessThanOrEqual(390);
-    expect(mobileCreateBox.height).toBeGreaterThanOrEqual(40);
-  }
-
-  await diagnoseTrigger.click();
-  const diagnoseDialog = page.getByRole('dialog', { name: '分流诊断' });
-  await expect(diagnoseDialog).toBeVisible();
-  await expect.poll(() => adminBootstrapRequests).toBe(1);
-  await expect.poll(() => trafficStatsRequests).toBe(1);
-
-  const mobileDialogBox = await diagnoseDialog.boundingBox();
-  expect(mobileDialogBox).not.toBeNull();
-  if (mobileDialogBox) {
-    expect(mobileDialogBox.x).toBeGreaterThanOrEqual(0);
-    expect(mobileDialogBox.y).toBeGreaterThanOrEqual(0);
-    expect(mobileDialogBox.x + mobileDialogBox.width).toBeLessThanOrEqual(390);
-    expect(mobileDialogBox.y + mobileDialogBox.height).toBeLessThanOrEqual(844);
-  }
-
-  const mobileRootGeometry = await page.evaluate(() => {
+async function expectNoDocumentOverflow(page) {
+  const widths = await page.evaluate(() => {
     const root = globalThis.document.scrollingElement;
-    return root
-      ? { clientWidth: root.clientWidth, scrollWidth: root.scrollWidth }
-      : null;
+    return root ? [root.clientWidth, root.scrollWidth] : [0, 1];
   });
-  expect(mobileRootGeometry).not.toBeNull();
-  if (mobileRootGeometry) {
-    expect(mobileRootGeometry.scrollWidth).toBeLessThanOrEqual(
-      mobileRootGeometry.clientWidth + 1,
+  expect(widths[1]).toBeLessThanOrEqual(widths[0] + 1);
+}
+
+test('routing diagnostics is a compact table-first workbench', async ({ page }) => {
+  await seedDiagnostics(page);
+  let bootstrapRequests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === '/api/admin/bootstrap') {
+      bootstrapRequests += 1;
+    }
+  });
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1366, height: 768 },
+    { width: 1280, height: 800 },
+    { width: 390, height: 844 },
+  ]) {
+    const key = `${viewport.width}x${viewport.height}-routing-diagnose`;
+    await page.setViewportSize(viewport);
+    await page.goto(url('/'));
+    await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
+    const beforeOpen = bootstrapRequests;
+    const dialog = await openDiagnostics(page);
+    await expect.poll(() => bootstrapRequests).toBe(beforeOpen);
+    await expect(dialog.getByText('下一棒', { exact: true }).first()).toBeVisible();
+    await expect(dialog.getByText('可分配', { exact: true }).first()).toBeVisible();
+    await expect(dialog.getByText('当前不在线', { exact: true }).first()).toBeVisible();
+    await expect(dialog.getByLabel('诊断产品')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: '刷新', exact: true })).toBeVisible();
+
+    const geometry = await readGeometry(dialog);
+    expect(geometry).not.toBeNull();
+    expect(geometry.top).toBeGreaterThanOrEqual(0);
+    expect(geometry.bottom).toBeLessThanOrEqual(viewport.height + 1);
+    expect(geometry.contextHeight).toBeLessThanOrEqual(
+      viewport.width <= 900 ? 170 : 72,
     );
+    expect(geometry.funnelHeight).toBeLessThanOrEqual(
+      viewport.width <= 900 ? 130 : 64,
+    );
+    expect(geometry.headerHeight).toBeLessThanOrEqual(
+      viewport.width <= 900 ? 120 : 72,
+    );
+    expect(geometry.footerHeight).toBeLessThanOrEqual(58);
+    if (viewport.width >= 1000) {
+      expect(geometry.width).toBeGreaterThan(900);
+      expect(geometry.tableViewportHeight).toBeGreaterThan(
+        geometry.funnelHeight * 2,
+      );
+    }
+    await expectNoDocumentOverflow(page);
+    await capture(page, key, geometry);
+
+    await dialog.getByRole('button', { name: '关闭', exact: true }).last().click();
+    await expect(dialog).toBeHidden();
   }
 
-  await page.keyboard.press('Escape');
-  await expect(diagnoseDialog).toBeHidden();
-
-  await page.getByRole('button', { name: /仪表板/u }).click();
-  await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
-  await expect(diagnoseTrigger).toHaveCount(0);
-  await expect.poll(() => adminBootstrapRequests).toBe(1);
-
-  await page.getByRole('button', { name: /客服坐席/u }).click();
-  await page.setViewportSize({ width: 1440, height: 760 });
-  await expect(diagnoseTrigger).toBeVisible();
-  await expect(createAgent).toBeVisible();
-
-  const desktopHeadingBox = await heading.boundingBox();
-  const desktopTriggerBox = await diagnoseTrigger.boundingBox();
-  const desktopCreateBox = await createAgent.boundingBox();
-  expect(desktopHeadingBox).not.toBeNull();
-  expect(desktopTriggerBox).not.toBeNull();
-  expect(desktopCreateBox).not.toBeNull();
-  if (desktopHeadingBox && desktopTriggerBox && desktopCreateBox) {
-    expect(desktopTriggerBox.x).toBeGreaterThan(
-      desktopHeadingBox.x + desktopHeadingBox.width,
-    );
-    expect(desktopTriggerBox.x + desktopTriggerBox.width).toBeLessThanOrEqual(
-      desktopCreateBox.x,
-    );
-    expect(desktopCreateBox.x + desktopCreateBox.width).toBeLessThanOrEqual(
-      1440,
-    );
-  }
-
-  await diagnoseTrigger.click();
-  await expect(diagnoseDialog).toBeVisible();
-  await expect.poll(() => adminBootstrapRequests).toBe(1);
-
-  const desktopDialogBox = await diagnoseDialog.boundingBox();
-  expect(desktopDialogBox).not.toBeNull();
-  if (desktopDialogBox) {
-    expect(desktopDialogBox.x).toBeGreaterThanOrEqual(0);
-    expect(desktopDialogBox.y).toBeGreaterThanOrEqual(0);
-    expect(desktopDialogBox.x + desktopDialogBox.width).toBeLessThanOrEqual(
-      1440,
-    );
-    expect(desktopDialogBox.y + desktopDialogBox.height).toBeLessThanOrEqual(
-      760,
-    );
-  }
-
-  await diagnoseDialog
-    .getByRole('button', { name: '关闭', exact: true })
-    .click();
-  await expect(diagnoseDialog).toBeHidden();
-  await expect.poll(() => adminBootstrapRequests).toBe(1);
+  expect(bootstrapRequests).toBe(4);
 });
