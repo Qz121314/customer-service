@@ -116,8 +116,9 @@ test('active promotion is NEW until an idempotent article view and new revision 
   const beforeConversationCount = database
     .prepare('SELECT COUNT(*) AS count FROM conversations')
     .get().count;
-  const beforeMessageCount = database.prepare('SELECT COUNT(*) AS count FROM messages').get()
-    .count;
+  const beforeMessageCount = database
+    .prepare('SELECT COUNT(*) AS count FROM messages')
+    .get().count;
 
   const first = await visitorPromotionApi.request(
     '/client/v1/promotion?visitorId=ABC123',
@@ -125,7 +126,7 @@ test('active promotion is NEW until an idempotent article view and new revision 
     { DB: d1 },
   );
   assert.equal(first.status, 200);
-  assert.equal((await first.clone().json()).promotion.isNew, true);
+  assert.equal((await first.json()).promotion.isNew, true);
 
   const view = await visitorPromotionApi.request(
     `/client/v1/promotion/${encodeURIComponent(promotionId)}/view`,
@@ -137,19 +138,14 @@ test('active promotion is NEW until an idempotent article view and new revision 
     { DB: d1 },
   );
   assert.equal(view.status, 200);
-  const viewed = await view.json();
-  assert.equal(typeof viewed.visitorToken, 'string');
+  assert.equal((await view.json()).revision, 1);
 
   const repeated = await visitorPromotionApi.request(
     `/client/v1/promotion/${encodeURIComponent(promotionId)}/view`,
     {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        visitorId: 'ABC123',
-        visitorToken: viewed.visitorToken,
-        revision: 1,
-      }),
+      body: JSON.stringify({ visitorId: 'ABC123', revision: 1 }),
     },
     { DB: d1 },
   );
@@ -162,7 +158,7 @@ test('active promotion is NEW until an idempotent article view and new revision 
   );
 
   const afterView = await visitorPromotionApi.request(
-    `/client/v1/promotion?visitorId=ABC123&visitorToken=${encodeURIComponent(viewed.visitorToken)}`,
+    '/client/v1/promotion?visitorId=ABC123',
     undefined,
     { DB: d1 },
   );
@@ -171,7 +167,7 @@ test('active promotion is NEW until an idempotent article view and new revision 
   const updated = await savePromotion(d1, { title: 'Second offer' });
   assert.equal(updated.body.promotion.revision, 2);
   const afterRevision = await visitorPromotionApi.request(
-    `/client/v1/promotion?visitorId=ABC123&visitorToken=${encodeURIComponent(viewed.visitorToken)}`,
+    '/client/v1/promotion?visitorId=ABC123',
     undefined,
     { DB: d1 },
   );
@@ -220,17 +216,53 @@ test('active rule excludes disabled, future and expired promotion', async () => 
   assert.equal((await response.json()).promotion, null);
 });
 
+test('public promotion lookup is isolated by site', async () => {
+  const { database, d1 } = setup();
+  await savePromotion(d1);
+  database.exec(`
+    INSERT INTO sites (id, name, public_key, is_enabled)
+    VALUES ('site-b', 'Site B', 'pk_site_b', 1);
+    INSERT INTO visitor_promotions (
+      site_id, id, revision, is_enabled, title, summary, body_markdown
+    ) VALUES (
+      'site-b', 'promo-b', 1, 1, 'Site B Offer', 'Only B', '# Site B'
+    );
+  `);
+
+  const defaultResponse = await visitorPromotionApi.request(
+    '/client/v1/promotion?visitorId=ABC123&projectId=default',
+    undefined,
+    { DB: d1 },
+  );
+  assert.equal((await defaultResponse.json()).promotion.title, 'New Customer Offer');
+
+  const siteBResponse = await visitorPromotionApi.request(
+    '/client/v1/promotion?visitorId=ABC123&projectId=pk_site_b',
+    undefined,
+    { DB: d1 },
+  );
+  assert.equal((await siteBResponse.json()).promotion.title, 'Site B Offer');
+});
+
 test('promotion source stays outside chat, routing, quota and statistics owners', () => {
   const promotionSource = readFileSync(
-    fileURLToPath(new URL('../src/worker/visitor-promotion-api.ts', import.meta.url)),
+    fileURLToPath(
+      new URL('../src/worker/visitor-promotion-api.ts', import.meta.url),
+    ),
     'utf8',
   );
   const clientSource = readFileSync(
     fileURLToPath(new URL('../src/worker/client-api.ts', import.meta.url)),
     'utf8',
   );
-  assert.doesNotMatch(promotionSource, /INSERT\s+INTO\s+(?:conversations|messages)\b/iu);
-  assert.doesNotMatch(promotionSource, /conversation_traffic_receipts|traffic_daily_rollups/iu);
+  assert.doesNotMatch(
+    promotionSource,
+    /INSERT\s+INTO\s+(?:conversations|messages)\b/iu,
+  );
+  assert.doesNotMatch(
+    promotionSource,
+    /conversation_traffic_receipts|traffic_daily_rollups/iu,
+  );
   assert.doesNotMatch(promotionSource, /from ['"]\.\/routing/iu);
   assert.doesNotMatch(clientSource, /visitor_promotions|visitor_promotion_views/iu);
 });
