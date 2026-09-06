@@ -1,71 +1,24 @@
-/* Admin Routing Diagnostics ownership. */
-.routing-diagnose-trigger {
-  display: flex;
-  flex: none;
-  margin-left: auto;
-}
+/* Admin Routing Diagnostics owner. The workspace is part of 客服坐席 and the
+ * document owns vertical scrolling; only the wide table owns horizontal scroll.
+ */
 
-.routing-diagnose-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.routing-diagnose-backdrop {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background: rgb(15 23 42 / 40%);
-  cursor: default;
-}
-
-.routing-diagnose-drawer {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  width: min(1180px, calc(100vw - 40px));
-  max-height: calc(100dvh - 40px);
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid var(--admin-border-strong, #cfd5de);
-  border-radius: 12px;
-  background: var(--admin-bg, #f4f5f7);
-  box-shadow: 0 22px 64px rgb(15 23 42 / 22%);
+.routing-diagnose-workspace {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
 }
 
 .routing-diagnose-head {
   min-width: 0;
-  min-height: 64px;
+  min-height: 54px;
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(280px, 360px) auto auto;
+  grid-template-columns: minmax(260px, 420px) auto minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px 10px 16px;
-  border-bottom: 1px solid var(--admin-border, #e1e5ea);
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--admin-border, #e1e5ea);
+  border-radius: 9px;
   background: var(--admin-surface, #fff);
-}
-
-.routing-diagnose-title {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.routing-diagnose-title strong {
-  color: var(--admin-text-strong, #17202b);
-  font-size: 17px;
-  font-weight: 720;
-  letter-spacing: -0.02em;
-}
-
-.routing-diagnose-title span,
-.routing-diagnose-foot span {
-  color: var(--admin-muted, #737d89);
-  font-size: 11px;
 }
 
 .routing-diagnose-product {
@@ -78,7 +31,7 @@
 
 .routing-diagnose-product > span {
   color: var(--admin-muted-strong, #56616e);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -86,60 +39,44 @@
 .routing-diagnose-product select {
   width: 100%;
   min-width: 0;
-  min-height: 36px;
+  min-height: 34px;
   padding: 0 30px 0 10px;
   border: 1px solid var(--admin-border-strong, #cfd5de);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--admin-surface, #fff);
   color: var(--admin-text, #29313d);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
 }
 
-.routing-diagnose-close {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--admin-border, #e1e5ea);
-  border-radius: 8px;
-  background: var(--admin-surface, #fff);
-  color: var(--admin-muted-strong, #56616e);
-  cursor: pointer;
-}
-
-.routing-diagnose-close:hover {
-  border-color: var(--admin-border-strong, #cfd5de);
-  background: var(--admin-surface-soft, #f7f8fa);
-  color: var(--admin-text-strong, #17202b);
-}
-
-.routing-diagnose-close .ui-icon {
-  width: 17px;
-  height: 17px;
+.routing-diagnose-readonly {
+  min-width: 0;
+  justify-self: end;
+  overflow: hidden;
+  color: var(--admin-muted, #737d89);
+  font-size: 9px;
+  line-height: 1.4;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .routing-diagnose-body {
   min-width: 0;
-  min-height: 0;
-  flex: 1 1 auto;
   display: grid;
   align-content: start;
   gap: 10px;
-  padding: 12px 14px;
-  overflow: auto;
-  overscroll-behavior: contain;
+  overflow: visible;
 }
 
 .routing-diagnose-error,
 .routing-diagnose-empty {
-  padding: 10px 12px;
+  padding: 12px;
   border: 1px solid var(--admin-border, #e1e5ea);
   border-radius: 8px;
   background: var(--admin-surface, #fff);
   color: var(--admin-muted-strong, #56616e);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .routing-diagnose-error {
@@ -161,11 +98,11 @@
 .routing-diagnose-context > div {
   position: relative;
   min-width: 0;
-  min-height: 58px;
+  min-height: 54px;
   display: grid;
   align-content: center;
-  gap: 4px;
-  padding: 9px 12px;
+  gap: 3px;
+  padding: 8px 10px;
 }
 
 .routing-diagnose-context > div + div {
@@ -175,7 +112,7 @@
 .routing-diagnose-context span,
 .routing-diagnose-funnel span {
   color: var(--admin-muted, #737d89);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 620;
 }
 
@@ -183,7 +120,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--admin-text-strong, #17202b);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 680;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -220,14 +157,13 @@
 }
 
 .routing-diagnose-funnel > div {
-  position: relative;
   min-width: 0;
-  min-height: 50px;
+  min-height: 48px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  gap: 5px;
+  padding: 7px 8px;
 }
 
 .routing-diagnose-funnel > div + div {
@@ -236,7 +172,7 @@
 
 .routing-diagnose-funnel strong {
   color: var(--admin-text-strong, #17202b);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -259,12 +195,12 @@
 }
 
 .routing-diagnose-section-title {
-  min-height: 48px;
+  min-height: 46px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 8px 11px;
   border-bottom: 1px solid var(--admin-border, #e1e5ea);
 }
 
@@ -282,7 +218,7 @@
 
 .routing-diagnose-section-title span {
   color: var(--admin-muted, #737d89);
-  font-size: 10px;
+  font-size: 9px;
 }
 
 .routing-diagnose-health {
@@ -292,7 +228,7 @@
   align-items: center;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 10px !important;
+  font-size: 9px !important;
   font-weight: 680;
 }
 
@@ -308,13 +244,15 @@
 
 .routing-diagnose-table-wrap {
   min-width: 0;
-  max-height: min(430px, 54dvh);
-  overflow: auto;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-inline: contain;
 }
 
 .routing-diagnose-table {
   width: 100%;
-  min-width: 940px;
+  min-width: 860px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -359,7 +297,7 @@
 }
 
 .routing-diagnose-table td {
-  height: 54px;
+  height: 52px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--admin-border-subtle, #edf0f3);
   color: var(--admin-text, #29313d);
@@ -437,10 +375,10 @@
 .routing-diagnose-check,
 .routing-diagnose-result {
   width: fit-content;
+  min-height: 22px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 22px;
   padding: 0 7px;
   border-radius: 999px;
   background: var(--admin-surface-muted, #f2f4f7);
@@ -482,25 +420,15 @@
   color: var(--admin-muted-strong, #56616e);
 }
 
-.routing-diagnose-foot {
-  min-height: 50px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 12px 8px 16px;
-  border-top: 1px solid var(--admin-border, #e1e5ea);
-  background: var(--admin-surface, #fff);
-}
-
 @media (max-width: 900px) {
   .routing-diagnose-head {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .routing-diagnose-product {
+  .routing-diagnose-readonly {
     grid-column: 1 / -1;
-    grid-row: 2;
+    justify-self: start;
+    text-align: left;
   }
 
   .routing-diagnose-context {
@@ -508,17 +436,16 @@
   }
 
   .routing-diagnose-context > div {
-    min-height: 52px;
-    border-left: 0 !important;
-    border-bottom: 1px solid var(--admin-border-subtle, #edf0f3);
+    min-height: 50px;
+    border-top: 1px solid var(--admin-border-subtle, #edf0f3);
   }
 
-  .routing-diagnose-context > div:nth-child(2n) {
-    border-left: 1px solid var(--admin-border-subtle, #edf0f3) !important;
+  .routing-diagnose-context > div:nth-child(-n + 2) {
+    border-top: 0;
   }
 
-  .routing-diagnose-context > div:last-child {
-    border-bottom: 0;
+  .routing-diagnose-context > div:nth-child(odd) {
+    border-left: 0;
   }
 
   .routing-diagnose-funnel {
@@ -526,38 +453,27 @@
   }
 
   .routing-diagnose-funnel > div {
-    border-bottom: 1px solid var(--admin-border-subtle, #edf0f3);
+    min-height: 46px;
   }
 
-  .routing-diagnose-funnel > div:nth-child(4n + 1) {
+  .routing-diagnose-funnel > div:nth-child(5) {
     border-left: 0;
   }
 
-  .routing-diagnose-funnel > div:nth-last-child(-n + 4) {
-    border-bottom: 0;
+  .routing-diagnose-funnel > div:nth-child(n + 5) {
+    border-top: 1px solid var(--admin-border-subtle, #edf0f3);
   }
 }
 
-@media (max-width: 720px) {
-  .routing-diagnose-layer {
-    align-items: stretch;
-    padding: 0;
-  }
-
-  .routing-diagnose-drawer {
-    width: 100%;
-    max-height: 100dvh;
-    border-width: 0;
-    border-radius: 0;
+@media (max-width: 560px) {
+  .routing-diagnose-workspace {
+    gap: 8px;
   }
 
   .routing-diagnose-head {
-    min-height: 0;
-    padding: 10px 12px;
-  }
-
-  .routing-diagnose-title strong {
-    font-size: 16px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    padding: 8px;
   }
 
   .routing-diagnose-product {
@@ -570,8 +486,12 @@
     font-size: 16px;
   }
 
-  .routing-diagnose-body {
-    padding: 10px 12px;
+  .routing-diagnose-head .secondary-button {
+    min-height: 44px;
+  }
+
+  .routing-diagnose-readonly {
+    display: none;
   }
 
   .routing-diagnose-context {
@@ -579,124 +499,58 @@
   }
 
   .routing-diagnose-context > div {
-    min-height: 48px;
-    gap: 2px;
-    padding: 6px 9px;
+    padding-inline: 8px;
   }
 
-  .routing-diagnose-cursor-item button {
-    min-height: 20px;
+  .routing-diagnose-context > div:nth-child(1) {
+    grid-column: 1;
+    grid-row: 1;
+    border-top: 0;
+    border-left: 0;
+  }
+
+  .routing-diagnose-context > div:nth-child(2) {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    border-top: 1px solid var(--admin-border-subtle, #edf0f3);
+    border-left: 0;
+  }
+
+  .routing-diagnose-context > div:nth-child(3) {
+    grid-column: 2;
+    grid-row: 1;
+    border-top: 0;
+    border-left: 1px solid var(--admin-border-subtle, #edf0f3);
+  }
+
+  .routing-diagnose-context > div:nth-child(4) {
+    grid-column: 1;
+    grid-row: 3;
+    border-left: 0;
+  }
+
+  .routing-diagnose-context > div:nth-child(5) {
+    grid-column: 2;
+    grid-row: 3;
+    border-left: 1px solid var(--admin-border-subtle, #edf0f3);
   }
 
   .routing-diagnose-funnel > div {
-    min-height: 46px;
-    gap: 3px;
-    padding: 6px 7px;
-  }
-
-  .routing-diagnose-funnel span {
-    font-size: 9px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 7px;
   }
 
   .routing-diagnose-funnel strong {
-    font-size: 14px;
+    font-size: 13px;
   }
 
-  .routing-diagnose-table-wrap {
-    max-height: none;
-    overflow: visible;
+  .routing-diagnose-section-title {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .routing-diagnose-table {
-    min-width: 0;
-    display: block;
-  }
-
-  .routing-diagnose-table thead {
-    display: none;
-  }
-
-  .routing-diagnose-table tbody {
-    display: grid;
-  }
-
-  .routing-diagnose-table tr {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px 10px;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--admin-border-subtle, #edf0f3);
-  }
-
-  .routing-diagnose-table tr:last-child {
-    border-bottom: 0;
-  }
-
-  .routing-diagnose-table td {
-    height: auto;
-    padding: 0;
-    border: 0;
-  }
-
-  .routing-diagnose-table td:first-child,
-  .routing-diagnose-table td:last-child {
-    grid-column: 1 / -1;
-  }
-
-  .routing-diagnose-table td:first-child {
-    padding-bottom: 3px;
-  }
-
-  .routing-diagnose-table td::before {
-    display: block;
-    margin-bottom: 3px;
-    color: var(--admin-muted, #737d89);
-    font-size: 9px;
-    font-weight: 640;
-  }
-
-  .routing-diagnose-table td:nth-child(2)::before {
-    content: '在线状态';
-  }
-
-  .routing-diagnose-table td:nth-child(3)::before {
-    content: '今日接待 / 上限';
-  }
-
-  .routing-diagnose-table td:nth-child(4)::before {
-    content: '额度剩余';
-  }
-
-  .routing-diagnose-table td:nth-child(5)::before {
-    content: '范围匹配';
-  }
-
-  .routing-diagnose-table td:nth-child(6)::before {
-    content: '资格结果';
-  }
-
-  .routing-diagnose-table td:nth-child(7)::before {
-    content: '原因';
-  }
-
-  .routing-diagnose-foot {
-    min-height: 56px;
-    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
-  }
-
-  .routing-diagnose-foot .secondary-button {
-    min-height: 44px;
-  }
-}
-
-@media (max-width: 430px) {
-  .routing-diagnose-title span,
-  .routing-diagnose-foot span {
-    display: none;
-  }
-
-  .routing-diagnose-context strong {
-    font-size: 11px;
+    min-width: 800px;
   }
 }

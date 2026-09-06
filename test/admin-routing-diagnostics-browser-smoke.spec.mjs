@@ -73,36 +73,44 @@ async function seedDiagnostics(page) {
 
 async function openDiagnostics(page) {
   await page.getByRole('button', { name: /客服坐席/u }).click();
-  await expect(page.getByRole('heading', { name: '客服坐席' })).toBeVisible();
-  await page.getByRole('button', { name: '分流诊断', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '分流诊断' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator('.routing-diagnose-table')).toBeVisible();
-  return dialog;
+  await expect(page.getByRole('heading', { name: '客服账号' })).toBeVisible();
+  const context = page.locator('.admin-context-navigation');
+  await expect(context).toBeVisible();
+  await context.getByRole('button', { name: /分流诊断/u }).click();
+  await expect(page.getByRole('heading', { name: '分流诊断' })).toBeVisible();
+  const workspace = page.locator('.routing-diagnose-workspace');
+  await expect(workspace).toBeVisible();
+  await expect(workspace.locator('.routing-diagnose-table')).toBeVisible();
+  return workspace;
 }
 
-async function readGeometry(dialog) {
-  return dialog.evaluate((element) => {
+async function readGeometry(workspace) {
+  return workspace.evaluate((element) => {
     const context = element.querySelector('.routing-diagnose-context');
     const funnel = element.querySelector('.routing-diagnose-funnel');
     const tableWrap = element.querySelector('.routing-diagnose-table-wrap');
     const table = element.querySelector('.routing-diagnose-table');
     const head = element.querySelector('.routing-diagnose-head');
-    const foot = element.querySelector('.routing-diagnose-foot');
-    if (!context || !funnel || !tableWrap || !table || !head || !foot)
+    const content = globalThis.document.querySelector('.admin-content');
+    if (!context || !funnel || !tableWrap || !table || !head || !content) {
       return null;
+    }
     const rect = element.getBoundingClientRect();
+    const tableStyle = globalThis.getComputedStyle(tableWrap);
     return {
       width: rect.width,
       height: rect.height,
       top: rect.top,
-      bottom: rect.bottom,
       headerHeight: head.getBoundingClientRect().height,
       contextHeight: context.getBoundingClientRect().height,
       funnelHeight: funnel.getBoundingClientRect().height,
       tableHeight: table.getBoundingClientRect().height,
       tableViewportHeight: tableWrap.getBoundingClientRect().height,
-      footerHeight: foot.getBoundingClientRect().height,
+      workspacePosition: globalThis.getComputedStyle(element).position,
+      contentOverflowY: globalThis.getComputedStyle(content).overflowY,
+      tableMaxHeight: tableStyle.maxHeight,
+      tableOverflowX: tableStyle.overflowX,
+      tableOverflowY: tableStyle.overflowY,
     };
   });
 }
@@ -115,7 +123,7 @@ async function expectNoDocumentOverflow(page) {
   expect(widths[1]).toBeLessThanOrEqual(widths[0] + 1);
 }
 
-test('routing diagnostics is a compact table-first workbench', async ({
+test('routing diagnostics is an inline table-first context workspace', async ({
   page,
 }) => {
   await seedDiagnostics(page);
@@ -136,51 +144,53 @@ test('routing diagnostics is a compact table-first workbench', async ({
     await page.setViewportSize(viewport);
     await page.goto(url('/'));
     await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
+    await expect(page.locator('.admin-context-navigation')).toHaveCount(0);
     const beforeOpen = bootstrapRequests;
-    const dialog = await openDiagnostics(page);
+    const workspace = await openDiagnostics(page);
     await expect.poll(() => bootstrapRequests).toBe(beforeOpen);
     await expect(
-      dialog.getByText('下一棒', { exact: true }).first(),
+      workspace.getByText('下一棒', { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      dialog.getByText('可分配', { exact: true }).first(),
+      workspace.getByText('可分配', { exact: true }).first(),
     ).toBeVisible();
     await expect(
-      dialog.getByText('当前不在线', { exact: true }).first(),
+      workspace.getByText('当前不在线', { exact: true }).first(),
     ).toBeVisible();
-    await expect(dialog.getByLabel('诊断产品')).toBeVisible();
+    await expect(workspace.getByLabel('诊断产品')).toBeVisible();
     await expect(
-      dialog.getByRole('button', { name: '刷新', exact: true }),
+      workspace.getByRole('button', { name: '刷新', exact: true }),
     ).toBeVisible();
 
-    const geometry = await readGeometry(dialog);
+    const geometry = await readGeometry(workspace);
     expect(geometry).not.toBeNull();
-    expect(geometry.top).toBeGreaterThanOrEqual(0);
-    expect(geometry.bottom).toBeLessThanOrEqual(viewport.height + 1);
+    expect(geometry.workspacePosition).not.toBe('fixed');
+    expect(geometry.contentOverflowY).toBe('visible');
+    expect(geometry.tableMaxHeight).toBe('none');
+    expect(geometry.tableOverflowX).toBe('auto');
+    expect(['visible', 'auto']).toContain(geometry.tableOverflowY);
     expect(geometry.contextHeight).toBeLessThanOrEqual(
-      viewport.width <= 900 ? 170 : 72,
+      viewport.width <= 900 ? 190 : 72,
     );
     expect(geometry.funnelHeight).toBeLessThanOrEqual(
       viewport.width <= 900 ? 130 : 64,
     );
     expect(geometry.headerHeight).toBeLessThanOrEqual(
-      viewport.width <= 900 ? 120 : 72,
+      viewport.width <= 900 ? 116 : 64,
     );
-    expect(geometry.footerHeight).toBeLessThanOrEqual(58);
     if (viewport.width >= 1000) {
-      expect(geometry.width).toBeGreaterThan(900);
-      expect(geometry.tableViewportHeight).toBeGreaterThan(
-        geometry.funnelHeight * 2,
-      );
+      expect(geometry.width).toBeGreaterThan(700);
+      expect(geometry.tableHeight).toBeGreaterThan(geometry.funnelHeight * 2);
     }
     await expectNoDocumentOverflow(page);
     await capture(page, key, geometry);
 
-    await dialog
-      .getByRole('button', { name: '关闭', exact: true })
-      .last()
+    await page
+      .locator('.admin-context-navigation')
+      .getByRole('button', { name: /客服账号/u })
       .click();
-    await expect(dialog).toBeHidden();
+    await expect(workspace).toBeHidden();
+    await expect(page.getByRole('heading', { name: '客服账号' })).toBeVisible();
   }
 
   expect(bootstrapRequests).toBe(4);

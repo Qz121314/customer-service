@@ -34,8 +34,13 @@ test('admin route composes explicit CSS owners without the legacy foundation', (
   );
   assert.match(
     routingDiagnose,
+    /\.routing-diagnose-workspace\s*\{/u,
+    'Routing Diagnostics should own its inline workspace presentation',
+  );
+  assert.doesNotMatch(
+    routingDiagnose,
     /\.routing-diagnose-layer\s*\{/u,
-    'Routing Diagnostics should own its overlay presentation',
+    'the retired diagnostics overlay presentation must not return',
   );
   assert.doesNotMatch(
     routingDiagnose,

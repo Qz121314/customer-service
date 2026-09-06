@@ -1,23 +1,32 @@
-/* Admin shell geometry owner. The shell keeps a compact three-destination IA
- * while feature pages own their internal layout and responsive composition.
+/* Admin shell geometry owner. Desktop feature sections may add a contextual
+ * second rail, while the document owns primary vertical scrolling.
  */
 
 .admin-console {
   display: grid;
   grid-template-columns: 208px minmax(0, 1fr);
   width: 100%;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100dvh;
+  align-items: start;
+  overflow: visible;
+}
+
+.admin-console.has-context-navigation {
+  grid-template-columns: 208px 184px minmax(0, 1fr);
 }
 
 .admin-sidebar {
+  position: sticky;
+  top: 0;
   min-width: 0;
+  height: 100dvh;
   min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 16px 11px 12px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .admin-brand {
@@ -103,15 +112,122 @@
   gap: 8px;
 }
 
-.admin-content {
+.admin-context-navigation {
+  position: sticky;
+  top: 0;
   min-width: 0;
+  height: 100dvh;
   min-height: 0;
-  width: 100%;
-  max-width: none;
-  padding: 22px clamp(20px, 2.6vw, 36px) 36px;
+  padding: 18px 12px;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  border-right: 1px solid var(--admin-border, #e1e4e9);
+  background: #f8f9fb;
+  color: var(--admin-text, #29313d);
+}
+
+.admin-context-head {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  padding: 0 7px 13px;
+  margin-bottom: 7px;
+  border-bottom: 1px solid var(--admin-border-subtle, #edf0f3);
+}
+
+.admin-context-head strong,
+.admin-context-head span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-context-head strong {
+  color: var(--admin-text-strong, #17202b);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-context-head span {
+  color: var(--admin-muted, #737d89);
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.admin-context-navigation nav {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.admin-context-navigation nav button {
+  min-width: 0;
+  min-height: 52px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--admin-radius-md, 8px);
+  background: transparent;
+  color: var(--admin-muted-strong, #56616e);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.admin-context-navigation nav button strong,
+.admin-context-navigation nav button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-context-navigation nav button strong {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 680;
+  white-space: nowrap;
+}
+
+.admin-context-navigation nav button span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--admin-muted, #737d89);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.admin-context-navigation nav button:hover {
+  border-color: var(--admin-border, #e1e4e9);
+  background: var(--admin-surface, #fff);
+  color: var(--admin-text-strong, #17202b);
+}
+
+.admin-context-navigation nav button.active {
+  border-color: var(--admin-accent-border, #d8d6ff);
+  background: var(--admin-accent-soft, #f0efff);
+  color: var(--admin-accent-strong, #4338ca);
+}
+
+.admin-context-navigation nav button.active span {
+  color: var(--admin-accent-strong, #4338ca);
+  opacity: 0.76;
+}
+
+.admin-content {
+  min-width: 0;
+  width: 100%;
+  min-height: 100dvh;
+  max-width: none;
+  padding: 22px clamp(20px, 2.6vw, 36px) 44px;
+  overflow: visible;
 }
 
 .admin-content-head {
@@ -147,14 +263,42 @@
 .admin-statistics-page,
 .admin-agent-layout,
 .site-settings-page,
+.routing-diagnose-workspace,
 .notice {
   margin-inline: auto;
 }
 
 .admin-statistics-page,
 .admin-agent-layout,
+.routing-diagnose-workspace,
 .notice {
   width: min(100%, 1440px);
+}
+
+.site-settings-page.is-branding,
+.site-settings-page.is-availability {
+  width: min(100%, 780px);
+}
+
+.site-settings-page .site-logo-setting {
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: start;
+}
+
+.site-settings-page .site-logo-preview {
+  width: 58px;
+  height: 58px;
+}
+
+.site-settings-page .site-logo-actions {
+  grid-column: 2;
+  justify-content: flex-start;
+}
+
+.site-settings-page .no-agent-settings-card {
+  padding: 16px 18px 18px;
+  border: 1px solid var(--admin-border, #e1e4e9);
+  border-radius: var(--admin-radius-lg, 10px);
 }
 
 @media (max-width: 1180px) {
@@ -162,15 +306,23 @@
     grid-template-columns: 196px minmax(0, 1fr);
   }
 
+  .admin-console.has-context-navigation {
+    grid-template-columns: 196px 168px minmax(0, 1fr);
+  }
+
   .admin-content {
     padding-inline: 20px;
+  }
+
+  .admin-context-navigation {
+    padding-inline: 10px;
   }
 }
 
 @media (max-width: 900px) {
-  .admin-console {
+  .admin-console,
+  .admin-console.has-context-navigation {
     display: block;
-    height: auto;
     min-height: 100dvh;
     overflow: visible;
   }
@@ -186,6 +338,7 @@
       'nav nav';
     gap: 8px 12px;
     width: 100%;
+    height: auto;
     min-height: auto;
     padding: 10px 12px 9px;
     overflow: visible;
@@ -254,9 +407,51 @@
     border: 0;
   }
 
+  .admin-context-navigation {
+    position: static;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    padding: 8px 12px;
+    overflow: visible;
+    border-right: 0;
+    border-bottom: 1px solid var(--admin-border, #e1e4e9);
+    background: #fafbfc;
+  }
+
+  .admin-context-head {
+    display: none;
+  }
+
+  .admin-context-navigation nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .admin-context-navigation nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-context-navigation nav button {
+    min-width: 150px;
+    min-height: 44px;
+    flex: 1 0 150px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    text-align: center;
+  }
+
+  .admin-context-navigation nav button span {
+    display: none;
+  }
+
   .admin-content {
     min-height: calc(100dvh - 108px);
-    padding: 20px 16px 36px;
+    padding: 20px 16px 40px;
     overflow: visible;
   }
 
@@ -275,6 +470,11 @@
   .admin-content-head > .secondary-button,
   .admin-content-head > button {
     min-height: 44px;
+  }
+
+  .site-settings-page .site-logo-actions {
+    grid-column: 2;
+    padding-left: 0;
   }
 }
 
@@ -301,8 +501,17 @@
     height: 16px;
   }
 
+  .admin-context-navigation {
+    padding-inline: 10px;
+  }
+
+  .admin-context-navigation nav button {
+    min-width: 132px;
+    flex-basis: 132px;
+  }
+
   .admin-content {
-    padding: 18px 14px 32px;
+    padding: 18px 14px 36px;
   }
 
   .admin-content-head h1 {
@@ -312,5 +521,13 @@
   .admin-content-head p {
     font-size: 12px;
     line-height: 1.5;
+  }
+
+  .site-settings-page .site-logo-actions {
+    grid-column: 1 / -1;
+  }
+
+  .site-settings-page .no-agent-settings-card {
+    padding-inline: 12px;
   }
 }

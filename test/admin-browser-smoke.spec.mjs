@@ -2,8 +2,12 @@ import { writeFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 const baseUrl = process.env.UI_SMOKE_BASE_URL ?? 'http://127.0.0.1:8787';
-const adminPassword =
-  process.env.UI_SMOKE_ADMIN_PASSWORD ?? 'ui-smoke-admin-password';
+const adminPassword = process.env.UI_SMOKE_ADMIN_PASSWORD;
+if (!adminPassword) {
+  throw new Error(
+    'UI_SMOKE_ADMIN_PASSWORD is required for admin browser smoke',
+  );
+}
 const evidence = { screenshots: {}, geometry: [] };
 
 function url(path) {
@@ -33,12 +37,16 @@ async function loginAdmin(page) {
 
 async function loginAndSeed(page, username, name) {
   await loginAdmin(page);
+  await seedAgent(page, username, name);
+}
+
+async function seedAgent(page, username, name) {
   const create = await page.request.post(url('/api/admin/agents'), {
     data: {
       name,
       adminLabel: '1号',
       username,
-      password: 'ui-admin-smoke-pass',
+      password: adminPassword,
       routingScope: { type: 'none' },
       dailyConversationLimit: 0,
       trafficQuotaEnabled: false,
@@ -50,9 +58,11 @@ async function loginAndSeed(page, username, name) {
   expect(create.ok()).toBeTruthy();
 }
 
-async function openSection(page, name) {
+async function openSection(page, name, heading = name) {
   await page.getByRole('button', { name: new RegExp(name, 'u') }).click();
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: heading, exact: true }),
+  ).toBeVisible();
 }
 
 async function expectNoHorizontalOverflow(page) {
@@ -95,7 +105,11 @@ async function agentsGeometry(page) {
     const overview = globalThis.document.querySelector('.admin-overview-strip');
     const table = globalThis.document.querySelector('.admin-table-card');
     const toolbar = globalThis.document.querySelector('.admin-list-toolbar');
-    if (!overview || !table || !toolbar) return null;
+    const content = globalThis.document.querySelector('.admin-content');
+    const context = globalThis.document.querySelector(
+      '.admin-context-navigation',
+    );
+    if (!overview || !table || !toolbar || !content || !context) return null;
     const a = overview.getBoundingClientRect();
     const b = table.getBoundingClientRect();
     const c = toolbar.getBoundingClientRect();
@@ -107,6 +121,8 @@ async function agentsGeometry(page) {
       toolbarHeight: c.height,
       tableTop: b.top,
       summaryBottom: a.bottom,
+      contentOverflowY: globalThis.getComputedStyle(content).overflowY,
+      contextPosition: globalThis.getComputedStyle(context).position,
     };
   });
 }
@@ -208,9 +224,18 @@ async function captureCoreSurfaces(page, key, seedName) {
   await expect(page.getByText('SUMMARY', { exact: true })).toHaveCount(0);
   await expect(page.getByText('AGENTS', { exact: true })).toHaveCount(0);
   await expect(page.getByText('PRODUCTS', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.admin-context-navigation')).toHaveCount(0);
   await capture(page, `${key}-dashboard`);
 
-  await openSection(page, '客服坐席');
+  await openSection(page, '客服坐席', '客服账号');
+  const context = page.locator('.admin-context-navigation');
+  await expect(context).toBeVisible();
+  await expect(
+    context.getByRole('button', { name: /客服账号/u }),
+  ).toBeVisible();
+  await expect(
+    context.getByRole('button', { name: /分流诊断/u }),
+  ).toBeVisible();
   await capture(page, `${key}-agents`);
 
   await page.getByRole('button', { name: '新增客服', exact: true }).click();
@@ -226,9 +251,18 @@ async function captureCoreSurfaces(page, key, seedName) {
   await capture(page, `${key}-edit-agent`);
   await editDialog.getByRole('button', { name: '关闭' }).click();
 
-  await openSection(page, '站点设置');
+  await openSection(page, '站点设置', '品牌');
+  await expect(page.getByText('站点 Logo', { exact: true })).toBeVisible();
+  await capture(page, `${key}-site-settings-brand`);
+  await page
+    .locator('.admin-context-navigation')
+    .getByRole('button', { name: /客服可用性/u })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: '客服可用性', exact: true }),
+  ).toBeVisible();
   await expect(page.getByText('无客服提示语', { exact: true })).toBeVisible();
-  await capture(page, `${key}-site-settings`);
+  await capture(page, `${key}-site-settings-availability`);
 }
 
 test('desktop workbench is compact at required viewports', async ({ page }) => {
@@ -246,6 +280,7 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     await expectNoHorizontalOverflow(page);
     await expect(page.locator('.traffic-summary-strip')).toBeVisible();
     await expect(page.locator('.traffic-distribution-card')).toHaveCount(2);
+    await expect(page.locator('.admin-context-navigation')).toHaveCount(0);
 
     const dashboard = await dashboardGeometry(page);
     expect(dashboard).not.toBeNull();
@@ -255,7 +290,7 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     );
     evidence.geometry.push({ name: `${key}-dashboard`, ...dashboard });
 
-    await openSection(page, '客服坐席');
+    await openSection(page, '客服坐席', '客服账号');
     const agents = await agentsGeometry(page);
     expect(agents).not.toBeNull();
     expect(agents.summaryHeight).toBeLessThanOrEqual(60);
@@ -265,6 +300,8 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     expect(agents.tableHeight).toBeGreaterThan(agents.summaryHeight * 2);
     expect(agents.tableTop).toBeGreaterThanOrEqual(agents.summaryBottom);
     expect(agents.toolbarHeight).toBeLessThanOrEqual(58);
+    expect(agents.contentOverflowY).toBe('visible');
+    expect(agents.contextPosition).toBe('sticky');
     evidence.geometry.push({ name: `${key}-agents`, ...agents });
 
     await page.getByRole('button', { name: '新增客服', exact: true }).click();
@@ -283,9 +320,68 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     evidence.geometry.push({ name: `${key}-editor`, ...editor });
     await dialog.getByRole('button', { name: '关闭' }).click();
 
+    await openSection(page, '站点设置', '品牌');
+    const settingsWidth = await page
+      .locator('.site-settings-page')
+      .evaluate((element) => element.getBoundingClientRect().width);
+    expect(settingsWidth).toBeLessThanOrEqual(782);
+    await expectNoHorizontalOverflow(page);
+
     await page.goto(url('/'));
     await captureCoreSurfaces(page, key, seedName);
   }
+});
+
+test('agent directory lets the document own long-list vertical scrolling', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await loginAdmin(page);
+  const runId = Date.now().toString(36);
+  const seedPrefix = `UI Scroll ${runId} Agent`;
+  for (let index = 0; index < 100; index += 1) {
+    await seedAgent(
+      page,
+      `ui-scroll-${runId}-${index}`,
+      `${seedPrefix} ${index + 1}`,
+    );
+  }
+  await page.goto(url('/'));
+  await openSection(page, '客服坐席', '客服账号');
+  const seededRows = page.getByRole('row').filter({ hasText: seedPrefix });
+  await expect(seededRows).toHaveCount(100);
+  const lastSeededRow = page
+    .getByRole('row')
+    .filter({ hasText: `${seedPrefix} 100` });
+  await lastSeededRow.scrollIntoViewIfNeeded();
+  await expect(lastSeededRow).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const root = globalThis.document.scrollingElement;
+    const content = globalThis.document.querySelector('.admin-content');
+    const tableWrap = globalThis.document.querySelector('.admin-table-wrap');
+    if (!root || !content || !tableWrap) return null;
+    const style = globalThis.getComputedStyle(content);
+    const tableStyle = globalThis.getComputedStyle(tableWrap);
+    return {
+      rootClientHeight: root.clientHeight,
+      rootScrollHeight: root.scrollHeight,
+      contentOverflowY: style.overflowY,
+      tableMaxHeight: tableStyle.maxHeight,
+      tableOverflowY: tableStyle.overflowY,
+    };
+  });
+  expect(geometry).not.toBeNull();
+  expect(geometry.rootScrollHeight).toBeGreaterThan(geometry.rootClientHeight);
+  expect(geometry.contentOverflowY).toBe('visible');
+  expect(geometry.tableMaxHeight).toBe('none');
+  expect(['visible', 'auto']).toContain(geometry.tableOverflowY);
+  await expectNoHorizontalOverflow(page);
+  evidence.geometry.push({
+    name: '1366x768-long-agent-directory',
+    ...geometry,
+  });
+  await capture(page, '1366x768-long-agent-directory');
 });
 
 test('dashboard long distributions scroll independently without equal-height coupling', async ({
@@ -362,7 +458,16 @@ test('mobile workbench remains touch-safe', async ({ page }) => {
   await captureCoreSurfaces(page, '390x844', seedName);
   await expectNoHorizontalOverflow(page);
 
-  await openSection(page, '客服坐席');
+  await openSection(page, '客服坐席', '客服账号');
+  const contextButtons = page.locator('.admin-context-navigation nav button');
+  await expect(contextButtons).toHaveCount(2);
+  for (const button of await contextButtons.all()) {
+    expect(
+      await button.evaluate(
+        (element) => element.getBoundingClientRect().height,
+      ),
+    ).toBeGreaterThanOrEqual(44);
+  }
   await page.getByRole('button', { name: '新增客服', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '新增客服' });
   const geometry = await dialog.evaluate((element) => {
@@ -396,7 +501,7 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
   await page.setViewportSize({ width: 1280, height: 800 });
   await loginAndSeed(page, 'ui-logo-agent', 'UI Logo Agent');
   await page.goto(url('/'));
-  await openSection(page, '站点设置');
+  await openSection(page, '站点设置', '品牌');
 
   const first = await generatedPng(page, 1024, 256, '#5145cd');
   await page.locator('.site-logo-file-input').setInputFiles({

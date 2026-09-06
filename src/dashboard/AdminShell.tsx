@@ -5,6 +5,18 @@ import { Button } from './ui';
 
 export type AdminSection = 'dashboard' | 'agents' | 'settings';
 
+export type AdminContextNavigation = {
+  title: string;
+  description: string;
+  items: Array<{
+    id: string;
+    label: string;
+    description: string;
+    active: boolean;
+    onSelect: () => void;
+  }>;
+};
+
 type AdminSidebarProps = {
   section: AdminSection;
   agentCount: number;
@@ -23,6 +35,7 @@ type AdminPageHeaderProps = {
 
 type AdminShellProps = AdminSidebarProps &
   AdminPageHeaderProps & {
+    contextNavigation?: AdminContextNavigation | null;
     children: ReactNode;
     overlays?: ReactNode;
   };
@@ -117,6 +130,35 @@ export function AdminSidebar({
   );
 }
 
+export function AdminContextNav({
+  navigation,
+}: {
+  navigation: AdminContextNavigation;
+}) {
+  return (
+    <aside className="admin-context-navigation">
+      <header className="admin-context-head">
+        <strong>{navigation.title}</strong>
+        <span>{navigation.description}</span>
+      </header>
+      <nav aria-label={`${navigation.title}二级导航`}>
+        {navigation.items.map((item) => (
+          <button
+            type="button"
+            key={item.id}
+            className={item.active ? 'active' : ''}
+            aria-current={item.active ? 'page' : undefined}
+            onClick={item.onSelect}
+          >
+            <strong>{item.label}</strong>
+            <span>{item.description}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
 export function AdminPageHeader({
   title,
   hint,
@@ -148,6 +190,7 @@ export function AdminShell({
   title,
   hint,
   showCreateAgent,
+  contextNavigation,
   onSectionChange,
   onLogout,
   onCreateAgent,
@@ -156,7 +199,9 @@ export function AdminShell({
   overlays,
 }: AdminShellProps) {
   return (
-    <div className="admin-console">
+    <div
+      className={`admin-console${contextNavigation ? ' has-context-navigation' : ''}`}
+    >
       <AdminSidebar
         section={section}
         agentCount={agentCount}
@@ -164,6 +209,9 @@ export function AdminShell({
         onSectionChange={onSectionChange}
         onLogout={onLogout}
       />
+      {contextNavigation ? (
+        <AdminContextNav navigation={contextNavigation} />
+      ) : null}
       <main className="admin-content">
         <AdminPageHeader
           title={title}
