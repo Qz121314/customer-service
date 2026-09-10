@@ -169,6 +169,21 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
   });
 });
 
+adminConfigApi.get('/api/admin/realtime/stats', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  if (c.req.header('Upgrade')?.toLowerCase() !== 'websocket') {
+    return c.json({ error: 'WEBSOCKET_REQUIRED' }, 426);
+  }
+  const headers = new Headers(c.req.raw.headers);
+  headers.set('X-CS-Participant-Role', 'admin');
+  headers.set('X-CS-Participant-ID', 'admin-statistics');
+  const request = new Request(c.req.raw, { headers });
+  const room = c.env.CONVERSATION_ROOMS.get(
+    c.env.CONVERSATION_ROOMS.idFromName('admin-statistics'),
+  );
+  return room.fetch(request);
+});
+
 adminConfigApi.get('/api/admin/agent-stats', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const month = normalizeMonth(c.req.query('month'));
