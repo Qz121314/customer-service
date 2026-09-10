@@ -286,6 +286,7 @@ async function captureCoreSurfaces(page, key, seedName) {
 
   await openBranding(page);
   await capture(page, `${key}-site-settings-brand`);
+  await page.getByRole('button', { name: '站点设置', exact: true }).click();
   await page
     .locator('.admin-context-navigation')
     .getByRole('button', { name: /客服可用性/u })
