@@ -21,8 +21,10 @@ type AdminSidebarProps = {
   section: AdminSection;
   agentCount: number;
   siteLogo: SiteLogoInfo | null;
+  contextNavigation?: AdminContextNavigation | null;
   onSectionChange: (section: AdminSection) => void;
   onLogout: () => Promise<void>;
+  onOpenBranding: () => void;
 };
 
 type AdminPageHeaderProps = {
@@ -36,6 +38,7 @@ type AdminPageHeaderProps = {
 type AdminShellProps = AdminSidebarProps &
   AdminPageHeaderProps & {
     contextNavigation?: AdminContextNavigation | null;
+    onOpenBranding: () => void;
     children: ReactNode;
     overlays?: ReactNode;
   };
@@ -64,19 +67,29 @@ export function AdminSidebar({
   section,
   agentCount,
   siteLogo,
+  contextNavigation,
   onSectionChange,
   onLogout,
+  onOpenBranding,
 }: AdminSidebarProps) {
   return (
     <aside className="admin-sidebar">
-      <div className="admin-brand">
+      <button
+        type="button"
+        className="admin-brand admin-brand-button"
+        aria-label="上传品牌 Logo"
+        onClick={onOpenBranding}
+      >
         <AdminBrandMark siteLogo={siteLogo} />
         <div>
           <strong>客服管理</strong>
           <small>管理员后台</small>
         </div>
-      </div>
-      <nav className="admin-nav" aria-label="客服管理导航">
+      </button>
+      <nav
+        className={`admin-nav${contextNavigation ? ' has-context-navigation' : ''}`}
+        aria-label="客服管理导航"
+      >
         <button
           type="button"
           className={section === 'dashboard' ? 'active' : ''}
@@ -88,29 +101,39 @@ export function AdminSidebar({
             <span>仪表板</span>
           </span>
         </button>
-        <button
-          type="button"
-          className={section === 'agents' ? 'active' : ''}
-          aria-current={section === 'agents' ? 'page' : undefined}
-          onClick={() => onSectionChange('agents')}
-        >
-          <span className="admin-nav-label">
-            <UiIcon name="agents" />
-            <span>客服坐席</span>
-          </span>
-          <small>{agentCount}</small>
-        </button>
-        <button
-          type="button"
-          className={section === 'settings' ? 'active' : ''}
-          aria-current={section === 'settings' ? 'page' : undefined}
-          onClick={() => onSectionChange('settings')}
-        >
-          <span className="admin-nav-label">
-            <UiIcon name="settings" />
-            <span>站点设置</span>
-          </span>
-        </button>
+        <div className="admin-nav-group">
+          <button
+            type="button"
+            className={section === 'agents' ? 'active' : ''}
+            aria-current={section === 'agents' ? 'page' : undefined}
+            onClick={() => onSectionChange('agents')}
+          >
+            <span className="admin-nav-label">
+              <UiIcon name="agents" />
+              <span>客服坐席</span>
+            </span>
+            <small>{agentCount}</small>
+          </button>
+          {section === 'agents' && contextNavigation ? (
+            <AdminContextNav navigation={contextNavigation} />
+          ) : null}
+        </div>
+        <div className="admin-nav-group">
+          <button
+            type="button"
+            className={section === 'settings' ? 'active' : ''}
+            aria-current={section === 'settings' ? 'page' : undefined}
+            onClick={() => onSectionChange('settings')}
+          >
+            <span className="admin-nav-label">
+              <UiIcon name="settings" />
+              <span>站点设置</span>
+            </span>
+          </button>
+          {section === 'settings' && contextNavigation ? (
+            <AdminContextNav navigation={contextNavigation} />
+          ) : null}
+        </div>
       </nav>
       <div className="admin-sidebar-foot">
         <a href="/agent" target="_blank" rel="noreferrer">
@@ -137,10 +160,6 @@ export function AdminContextNav({
 }) {
   return (
     <aside className="admin-context-navigation">
-      <header className="admin-context-head">
-        <strong>{navigation.title}</strong>
-        <span>{navigation.description}</span>
-      </header>
       <nav aria-label={`${navigation.title}二级导航`}>
         {navigation.items.map((item) => (
           <button
@@ -166,6 +185,8 @@ export function AdminPageHeader({
   onCreateAgent,
   actions,
 }: AdminPageHeaderProps) {
+  if (!title && !hint && !showCreateAgent && !actions) return null;
+
   return (
     <header className="admin-content-head">
       <div>
@@ -194,24 +215,22 @@ export function AdminShell({
   onSectionChange,
   onLogout,
   onCreateAgent,
+  onOpenBranding,
   actions,
   children,
   overlays,
 }: AdminShellProps) {
   return (
-    <div
-      className={`admin-console${contextNavigation ? ' has-context-navigation' : ''}`}
-    >
+    <div className="admin-console">
       <AdminSidebar
         section={section}
         agentCount={agentCount}
         siteLogo={siteLogo}
+        contextNavigation={contextNavigation}
         onSectionChange={onSectionChange}
         onLogout={onLogout}
+        onOpenBranding={onOpenBranding}
       />
-      {contextNavigation ? (
-        <AdminContextNav navigation={contextNavigation} />
-      ) : null}
       <main className="admin-content">
         <AdminPageHeader
           title={title}

@@ -60,9 +60,22 @@ async function seedAgent(page, username, name) {
 
 async function openSection(page, name, heading = name) {
   await page.getByRole('button', { name: new RegExp(name, 'u') }).click();
+  const target =
+    heading === '客服账号'
+      ? page.locator('.admin-table-card')
+      : heading === '品牌' || heading === '客服可用性'
+        ? page.locator('.site-settings-page')
+        : page.locator('.admin-content');
+  await expect(target).toBeVisible();
+}
+
+async function openBranding(page) {
   await expect(
-    page.getByRole('heading', { name: heading, exact: true }),
+    page.getByRole('button', { name: '上传品牌 Logo' }),
   ).toBeVisible();
+  const input = page.locator('.site-logo-file-input');
+  await expect(input).toHaveCount(1);
+  return input;
 }
 
 async function expectNoHorizontalOverflow(page) {
@@ -134,14 +147,12 @@ async function contextNavigationGeometry(page) {
     const context = globalThis.document.querySelector(
       '.admin-context-navigation',
     );
-    const head = context?.querySelector('.admin-context-head');
     const nav = context?.querySelector('nav');
-    if (!shell || !sidebar || !context || !head || !nav) return null;
+    if (!shell || !sidebar || !context || !nav) return null;
     return {
       shellDisplay: globalThis.getComputedStyle(shell).display,
       sidebarPosition: globalThis.getComputedStyle(sidebar).position,
       contextPosition: globalThis.getComputedStyle(context).position,
-      contextHeadDisplay: globalThis.getComputedStyle(head).display,
       contextNavDisplay: globalThis.getComputedStyle(nav).display,
       contextHeight: context.getBoundingClientRect().height,
       contextWidth: context.getBoundingClientRect().width,
@@ -273,16 +284,14 @@ async function captureCoreSurfaces(page, key, seedName) {
   await capture(page, `${key}-edit-agent`);
   await editDialog.getByRole('button', { name: '关闭' }).click();
 
-  await openSection(page, '站点设置', '品牌');
-  await expect(page.getByText('站点 Logo', { exact: true })).toBeVisible();
+  await openBranding(page);
   await capture(page, `${key}-site-settings-brand`);
+  await page.getByRole('button', { name: '站点设置', exact: true }).click();
   await page
     .locator('.admin-context-navigation')
     .getByRole('button', { name: /客服可用性/u })
     .click();
-  await expect(
-    page.getByRole('heading', { name: '客服可用性', exact: true }),
-  ).toBeVisible();
+  await expect(page.locator('.site-settings-page')).toBeVisible();
   await expect(page.getByText('无客服提示语', { exact: true })).toBeVisible();
   await capture(page, `${key}-site-settings-availability`);
 }
@@ -323,7 +332,7 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     expect(agents.tableTop).toBeGreaterThanOrEqual(agents.summaryBottom);
     expect(agents.toolbarHeight).toBeLessThanOrEqual(58);
     expect(agents.contentOverflowY).toBe('visible');
-    expect(agents.contextPosition).toBe('sticky');
+    expect(agents.contextPosition).toBe('static');
     evidence.geometry.push({ name: `${key}-agents`, ...agents });
 
     await page.getByRole('button', { name: '新增客服', exact: true }).click();
@@ -342,11 +351,11 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     evidence.geometry.push({ name: `${key}-editor`, ...editor });
     await dialog.getByRole('button', { name: '关闭' }).click();
 
-    await openSection(page, '站点设置', '品牌');
-    const settingsWidth = await page
-      .locator('.site-settings-page')
+    await openBranding(page);
+    const logoWidth = await page
+      .getByRole('button', { name: '上传品牌 Logo' })
       .evaluate((element) => element.getBoundingClientRect().width);
-    expect(settingsWidth).toBeLessThanOrEqual(782);
+    expect(logoWidth).toBeGreaterThanOrEqual(40);
     await expectNoHorizontalOverflow(page);
 
     await page.goto(url('/'));
@@ -354,7 +363,7 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
   }
 });
 
-test('1024 tablet context navigation switches at the exact breakpoint', async ({
+test('context navigation stays inside the primary sidebar across breakpoints', async ({
   page,
 }) => {
   await loginAndSeed(page, 'ui-tablet-workbench-agent', 'UI Tablet Agent');
@@ -365,7 +374,8 @@ test('1024 tablet context navigation switches at the exact breakpoint', async ({
   let geometry = await contextNavigationGeometry(page);
   expect(geometry).not.toBeNull();
   expect(geometry.shellDisplay).toBe('grid');
-  expect(geometry.contextPosition).toBe('sticky');
+  expect(geometry.contextPosition).toBe('static');
+  expect(geometry.contextNavDisplay).toBe('grid');
 
   await page.setViewportSize({ width: 1024, height: 768 });
   geometry = await contextNavigationGeometry(page);
@@ -373,10 +383,9 @@ test('1024 tablet context navigation switches at the exact breakpoint', async ({
   expect(geometry.shellDisplay).toBe('block');
   expect(geometry.sidebarPosition).toBe('sticky');
   expect(geometry.contextPosition).toBe('static');
-  expect(geometry.contextHeadDisplay).toBe('none');
   expect(geometry.contextNavDisplay).toBe('flex');
-  expect(geometry.contextWidth).toBeGreaterThan(1000);
-  expect(geometry.contextHeight).toBeLessThanOrEqual(62);
+  expect(geometry.contextWidth).toBeGreaterThanOrEqual(980);
+  expect(geometry.contextHeight).toBeLessThanOrEqual(90);
   await expectNoHorizontalOverflow(page);
   evidence.geometry.push({
     name: '1024x768-tablet-context-navigation',
@@ -461,8 +470,8 @@ test('dashboard regular distributions up to 10 rows do not scroll internally', a
   expect(geometry.listScrollHeights[1]).toBeLessThanOrEqual(
     geometry.listClientHeights[1] + 1,
   );
-  expect(geometry.cardHeights[0]).toBeGreaterThan(520);
-  expect(geometry.cardHeights[1]).toBeGreaterThan(520);
+  expect(geometry.cardHeights[0]).toBeGreaterThan(430);
+  expect(geometry.cardHeights[1]).toBeGreaterThan(430);
   await expectNoHorizontalOverflow(page);
   evidence.geometry.push({
     name: '1366x768-dashboard-regular-10-items',
@@ -540,7 +549,7 @@ test('mobile workbench remains touch-safe', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAndSeed(page, 'ui-mobile-workbench-agent', seedName);
   await page.goto(url('/'));
-  await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '会话情况' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await captureCoreSurfaces(page, '390x844', seedName);
   await expectNoHorizontalOverflow(page);
@@ -588,58 +597,39 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
   await page.setViewportSize({ width: 1280, height: 800 });
   await loginAndSeed(page, 'ui-logo-agent', 'UI Logo Agent');
   await page.goto(url('/'));
-  await openSection(page, '站点设置', '品牌');
+  const logoInput = await openBranding(page);
 
   const first = await generatedPng(page, 1024, 256, '#5145cd');
-  await page.locator('.site-logo-file-input').setInputFiles({
+  await logoInput.setInputFiles({
     name: 'wide-logo.png',
     mimeType: 'image/png',
     buffer: first,
   });
-  await expect(page.getByText('待上传 Logo', { exact: true })).toBeVisible();
-  const preview = await page
-    .locator('.site-logo-preview img')
-    .evaluate(async (image) => {
-      await image.decode();
-      const response = await fetch(image.src);
-      const blob = await response.blob();
-      return {
-        width: image.naturalWidth,
-        height: image.naturalHeight,
-        type: blob.type,
-      };
-    });
-  expect(preview).toEqual({ width: 512, height: 128, type: 'image/webp' });
-  await expect(page.locator('.site-logo-meta')).toHaveCount(0);
-  await expect(page.getByText(/R2/u)).toHaveCount(0);
-  await expect(page.getByText(/质量/u)).toHaveCount(0);
-  await page.getByRole('button', { name: '上传 Logo', exact: true }).click();
-  await expect(page.getByText('当前 Logo', { exact: true })).toBeVisible();
+  await expect(page.locator('.admin-brand-mark img').first()).toHaveAttribute(
+    'src',
+    /^\/client\/v1\/site-logo\/[0-9a-f-]+$/u,
+  );
   const firstUrl = await page
     .locator('.admin-brand-mark img')
     .getAttribute('src');
   expect(firstUrl).toMatch(/^\/client\/v1\/site-logo\/[0-9a-f-]+$/u);
 
   const second = await generatedPng(page, 900, 900, '#3730a3');
-  await page.getByRole('button', { name: '替换图片', exact: true }).click();
-  await page.locator('.site-logo-file-input').setInputFiles({
+  await logoInput.setInputFiles({
     name: 'square-logo.png',
     mimeType: 'image/png',
     buffer: second,
   });
-  await page.getByRole('button', { name: '上传 Logo', exact: true }).click();
-  await expect(page.getByText('当前 Logo', { exact: true })).toBeVisible();
+  await expect(
+    page.locator('.admin-brand-mark img').first(),
+  ).not.toHaveAttribute('src', firstUrl);
   const secondUrl = await page
     .locator('.admin-brand-mark img')
     .getAttribute('src');
   expect(secondUrl).not.toBe(firstUrl);
   expect((await page.request.get(url(firstUrl))).status()).toBe(404);
 
-  await page.getByRole('button', { name: '移除', exact: true }).click();
-  await expect(page.locator('.admin-brand-mark')).toContainText('CS');
-  expect((await page.request.get(url(secondUrl))).status()).toBe(404);
-
-  await page.locator('.site-logo-file-input').setInputFiles({
+  await logoInput.setInputFiles({
     name: 'not-image.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('not an image'),

@@ -73,11 +73,10 @@ async function seedDiagnostics(page) {
 
 async function openDiagnostics(page) {
   await page.getByRole('button', { name: /客服坐席/u }).click();
-  await expect(page.getByRole('heading', { name: '客服账号' })).toBeVisible();
+  await expect(page.locator('.admin-table-card')).toBeVisible();
   const context = page.locator('.admin-context-navigation');
   await expect(context).toBeVisible();
   await context.getByRole('button', { name: /分流诊断/u }).click();
-  await expect(page.getByRole('heading', { name: '分流诊断' })).toBeVisible();
   const workspace = page.locator('.routing-diagnose-workspace');
   await expect(workspace).toBeVisible();
   await expect(workspace.locator('.routing-diagnose-table')).toBeVisible();
@@ -143,7 +142,7 @@ test('routing diagnostics is an inline table-first context workspace', async ({
     const key = `${viewport.width}x${viewport.height}-routing-diagnose`;
     await page.setViewportSize(viewport);
     await page.goto(url('/'));
-    await expect(page.getByRole('heading', { name: '仪表板' })).toBeVisible();
+    await expect(page.getByRole('region', { name: '会话情况' })).toBeVisible();
     await expect(page.locator('.admin-context-navigation')).toHaveCount(0);
     const beforeOpen = bootstrapRequests;
     const workspace = await openDiagnostics(page);
@@ -190,7 +189,7 @@ test('routing diagnostics is an inline table-first context workspace', async ({
       .getByRole('button', { name: /客服账号/u })
       .click();
     await expect(workspace).toBeHidden();
-    await expect(page.getByRole('heading', { name: '客服账号' })).toBeVisible();
+    await expect(page.locator('.admin-table-card')).toBeVisible();
   }
 
   expect(bootstrapRequests).toBe(4);

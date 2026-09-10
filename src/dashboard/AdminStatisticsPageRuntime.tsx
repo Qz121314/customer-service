@@ -7,6 +7,7 @@ import type {
 import {
   AdminStatisticsDistributionCard,
   AdminStatisticsFooter,
+  AdminStatisticsOperationsCard,
   AdminStatisticsOverviewHeader,
   AdminStatisticsTotalCard,
 } from './AdminStatisticsSections';
@@ -32,7 +33,7 @@ export function AdminStatisticsPage({
   onClearError,
   onRangeChange,
 }: {
-  agents: Array<Pick<AgentAccount, 'id' | 'adminLabel'>>;
+  agents: AgentAccount[];
   products: ProductCatalogItem[];
   range: TrafficRange;
   stats: TrafficOverviewStats | null;
@@ -111,6 +112,8 @@ export function AdminStatisticsPage({
           accepted={accepted}
           pending={pending}
         />
+
+        <AdminStatisticsOperationsCard agents={agents} busy={busy} />
 
         <div className="traffic-distribution-grid">
           <AdminStatisticsDistributionCard

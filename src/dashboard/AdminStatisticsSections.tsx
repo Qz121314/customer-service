@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import type { TrafficOverviewStats } from './api';
+import type { AgentAccount, TrafficOverviewStats } from './api';
 import { TrafficDateRangePicker } from './TrafficDateRangePicker';
 import {
   customTrafficRange,
@@ -96,13 +96,61 @@ export function AdminStatisticsTotalCard({
   ] as const;
 
   return (
-    <section className="traffic-summary-strip" aria-label="会话总览">
-      {metrics.map(([label, value, tone]) => (
-        <div className={`traffic-summary-metric ${tone}`} key={label}>
-          <span>{label}</span>
-          <strong title={value}>{value}</strong>
-        </div>
-      ))}
+    <section className="traffic-summary-card" aria-label="会话情况">
+      <div className="traffic-summary-strip">
+        {metrics.map(([label, value, tone]) => (
+          <div className={`traffic-summary-metric ${tone}`} key={label}>
+            <span>{label}</span>
+            <strong title={value}>{value}</strong>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function AdminStatisticsOperationsCard({
+  agents,
+  busy,
+}: {
+  agents: AgentAccount[];
+  busy: boolean;
+}) {
+  const enabledAgents = agents.filter((agent) => agent.isEnabled);
+  const onlineAgents = enabledAgents.filter(
+    (agent) => agent.status === 'online',
+  );
+  const busyAgents = enabledAgents.filter((agent) => agent.status === 'busy');
+  const offlineAgents =
+    enabledAgents.length - onlineAgents.length - busyAgents.length;
+  const todayReceptionCount = enabledAgents.reduce(
+    (total, agent) => total + agent.todayConversationCount,
+    0,
+  );
+
+  const metrics = [
+    ['在线', onlineAgents.length, 'is-online'],
+    ['忙碌', busyAgents.length, 'is-busy'],
+    ['离线', offlineAgents, ''],
+    ['今日接待', todayReceptionCount, ''],
+  ] as const;
+
+  return (
+    <section className="traffic-operations-card" aria-label="坐席运营状态">
+      <div
+        className={
+          busy
+            ? 'traffic-operations-metrics is-loading'
+            : 'traffic-operations-metrics'
+        }
+      >
+        {metrics.map(([label, value, tone]) => (
+          <div className={tone} key={label}>
+            <span>{label}</span>
+            <strong>{busy ? '—' : value.toLocaleString('zh-CN')}</strong>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
