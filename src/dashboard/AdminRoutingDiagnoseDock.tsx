@@ -140,9 +140,6 @@ export function AdminRoutingDiagnoseWorkspace({
         >
           {loading ? '刷新中…' : '刷新'}
         </Button>
-        <span className="routing-diagnose-readonly">
-          只读诊断，不会修改客服状态、额度或轮询游标。
-        </span>
       </header>
 
       <div className="routing-diagnose-body">

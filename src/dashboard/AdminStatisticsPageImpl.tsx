@@ -6,7 +6,7 @@ import type {
 import type { TrafficRange } from './traffic-statistics-range';
 
 export type AdminStatisticsPageProps = {
-  agents: Array<Pick<AgentAccount, 'id' | 'adminLabel'>>;
+  agents: AgentAccount[];
   products: ProductCatalogItem[];
   range: TrafficRange;
   stats: TrafficOverviewStats | null;

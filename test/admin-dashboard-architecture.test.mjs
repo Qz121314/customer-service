@@ -25,6 +25,16 @@ test('admin IA owns dashboard, agents and site settings without a statistics des
   assert.doesNotMatch(shell, /访客体验/u);
   assert.doesNotMatch(shell, /onSectionChange\('statistics'\)/u);
   assert.doesNotMatch(shell, /<span>流量统计<\/span>/u);
+  assert.match(
+    shell,
+    /<AdminContextNav navigation=\{contextNavigation\} \/>/u,
+    'secondary navigation should live inside the primary sidebar',
+  );
+  assert.match(
+    shell,
+    /<AdminSidebar[\s\S]*?contextNavigation=\{contextNavigation\}[\s\S]*?<main className="admin-content">/u,
+    'secondary navigation should be passed into the primary sidebar before the workspace',
+  );
 });
 
 test('admin defaults to dashboard and dashboard composes statistics without a context rail', () => {
@@ -62,13 +72,15 @@ test('agents owns contextual account and inline routing-diagnostics workspaces',
   assert.doesNotMatch(portal, /AdminRoutingDiagnoseTrigger/u);
 });
 
-test('site settings owns contextual branding and no-agent availability workspaces', () => {
-  assert.match(portal, /type SettingsView = 'branding' \| 'availability';/u);
-  assert.match(portal, /label: '品牌'/u);
+test('brand logo is a global header action and settings owns availability', () => {
+  assert.match(portal, /type SettingsView = 'availability';/u);
+  assert.doesNotMatch(portal, /label: '品牌'/u);
+  assert.match(shell, /aria-label="上传品牌 Logo"/u);
+  assert.match(portal, /<SiteLogoQuickUpload/u);
   assert.match(portal, /label: '客服可用性'/u);
   assert.match(portal, /<SiteSettingsPage[\s\S]*?view=\{settingsView\}/u);
-  assert.match(siteSettings, /view: 'branding' \| 'availability'/u);
-  assert.match(siteSettings, /站点 Logo/u);
+  assert.match(siteSettings, /view: 'availability'/u);
+  assert.match(siteSettings, /className="site-logo-file-input"/u);
   assert.match(siteSettings, /<NoAgentMessageSettingsPanel/u);
   assert.doesNotMatch(portal, /<NoAgentMessageSettingsPanel/u);
 });

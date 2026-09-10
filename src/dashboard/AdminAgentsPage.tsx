@@ -4,13 +4,12 @@ import {
   agentScopeSummary,
   initials,
   presenceClass,
-  productsForScope,
   relativeTime,
   statusLabel,
 } from './dashboard-runtime';
 import { Button } from './ui';
 
-export type AgentFilter = 'all' | 'online' | 'limited' | 'disabled';
+export type AgentFilter = 'all' | 'online' | 'busy' | 'limited' | 'disabled';
 
 type AdminAgentsPageProps = {
   agents: AgentAccount[];
@@ -29,8 +28,9 @@ type AdminAgentsPageProps = {
 type AgentOverviewProps = {
   agentCount: number;
   onlineCount: number;
-  enabledCount: number;
-  assignedProductCount: number;
+  busyCount: number;
+  offlineCount: number;
+  limitedCount: number;
 };
 
 type AgentToolbarProps = {
@@ -38,6 +38,7 @@ type AgentToolbarProps = {
   agentFilter: AgentFilter;
   agentCount: number;
   onlineCount: number;
+  busyCount: number;
   limitedCount: number;
   disabledCount: number;
   onSearchChange: (value: string) => void;
@@ -78,16 +79,13 @@ export function AdminAgentsPage({
   const onlineCount = agents.filter(
     (agent) => agent.isEnabled && agent.status === 'online',
   ).length;
+  const busyCount = agents.filter(
+    (agent) => agent.isEnabled && agent.status === 'busy',
+  ).length;
   const enabledCount = agents.filter((agent) => agent.isEnabled).length;
   const disabledCount = agents.length - enabledCount;
+  const offlineCount = Math.max(0, enabledCount - onlineCount - busyCount);
   const limitedCount = agents.filter(agentIsLimited).length;
-  const assignedProductCount = new Set(
-    agents.flatMap((agent) =>
-      productsForScope(agent.routingScope, products).map(
-        (product) => product.id,
-      ),
-    ),
-  ).size;
 
   const visibleAgents = useMemo(() => {
     const keyword = agentSearch.trim().toLocaleLowerCase();
@@ -102,6 +100,9 @@ export function AdminAgentsPage({
       if (agentFilter === 'online') {
         return agent.isEnabled && agent.status === 'online';
       }
+      if (agentFilter === 'busy') {
+        return agent.isEnabled && agent.status === 'busy';
+      }
       if (agentFilter === 'limited') return agentIsLimited(agent);
       if (agentFilter === 'disabled') return !agent.isEnabled;
       return true;
@@ -113,8 +114,9 @@ export function AdminAgentsPage({
       <AgentOverview
         agentCount={agents.length}
         onlineCount={onlineCount}
-        enabledCount={enabledCount}
-        assignedProductCount={assignedProductCount}
+        busyCount={busyCount}
+        offlineCount={offlineCount}
+        limitedCount={limitedCount}
       />
       <AgentTable
         agents={agents}
@@ -125,6 +127,7 @@ export function AdminAgentsPage({
         agentFilter={agentFilter}
         agentCount={agents.length}
         onlineCount={onlineCount}
+        busyCount={busyCount}
         limitedCount={limitedCount}
         disabledCount={disabledCount}
         onSearchChange={onSearchChange}
@@ -141,14 +144,16 @@ export function AdminAgentsPage({
 function AgentOverview({
   agentCount,
   onlineCount,
-  enabledCount,
-  assignedProductCount,
+  busyCount,
+  offlineCount,
+  limitedCount,
 }: AgentOverviewProps) {
   const metrics = [
     ['客服总数', agentCount, ''],
     ['当前在线', onlineCount, 'is-online'],
-    ['已启用账号', enabledCount, ''],
-    ['已覆盖产品', assignedProductCount, ''],
+    ['忙碌中', busyCount, 'is-busy'],
+    ['离线', offlineCount, ''],
+    ['达到上限', limitedCount, limitedCount ? 'is-warning' : ''],
   ] as const;
 
   return (
@@ -171,6 +176,7 @@ function AgentToolbar({
   agentFilter,
   agentCount,
   onlineCount,
+  busyCount,
   limitedCount,
   disabledCount,
   onSearchChange,
@@ -193,6 +199,7 @@ function AgentToolbar({
           [
             ['all', '全部', agentCount],
             ['online', '在线', onlineCount],
+            ['busy', '忙碌', busyCount],
             ['limited', '额度不足', limitedCount],
             ['disabled', '停用', disabledCount],
           ] as const
@@ -222,6 +229,7 @@ function AgentTable({
   agentFilter,
   agentCount,
   onlineCount,
+  busyCount,
   limitedCount,
   disabledCount,
   onSearchChange,
@@ -233,23 +241,12 @@ function AgentTable({
 }: AgentTableProps) {
   return (
     <section className="admin-table-card">
-      <div className="admin-table-title">
-        <div>
-          <strong>客服账号</strong>
-          <span>分区和分类规则会自动覆盖后续新增产品</span>
-        </div>
-        <span className="admin-table-total">
-          {visibleAgents.length === agents.length
-            ? `${agents.length} 个账号`
-            : `显示 ${visibleAgents.length} / ${agents.length}`}
-        </span>
-      </div>
-
       <AgentToolbar
         agentSearch={agentSearch}
         agentFilter={agentFilter}
         agentCount={agentCount}
         onlineCount={onlineCount}
+        busyCount={busyCount}
         limitedCount={limitedCount}
         disabledCount={disabledCount}
         onSearchChange={onSearchChange}

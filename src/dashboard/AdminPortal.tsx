@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type AgentAccount,
   type NoAgentMessageSettings,
@@ -16,7 +16,7 @@ import { AdminLogin, AdminSetup, Startup } from './dashboard-ui';
 import { AdminStatisticsPage } from './AdminStatisticsPage';
 import { AgentEditorModal } from './AgentEditorModal';
 import { AdminAgentStatisticsModal } from './AdminAgentStatisticsModal';
-import { SiteSettingsPage } from './SiteSettingsPage';
+import { SiteLogoQuickUpload, SiteSettingsPage } from './SiteSettingsPage';
 import { AdminRoutingDiagnoseWorkspace } from './AdminRoutingDiagnoseDock';
 import {
   AdminShell,
@@ -29,7 +29,7 @@ import { useAdminAgentsController } from './useAdminAgentsController';
 import { useAdminStatisticsController } from './useAdminStatisticsController';
 
 type AgentsView = 'accounts' | 'diagnostics';
-type SettingsView = 'branding' | 'availability';
+type SettingsView = 'availability';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -86,7 +86,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [siteLogo, setSiteLogo] = useState<SiteLogoInfo | null>(null);
   const [section, setSection] = useState<AdminSection>('dashboard');
   const [agentsView, setAgentsView] = useState<AgentsView>('accounts');
-  const [settingsView, setSettingsView] = useState<SettingsView>('branding');
+  const [settingsView, setSettingsView] =
+    useState<SettingsView>('availability');
+  const logoPickerRef = useRef<() => void>(() => undefined);
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -134,7 +136,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
 
   function changeSection(nextSection: AdminSection) {
     if (nextSection === 'agents') setAgentsView('accounts');
-    if (nextSection === 'settings') setSettingsView('branding');
+    if (nextSection === 'settings') setSettingsView('availability');
     setSection(nextSection);
   }
 
@@ -163,15 +165,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       : section === 'settings'
         ? {
             title: '站点设置',
-            description: '品牌与访客侧体验',
+            description: '访客侧体验',
             items: [
-              {
-                id: 'branding',
-                label: '品牌',
-                description: '站点 Logo 与默认品牌标记',
-                active: settingsView === 'branding',
-                onSelect: () => setSettingsView('branding'),
-              },
               {
                 id: 'availability',
                 label: '客服可用性',
@@ -183,26 +178,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           }
         : null;
 
-  const sectionTitle =
-    section === 'dashboard'
-      ? '仪表板'
-      : section === 'agents'
-        ? agentsView === 'accounts'
-          ? '客服账号'
-          : '分流诊断'
-        : settingsView === 'branding'
-          ? '品牌'
-          : '客服可用性';
-  const sectionHint =
-    section === 'dashboard'
-      ? '客服系统运营概览：快速查看咨询总量、客服接待与产品会话分布。'
-      : section === 'agents'
-        ? agentsView === 'accounts'
-          ? '查找客服并管理登录身份、接待上限、咨询额度和产品负责范围。'
-          : '按产品只读检查当前严格轮询资格、排除原因和下一棒。'
-        : settingsView === 'branding'
-          ? '管理管理员后台使用的站点 Logo；未配置时继续显示默认 CS。'
-          : '管理没有可分配客服时，访客立即看到的提示内容。';
+  const sectionTitle = '';
+  const sectionHint = '';
 
   return (
     <AdminShell
@@ -216,6 +193,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       onSectionChange={changeSection}
       onLogout={onLogout}
       onCreateAgent={agentsController.pageProps.onCreateAgent}
+      onOpenBranding={() => logoPickerRef.current()}
       overlays={
         <>
           {agentsController.editorOpen && (
@@ -233,6 +211,12 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         </>
       }
     >
+      <SiteLogoQuickUpload
+        onChange={setSiteLogo}
+        onReady={(openPicker) => {
+          logoPickerRef.current = openPicker;
+        }}
+      />
       {error && (
         <button
           type="button"
@@ -270,8 +254,6 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
           view={settingsView}
           noAgentMessage={noAgentMessage}
           noAgentSaving={settingsSaving}
-          siteLogo={siteLogo}
-          onSiteLogoChange={setSiteLogo}
           onSaveNoAgentMessage={saveNoAgentMessage}
         />
       ) : null}
