@@ -619,10 +619,9 @@ test('site logo is compressed in browser before unique R2 replacement', async ({
     mimeType: 'image/png',
     buffer: second,
   });
-  await expect(page.locator('.admin-brand-mark img').first()).not.toHaveAttribute(
-    'src',
-    firstUrl,
-  );
+  await expect(
+    page.locator('.admin-brand-mark img').first(),
+  ).not.toHaveAttribute('src', firstUrl);
   const secondUrl = await page
     .locator('.admin-brand-mark img')
     .getAttribute('src');
