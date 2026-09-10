@@ -6,6 +6,7 @@ const REMOVED_PROTOCOL_PREFIXES = [
 ] as const;
 
 export function isRemovedProtocolPath(pathname: string): boolean {
+  if (pathname === '/api/admin/realtime/stats') return false;
   return REMOVED_PROTOCOL_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );

@@ -111,9 +111,13 @@ export function AdminStatisticsTotalCard({
 
 export function AdminStatisticsOperationsCard({
   agents,
+  stats,
+  range,
   busy,
 }: {
   agents: AgentAccount[];
+  stats: TrafficOverviewStats | null;
+  range: TrafficRange;
   busy: boolean;
 }) {
   const enabledAgents = agents.filter((agent) => agent.isEnabled);
@@ -123,10 +127,16 @@ export function AdminStatisticsOperationsCard({
   const busyAgents = enabledAgents.filter((agent) => agent.status === 'busy');
   const offlineAgents =
     enabledAgents.length - onlineAgents.length - busyAgents.length;
-  const todayReceptionCount = enabledAgents.reduce(
-    (total, agent) => total + agent.todayConversationCount,
-    0,
-  );
+  const todayReceptionCount =
+    range === 'today' && stats
+      ? stats.agents.reduce(
+          (total, agent) => total + (agent.agentId ? agent.count : 0),
+          0,
+        )
+      : enabledAgents.reduce(
+          (total, agent) => total + agent.todayConversationCount,
+          0,
+        );
 
   const metrics = [
     ['在线', onlineAgents.length, 'is-online'],

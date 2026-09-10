@@ -236,7 +236,7 @@ test('first CTA executes the bounded create, claim and assignment lifecycle', as
   assert.equal(ownedConversationReads(metrics).length, 0);
   assert.equal(messageInserts(metrics).length, 1);
   assert.equal(changedRows(messageInserts(metrics)), 1);
-  assert.equal(rooms.calls.length, 4);
+  assert.equal(rooms.calls.length, 5);
 
   assert.equal(count(database, 'conversations'), 1);
   assert.equal(count(database, 'conversation_source_handoffs'), 1);
@@ -470,7 +470,7 @@ test('closed affinity remains only a priority and ineligible original agent fall
       .get().last_agent_id,
     'agent-affinity-b',
   );
-  assert.equal(rooms.calls.length, 4);
+  assert.equal(rooms.calls.length, 5);
   database.close();
 });
 

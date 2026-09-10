@@ -91,6 +91,20 @@ export type TrafficOverviewStats = {
   retainedFrom: string;
 };
 
+export type AdminTrafficRealtimeEvent = {
+  type: 'traffic.receipt.created';
+  eventId: string;
+  businessDate: string;
+  agent: {
+    id: string | null;
+    name: string;
+  };
+  product: {
+    id: string | null;
+    title: string;
+  };
+};
+
 export type AdminAgentMonthlyStats = {
   month: string;
   agentId: string;
@@ -531,6 +545,10 @@ export function openAgentInboxSocket(): WebSocket {
 
 export function openConversationSocket(id: string): WebSocket {
   return openSocket(`/api/agent/realtime/${encodeURIComponent(id)}`);
+}
+
+export function openAdminStatisticsSocket(): WebSocket {
+  return openSocket('/api/admin/realtime/stats', true);
 }
 
 const REALTIME_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];

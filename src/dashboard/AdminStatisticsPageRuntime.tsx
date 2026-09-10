@@ -113,7 +113,12 @@ export function AdminStatisticsPage({
           pending={pending}
         />
 
-        <AdminStatisticsOperationsCard agents={agents} busy={busy} />
+        <AdminStatisticsOperationsCard
+          agents={agents}
+          stats={stats}
+          range={range}
+          busy={busy}
+        />
 
         <div className="traffic-distribution-grid">
           <AdminStatisticsDistributionCard

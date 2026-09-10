@@ -3,6 +3,7 @@ import {
   publicMessageAttachment,
 } from './message-attachments';
 import { loadAgentOverview } from './agent-inbox';
+import { routingBusinessDate } from './routing';
 import type { ProductContextSnapshot } from './client-api';
 
 type AssignmentBroadcastEnv = {
@@ -124,6 +125,7 @@ export async function broadcastAssignments(
         conversation,
         overview,
         visitorMessagesByConversation.get(conversation.id) ?? null,
+        assignmentAt,
       ),
     ),
   );
@@ -141,6 +143,7 @@ async function broadcastAssignment(
   conversation: AssignmentConversationSnapshot,
   overview: Record<string, unknown>,
   visitorMessage: AssignmentVisitorMessage | null,
+  assignmentAt: string,
 ): Promise<void> {
   const initialAssignment = conversation.initial_assignment === 1;
 
@@ -185,6 +188,23 @@ async function broadcastAssignment(
         : {}),
     }),
   ];
+  if (initialAssignment) {
+    assignmentUpdates.push(
+      broadcastRoom(env, 'admin-statistics', {
+        type: 'traffic.receipt.created',
+        eventId: crypto.randomUUID(),
+        businessDate: routingBusinessDate(new Date(assignmentAt)),
+        agent: {
+          id: conversation.assigned_agent,
+          name: conversation.agent_name ?? '待接待',
+        },
+        product: {
+          id: conversation.product_id,
+          title: conversation.product_title ?? '未知产品',
+        },
+      }),
+    );
+  }
   if (conversation.external_id) {
     assignmentUpdates.push(
       broadcastRoom(
