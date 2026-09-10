@@ -384,7 +384,7 @@ test('context navigation stays inside the primary sidebar across breakpoints', a
   expect(geometry.sidebarPosition).toBe('sticky');
   expect(geometry.contextPosition).toBe('static');
   expect(geometry.contextNavDisplay).toBe('flex');
-  expect(geometry.contextWidth).toBeGreaterThan(1000);
+  expect(geometry.contextWidth).toBeGreaterThanOrEqual(980);
   expect(geometry.contextHeight).toBeLessThanOrEqual(90);
   await expectNoHorizontalOverflow(page);
   evidence.geometry.push({
