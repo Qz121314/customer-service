@@ -249,7 +249,14 @@ function H5PagesWorkspace({
       {editor ? (
         <H5PageEditor
           editor={editor}
-          pools={enabledPools}
+          pools={
+            editor.id
+              ? pools.filter(
+                  (pool) =>
+                    pool.isEnabled || pool.id === editor.conversionPoolId,
+                )
+              : enabledPools
+          }
           publicOrigin={publicOrigin}
           onClose={() => setEditor(null)}
           onRun={onRun}
@@ -498,8 +505,18 @@ function H5PageEditor({
     setSaving(true);
     try {
       await onRun(async () => {
-        if (state.id) await updateH5Page(state.id, state);
-        else await createH5Page(state);
+        if (state.id) {
+          const patch: Partial<EditorState> = {};
+          if (state.title !== editor.title) patch.title = state.title;
+          if (state.slug !== editor.slug) patch.slug = state.slug;
+          if (state.conversionPoolId !== editor.conversionPoolId) {
+            patch.conversionPoolId = state.conversionPoolId;
+          }
+          if (state.isEnabled !== editor.isEnabled) {
+            patch.isEnabled = state.isEnabled;
+          }
+          await updateH5Page(state.id, patch);
+        } else await createH5Page(state);
         onClose();
       }, '保存 H5 页面失败');
     } finally {
@@ -549,8 +566,8 @@ function H5PageEditor({
           >
             <option value="">未绑定</option>
             {pools.map((pool) => (
-              <option value={pool.id} key={pool.id}>
-                {pool.name}
+              <option value={pool.id} key={pool.id} disabled={!pool.isEnabled}>
+                {pool.name} {!pool.isEnabled ? '（已停用）' : ''}
               </option>
             ))}
           </select>

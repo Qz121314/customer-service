@@ -181,8 +181,12 @@ h5AdminApi.patch('/api/admin/h5/pages/:id', async (c) => {
       ? normalizeH5Slug(body.slug)
       : current.slug;
   if (!title || !slug) return c.json({ error: 'INVALID_H5_PAGE' }, 400);
-  const poolId = Object.hasOwn(body ?? {}, 'conversionPoolId')
-    ? await validatePoolSelection(c.env.DB, body?.conversionPoolId)
+  const hasPoolChange = Object.hasOwn(body ?? {}, 'conversionPoolId');
+  const requestedPoolId = body?.conversionPoolId;
+  const poolId = hasPoolChange
+    ? requestedPoolId === current.conversion_pool_id
+      ? current.conversion_pool_id
+      : await validatePoolSelection(c.env.DB, requestedPoolId)
     : current.conversion_pool_id;
   if (poolId === 'INVALID') {
     return c.json({ error: 'INVALID_CONVERSION_POOL' }, 400);

@@ -130,6 +130,17 @@ test('H5 admin pages support CRUD, stable IDs, duplicate slugs and derived publi
   assert.equal(page.sectionId, 'h5:section:pages');
   assert.equal(page.publicUrl, null);
 
+  const disablePool = await request(
+    h5AdminApi,
+    `/api/admin/h5/conversion-pools/${encodeURIComponent(pool.id)}`,
+    database,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ isEnabled: false }),
+    },
+  );
+  assert.equal(disablePool.status, 200);
+
   const settings = await request(
     h5AdminApi,
     '/api/admin/h5/settings',
@@ -260,6 +271,79 @@ test('H5 validation protects slug, origin, pool semantics and page binding', asy
     }),
   });
   assert.equal(page.status, 400);
+
+  const disabledPool = await request(
+    h5AdminApi,
+    '/api/admin/h5/conversion-pools',
+    database,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Disabled',
+        actionType: 'chat',
+        ctaLabel: '暂不可用',
+        isEnabled: false,
+      }),
+    },
+  );
+  assert.equal(disabledPool.status, 201);
+  const disabledPoolId = (await json(disabledPool)).pool.id;
+  const disabledPage = await request(
+    h5AdminApi,
+    '/api/admin/h5/pages',
+    database,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Disabled binding',
+        slug: 'disabled-binding',
+        conversionPoolId: disabledPoolId,
+      }),
+    },
+  );
+  assert.equal(disabledPage.status, 400);
+
+  const enabledPool = await request(
+    h5AdminApi,
+    '/api/admin/h5/conversion-pools',
+    database,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Enabled',
+        actionType: 'chat',
+        ctaLabel: '咨询',
+      }),
+    },
+  );
+  assert.equal(enabledPool.status, 201);
+  const enabledPoolId = (await json(enabledPool)).pool.id;
+  const boundPage = await request(h5AdminApi, '/api/admin/h5/pages', database, {
+    method: 'POST',
+    body: JSON.stringify({
+      title: 'Bound page',
+      slug: 'bound-page',
+      conversionPoolId: enabledPoolId,
+    }),
+  });
+  assert.equal(boundPage.status, 201);
+  const disabledTarget = await request(
+    h5AdminApi,
+    `/api/admin/h5/conversion-pools/${encodeURIComponent(disabledPoolId)}`,
+    database,
+    { method: 'PATCH', body: JSON.stringify({ isEnabled: false }) },
+  );
+  assert.equal(disabledTarget.status, 200);
+  const changeToDisabled = await request(
+    h5AdminApi,
+    `/api/admin/h5/pages/${encodeURIComponent((await json(boundPage)).page.id)}`,
+    database,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ conversionPoolId: disabledPoolId }),
+    },
+  );
+  assert.equal(changeToDisabled.status, 400);
   database.close();
 });
 
