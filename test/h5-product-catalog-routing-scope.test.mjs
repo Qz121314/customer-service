@@ -65,6 +65,37 @@ test('H5 catalog schema uses an independent product namespace and indexes', () =
       )
       .run(),
   );
+  assert.throws(() =>
+    database
+      .prepare(
+        `INSERT INTO h5_product_catalog (
+           site_id, id, title, section_id, section_name
+         ) VALUES ('default', 'h5:product:wrong-section', 'Wrong',
+           'site:section:escorts', 'ESCORTS')`,
+      )
+      .run(),
+  );
+  assert.throws(() =>
+    database
+      .prepare(
+        `INSERT INTO h5_product_catalog (
+           site_id, id, title, section_id, section_name,
+           category_id, category_name
+         ) VALUES ('default', 'h5:product:wrong-category', 'Wrong',
+           'h5:section:pages', 'H5 页面', 'site:category:landing', 'Landing')`,
+      )
+      .run(),
+  );
+  assert.throws(() =>
+    database
+      .prepare(
+        `INSERT INTO h5_product_catalog (
+           site_id, id, title, section_id, section_name, category_name
+         ) VALUES ('default', 'h5:product:category-name', 'Wrong',
+           'h5:section:pages', 'H5 页面', 'Landing')`,
+      )
+      .run(),
+  );
   const indexes = database
     .prepare("PRAGMA index_list('h5_product_catalog')")
     .all()

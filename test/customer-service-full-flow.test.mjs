@@ -436,6 +436,147 @@ test('admin can save multiple whole-section routing rules in one request', async
   database.close();
 });
 
+test('admin preserves mixed Site and H5 section and product scopes across save and reload', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  database.exec(`
+    INSERT INTO product_catalog (
+      site_id, id, title, section_id, section_name,
+      category_id, category_name, is_enabled
+    ) VALUES (
+      'default', 'site:product:escort-a', 'Escort A',
+      'site:section:escorts', 'ESCORTS', 'site:category:vip', 'VIP', 1
+    );
+    INSERT INTO h5_product_catalog (
+      site_id, id, title, section_id, section_name,
+      category_id, category_name, is_enabled
+    ) VALUES
+      ('default', 'h5:product:landing-a', 'Landing A',
+       'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 1),
+      ('default', 'h5:product:disabled', 'Disabled H5',
+       'h5:section:pages', 'H5 页面', 'h5:category:landing', 0);
+  `);
+
+  const adminPassword = 'admin-password';
+  const env = {
+    DB: d1(database),
+    CONVERSATION_ROOMS: fakeRooms().namespace,
+    ADMIN_PASSWORD: adminPassword,
+  };
+  const headers = {
+    cookie: adminCookie(adminPassword),
+    'content-type': 'application/json',
+  };
+  const createResponse = await adminConfigApi.request(
+    '/api/admin/agents',
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: 'Mixed H5 Agent',
+        username: 'mixed-h5-agent',
+        password: 'pass',
+        routingScope: {
+          type: 'section',
+          sectionIds: ['site:section:escorts', 'h5:section:pages'],
+        },
+      }),
+    },
+    env,
+  );
+  const created = await json(createResponse);
+  assert.equal(createResponse.status, 201);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT scope_type, section_id
+         FROM agent_routing_scopes
+         WHERE agent_id = ? AND scope_type = 'section'
+         ORDER BY section_id`,
+      )
+      .all(created.id)
+      .map((row) => [row.scope_type, row.section_id]),
+    [
+      ['section', 'h5:section:pages'],
+      ['section', 'site:section:escorts'],
+    ],
+  );
+
+  const sectionReload = await adminConfigApi.request(
+    '/api/admin/agents',
+    { headers: { cookie: adminCookie(adminPassword) } },
+    env,
+  );
+  const reloadedSectionAgent = (await json(sectionReload)).agents.find(
+    (agent) => agent.id === created.id,
+  );
+  assert.deepEqual(reloadedSectionAgent.routingScope, {
+    type: 'section',
+    sectionIds: ['h5:section:pages', 'site:section:escorts'],
+  });
+
+  const productUpdate = await adminConfigApi.request(
+    `/api/admin/agents/${encodeURIComponent(created.id)}`,
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({
+        routingScope: {
+          type: 'product',
+          productIds: ['site:product:escort-a', 'h5:product:landing-a'],
+        },
+      }),
+    },
+    env,
+  );
+  assert.equal(productUpdate.status, 200);
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT scope_type, product_id
+         FROM agent_routing_scopes
+         WHERE agent_id = ? AND scope_type = 'product'
+         ORDER BY product_id`,
+      )
+      .all(created.id)
+      .map((row) => [row.scope_type, row.product_id]),
+    [
+      ['product', 'h5:product:landing-a'],
+      ['product', 'site:product:escort-a'],
+    ],
+  );
+
+  const productReload = await adminConfigApi.request(
+    '/api/admin/agents',
+    { headers: { cookie: adminCookie(adminPassword) } },
+    env,
+  );
+  const reloadedProductAgent = (await json(productReload)).agents.find(
+    (agent) => agent.id === created.id,
+  );
+  assert.deepEqual(reloadedProductAgent.routingScope, {
+    type: 'product',
+    productIds: ['h5:product:landing-a', 'site:product:escort-a'],
+  });
+
+  for (const productId of ['h5:product:disabled', 'h5:product:unknown']) {
+    const invalidUpdate = await adminConfigApi.request(
+      `/api/admin/agents/${encodeURIComponent(created.id)}`,
+      {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({
+          routingScope: { type: 'product', productIds: [productId] },
+        }),
+      },
+      env,
+    );
+    assert.equal(invalidUpdate.status, 400);
+    assert.equal((await invalidUpdate.json()).error, 'INVALID_ROUTING_SCOPE');
+  }
+  database.close();
+});
+
 test('admin can save and update a private agent marker', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);

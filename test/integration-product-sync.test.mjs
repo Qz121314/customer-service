@@ -104,6 +104,27 @@ test('product sync rejects relative detail URLs', async () => {
   database.close();
 });
 
+test('Site integration rejects the reserved H5 namespace', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  for (const field of ['id', 'sectionId', 'categoryId']) {
+    const rawProduct = product(1);
+    rawProduct[field] =
+      field === 'id'
+        ? 'h5:product:reserved'
+        : field === 'sectionId'
+          ? 'h5:section:pages'
+          : 'h5:category:landing';
+    const response = await syncRequest(d1(database), [rawProduct]);
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.code, 'RESERVED_H5_NAMESPACE');
+  }
+
+  const validResponse = await syncRequest(d1(database), [product(2)]);
+  assert.equal(validResponse.status, 200);
+  database.close();
+});
+
 test('Site product sync leaves the independent H5 catalog untouched', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
