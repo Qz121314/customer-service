@@ -134,6 +134,10 @@ h5AdminApi.post('/api/admin/h5/pages/:id/duplicate', async (c) => {
   if (!source) return c.json({ error: 'NOT_FOUND' }, 404);
   const slug = await duplicateSlug(c.env.DB, source.slug);
   const id = `h5:product:${crypto.randomUUID()}`;
+  const conversionPoolId =
+    source.conversion_pool_id && source.pool_is_enabled === 1
+      ? source.conversion_pool_id
+      : null;
   try {
     await c.env.DB.prepare(
       `INSERT INTO h5_product_catalog (
@@ -150,7 +154,7 @@ h5AdminApi.post('/api/admin/h5/pages/:id/duplicate', async (c) => {
         source.category_id,
         source.category_name,
         slug,
-        source.conversion_pool_id,
+        conversionPoolId,
       )
       .run();
   } catch (error) {

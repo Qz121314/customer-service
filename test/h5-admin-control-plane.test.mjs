@@ -130,17 +130,6 @@ test('H5 admin pages support CRUD, stable IDs, duplicate slugs and derived publi
   assert.equal(page.sectionId, 'h5:section:pages');
   assert.equal(page.publicUrl, null);
 
-  const disablePool = await request(
-    h5AdminApi,
-    `/api/admin/h5/conversion-pools/${encodeURIComponent(pool.id)}`,
-    database,
-    {
-      method: 'PATCH',
-      body: JSON.stringify({ isEnabled: false }),
-    },
-  );
-  assert.equal(disablePool.status, 200);
-
   const settings = await request(
     h5AdminApi,
     '/api/admin/h5/settings',
@@ -189,9 +178,37 @@ test('H5 admin pages support CRUD, stable IDs, duplicate slugs and derived publi
   assert.equal(copy.isEnabled, false);
   assert.equal(copy.conversionPoolId, pool.id);
 
+  const disablePool = await request(
+    h5AdminApi,
+    `/api/admin/h5/conversion-pools/${encodeURIComponent(pool.id)}`,
+    database,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ isEnabled: false }),
+    },
+  );
+  assert.equal(disablePool.status, 200);
+
+  const disabledDuplicate = await request(
+    h5AdminApi,
+    `/api/admin/h5/pages/${encodeURIComponent(page.id)}/duplicate`,
+    database,
+    {
+      method: 'POST',
+    },
+  );
+  assert.equal(disabledDuplicate.status, 201);
+  const disabledCopy = (await json(disabledDuplicate)).page;
+  assert.equal(disabledCopy.conversionPoolId, null);
+
   const list = await request(h5AdminApi, '/api/admin/h5/pages', database);
   assert.equal(list.status, 200);
-  assert.equal((await json(list)).pages.length, 2);
+  const pages = (await json(list)).pages;
+  assert.equal(pages.length, 3);
+  assert.equal(
+    pages.find((item) => item.id === page.id).conversionPoolId,
+    pool.id,
+  );
   database.close();
 });
 
