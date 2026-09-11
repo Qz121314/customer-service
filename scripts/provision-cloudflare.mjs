@@ -26,9 +26,6 @@ export function readResourceDeclaration(rawConfig) {
   const mediaBucket = buckets.find(
     (candidate) => candidate.binding === 'MEDIA',
   );
-  const h5PagesBucket = buckets.find(
-    (candidate) => candidate.binding === 'H5_PAGES',
-  );
 
   assert.ok(database, 'wrangler.jsonc must declare the DB D1 binding.');
   assert.ok(
@@ -45,19 +42,10 @@ export function readResourceDeclaration(rawConfig) {
     mediaBucket.bucket_name,
     'The MEDIA binding must declare a portable bucket_name.',
   );
-  assert.ok(
-    h5PagesBucket,
-    'wrangler.jsonc must declare the H5_PAGES R2 binding.',
-  );
-  assert.ok(
-    h5PagesBucket.bucket_name,
-    'The H5_PAGES binding must declare a portable bucket_name.',
-  );
 
   return {
     databaseName: database.database_name,
     bucketName: mediaBucket.bucket_name,
-    h5PagesBucketName: h5PagesBucket.bucket_name,
   };
 }
 
@@ -75,8 +63,7 @@ export async function provisionCloudflareResources({
   run = runCommand,
   log = console.log,
 }) {
-  const { databaseName, bucketName, h5PagesBucketName } =
-    readResourceDeclaration(rawConfig);
+  const { databaseName, bucketName } = readResourceDeclaration(rawConfig);
   const databasesOutput = await capture(WRANGLER_COMMAND, [
     'd1',
     'list',
@@ -92,7 +79,7 @@ export async function provisionCloudflareResources({
     await run(WRANGLER_COMMAND, ['d1', 'create', databaseName]);
   }
 
-  for (const name of [bucketName, h5PagesBucketName]) {
+  for (const name of [bucketName]) {
     try {
       await capture(WRANGLER_COMMAND, ['r2', 'bucket', 'info', name, '--json']);
       log(`R2 ${name}: existing resource selected.`);
@@ -103,7 +90,7 @@ export async function provisionCloudflareResources({
     }
   }
 
-  return { databaseName, bucketName, h5PagesBucketName };
+  return { databaseName, bucketName };
 }
 
 export function isMissingR2Bucket(error) {
@@ -160,7 +147,7 @@ async function main() {
   });
   const resources = await provisionCloudflareResources({ rawConfig });
   console.log(
-    `Cloudflare storage ready: D1=${resources.databaseName} MEDIA=${resources.bucketName} H5_PAGES=${resources.h5PagesBucketName}`,
+    `Cloudflare storage ready: D1=${resources.databaseName} MEDIA=${resources.bucketName}`,
   );
 }
 

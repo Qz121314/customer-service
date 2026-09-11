@@ -12,7 +12,6 @@ import {
   TRAFFIC_PENDING_AGENT_ID,
   TRAFFIC_UNKNOWN_PRODUCT_ID,
 } from './traffic-statistics';
-import { buildH5PublicUrl } from './h5-public-url.ts';
 
 type Bindings = {
   DB: D1Database;
@@ -55,9 +54,6 @@ type ProductRow = {
   category_id: string | null;
   category_name: string | null;
   is_enabled: number;
-  source_type: 'site' | 'h5';
-  slug: string | null;
-  public_origin: string | null;
 };
 
 type ScopeType = 'section' | 'category' | 'product';
@@ -768,22 +764,9 @@ async function loadProducts(db: D1Database) {
   const result = await db
     .prepare(
       `SELECT id, title, href, cover_url, section_id, section_name,
-         category_id, category_name, is_enabled, source_type,
-         slug, public_origin
-       FROM (
-         SELECT id, title, href, cover_url, section_id, section_name,
-           category_id, category_name, is_enabled, 'site' AS source_type,
-           NULL AS slug, NULL AS public_origin
-         FROM product_catalog
-         WHERE site_id = 'default'
-         UNION ALL
-         SELECT id, title, href, cover_url, section_id, section_name,
-           category_id, category_name, is_enabled, 'h5' AS source_type,
-           slug, settings.public_origin
-         FROM h5_product_catalog
-         LEFT JOIN h5_settings settings ON settings.site_id = h5_product_catalog.site_id
-         WHERE h5_product_catalog.site_id = 'default'
-       ) catalog
+         category_id, category_name, is_enabled
+       FROM product_catalog
+       WHERE site_id = 'default'
        ORDER BY is_enabled DESC,
          COALESCE(section_name, '') COLLATE NOCASE ASC,
          COALESCE(category_name, '') COLLATE NOCASE ASC,
@@ -795,17 +778,13 @@ async function loadProducts(db: D1Database) {
   return (result.results ?? []).map((product) => ({
     id: product.id,
     title: product.title,
-    href:
-      product.source_type === 'h5'
-        ? buildH5PublicUrl(product.public_origin, product.slug ?? '')
-        : product.href,
+    href: product.href,
     coverUrl: product.cover_url,
     sectionId: product.section_id,
     sectionName: product.section_name,
     categoryId: product.category_id,
     categoryName: product.category_name,
     isEnabled: product.is_enabled === 1,
-    sourceType: product.source_type,
   }));
 }
 
@@ -981,8 +960,6 @@ async function allEnabledSectionsExist(
        SELECT 1
        FROM (
          SELECT site_id, section_id, is_enabled FROM product_catalog
-         UNION ALL
-         SELECT site_id, section_id, is_enabled FROM h5_product_catalog
        ) product
        WHERE product.site_id = 'default'
          AND product.is_enabled = 1
@@ -1008,9 +985,6 @@ async function allEnabledCategoriesExist(
        FROM (
          SELECT site_id, section_id, category_id, is_enabled
          FROM product_catalog
-         UNION ALL
-         SELECT site_id, section_id, category_id, is_enabled
-         FROM h5_product_catalog
        ) product
        WHERE product.site_id = 'default'
          AND product.is_enabled = 1
@@ -1036,8 +1010,6 @@ async function allEnabledProductsExist(
        SELECT 1
        FROM (
          SELECT site_id, id, is_enabled FROM product_catalog
-         UNION ALL
-         SELECT site_id, id, is_enabled FROM h5_product_catalog
        ) product
        WHERE product.site_id = 'default'
          AND product.id = CAST(requested.value AS TEXT)

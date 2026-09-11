@@ -197,7 +197,7 @@ export function VisitorChatPage() {
 function getOrCreateVisitorId(): string {
   const existing = localStorage.getItem(VISITOR_ID_KEY);
   if (existing) return existing;
-  const value = `h5-${crypto.randomUUID()}`;
+  const value = `visitor-${crypto.randomUUID()}`;
   localStorage.setItem(VISITOR_ID_KEY, value);
   return value;
 }
