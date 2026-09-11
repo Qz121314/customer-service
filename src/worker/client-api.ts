@@ -25,6 +25,7 @@ import {
   type AgentNotificationEvent,
   type AgentNotificationVariables,
 } from './agent-notification-event';
+import { buildH5PublicUrl } from './h5-public-url.ts';
 
 type ClientBindings = {
   DB: D1Database;
@@ -1382,6 +1383,64 @@ async function findEnabledProduct(
   siteId: string,
   productId: string,
 ): Promise<NormalizedProduct | null> {
+  if (productId.startsWith('h5:product:')) {
+    const row = await db
+      .prepare(
+        `SELECT p.id, p.title, p.cover_url, p.section_id, p.section_name,
+           p.category_id, p.category_name, p.slug,
+           settings.public_origin, content.published_asset_id,
+           pool.is_enabled AS pool_is_enabled, pool.action_type
+         FROM h5_product_catalog p
+         JOIN h5_page_content content
+           ON content.site_id = p.site_id AND content.page_id = p.id
+         JOIN h5_conversion_pools pool
+           ON pool.site_id = p.site_id AND pool.id = p.conversion_pool_id
+         LEFT JOIN h5_settings settings ON settings.site_id = p.site_id
+         WHERE p.site_id = ?1
+           AND p.id = ?2
+           AND p.is_enabled = 1
+           AND content.published_asset_id IS NOT NULL
+           AND pool.is_enabled = 1
+           AND pool.action_type = 'chat'
+         LIMIT 1`,
+      )
+      .bind(siteId, productId)
+      .first<{
+        id: string;
+        title: string;
+        cover_url: string | null;
+        section_id: string;
+        section_name: string;
+        category_id: string | null;
+        category_name: string | null;
+        slug: string;
+        public_origin: string | null;
+        published_asset_id: string;
+        pool_is_enabled: number;
+        action_type: string;
+      }>();
+    if (
+      !row ||
+      row.pool_is_enabled !== 1 ||
+      row.action_type !== 'chat' ||
+      !row.published_asset_id
+    ) {
+      return null;
+    }
+    const href = buildH5PublicUrl(row.public_origin, row.slug);
+    if (!href) return null;
+    return {
+      id: row.id,
+      title: row.title,
+      href,
+      coverUrl: row.cover_url,
+      sectionId: row.section_id,
+      sectionName: row.section_name,
+      categoryId: row.category_id,
+      categoryName: row.category_name,
+    };
+  }
+
   const row = await db
     .prepare(
       `SELECT id, title, href, cover_url,
