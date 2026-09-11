@@ -454,7 +454,7 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
       ('default', 'h5:product:landing-a', 'Landing A',
        'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 1),
       ('default', 'h5:product:disabled', 'Disabled H5',
-       'h5:section:pages', 'H5 页面', 'h5:category:landing', 0);
+       'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 0);
   `);
 
   const adminPassword = 'admin-password';
