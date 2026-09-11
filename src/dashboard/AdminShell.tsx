@@ -3,7 +3,7 @@ import { UiIcon } from './icons';
 import type { SiteLogoInfo } from './site-logo-client';
 import { Button } from './ui';
 
-export type AdminSection = 'dashboard' | 'agents' | 'h5' | 'settings';
+export type AdminSection = 'dashboard' | 'agents' | 'settings';
 
 export type AdminContextNavigation = {
   title: string;
@@ -101,22 +101,6 @@ export function AdminSidebar({
             <span>仪表板</span>
           </span>
         </button>
-        <div className="admin-nav-group">
-          <button
-            type="button"
-            className={section === 'h5' ? 'active' : ''}
-            aria-current={section === 'h5' ? 'page' : undefined}
-            onClick={() => onSectionChange('h5')}
-          >
-            <span className="admin-nav-label">
-              <UiIcon name="workspace" />
-              <span>H5</span>
-            </span>
-          </button>
-          {section === 'h5' && contextNavigation ? (
-            <AdminContextNav navigation={contextNavigation} />
-          ) : null}
-        </div>
         <div className="admin-nav-group">
           <button
             type="button"

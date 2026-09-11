@@ -436,7 +436,7 @@ test('admin can save multiple whole-section routing rules in one request', async
   database.close();
 });
 
-test('admin preserves mixed Site and H5 section and product scopes across save and reload', async () => {
+test('admin preserves Site section and product scopes across save and reload', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
   database.exec(`
@@ -447,14 +447,6 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
       'default', 'site:product:escort-a', 'Escort A',
       'site:section:escorts', 'ESCORTS', 'site:category:vip', 'VIP', 1
     );
-    INSERT INTO h5_product_catalog (
-      site_id, id, title, section_id, section_name,
-      category_id, category_name, slug, is_enabled
-    ) VALUES
-      ('default', 'h5:product:landing-a', 'Landing A',
-       'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 'landing-a', 1),
-      ('default', 'h5:product:disabled', 'Disabled H5',
-       'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 'disabled', 0);
   `);
 
   const adminPassword = 'admin-password';
@@ -473,12 +465,12 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
       method: 'POST',
       headers,
       body: JSON.stringify({
-        name: 'Mixed H5 Agent',
-        username: 'mixed-h5-agent',
+        name: 'Site Agent',
+        username: 'site-agent',
         password: 'pass',
         routingScope: {
           type: 'section',
-          sectionIds: ['site:section:escorts', 'h5:section:pages'],
+          sectionIds: ['site:section:escorts'],
         },
       }),
     },
@@ -496,10 +488,7 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
       )
       .all(created.id)
       .map((row) => [row.scope_type, row.section_id]),
-    [
-      ['section', 'h5:section:pages'],
-      ['section', 'site:section:escorts'],
-    ],
+    [['section', 'site:section:escorts']],
   );
 
   const sectionReload = await adminConfigApi.request(
@@ -512,7 +501,7 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
   );
   assert.deepEqual(reloadedSectionAgent.routingScope, {
     type: 'section',
-    sectionIds: ['h5:section:pages', 'site:section:escorts'],
+    sectionIds: ['site:section:escorts'],
   });
 
   const productUpdate = await adminConfigApi.request(
@@ -523,7 +512,7 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
       body: JSON.stringify({
         routingScope: {
           type: 'product',
-          productIds: ['site:product:escort-a', 'h5:product:landing-a'],
+          productIds: ['site:product:escort-a'],
         },
       }),
     },
@@ -540,10 +529,7 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
       )
       .all(created.id)
       .map((row) => [row.scope_type, row.product_id]),
-    [
-      ['product', 'h5:product:landing-a'],
-      ['product', 'site:product:escort-a'],
-    ],
+    [['product', 'site:product:escort-a']],
   );
 
   const productReload = await adminConfigApi.request(
@@ -556,10 +542,10 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
   );
   assert.deepEqual(reloadedProductAgent.routingScope, {
     type: 'product',
-    productIds: ['h5:product:landing-a', 'site:product:escort-a'],
+    productIds: ['site:product:escort-a'],
   });
 
-  for (const productId of ['h5:product:disabled', 'h5:product:unknown']) {
+  for (const productId of ['site:product:disabled', 'site:product:unknown']) {
     const invalidUpdate = await adminConfigApi.request(
       `/api/admin/agents/${encodeURIComponent(created.id)}`,
       {

@@ -444,7 +444,7 @@ export function ProductAssignmentPicker({
                   <span>
                     <strong>{product.title}</strong>
                     <small>
-                      {[product.sectionName, product.categoryName]
+                      {['Site 产品', product.sectionName, product.categoryName]
                         .filter(Boolean)
                         .join(' / ') || '未分类'}
                     </small>
@@ -492,7 +492,11 @@ export function ProductAssignmentPicker({
                     <span className="product-assignment-copy">
                       <strong>{product.title}</strong>
                       <small>
-                        {[product.sectionName, product.categoryName]
+                        {[
+                          'Site 产品',
+                          product.sectionName,
+                          product.categoryName,
+                        ]
                           .filter(Boolean)
                           .join(' / ') || '未分类'}
                       </small>

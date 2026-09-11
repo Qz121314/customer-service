@@ -104,62 +104,6 @@ test('product sync rejects relative detail URLs', async () => {
   database.close();
 });
 
-test('Site integration rejects the reserved H5 namespace', async () => {
-  const database = new DatabaseSync(':memory:');
-  applyMigrations(database);
-  for (const field of ['id', 'sectionId', 'categoryId']) {
-    const rawProduct = product(1);
-    rawProduct[field] =
-      field === 'id'
-        ? 'h5:product:reserved'
-        : field === 'sectionId'
-          ? 'h5:section:pages'
-          : 'h5:category:landing';
-    const response = await syncRequest(d1(database), [rawProduct]);
-    assert.equal(response.status, 400);
-    assert.equal((await response.json()).error.code, 'RESERVED_H5_NAMESPACE');
-  }
-
-  const validResponse = await syncRequest(d1(database), [product(2)]);
-  assert.equal(validResponse.status, 200);
-  database.close();
-});
-
-test('Site product sync leaves the independent H5 catalog untouched', async () => {
-  const database = new DatabaseSync(':memory:');
-  applyMigrations(database);
-  database
-    .prepare(
-      `INSERT INTO h5_product_catalog (
-         site_id, id, title, href, section_id, section_name,
-         category_id, category_name, slug, is_enabled
-       ) VALUES ('default', 'h5:product:landing-a', 'Landing A',
-         'https://h5.example/landing-a', 'h5:section:pages', 'H5 页面',
-         'h5:category:landing', 'Landing', 'landing-a', 1)`,
-    )
-    .run();
-
-  const response = await syncRequest(d1(database), [product(1)]);
-  assert.equal(response.status, 200);
-  assert.deepEqual(
-    {
-      ...database
-        .prepare(
-          `SELECT id, title, is_enabled
-         FROM h5_product_catalog
-         WHERE site_id = 'default'`,
-        )
-        .get(),
-    },
-    {
-      id: 'h5:product:landing-a',
-      title: 'Landing A',
-      is_enabled: 1,
-    },
-  );
-  database.close();
-});
-
 function scalar(database, sql, column) {
   return database.prepare(sql).get()[column];
 }
