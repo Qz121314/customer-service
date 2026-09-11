@@ -27,6 +27,7 @@ import { AdminAgentsPage } from './AdminAgentsPage';
 import { getSiteLogo, type SiteLogoInfo } from './site-logo-client';
 import { useAdminAgentsController } from './useAdminAgentsController';
 import { useAdminStatisticsController } from './useAdminStatisticsController';
+import { H5ControlPlanePage, type H5AdminView } from './H5ControlPlanePage';
 
 type AgentsView = 'accounts' | 'diagnostics';
 type SettingsView = 'availability';
@@ -88,6 +89,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [agentsView, setAgentsView] = useState<AgentsView>('accounts');
   const [settingsView, setSettingsView] =
     useState<SettingsView>('availability');
+  const [h5View, setH5View] = useState<H5AdminView>('pages');
   const logoPickerRef = useRef<() => void>(() => undefined);
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -137,6 +139,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   function changeSection(nextSection: AdminSection) {
     if (nextSection === 'agents') setAgentsView('accounts');
     if (nextSection === 'settings') setSettingsView('availability');
+    if (nextSection === 'h5') setH5View('pages');
     setSection(nextSection);
   }
 
@@ -176,7 +179,35 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
               },
             ],
           }
-        : null;
+        : section === 'h5'
+          ? {
+              title: 'H5',
+              description: '页面、转化池与公网域名',
+              items: [
+                {
+                  id: 'pages',
+                  label: 'H5 页面',
+                  description: '创建页面、Slug 与专属 URL',
+                  active: h5View === 'pages',
+                  onSelect: () => setH5View('pages'),
+                },
+                {
+                  id: 'pools',
+                  label: '转化池',
+                  description: 'Chat 与 External CTA 配置',
+                  active: h5View === 'pools',
+                  onSelect: () => setH5View('pools'),
+                },
+                {
+                  id: 'settings',
+                  label: 'H5 设置',
+                  description: '配置默认公网域名',
+                  active: h5View === 'settings',
+                  onSelect: () => setH5View('settings'),
+                },
+              ],
+            }
+          : null;
 
   const sectionTitle = '';
   const sectionHint = '';
@@ -248,6 +279,8 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       {section === 'agents' && agentsView === 'diagnostics' && (
         <AdminRoutingDiagnoseWorkspace products={products} />
       )}
+
+      {section === 'h5' && <H5ControlPlanePage view={h5View} />}
 
       {section === 'settings' && noAgentMessage ? (
         <SiteSettingsPage

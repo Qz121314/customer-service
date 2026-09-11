@@ -32,6 +32,10 @@ Site / 产品页
 
 产品目录以 Site 的 `/integration/v1/verify` 全量同步结果为权威。访客请求只提交 `product.id`；客服系统从 `product_catalog` 读取标题、链接、图片、分区和分类，不能通过访客请求覆盖目录或重新启用已禁用产品。H5 Product 使用 Customer Service 内部独立的 `h5_product_catalog`，不写入 Site 管理的 `product_catalog`；`h5:*` 是保留给内部 H5 目录的 namespace，Site integration payload 不能占用。
 
+H5 P2 的后台控制面继续以 `h5_product_catalog` 作为 H5 Page 的唯一身份来源。管理员可在 H5 菜单下管理页面、Conversion Pool 和默认 Public Origin：页面使用稳定的 `h5:product:*` ID 与 site-scoped 小写 slug，Public URL 由 HTTPS Origin 与 slug 动态生成；`href` 不是 H5 的第二个配置来源。Conversion Pool 只保存 `chat` 或 `external` CTA 配置，不包含 Agent、路由权重或坐席分组；未来 Chat CTA 仍通过现有 `agent_routing_scopes` 和 Routing Contract 选择坐席。公网域名由管理员先在 Cloudflare 手动绑定，再在客服管理中心填写。
+
+H5 P2 只包含 Admin、D1 数据模型和配置 API，不包含 H5 Worker、HTML 上传、发布、Runtime、H5 Chat、Conversation Start 或 Statistics；Public URL 在 Worker 实现前只用于配置预览。
+
 ### 明确不做
 
 - 人工转接、人工重新排队、转接目标选择；

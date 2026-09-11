@@ -23,6 +23,39 @@ export type ProductCatalogItem = {
   sourceType: 'site' | 'h5';
 };
 
+export type H5Page = {
+  id: string;
+  title: string;
+  slug: string;
+  conversionPoolId: string | null;
+  conversionPoolName: string | null;
+  conversionPoolEnabled: boolean | null;
+  isEnabled: boolean;
+  sectionId: string;
+  sectionName: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  publicUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type H5ConversionPool = {
+  id: string;
+  name: string;
+  isEnabled: boolean;
+  actionType: 'chat' | 'external';
+  ctaLabel: string;
+  externalUrl: string | null;
+  usedBy: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type H5Settings = {
+  publicOrigin: string | null;
+};
+
 export type AgentRoutingScope =
   | { type: 'none' }
   | { type: 'section'; sectionIds: string[] }
@@ -287,6 +320,20 @@ const errorMessages: Record<string, string> = {
   INVALID_MESSAGE_CURSOR: '会话同步位置无效，请重新加载会话',
   INVALID_MEDIA_UPLOAD_ID: '图片上传标识无效，请重新选择图片',
   MEDIA_UPLOAD_ID_CONFLICT: '图片上传标识冲突，请重新选择图片',
+  INVALID_H5_PAGE: 'H5 页面信息无效，请检查名称和 Slug',
+  SLUG_EXISTS: 'Slug 已存在，请换一个新的 Slug',
+  INVALID_PUBLIC_ORIGIN: '公网域名必须是没有路径的 HTTPS Origin',
+  INVALID_CONVERSION_POOL: '转化池不存在、已停用或配置无效',
+  INVALID_ACTION_TYPE: '转化池动作类型无效',
+  CHAT_EXTERNAL_URL_FORBIDDEN: 'Chat 转化池不能配置外部 URL',
+  EXTERNAL_URL_REQUIRED: 'External 转化池必须填写 HTTPS URL',
+  CONVERSION_POOL_IN_USE: '该转化池仍被 H5 页面使用，请先解除页面绑定',
+  H5_PAGE_ROUTING_SCOPE_IN_USE:
+    '该 H5 页面仍被客服负责范围引用，请先移除负责范围',
+  H5_PAGE_CREATE_FAILED: '创建 H5 页面失败，请重试',
+  H5_PAGE_UPDATE_FAILED: '更新 H5 页面失败，请重试',
+  CONVERSION_POOL_CREATE_FAILED: '创建转化池失败，请重试',
+  CONVERSION_POOL_UPDATE_FAILED: '更新转化池失败，请重试',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -383,6 +430,115 @@ export async function getAgentQuotaLedger(
 export async function getProductCatalog(): Promise<ProductCatalogItem[]> {
   const response = await getAdminBootstrap();
   return response.products;
+}
+
+export async function getH5Pages(): Promise<H5Page[]> {
+  const response = await request<{ pages: H5Page[] }>('/api/admin/h5/pages');
+  return response.pages;
+}
+
+export async function createH5Page(input: {
+  title: string;
+  slug: string;
+  conversionPoolId: string | null;
+  isEnabled: boolean;
+}): Promise<H5Page> {
+  const response = await request<{ page: H5Page }>('/api/admin/h5/pages', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return response.page;
+}
+
+export async function updateH5Page(
+  id: string,
+  input: Partial<{
+    title: string;
+    slug: string;
+    conversionPoolId: string | null;
+    isEnabled: boolean;
+  }>,
+): Promise<H5Page> {
+  const response = await request<{ page: H5Page }>(
+    `/api/admin/h5/pages/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+  return response.page;
+}
+
+export async function duplicateH5Page(id: string): Promise<H5Page> {
+  const response = await request<{ page: H5Page }>(
+    `/api/admin/h5/pages/${encodeURIComponent(id)}/duplicate`,
+    { method: 'POST' },
+  );
+  return response.page;
+}
+
+export async function deleteH5Page(id: string): Promise<void> {
+  await request(`/api/admin/h5/pages/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getH5ConversionPools(): Promise<H5ConversionPool[]> {
+  const response = await request<{ pools: H5ConversionPool[] }>(
+    '/api/admin/h5/conversion-pools',
+  );
+  return response.pools;
+}
+
+export async function createH5ConversionPool(input: {
+  name: string;
+  actionType: 'chat' | 'external';
+  ctaLabel: string;
+  externalUrl: string | null;
+  isEnabled: boolean;
+}): Promise<H5ConversionPool> {
+  const response = await request<{ pool: H5ConversionPool }>(
+    '/api/admin/h5/conversion-pools',
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return response.pool;
+}
+
+export async function updateH5ConversionPool(
+  id: string,
+  input: Partial<{
+    name: string;
+    actionType: 'chat' | 'external';
+    ctaLabel: string;
+    externalUrl: string | null;
+    isEnabled: boolean;
+  }>,
+): Promise<H5ConversionPool> {
+  const response = await request<{ pool: H5ConversionPool }>(
+    `/api/admin/h5/conversion-pools/${encodeURIComponent(id)}`,
+    { method: 'PATCH', body: JSON.stringify(input) },
+  );
+  return response.pool;
+}
+
+export async function deleteH5ConversionPool(id: string): Promise<void> {
+  await request(`/api/admin/h5/conversion-pools/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getH5Settings(): Promise<H5Settings> {
+  const response = await request<{ settings: H5Settings }>(
+    '/api/admin/h5/settings',
+  );
+  return response.settings;
+}
+
+export async function updateH5Settings(
+  publicOrigin: string,
+): Promise<H5Settings> {
+  const response = await request<{ settings: H5Settings }>(
+    '/api/admin/h5/settings',
+    { method: 'PUT', body: JSON.stringify({ publicOrigin }) },
+  );
+  return response.settings;
 }
 
 export async function getTrafficOverviewStats(

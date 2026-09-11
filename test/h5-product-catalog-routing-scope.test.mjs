@@ -27,9 +27,9 @@ function seedCatalog(database) {
     .prepare(
       `INSERT INTO h5_product_catalog (
          site_id, id, title, section_id, section_name,
-         category_id, category_name, is_enabled
+         category_id, category_name, slug, is_enabled
        ) VALUES ('default', 'h5:product:landing-a', 'Landing A',
-         'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 1)`,
+         'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 'landing-a', 1)`,
     )
     .run();
 }
@@ -51,6 +51,8 @@ test('H5 catalog schema uses an independent product namespace and indexes', () =
     'section_name',
     'category_id',
     'category_name',
+    'slug',
+    'conversion_pool_id',
     'is_enabled',
     'created_at',
     'updated_at',
@@ -102,6 +104,16 @@ test('H5 catalog schema uses an independent product namespace and indexes', () =
     .map((row) => row.name);
   assert.ok(indexes.includes('idx_h5_product_catalog_admin'));
   assert.ok(indexes.includes('idx_h5_product_catalog_scope_lookup'));
+  assert.throws(() =>
+    database
+      .prepare(
+        `INSERT INTO h5_product_catalog (
+           site_id, id, title, section_id, section_name, slug
+         ) VALUES ('default', 'h5:product:bad-slug', 'Bad',
+           'h5:section:pages', 'H5 页面', 'Landing A')`,
+      )
+      .run(),
+  );
   database.close();
 });
 
@@ -113,9 +125,9 @@ test('set-based catalog lookups recognize Site and H5 records with enabled seman
     .prepare(
       `INSERT INTO h5_product_catalog (
          site_id, id, title, section_id, section_name,
-         category_id, category_name, is_enabled
+         category_id, category_name, slug, is_enabled
        ) VALUES ('default', 'h5:product:disabled', 'Disabled',
-         'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 0)`,
+         'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 'disabled', 0)`,
     )
     .run();
 

@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { touchAgentActivity } from './agent-activity';
+import { verifyAdminSession } from './admin-session.ts';
 
 type RealtimeParticipantRole = 'visitor' | 'agent';
 
@@ -240,29 +241,7 @@ async function createAdminSession(password: string): Promise<string> {
   return `${payload}.${await hmac(password, payload)}`;
 }
 
-export async function verifyAdminSession(
-  request: Request,
-  password: string,
-): Promise<boolean> {
-  const header = request.headers.get('Cookie') ?? '';
-  const token = header
-    .split(';')
-    .map((part) => part.trim())
-    .find((part) => part.startsWith(`${SESSION_COOKIE}=`))
-    ?.slice(SESSION_COOKIE.length + 1);
-  if (!token) return false;
-
-  const [payload, signature] = token.split('.');
-  if (!payload || !signature) return false;
-  if (!timingSafeEqual(signature, await hmac(password, payload))) return false;
-
-  try {
-    const session = JSON.parse(decode(payload)) as { exp?: number };
-    return typeof session.exp === 'number' && session.exp > Date.now() / 1000;
-  } catch {
-    return false;
-  }
-}
+export { verifyAdminSession } from './admin-session.ts';
 
 async function hmac(secret: string, value: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -283,14 +262,6 @@ async function hmac(secret: string, value: string): Promise<string> {
 
 function encode(value: string): string {
   return toBase64Url(new TextEncoder().encode(value));
-}
-
-function decode(value: string): string {
-  const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  return new TextDecoder().decode(
-    Uint8Array.from(atob(padded), (character) => character.charCodeAt(0)),
-  );
 }
 
 function toBase64Url(bytes: Uint8Array): string {

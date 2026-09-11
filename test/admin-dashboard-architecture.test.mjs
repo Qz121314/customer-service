@@ -17,10 +17,11 @@ const statisticsController = readFileSync(
 test('admin IA owns dashboard, agents and site settings without a statistics destination', () => {
   assert.match(
     shell,
-    /export type AdminSection = 'dashboard' \| 'agents' \| 'settings';/u,
+    /export type AdminSection = 'dashboard' \| 'agents' \| 'h5' \| 'settings';/u,
   );
   assert.match(shell, /<span>仪表板<\/span>/u);
   assert.match(shell, /<span>客服坐席<\/span>/u);
+  assert.match(shell, /<span>H5<\/span>/u);
   assert.match(shell, /<span>站点设置<\/span>/u);
   assert.doesNotMatch(shell, /访客体验/u);
   assert.doesNotMatch(shell, /onSectionChange\('statistics'\)/u);
@@ -83,4 +84,12 @@ test('brand logo is a global header action and settings owns availability', () =
   assert.match(siteSettings, /className="site-logo-file-input"/u);
   assert.match(siteSettings, /<NoAgentMessageSettingsPanel/u);
   assert.doesNotMatch(portal, /<NoAgentMessageSettingsPanel/u);
+});
+
+test('H5 owns Pages, Conversion Pools and Public Domain settings in one context rail', () => {
+  assert.match(portal, /useState<H5AdminView>\('pages'\)/u);
+  assert.match(portal, /label: 'H5 页面'/u);
+  assert.match(portal, /label: '转化池'/u);
+  assert.match(portal, /label: 'H5 设置'/u);
+  assert.match(portal, /<H5ControlPlanePage view=\{h5View\} \/>/u);
 });
