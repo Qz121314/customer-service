@@ -488,9 +488,7 @@ test('admin preserves Site section and product scopes across save and reload', a
       )
       .all(created.id)
       .map((row) => [row.scope_type, row.section_id]),
-    [
-      ['section', 'site:section:escorts'],
-    ],
+    [['section', 'site:section:escorts']],
   );
 
   const sectionReload = await adminConfigApi.request(
@@ -531,9 +529,7 @@ test('admin preserves Site section and product scopes across save and reload', a
       )
       .all(created.id)
       .map((row) => [row.scope_type, row.product_id]),
-    [
-      ['product', 'site:product:escort-a'],
-    ],
+    [['product', 'site:product:escort-a']],
   );
 
   const productReload = await adminConfigApi.request(
