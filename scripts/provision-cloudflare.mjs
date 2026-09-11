@@ -23,7 +23,12 @@ export function readResourceDeclaration(rawConfig) {
   const databases = rawConfig.d1_databases ?? [];
   const buckets = rawConfig.r2_buckets ?? [];
   const database = databases.find((candidate) => candidate.binding === 'DB');
-  const bucket = buckets.find((candidate) => candidate.binding === 'MEDIA');
+  const mediaBucket = buckets.find(
+    (candidate) => candidate.binding === 'MEDIA',
+  );
+  const h5PagesBucket = buckets.find(
+    (candidate) => candidate.binding === 'H5_PAGES',
+  );
 
   assert.ok(database, 'wrangler.jsonc must declare the DB D1 binding.');
   assert.ok(
@@ -35,15 +40,24 @@ export function readResourceDeclaration(rawConfig) {
     undefined,
     'Do not commit an account-bound D1 database_id; deployment resolves it by name.',
   );
-  assert.ok(bucket, 'wrangler.jsonc must declare the MEDIA R2 binding.');
+  assert.ok(mediaBucket, 'wrangler.jsonc must declare the MEDIA R2 binding.');
   assert.ok(
-    bucket.bucket_name,
+    mediaBucket.bucket_name,
     'The MEDIA binding must declare a portable bucket_name.',
+  );
+  assert.ok(
+    h5PagesBucket,
+    'wrangler.jsonc must declare the H5_PAGES R2 binding.',
+  );
+  assert.ok(
+    h5PagesBucket.bucket_name,
+    'The H5_PAGES binding must declare a portable bucket_name.',
   );
 
   return {
     databaseName: database.database_name,
-    bucketName: bucket.bucket_name,
+    bucketName: mediaBucket.bucket_name,
+    h5PagesBucketName: h5PagesBucket.bucket_name,
   };
 }
 
@@ -61,7 +75,8 @@ export async function provisionCloudflareResources({
   run = runCommand,
   log = console.log,
 }) {
-  const { databaseName, bucketName } = readResourceDeclaration(rawConfig);
+  const { databaseName, bucketName, h5PagesBucketName } =
+    readResourceDeclaration(rawConfig);
   const databasesOutput = await capture(WRANGLER_COMMAND, [
     'd1',
     'list',
@@ -77,22 +92,18 @@ export async function provisionCloudflareResources({
     await run(WRANGLER_COMMAND, ['d1', 'create', databaseName]);
   }
 
-  try {
-    await capture(WRANGLER_COMMAND, [
-      'r2',
-      'bucket',
-      'info',
-      bucketName,
-      '--json',
-    ]);
-    log(`R2 ${bucketName}: existing resource selected.`);
-  } catch (error) {
-    if (!isMissingR2Bucket(error)) throw error;
-    log(`R2 ${bucketName}: creating resource.`);
-    await run(WRANGLER_COMMAND, ['r2', 'bucket', 'create', bucketName]);
+  for (const name of [bucketName, h5PagesBucketName]) {
+    try {
+      await capture(WRANGLER_COMMAND, ['r2', 'bucket', 'info', name, '--json']);
+      log(`R2 ${name}: existing resource selected.`);
+    } catch (error) {
+      if (!isMissingR2Bucket(error)) throw error;
+      log(`R2 ${name}: creating resource.`);
+      await run(WRANGLER_COMMAND, ['r2', 'bucket', 'create', name]);
+    }
   }
 
-  return { databaseName, bucketName };
+  return { databaseName, bucketName, h5PagesBucketName };
 }
 
 export function isMissingR2Bucket(error) {
@@ -149,7 +160,7 @@ async function main() {
   });
   const resources = await provisionCloudflareResources({ rawConfig });
   console.log(
-    `Cloudflare storage ready: D1=${resources.databaseName} R2=${resources.bucketName}`,
+    `Cloudflare storage ready: D1=${resources.databaseName} MEDIA=${resources.bucketName} H5_PAGES=${resources.h5PagesBucketName}`,
   );
 }
 

@@ -15,13 +15,17 @@ const portableConfig = {
       migrations_dir: './migrations',
     },
   ],
-  r2_buckets: [{ binding: 'MEDIA', bucket_name: 'customer-service-media' }],
+  r2_buckets: [
+    { binding: 'MEDIA', bucket_name: 'customer-service-media' },
+    { binding: 'H5_PAGES', bucket_name: 'customer-service-h5-pages' },
+  ],
 };
 
 test('portable resource declarations reject account-bound D1 ids', () => {
   assert.deepEqual(readResourceDeclaration(portableConfig), {
     databaseName: 'customer-service-db',
     bucketName: 'customer-service-media',
+    h5PagesBucketName: 'customer-service-h5-pages',
   });
   assert.throws(
     () =>
@@ -45,7 +49,7 @@ test('provisioning reuses existing D1 and R2 resources', async () => {
     if (args[0] === 'd1') {
       return { stdout: JSON.stringify([{ name: 'customer-service-db' }]) };
     }
-    return { stdout: JSON.stringify({ name: 'customer-service-media' }) };
+    return { stdout: JSON.stringify({ name: args[3] }) };
   };
 
   await provisionCloudflareResources({
@@ -59,6 +63,7 @@ test('provisioning reuses existing D1 and R2 resources', async () => {
   assert.deepEqual(messages, [
     'D1 customer-service-db: existing resource selected.',
     'R2 customer-service-media: existing resource selected.',
+    'R2 customer-service-h5-pages: existing resource selected.',
   ]);
 });
 
@@ -85,6 +90,7 @@ test('provisioning creates only missing resources before deployment', async () =
   assert.deepEqual(created, [
     ['d1', 'create', 'customer-service-db'],
     ['r2', 'bucket', 'create', 'customer-service-media'],
+    ['r2', 'bucket', 'create', 'customer-service-h5-pages'],
   ]);
 });
 

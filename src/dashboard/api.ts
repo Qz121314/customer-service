@@ -36,6 +36,11 @@ export type H5Page = {
   categoryId: string | null;
   categoryName: string | null;
   publicUrl: string | null;
+  contentStatus: 'unuploaded' | 'pending' | 'published' | 'updated';
+  draftByteSize: number | null;
+  draftUploadedAt: string | null;
+  publishedByteSize: number | null;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -334,6 +339,12 @@ const errorMessages: Record<string, string> = {
   H5_PAGE_UPDATE_FAILED: '更新 H5 页面失败，请重试',
   CONVERSION_POOL_CREATE_FAILED: '创建转化池失败，请重试',
   CONVERSION_POOL_UPDATE_FAILED: '更新转化池失败，请重试',
+  INVALID_H5_HTML: 'HTML 文件无效，仅支持安全的单个 HTML 文档',
+  H5_HTML_TOO_LARGE: 'HTML 文件不能为空且不能超过 5 MB',
+  H5_HTML_UPLOAD_FAILED: 'HTML 上传失败，请重试',
+  H5_HTML_PERSIST_FAILED: 'HTML 草稿保存失败，请重试',
+  H5_NO_DRAFT: '当前页面没有可发布的 HTML 草稿',
+  H5_DRAFT_NOT_FOUND: 'HTML 草稿对象不存在，请重新上传',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -478,6 +489,29 @@ export async function deleteH5Page(id: string): Promise<void> {
   await request(`/api/admin/h5/pages/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
+}
+
+export async function uploadH5PageHtml(
+  id: string,
+  html: string,
+): Promise<H5Page> {
+  const response = await request<{ page: H5Page }>(
+    `/api/admin/h5/pages/${encodeURIComponent(id)}/html`,
+    {
+      method: 'PUT',
+      body: html,
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    },
+  );
+  return response.page;
+}
+
+export async function publishH5Page(id: string): Promise<H5Page> {
+  const response = await request<{ page: H5Page }>(
+    `/api/admin/h5/pages/${encodeURIComponent(id)}/publish`,
+    { method: 'POST' },
+  );
+  return response.page;
 }
 
 export async function getH5ConversionPools(): Promise<H5ConversionPool[]> {

@@ -32,9 +32,13 @@ Site / 产品页
 
 产品目录以 Site 的 `/integration/v1/verify` 全量同步结果为权威。访客请求只提交 `product.id`；客服系统从 `product_catalog` 读取标题、链接、图片、分区和分类，不能通过访客请求覆盖目录或重新启用已禁用产品。H5 Product 使用 Customer Service 内部独立的 `h5_product_catalog`，不写入 Site 管理的 `product_catalog`；`h5:*` 是保留给内部 H5 目录的 namespace，Site integration payload 不能占用。
 
-H5 P2 的后台控制面继续以 `h5_product_catalog` 作为 H5 Page 的唯一身份来源。管理员可在 H5 菜单下管理页面、Conversion Pool 和默认 Public Origin：页面使用稳定的 `h5:product:*` ID 与 site-scoped 小写 slug，Public URL 由 HTTPS Origin 与 slug 动态生成；`href` 不是 H5 的第二个配置来源。Conversion Pool 只保存 `chat` 或 `external` CTA 配置，不包含 Agent、路由权重或坐席分组；未来 Chat CTA 仍通过现有 `agent_routing_scopes` 和 Routing Contract 选择坐席。公网域名由管理员先在 Cloudflare 手动绑定，再在客服管理中心填写。
+H5 P3 的后台控制面继续以 `h5_product_catalog` 作为 H5 Page 的唯一身份来源。管理员可在 H5 菜单下管理页面、Conversion Pool、HTML 草稿/发布状态和默认 Public Origin：页面使用稳定的 `h5:product:*` ID 与 site-scoped 小写 slug，Public URL 由 HTTPS Origin 与 slug 动态生成；`href` 不是 H5 的第二个配置来源。Conversion Pool 只保存 `chat` 或 `external` CTA 配置，不包含 Agent、路由权重或坐席分组；未来 Chat CTA 仍通过现有 `agent_routing_scopes` 和 Routing Contract 选择坐席。公网域名由管理员先在 Cloudflare 手动绑定，再在客服管理中心填写。
 
-H5 P2 只包含 Admin、D1 数据模型和配置 API，不包含 H5 Worker、HTML 上传、发布、Runtime、H5 Chat、Conversation Start 或 Statistics；Public URL 在 Worker 实现前只用于配置预览。
+H5 P3 使用独立的私有 `customer-service-h5-pages` R2 bucket 保存 HTML 代码快照；客服消息媒体继续使用完全分离的 `customer-service-media` bucket。`h5_page_content` 只保存页面 metadata、草稿与已发布版本的不可变 asset ID、大小和时间；R2 key 使用 `h5-pages/{siteId}/{pageId}/versions/{assetId}.html`，H5_PAGES 中不保存图片、视频、CSS、字体、JavaScript、ZIP、bundle 或 tracking assets。上传生成新版本，发布只切换 D1 的 published 指针，替换草稿或删除页面后清理不再引用的对象。
+
+独立的 `customer-service-h5` Worker 只提供 `GET/HEAD /{slug}/` 和 D1/R2-free `/api/health`；运行时先用一次 D1 查询确认页面启用且已有发布版本，再用一次 H5_PAGES R2 读取返回静态 HTML。页面中的外部 HTTPS 图片、视频、CSS 和字体由浏览器直接加载，H5 Worker 不代理这些资源。响应使用 `no-store`、`nosniff`、`no-referrer` 和 sandbox CSP，允许 inline CSS/JS 与 HTTPS 素材，但禁止 external JS、页面网络 API、WebSocket、frame、object 和 tracking SDK；HTML 只接受 UTF-8、最大 5 MiB。
+
+H5 P3 不包含 H5 Chat、Conversation Start 或 Statistics；Conversion Pool 的 enabled 校验仍由现有 Create/PATCH API 负责。公网域名由管理员先在 Cloudflare 手动绑定，再在客服管理中心填写。
 
 ### 明确不做
 
@@ -62,7 +66,7 @@ H5 P2 只包含 Admin、D1 数据模型和配置 API，不包含 H5 Worker、HTM
 
 ### 2.2 负责范围如何命中
 
-正式路由表为 `agent_routing_scopes`。Site Product 与 H5 Product 共用这张表、现有 section/category/product 三种 Scope 类型和同一个 site-global strict round robin；H5 不建立第二套路由系统。H5 Worker、页面发布、H5 Chat 和 Conversation Start endpoint 尚未实现。
+正式路由表为 `agent_routing_scopes`。Site Product 与 H5 Product 共用这张表、现有 section/category/product 三种 Scope 类型和同一个 site-global strict round robin；H5 不建立第二套路由系统。H5 Chat 和 Conversation Start endpoint 尚未实现。
 
 支持三种范围：
 

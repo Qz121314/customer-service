@@ -1,6 +1,13 @@
 import { Hono } from 'hono';
 import { verifyAdminSession } from './admin-session.ts';
 import {
+  h5ContentStatus,
+  h5PageAssetKey,
+  H5_HTML_MAX_BYTES,
+  type H5PageContentRow,
+  validateH5Html,
+} from './h5-page-content.ts';
+import {
   buildH5PublicUrl,
   normalizeExternalUrl,
   normalizeH5Slug,
@@ -10,6 +17,7 @@ import {
 
 type Bindings = {
   DB: D1Database;
+  H5_PAGES: R2Bucket;
   ADMIN_PASSWORD?: string;
 };
 
@@ -44,6 +52,12 @@ type H5PageRow = {
   public_origin: string | null;
   pool_name: string | null;
   pool_is_enabled: number | null;
+  draft_asset_id: string | null;
+  draft_byte_size: number | null;
+  draft_uploaded_at: string | null;
+  published_asset_id: string | null;
+  published_byte_size: number | null;
+  published_at: string | null;
 };
 
 type H5Page = {
@@ -59,6 +73,11 @@ type H5Page = {
   categoryId: string | null;
   categoryName: string | null;
   publicUrl: string | null;
+  contentStatus: 'unuploaded' | 'pending' | 'published' | 'updated';
+  draftByteSize: number | null;
+  draftUploadedAt: string | null;
+  publishedByteSize: number | null;
+  publishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -165,6 +184,102 @@ h5AdminApi.post('/api/admin/h5/pages/:id/duplicate', async (c) => {
   return c.json({ page: await loadPage(c.env.DB, id) }, 201);
 });
 
+h5AdminApi.put('/api/admin/h5/pages/:id/html', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const id = c.req.param('id');
+  const page = await loadPageRow(c.env.DB, id);
+  if (!page) return c.json({ error: 'NOT_FOUND' }, 404);
+  const contentLength = Number(c.req.header('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > H5_HTML_MAX_BYTES) {
+    return c.json({ error: 'H5_HTML_TOO_LARGE' }, 413);
+  }
+  const bytes = new Uint8Array(await c.req.raw.arrayBuffer());
+  const validated = validateH5Html(c.req.header('content-type') ?? null, bytes);
+  if (!validated.ok) {
+    return c.json(
+      { error: validated.code },
+      validated.code === 'H5_HTML_TOO_LARGE' ? 413 : 400,
+    );
+  }
+
+  const current = await loadPageContent(c.env.DB, id);
+  const assetId = crypto.randomUUID();
+  const key = h5PageAssetKey(SITE_ID, id, assetId);
+  try {
+    await c.env.H5_PAGES.put(key, validated.bytes, {
+      httpMetadata: {
+        contentType: 'text/html; charset=utf-8',
+        cacheControl: 'no-store',
+      },
+      customMetadata: { owner: 'h5-page-html', siteId: SITE_ID, pageId: id },
+    });
+  } catch (error) {
+    console.error('h5.page.html.upload.failed', error);
+    return c.json({ error: 'H5_HTML_UPLOAD_FAILED' }, 500);
+  }
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO h5_page_content (
+         site_id, page_id, draft_asset_id, draft_byte_size, draft_uploaded_at
+       ) VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
+       ON CONFLICT(site_id, page_id) DO UPDATE SET
+         draft_asset_id = excluded.draft_asset_id,
+         draft_byte_size = excluded.draft_byte_size,
+         draft_uploaded_at = excluded.draft_uploaded_at`,
+    )
+      .bind(SITE_ID, id, assetId, validated.bytes.byteLength)
+      .run();
+  } catch (error) {
+    await deleteH5Object(c.env.H5_PAGES, key);
+    console.error('h5.page.html.persist.failed', error);
+    return c.json({ error: 'H5_HTML_PERSIST_FAILED' }, 500);
+  }
+  if (
+    current?.draft_asset_id &&
+    current.draft_asset_id !== current.published_asset_id
+  ) {
+    await deleteH5Object(
+      c.env.H5_PAGES,
+      h5PageAssetKey(SITE_ID, id, current.draft_asset_id),
+    );
+  }
+  return c.json({ page: await loadPage(c.env.DB, id) });
+});
+
+h5AdminApi.post('/api/admin/h5/pages/:id/publish', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+  const id = c.req.param('id');
+  const page = await loadPageRow(c.env.DB, id);
+  if (!page) return c.json({ error: 'NOT_FOUND' }, 404);
+  const content = await loadPageContent(c.env.DB, id);
+  if (!content?.draft_asset_id) return c.json({ error: 'H5_NO_DRAFT' }, 400);
+  const draftKey = h5PageAssetKey(SITE_ID, id, content.draft_asset_id);
+  if (!(await c.env.H5_PAGES.head(draftKey))) {
+    return c.json({ error: 'H5_DRAFT_NOT_FOUND' }, 409);
+  }
+  await c.env.DB.prepare(
+    `UPDATE h5_page_content
+     SET published_asset_id = ?1, published_byte_size = ?2,
+         published_at = CURRENT_TIMESTAMP
+     WHERE site_id = ?3 AND page_id = ?4`,
+  )
+    .bind(content.draft_asset_id, content.draft_byte_size, SITE_ID, id)
+    .run();
+
+  const oldKeys = new Set<string>();
+  if (
+    content.published_asset_id &&
+    content.published_asset_id !== content.draft_asset_id
+  ) {
+    oldKeys.add(h5PageAssetKey(SITE_ID, id, content.published_asset_id));
+  }
+  await Promise.all(
+    [...oldKeys].map((oldKey) => deleteH5Object(c.env.H5_PAGES, oldKey)),
+  );
+  return c.json({ page: await loadPage(c.env.DB, id) });
+});
+
 h5AdminApi.patch('/api/admin/h5/pages/:id', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const id = c.req.param('id');
@@ -239,11 +354,20 @@ h5AdminApi.delete('/api/admin/h5/pages/:id', async (c) => {
       409,
     );
   }
+  const content = await loadPageContent(c.env.DB, id);
   await c.env.DB.prepare(
     'DELETE FROM h5_product_catalog WHERE site_id = ?1 AND id = ?2',
   )
     .bind(SITE_ID, id)
     .run();
+  const assets = new Set<string>();
+  if (content?.draft_asset_id) assets.add(content.draft_asset_id);
+  if (content?.published_asset_id) assets.add(content.published_asset_id);
+  await Promise.all(
+    [...assets].map((assetId) =>
+      deleteH5Object(c.env.H5_PAGES, h5PageAssetKey(SITE_ID, id, assetId)),
+    ),
+  );
   return c.json({ ok: true });
 });
 
@@ -387,6 +511,21 @@ async function loadPage(db: D1Database, id: string): Promise<H5Page | null> {
   return row ? toPage(row) : null;
 }
 
+async function loadPageContent(
+  db: D1Database,
+  pageId: string,
+): Promise<H5PageContentRow | null> {
+  return db
+    .prepare(
+      `SELECT site_id, page_id, draft_asset_id, draft_byte_size,
+         draft_uploaded_at, published_asset_id, published_byte_size, published_at
+       FROM h5_page_content
+       WHERE site_id = ?1 AND page_id = ?2`,
+    )
+    .bind(SITE_ID, pageId)
+    .first<H5PageContentRow>();
+}
+
 async function loadPageRow(
   db: D1Database,
   id: string,
@@ -402,11 +541,16 @@ function pageSelect(extra: string): string {
      p.is_enabled, p.section_id, p.section_name, p.category_id,
      p.category_name, p.created_at, p.updated_at,
      settings.public_origin,
-     pool.name AS pool_name, pool.is_enabled AS pool_is_enabled
+     pool.name AS pool_name, pool.is_enabled AS pool_is_enabled,
+     content.draft_asset_id, content.draft_byte_size,
+     content.draft_uploaded_at, content.published_asset_id,
+     content.published_byte_size, content.published_at
    FROM h5_product_catalog p
    LEFT JOIN h5_conversion_pools pool
      ON pool.site_id = p.site_id AND pool.id = p.conversion_pool_id
    LEFT JOIN h5_settings settings ON settings.site_id = p.site_id
+   LEFT JOIN h5_page_content content
+     ON content.site_id = p.site_id AND content.page_id = p.id
    WHERE p.site_id = ?1 ${extra}
    ORDER BY p.is_enabled DESC, p.title COLLATE NOCASE ASC, p.id ASC`;
 }
@@ -426,6 +570,11 @@ function toPage(row: H5PageRow): H5Page {
     categoryId: row.category_id,
     categoryName: row.category_name,
     publicUrl: buildH5PublicUrl(row.public_origin, row.slug),
+    contentStatus: h5ContentStatus(row),
+    draftByteSize: row.draft_byte_size,
+    draftUploadedAt: row.draft_uploaded_at,
+    publishedByteSize: row.published_byte_size,
+    publishedAt: row.published_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -570,6 +719,14 @@ async function validatePoolSelection(
     .bind(SITE_ID, value)
     .first<{ id: string }>();
   return row ? row.id : 'INVALID';
+}
+
+async function deleteH5Object(bucket: R2Bucket, key: string): Promise<void> {
+  try {
+    await bucket.delete(key);
+  } catch (error) {
+    console.warn('h5.page.html.cleanup.failed', { key, error });
+  }
 }
 
 async function duplicateSlug(
