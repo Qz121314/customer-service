@@ -448,6 +448,27 @@ test('H5 control plane supports navigation, settings, pools and page creation', 
   await expect(row).toContainText('待发布');
   await row.getByRole('button', { name: '发布' }).click();
   await expect(row).toContainText('已发布');
+  const liveUrl = row.getByRole('link', { name: '打开公网 URL' });
+  await expect(liveUrl).toHaveAttribute(
+    'href',
+    `https://h5.example.com/${slug}/`,
+  );
+  await expect(liveUrl).not.toHaveAttribute('aria-disabled', 'true');
+
+  await row.getByRole('button', { name: '替换 HTML' }).click();
+  const replacementDialog = page.getByRole('dialog', { name: '替换 HTML' });
+  await replacementDialog.getByLabel('HTML 文件').setInputFiles({
+    name: 'index-v2.html',
+    mimeType: 'text/html',
+    buffer: Buffer.from('<!doctype html><html><body>Smoke H5 V2</body></html>'),
+  });
+  await replacementDialog.getByRole('button', { name: '上传 HTML' }).click();
+  await expect(row).toContainText('有未发布更新');
+  await expect(liveUrl).toHaveAttribute(
+    'href',
+    `https://h5.example.com/${slug}/`,
+  );
+  await expect(liveUrl).not.toHaveAttribute('aria-disabled', 'true');
   await expectNoHorizontalOverflow(page);
 });
 

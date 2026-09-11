@@ -157,160 +157,142 @@ function H5PagesWorkspace({
                 </tr>
               </thead>
               <tbody>
-                {pages.map((page) => (
-                  <tr
-                    key={page.id}
-                    className={!page.isEnabled ? 'is-disabled' : undefined}
-                  >
-                    <td>
-                      <strong>{page.title}</strong>
-                      <small className="h5-secondary-text">{page.id}</small>
-                    </td>
-                    <td>
-                      <code>{page.slug}</code>
-                    </td>
-                    <td>{page.conversionPoolName ?? '未绑定'}</td>
-                    <td>
-                      <span
-                        className={`h5-status ${page.isEnabled ? 'is-enabled' : ''}`}
-                      >
-                        {page.isEnabled ? '启用' : '停用'}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`h5-status ${page.contentStatus === 'published' ? 'is-enabled' : ''}`}
-                      >
-                        {contentStatusLabel(page.contentStatus)}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="h5-url-cell">
-                        <span>{page.publicUrl ?? '未配置 H5 公网域名'}</span>
-                        {page.publicUrl ? (
+                {pages.map((page) => {
+                  const canOpenPublicUrl = hasLivePublication(page);
+                  return (
+                    <tr
+                      key={page.id}
+                      className={!page.isEnabled ? 'is-disabled' : undefined}
+                    >
+                      <td>
+                        <strong>{page.title}</strong>
+                        <small className="h5-secondary-text">{page.id}</small>
+                      </td>
+                      <td>
+                        <code>{page.slug}</code>
+                      </td>
+                      <td>{page.conversionPoolName ?? '未绑定'}</td>
+                      <td>
+                        <span
+                          className={`h5-status ${page.isEnabled ? 'is-enabled' : ''}`}
+                        >
+                          {page.isEnabled ? '启用' : '停用'}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`h5-status ${page.contentStatus === 'published' ? 'is-enabled' : ''}`}
+                        >
+                          {contentStatusLabel(page.contentStatus)}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="h5-url-cell">
+                          <span>{page.publicUrl ?? '未配置 H5 公网域名'}</span>
+                          {page.publicUrl ? (
+                            <button
+                              type="button"
+                              className="table-action"
+                              onClick={() =>
+                                void navigator.clipboard?.writeText(
+                                  page.publicUrl!,
+                                )
+                              }
+                            >
+                              复制
+                            </button>
+                          ) : null}
+                        </div>
+                      </td>
+                      <td>{formatDate(page.updatedAt)}</td>
+                      <td>
+                        <div className="h5-row-actions">
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => setHtmlEditor(page)}
+                          >
+                            {page.contentStatus === 'unuploaded'
+                              ? '上传 HTML'
+                              : '替换 HTML'}
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action"
+                            disabled={
+                              page.contentStatus !== 'pending' &&
+                              page.contentStatus !== 'updated'
+                            }
+                            onClick={() =>
+                              void onRun(async () => {
+                                await publishH5Page(page.id);
+                              }, '发布 H5 页面失败')
+                            }
+                          >
+                            发布
+                          </button>
+                          <a
+                            className={`table-action ${canOpenPublicUrl ? '' : 'is-disabled'}`}
+                            href={
+                              canOpenPublicUrl ? page.publicUrl! : undefined
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-disabled={!canOpenPublicUrl}
+                            onClick={(event) => {
+                              if (!canOpenPublicUrl) event.preventDefault();
+                            }}
+                          >
+                            打开公网 URL
+                          </a>
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => setEditor(editPageEditor(page))}
+                          >
+                            编辑
+                          </button>
                           <button
                             type="button"
                             className="table-action"
                             onClick={() =>
-                              void navigator.clipboard?.writeText(
-                                page.publicUrl!,
-                              )
+                              void onRun(async () => {
+                                await duplicateH5Page(page.id);
+                              }, '复制 H5 页面失败')
                             }
                           >
                             复制
                           </button>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>{formatDate(page.updatedAt)}</td>
-                    <td>
-                      <div className="h5-row-actions">
-                        <button
-                          type="button"
-                          className="table-action"
-                          onClick={() => setHtmlEditor(page)}
-                        >
-                          {page.contentStatus === 'unuploaded'
-                            ? '上传 HTML'
-                            : '替换 HTML'}
-                        </button>
-                        <button
-                          type="button"
-                          className="table-action"
-                          disabled={
-                            page.contentStatus !== 'pending' &&
-                            page.contentStatus !== 'updated'
-                          }
-                          onClick={() =>
-                            void onRun(async () => {
-                              await publishH5Page(page.id);
-                            }, '发布 H5 页面失败')
-                          }
-                        >
-                          发布
-                        </button>
-                        <a
-                          className={`table-action ${
-                            page.publicUrl &&
-                            page.isEnabled &&
-                            page.contentStatus === 'published'
-                              ? ''
-                              : 'is-disabled'
-                          }`}
-                          href={
-                            page.publicUrl &&
-                            page.isEnabled &&
-                            page.contentStatus === 'published'
-                              ? page.publicUrl
-                              : undefined
-                          }
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-disabled={
-                            !(
-                              page.publicUrl &&
-                              page.isEnabled &&
-                              page.contentStatus === 'published'
-                            )
-                          }
-                          onClick={(event) => {
-                            if (
-                              !page.publicUrl ||
-                              !page.isEnabled ||
-                              page.contentStatus !== 'published'
-                            )
-                              event.preventDefault();
-                          }}
-                        >
-                          打开公网 URL
-                        </a>
-                        <button
-                          type="button"
-                          className="table-action"
-                          onClick={() => setEditor(editPageEditor(page))}
-                        >
-                          编辑
-                        </button>
-                        <button
-                          type="button"
-                          className="table-action"
-                          onClick={() =>
-                            void onRun(async () => {
-                              await duplicateH5Page(page.id);
-                            }, '复制 H5 页面失败')
-                          }
-                        >
-                          复制
-                        </button>
-                        <button
-                          type="button"
-                          className="table-action"
-                          onClick={() =>
-                            void onRun(async () => {
-                              await updateH5Page(page.id, {
-                                isEnabled: !page.isEnabled,
-                              });
-                            }, '更新页面状态失败')
-                          }
-                        >
-                          {page.isEnabled ? '停用' : '启用'}
-                        </button>
-                        <button
-                          type="button"
-                          className="table-action danger"
-                          onClick={() => {
-                            if (window.confirm('确认删除这个 H5 页面吗？'))
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() =>
                               void onRun(async () => {
-                                await deleteH5Page(page.id);
-                              }, '删除 H5 页面失败');
-                          }}
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                                await updateH5Page(page.id, {
+                                  isEnabled: !page.isEnabled,
+                                });
+                              }, '更新页面状态失败')
+                            }
+                          >
+                            {page.isEnabled ? '停用' : '启用'}
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action danger"
+                            onClick={() => {
+                              if (window.confirm('确认删除这个 H5 页面吗？'))
+                                void onRun(async () => {
+                                  await deleteH5Page(page.id);
+                                }, '删除 H5 页面失败');
+                            }}
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -924,6 +906,10 @@ function contentStatusLabel(status: H5Page['contentStatus']): string {
     published: '已发布',
     updated: '有未发布更新',
   }[status];
+}
+
+function hasLivePublication(page: H5Page): boolean {
+  return Boolean(page.publicUrl) && page.isEnabled && page.publishedAt !== null;
 }
 
 function editPageEditor(page: H5Page): EditorState {
