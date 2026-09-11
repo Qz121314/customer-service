@@ -92,6 +92,14 @@ integrationApi.post('/integration/v1/verify', async (c) => {
   let productCount = 0;
   if (body?.productCatalog !== undefined) {
     const catalog = normalizeProductCatalog(body.productCatalog);
+    if (catalog === 'RESERVED_H5_NAMESPACE') {
+      return integrationError(
+        c,
+        400,
+        'RESERVED_H5_NAMESPACE',
+        'The h5:* namespace is reserved for the internal H5 catalog.',
+      );
+    }
     if (!catalog) {
       return integrationError(
         c,
@@ -117,7 +125,9 @@ integrationApi.post('/integration/v1/verify', async (c) => {
   });
 });
 
-function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
+function normalizeProductCatalog(
+  value: unknown,
+): ProductCatalogInput | 'RESERVED_H5_NAMESPACE' | null {
   if (
     !isRecord(value) ||
     !Array.isArray(value.products) ||
@@ -133,6 +143,7 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
     const id = normalizeText(rawProduct.id, 100);
     const title = normalizeText(rawProduct.title, 300);
     if (!id || !title || seen.has(id)) return null;
+    if (hasReservedH5Namespace(id)) return 'RESERVED_H5_NAMESPACE';
     seen.add(id);
 
     const href = normalizePublicProductHref(rawProduct.href);
@@ -151,6 +162,14 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
     ) {
       return null;
     }
+    if (
+      [sectionId, categoryId].some(
+        (identifier) =>
+          identifier !== null && hasReservedH5Namespace(identifier),
+      )
+    ) {
+      return 'RESERVED_H5_NAMESPACE';
+    }
 
     products.push({
       id,
@@ -165,6 +184,10 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
     });
   }
   return { products };
+}
+
+function hasReservedH5Namespace(value: string): boolean {
+  return value.startsWith('h5:');
 }
 
 function normalizePublicProductHref(value: unknown): string | null {

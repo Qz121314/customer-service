@@ -54,6 +54,7 @@ type ProductRow = {
   category_id: string | null;
   category_name: string | null;
   is_enabled: number;
+  source_type: 'site' | 'h5';
 };
 
 type ScopeType = 'section' | 'category' | 'product';
@@ -764,9 +765,18 @@ async function loadProducts(db: D1Database) {
   const result = await db
     .prepare(
       `SELECT id, title, href, cover_url, section_id, section_name,
-         category_id, category_name, is_enabled
-       FROM product_catalog
-       WHERE site_id = 'default'
+         category_id, category_name, is_enabled, source_type
+       FROM (
+         SELECT id, title, href, cover_url, section_id, section_name,
+           category_id, category_name, is_enabled, 'site' AS source_type
+         FROM product_catalog
+         WHERE site_id = 'default'
+         UNION ALL
+         SELECT id, title, href, cover_url, section_id, section_name,
+           category_id, category_name, is_enabled, 'h5' AS source_type
+         FROM h5_product_catalog
+         WHERE site_id = 'default'
+       ) catalog
        ORDER BY is_enabled DESC,
          COALESCE(section_name, '') COLLATE NOCASE ASC,
          COALESCE(category_name, '') COLLATE NOCASE ASC,
@@ -785,6 +795,7 @@ async function loadProducts(db: D1Database) {
     categoryId: product.category_id,
     categoryName: product.category_name,
     isEnabled: product.is_enabled === 1,
+    sourceType: product.source_type,
   }));
 }
 
@@ -958,7 +969,11 @@ async function allEnabledSectionsExist(
      FROM json_each(?1) requested
      WHERE EXISTS (
        SELECT 1
-       FROM product_catalog product
+       FROM (
+         SELECT site_id, section_id, is_enabled FROM product_catalog
+         UNION ALL
+         SELECT site_id, section_id, is_enabled FROM h5_product_catalog
+       ) product
        WHERE product.site_id = 'default'
          AND product.is_enabled = 1
          AND product.section_id = CAST(requested.value AS TEXT)
@@ -980,7 +995,13 @@ async function allEnabledCategoriesExist(
      FROM json_each(?1) requested
      WHERE EXISTS (
        SELECT 1
-       FROM product_catalog product
+       FROM (
+         SELECT site_id, section_id, category_id, is_enabled
+         FROM product_catalog
+         UNION ALL
+         SELECT site_id, section_id, category_id, is_enabled
+         FROM h5_product_catalog
+       ) product
        WHERE product.site_id = 'default'
          AND product.is_enabled = 1
          AND product.section_id = ?2
@@ -1003,7 +1024,11 @@ async function allEnabledProductsExist(
      FROM json_each(?1) requested
      WHERE EXISTS (
        SELECT 1
-       FROM product_catalog product
+       FROM (
+         SELECT site_id, id, is_enabled FROM product_catalog
+         UNION ALL
+         SELECT site_id, id, is_enabled FROM h5_product_catalog
+       ) product
        WHERE product.site_id = 'default'
          AND product.id = CAST(requested.value AS TEXT)
          AND product.is_enabled = 1

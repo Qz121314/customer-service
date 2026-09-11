@@ -13,6 +13,7 @@ test('routing scope validation checks only requested identifiers', () => {
   const migration = source(
     '../migrations/0026_product_catalog_scope_index.sql',
   );
+  const h5Migration = source('../migrations/0062_h5_product_catalog.sql');
 
   const validations = [
     topLevelDeclaration(admin, 'async function allEnabledSectionsExist('),
@@ -28,11 +29,14 @@ test('routing scope validation checks only requested identifiers', () => {
     assert.match(validation, /FROM json_each\(\?1\) requested/u);
     assert.doesNotMatch(validation, /SELECT DISTINCT section_id/u);
     assert.doesNotMatch(validation, /\.all</u);
+    assert.match(validation, /FROM product_catalog/u);
+    assert.match(validation, /FROM h5_product_catalog/u);
   }
   assert.match(sharedLookup, /\.first<\{ count: number \}>\(\)/u);
   assert.doesNotMatch(sharedLookup, /\.all</u);
   assert.match(migration, /idx_product_catalog_scope_lookup/u);
   assert.match(migration, /site_id, is_enabled, section_id, category_id/u);
+  assert.match(h5Migration, /idx_h5_product_catalog_scope_lookup/u);
 });
 
 test('routing scope writes use one bulk insert per scope', () => {
