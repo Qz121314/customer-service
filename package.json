@@ -21,7 +21,7 @@
     "cf:check": "pnpm build:ui && pnpm cf:check:bundle",
     "cf:check:bundle": "wrangler deploy --dry-run && wrangler deploy --config wrangler.h5.jsonc --dry-run",
     "cf:provision": "pnpm fix:changed && pnpm safety && node scripts/provision-cloudflare.mjs",
-    "deploy:cloudflare": "pnpm cf:provision && pnpm db:migrate:remote && wrangler deploy --keep-vars --x-provision --x-auto-create",
+    "deploy:cloudflare": "pnpm cf:provision && pnpm db:migrate:remote && wrangler deploy --config wrangler.h5.jsonc --keep-vars --x-provision --x-auto-create && wrangler deploy --keep-vars --x-provision --x-auto-create",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "lint": "eslint .",

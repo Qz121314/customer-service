@@ -17,7 +17,7 @@ import {
 
 type Bindings = {
   DB: D1Database;
-  MEDIA: R2Bucket;
+  H5_PAGES: R2Bucket;
   ADMIN_PASSWORD?: string;
 };
 
@@ -206,7 +206,7 @@ h5AdminApi.put('/api/admin/h5/pages/:id/html', async (c) => {
   const assetId = crypto.randomUUID();
   const key = h5PageAssetKey(SITE_ID, id, assetId);
   try {
-    await c.env.MEDIA.put(key, validated.bytes, {
+    await c.env.H5_PAGES.put(key, validated.bytes, {
       httpMetadata: {
         contentType: 'text/html; charset=utf-8',
         cacheControl: 'no-store',
@@ -231,7 +231,7 @@ h5AdminApi.put('/api/admin/h5/pages/:id/html', async (c) => {
       .bind(SITE_ID, id, assetId, validated.bytes.byteLength)
       .run();
   } catch (error) {
-    await deleteH5Object(c.env.MEDIA, key);
+    await deleteH5Object(c.env.H5_PAGES, key);
     console.error('h5.page.html.persist.failed', error);
     return c.json({ error: 'H5_HTML_PERSIST_FAILED' }, 500);
   }
@@ -240,7 +240,7 @@ h5AdminApi.put('/api/admin/h5/pages/:id/html', async (c) => {
     current.draft_asset_id !== current.published_asset_id
   ) {
     await deleteH5Object(
-      c.env.MEDIA,
+      c.env.H5_PAGES,
       h5PageAssetKey(SITE_ID, id, current.draft_asset_id),
     );
   }
@@ -255,7 +255,7 @@ h5AdminApi.post('/api/admin/h5/pages/:id/publish', async (c) => {
   const content = await loadPageContent(c.env.DB, id);
   if (!content?.draft_asset_id) return c.json({ error: 'H5_NO_DRAFT' }, 400);
   const draftKey = h5PageAssetKey(SITE_ID, id, content.draft_asset_id);
-  if (!(await c.env.MEDIA.head(draftKey))) {
+  if (!(await c.env.H5_PAGES.head(draftKey))) {
     return c.json({ error: 'H5_DRAFT_NOT_FOUND' }, 409);
   }
   await c.env.DB.prepare(
@@ -275,7 +275,7 @@ h5AdminApi.post('/api/admin/h5/pages/:id/publish', async (c) => {
     oldKeys.add(h5PageAssetKey(SITE_ID, id, content.published_asset_id));
   }
   await Promise.all(
-    [...oldKeys].map((oldKey) => deleteH5Object(c.env.MEDIA, oldKey)),
+    [...oldKeys].map((oldKey) => deleteH5Object(c.env.H5_PAGES, oldKey)),
   );
   return c.json({ page: await loadPage(c.env.DB, id) });
 });
@@ -365,7 +365,7 @@ h5AdminApi.delete('/api/admin/h5/pages/:id', async (c) => {
   if (content?.published_asset_id) assets.add(content.published_asset_id);
   await Promise.all(
     [...assets].map((assetId) =>
-      deleteH5Object(c.env.MEDIA, h5PageAssetKey(SITE_ID, id, assetId)),
+      deleteH5Object(c.env.H5_PAGES, h5PageAssetKey(SITE_ID, id, assetId)),
     ),
   );
   return c.json({ ok: true });

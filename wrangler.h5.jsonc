@@ -14,8 +14,8 @@
   ],
   "r2_buckets": [
     {
-      "binding": "MEDIA",
-      "bucket_name": "customer-service-media",
+      "binding": "H5_PAGES",
+      "bucket_name": "customer-service-h5-pages",
     },
   ],
 }

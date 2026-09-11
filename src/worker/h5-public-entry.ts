@@ -4,7 +4,7 @@ import { normalizeH5Slug } from './h5-public-url.ts';
 
 type Bindings = {
   DB: D1Database;
-  MEDIA: R2Bucket;
+  H5_PAGES: R2Bucket;
 };
 
 type Env = { Bindings: Bindings };
@@ -49,7 +49,7 @@ h5PublicApp.all('*', async (c) => {
     .first<{ id: string; published_asset_id: string }>();
   if (!row) return new Response('Not Found', { status: 404 });
 
-  const object = await c.env.MEDIA.get(
+  const object = await c.env.H5_PAGES.get(
     h5PageAssetKey('default', row.id, row.published_asset_id),
   );
   if (!object) return new Response('Not Found', { status: 404 });
@@ -59,7 +59,7 @@ h5PublicApp.all('*', async (c) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy':
-      "sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; media-src https: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'",
   });
   if (object.size !== undefined)
     headers.set('Content-Length', String(object.size));

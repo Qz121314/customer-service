@@ -9,6 +9,57 @@ const { h5AdminApi } = await import('../src/worker/h5-admin-api.ts');
 const { h5PublicApp } = await import('../src/worker/h5-public-entry.ts');
 const { h5PageAssetKey } = await import('../src/worker/h5-page-content.ts');
 
+test('H5 uses a dedicated private R2 binding and production deploys both Workers', () => {
+  const appConfig = readFileSync(
+    fileURLToPath(new URL('../wrangler.jsonc', import.meta.url)),
+    'utf8',
+  );
+  const h5Config = readFileSync(
+    fileURLToPath(new URL('../wrangler.h5.jsonc', import.meta.url)),
+    'utf8',
+  );
+  const adminSource = readFileSync(
+    fileURLToPath(new URL('../src/worker/h5-admin-api.ts', import.meta.url)),
+    'utf8',
+  );
+  const publicSource = readFileSync(
+    fileURLToPath(new URL('../src/worker/h5-public-entry.ts', import.meta.url)),
+    'utf8',
+  );
+  const workflow = readFileSync(
+    fileURLToPath(new URL('../.github/workflows/ci.yml', import.meta.url)),
+    'utf8',
+  );
+
+  assert.match(appConfig, /"binding": "MEDIA"[\s\S]*?customer-service-media/u);
+  assert.match(
+    appConfig,
+    /"binding": "H5_PAGES"[\s\S]*?customer-service-h5-pages/u,
+  );
+  assert.match(
+    h5Config,
+    /"binding": "H5_PAGES"[\s\S]*?customer-service-h5-pages/u,
+  );
+  assert.doesNotMatch(h5Config, /"binding": "MEDIA"/u);
+  assert.match(adminSource, /H5_PAGES: R2Bucket/u);
+  assert.match(publicSource, /H5_PAGES: R2Bucket/u);
+  assert.doesNotMatch(adminSource, /env\.MEDIA/u);
+  assert.doesNotMatch(publicSource, /env\.MEDIA/u);
+
+  const h5DeployIndex = workflow.indexOf(
+    'wrangler deploy --config wrangler.h5.jsonc',
+  );
+  const h5HealthIndex = workflow.indexOf('$h5_url/api/health');
+  const mainDeployIndex = workflow.indexOf(
+    'wrangler deploy --keep-vars --x-provision --x-auto-create',
+  );
+  const mainHealthIndex = workflow.indexOf('"$BASE_URL/api/health"');
+  assert.ok(h5DeployIndex >= 0);
+  assert.ok(h5HealthIndex > h5DeployIndex);
+  assert.ok(mainDeployIndex > h5HealthIndex);
+  assert.ok(mainHealthIndex > mainDeployIndex);
+});
+
 function applyMigrations(database) {
   const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
   for (const name of readdirSync(directory)
@@ -93,7 +144,7 @@ function adminCookie(password) {
   return `cs_session=${payload}.${signature}`;
 }
 
-function request(api, path, database, media, options = {}) {
+function request(api, path, database, h5Pages, options = {}) {
   return api.request(
     path,
     {
@@ -105,7 +156,7 @@ function request(api, path, database, media, options = {}) {
     },
     {
       DB: d1(database),
-      MEDIA: media,
+      H5_PAGES: h5Pages,
       ADMIN_PASSWORD: 'admin-password',
     },
   );
@@ -118,12 +169,12 @@ function json(response) {
 test('H5 HTML upload, publish, replacement and public runtime lifecycle', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
-  const media = new FakeR2();
+  const h5Pages = new FakeR2();
   const create = await request(
     h5AdminApi,
     '/api/admin/h5/pages',
     database,
-    media,
+    h5Pages,
     {
       method: 'POST',
       body: JSON.stringify({ title: 'Runtime page', slug: 'runtime-page' }),
@@ -140,7 +191,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
       body: '<html></html>',
       headers: { 'content-type': 'text/html' },
     },
-    { DB: d1(database), MEDIA: media, ADMIN_PASSWORD: 'admin-password' },
+    { DB: d1(database), H5_PAGES: h5Pages, ADMIN_PASSWORD: 'admin-password' },
   );
   assert.equal(unauthorized.status, 401);
 
@@ -148,7 +199,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/publish`,
     database,
-    media,
+    h5Pages,
     { method: 'POST' },
   );
   assert.equal(noDraft.status, 400);
@@ -157,7 +208,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/html`,
     database,
-    media,
+    h5Pages,
     {
       method: 'PUT',
       body: '<html><body>version one</body></html>',
@@ -171,7 +222,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/publish`,
     database,
-    media,
+    h5Pages,
     { method: 'POST' },
   );
   assert.equal(firstPublish.status, 200);
@@ -188,13 +239,13 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     published.published_asset_id,
   );
   assert.equal(
-    new TextDecoder().decode(media.objects.get(firstKey).bytes),
+    new TextDecoder().decode(h5Pages.objects.get(firstKey).bytes),
     '<html><body>version one</body></html>',
   );
 
   const runtimeQueries = [];
-  const publicEnv = { DB: d1(database, runtimeQueries), MEDIA: media };
-  const firstGetCount = media.getCount;
+  const publicEnv = { DB: d1(database, runtimeQueries), H5_PAGES: h5Pages };
+  const firstGetCount = h5Pages.getCount;
   const firstPublic = await h5PublicApp.request(
     '/runtime-page/',
     { method: 'GET' },
@@ -208,7 +259,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
   assert.equal(firstPublic.headers.get('cache-control'), 'no-store');
   assert.match(firstPublic.headers.get('content-security-policy'), /sandbox/iu);
   assert.equal(runtimeQueries.length, 1);
-  assert.equal(media.getCount - firstGetCount, 1);
+  assert.equal(h5Pages.getCount - firstGetCount, 1);
 
   const headPublic = await h5PublicApp.request(
     '/runtime-page/',
@@ -230,7 +281,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/html`,
     database,
-    media,
+    h5Pages,
     {
       method: 'PUT',
       body: '<html><body>version two</body></html>',
@@ -245,7 +296,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/publish`,
     database,
-    media,
+    h5Pages,
     { method: 'POST' },
   );
   assert.equal((await json(secondPublish)).page.contentStatus, 'published');
@@ -256,7 +307,7 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}`,
     database,
-    media,
+    h5Pages,
     {
       method: 'PATCH',
       body: JSON.stringify({ isEnabled: false }),
@@ -273,12 +324,12 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
 test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
-  const media = new FakeR2();
+  const h5Pages = new FakeR2();
   const create = await request(
     h5AdminApi,
     '/api/admin/h5/pages',
     database,
-    media,
+    h5Pages,
     {
       method: 'POST',
       body: JSON.stringify({
@@ -303,7 +354,7 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
       h5AdminApi,
       `/api/admin/h5/pages/${encodeURIComponent(pageId)}/html`,
       database,
-      media,
+      h5Pages,
       {
         method: 'PUT',
         body: input.body,
@@ -317,10 +368,21 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/html`,
     database,
-    media,
+    h5Pages,
     {
       method: 'PUT',
-      body: '<html><body>published</body></html>',
+      body: `<!doctype html>
+<html>
+  <head>
+    <link rel="stylesheet" href="https://cdn.example.com/page.css">
+    <style>body { color: red; }</style>
+  </head>
+  <body>
+    <img src="https://cdn.example.com/banner.webp">
+    <video src="https://cdn.example.com/demo.mp4" controls></video>
+    <script>document.body.dataset.ready = 'yes';</script>
+  </body>
+</html>`,
       headers: { 'content-type': 'text/html' },
     },
   );
@@ -329,15 +391,36 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/publish`,
     database,
-    media,
+    h5Pages,
     { method: 'POST' },
+  );
+  const publicEnv = { DB: d1(database), H5_PAGES: h5Pages };
+  const externalAssetsPublic = await h5PublicApp.request(
+    '/validation-page/',
+    {},
+    publicEnv,
+  );
+  assert.equal(externalAssetsPublic.status, 200);
+  const externalAssetsHtml = await externalAssetsPublic.text();
+  assert.match(
+    externalAssetsHtml,
+    /https:\/\/cdn\.example\.com\/banner\.webp/u,
+  );
+  assert.match(externalAssetsHtml, /https:\/\/cdn\.example\.com\/page\.css/u);
+  assert.match(
+    externalAssetsPublic.headers.get('content-security-policy'),
+    /default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; media-src https: blob:/u,
+  );
+  assert.equal(
+    [...h5Pages.objects.keys()].every((key) => key.endsWith('.html')),
+    true,
   );
 
   const duplicate = await request(
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}/duplicate`,
     database,
-    media,
+    h5Pages,
     { method: 'POST' },
   );
   assert.equal((await json(duplicate)).page.contentStatus, 'unuploaded');
@@ -346,7 +429,7 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}`,
     database,
-    media,
+    h5Pages,
     {
       method: 'PATCH',
       body: JSON.stringify({ slug: 'renamed-page' }),
@@ -354,7 +437,6 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
     },
   );
   assert.equal(slugUpdate.status, 200);
-  const publicEnv = { DB: d1(database), MEDIA: media };
   assert.equal(
     (await h5PublicApp.request('/validation-page/', {}, publicEnv)).status,
     404,
@@ -368,7 +450,7 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
     h5AdminApi,
     `/api/admin/h5/pages/${encodeURIComponent(pageId)}`,
     database,
-    media,
+    h5Pages,
     { method: 'DELETE' },
   );
   assert.equal(deleted.status, 200);
@@ -380,7 +462,7 @@ test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup',
       .get(pageId).count,
     0,
   );
-  assert.equal(media.objects.size, 0);
+  assert.equal(h5Pages.objects.size, 0);
   assert.equal(
     (await h5PublicApp.request('/renamed-page/', {}, publicEnv)).status,
     404,
