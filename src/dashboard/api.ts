@@ -131,16 +131,6 @@ export type TrafficOverviewStats = {
   retainedFrom: string;
 };
 
-export type H5TrafficStats = {
-  from: string;
-  to: string;
-  retainedFrom: string;
-  total: number;
-  pages: Array<{ productId: string; productTitle: string; count: number }>;
-  agents: Array<{ agentId: string | null; agentName: string; count: number }>;
-  pools: Array<{ poolId: string | null; poolName: string; count: number }>;
-};
-
 export type AdminTrafficRealtimeEvent = {
   type: 'traffic.receipt.created';
   eventId: string;
@@ -597,15 +587,6 @@ export async function getTrafficOverviewStats(
 ): Promise<TrafficOverviewStats> {
   return request(
     `/api/admin/traffic-stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-  );
-}
-
-export async function getH5TrafficStats(
-  from: string,
-  to: string,
-): Promise<H5TrafficStats> {
-  return request(
-    `/api/admin/h5/stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 

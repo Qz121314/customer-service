@@ -21,6 +21,7 @@ export function VisitorChatPage() {
   const [visitorToken, setVisitorToken] = useState(
     () => localStorage.getItem(VISITOR_TOKEN_KEY) ?? '',
   );
+  const visitorTokenRef = useRef(visitorToken);
   const [error, setError] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
@@ -40,7 +41,7 @@ export function VisitorChatPage() {
     let active = true;
     void startVisitorConversation({
       visitorId,
-      visitorToken: visitorToken || null,
+      visitorToken: visitorTokenRef.current || null,
       sourceHandoffId: handoffId,
       productId,
     })
@@ -48,9 +49,10 @@ export function VisitorChatPage() {
         if (!active) return;
         if (started.visitorToken) {
           localStorage.setItem(VISITOR_TOKEN_KEY, started.visitorToken);
+          visitorTokenRef.current = started.visitorToken;
           setVisitorToken(started.visitorToken);
         }
-        const token = started.visitorToken ?? visitorToken;
+        const token = started.visitorToken ?? visitorTokenRef.current;
         if (!token) throw new Error('访客身份令牌未返回，请重试。');
         const next = await getVisitorConversation(
           started.conversation.id,
@@ -105,7 +107,7 @@ export function VisitorChatPage() {
       active = false;
       socketRef.current?.close();
     };
-  }, [handoffId, productId, visitorId, visitorToken]);
+  }, [handoffId, productId, visitorId]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();

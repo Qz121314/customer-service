@@ -8,7 +8,6 @@ import {
   type NoAgentMessageFormat,
 } from './no-agent-message';
 import {
-  loadH5TrafficStatistics,
   loadTrafficStatisticsRows,
   TRAFFIC_PENDING_AGENT_ID,
   TRAFFIC_UNKNOWN_PRODUCT_ID,
@@ -171,26 +170,6 @@ adminConfigApi.get('/api/admin/traffic-stats', async (c) => {
         count: Number(row.count),
       })),
     retainedFrom,
-  });
-});
-
-adminConfigApi.get('/api/admin/h5/stats', async (c) => {
-  if (!(await adminAuthorized(c))) return unauthorized(c);
-  const requestedFrom = normalizeReportingDate(c.req.query('from'));
-  const requestedTo = normalizeReportingDate(c.req.query('to'));
-  if (!requestedFrom || !requestedTo || requestedFrom > requestedTo) {
-    return c.json({ error: 'INVALID_REPORTING_RANGE' }, 400);
-  }
-  const retainedFrom = reportingRetentionCutoff();
-  const today = reportingBusinessDate();
-  const from = requestedFrom < retainedFrom ? retainedFrom : requestedFrom;
-  const to = requestedTo > today ? today : requestedTo;
-  if (from > to) return c.json({ error: 'REPORTING_RANGE_EXPIRED' }, 400);
-  return c.json({
-    from,
-    to,
-    retainedFrom,
-    ...(await loadH5TrafficStatistics(c.env.DB, from, to)),
   });
 });
 

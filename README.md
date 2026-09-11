@@ -36,7 +36,7 @@ H5 P3 的后台控制面继续以 `h5_product_catalog` 作为 H5 Page 的唯一�
 
 H5 P3 使用独立的私有 `customer-service-h5-pages` R2 bucket 保存 HTML 代码快照；客服消息媒体继续使用完全分离的 `customer-service-media` bucket。`h5_page_content` 只保存页面 metadata、草稿与已发布版本的不可变 asset ID、大小和时间；R2 key 使用 `h5-pages/{siteId}/{pageId}/versions/{assetId}.html`，H5_PAGES 中不保存图片、视频、CSS、字体、JavaScript、ZIP、bundle 或 tracking assets。上传生成新版本，发布只切换 D1 的 published 指针，替换草稿或删除页面后清理不再引用的对象。
 
-H5 Final Integration 使用声明式 CTA 标记，不要求上传 HTML 编写 API 调用：
+H5 页面使用声明式 CTA 标记，不要求上传 HTML 编写 API 调用：
 
 ```html
 <a data-h5-cta>
@@ -44,11 +44,11 @@ H5 Final Integration 使用声明式 CTA 标记，不要求上传 HTML 编写 AP
 </a>
 ```
 
-上传页面自己负责按钮样式；H5 Conversion Pool 负责动作和文案。发布响应只在边缘注入 first-party CTA bootstrap：Chat 通过配置的客服 Worker Origin 导航到 `/chat?productId=h5:product:*`，External 通过已校验的 HTTPS URL 导航。上传 HTML 不能覆盖目标，也不能直接 fetch、打开 WebSocket 或加载外部脚本。
+上传页面自己负责按钮样式；H5 Chat Conversion Pool 负责动作和文案。发布响应只在边缘注入 first-party CTA bootstrap，导航到客服 Worker 的 `/chat?productId=h5:product:*`。上传 HTML 不能覆盖目标，也不能直接 fetch、打开 WebSocket 或加载外部脚本。
 
 独立的 `customer-service-h5` Worker 只提供 `GET/HEAD /{slug}/` 和 D1/R2-free `/api/health`；运行时先用一次 D1 查询确认页面启用且已有发布版本，再用一次 H5_PAGES R2 读取返回静态 HTML。页面中的外部 HTTPS 图片、视频、CSS 和字体由浏览器直接加载，H5 Worker 不代理这些资源。响应使用 `no-store`、`nosniff`、`no-referrer` 和 sandbox CSP，允许 inline CSS/JS 与 HTTPS 素材，但禁止 external JS、页面网络 API、WebSocket、frame、object 和 tracking SDK；HTML 只接受 UTF-8、最大 5 MiB。
 
-H5 Final Integration 的 `/chat` 是同源的全屏 Visitor Chat，复用 visitor token、Conversation Start、现有 routing、2 小时复用、额度和实时消息协议；无客服直接显示管理员配置提示，不建立等待队列。H5 统计只统计真实 `conversation_traffic_receipts`，支持 7/30/90 天的页面、坐席和 Conversion Pool 分布，不推导 Page Views、CTR 或外部点击。H5 Worker 与主 Worker、`customer-service-h5-pages` 与 `customer-service-media` 继续独立部署。
+H5 `/chat` 复用 visitor token、Conversation Start、现有 routing、额度和实时消息协议；用户点击 CTA 后进入真实客服会话，坐席端继续使用现有工作台接待。无客服时显示现有配置提示，不建立等待队列。H5 Worker 与主 Worker、`customer-service-h5-pages` 与 `customer-service-media` 继续独立部署。
 
 ### 明确不做
 

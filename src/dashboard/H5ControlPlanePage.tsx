@@ -23,14 +23,12 @@ import {
   updateH5ConversionPool,
   updateH5Page,
   updateH5Settings,
-  getH5TrafficStats,
-  type H5TrafficStats,
 } from './api';
 import { message } from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button, Field, FieldDescription, FieldLabel, Input } from './ui';
 
-export type H5AdminView = 'pages' | 'pools' | 'settings' | 'stats';
+export type H5AdminView = 'pages' | 'pools' | 'settings';
 
 export function H5ControlPlanePage({ view }: { view: H5AdminView }) {
   const [pages, setPages] = useState<H5Page[]>([]);
@@ -100,82 +98,6 @@ export function H5ControlPlanePage({ view }: { view: H5AdminView }) {
           onRun={run}
         />
       ) : null}
-      {view === 'stats' ? <H5StatisticsWorkspace /> : null}
-    </div>
-  );
-}
-
-function H5StatisticsWorkspace() {
-  const [days, setDays] = useState<7 | 30 | 90>(7);
-  const [stats, setStats] = useState<H5TrafficStats | null>(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    const to = new Date().toISOString().slice(0, 10);
-    const from = new Date(Date.now() - (days - 1) * 86400000)
-      .toISOString()
-      .slice(0, 10);
-    void getH5TrafficStats(from, to)
-      .then(setStats)
-      .catch(() => setError('无法加载 H5 统计'));
-  }, [days]);
-  return (
-    <>
-      <WorkspaceHeading
-        title="H5 统计 / Performance"
-        hint="只统计已进入客服系统的真实 H5 咨询，不包含页面浏览、CTR 或外部点击。"
-        action={
-          <select
-            aria-label="统计周期"
-            value={days}
-            onChange={(event) =>
-              setDays(Number(event.target.value) as 7 | 30 | 90)
-            }
-          >
-            <option value="7">最近 7 天</option>
-            <option value="30">最近 30 天</option>
-            <option value="90">最近 90 天</option>
-          </select>
-        }
-      />
-      {error ? <div className="notice error">{error}</div> : null}
-      <section className="h5-table-card admin-table-card h5-statistics-grid">
-        <StatGroup
-          title={`H5 咨询：${stats?.total ?? 0}`}
-          rows={stats?.pages.map((row) => [row.productTitle, row.count]) ?? []}
-        />
-        <StatGroup
-          title="坐席接待分布"
-          rows={stats?.agents.map((row) => [row.agentName, row.count]) ?? []}
-        />
-        <StatGroup
-          title="Conversion Pool 分布"
-          rows={stats?.pools.map((row) => [row.poolName, row.count]) ?? []}
-        />
-      </section>
-    </>
-  );
-}
-
-function StatGroup({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Array<[string, number]>;
-}) {
-  return (
-    <div className="h5-stat-group">
-      <h3>{title}</h3>
-      {rows.length ? (
-        rows.map(([label, count]) => (
-          <p key={label}>
-            <span>{label}</span>
-            <strong>{count}</strong>
-          </p>
-        ))
-      ) : (
-        <p>暂无数据</p>
-      )}
     </div>
   );
 }
@@ -799,6 +721,9 @@ function H5HtmlEditor({
           />
           <FieldDescription>
             只接受单个 UTF-8 HTML 文件，最大 5 MB；不允许外部脚本和追踪 SDK。
+            CTA 请在 HTML 中加入：
+            <code>&lt;a data-h5-cta&gt;立即咨询&lt;/a&gt;</code>；动作和文案由
+            Chat Conversion Pool 控制，无需写 API 或客服链接。
           </FieldDescription>
           {file ? (
             <span className="h5-secondary-text">已选择：{file.name}</span>
