@@ -23,17 +23,22 @@ import {
   updateH5ConversionPool,
   updateH5Page,
   updateH5Settings,
+  getH5TrafficStats,
+  type H5TrafficStats,
 } from './api';
 import { message } from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button, Field, FieldDescription, FieldLabel, Input } from './ui';
 
-export type H5AdminView = 'pages' | 'pools' | 'settings';
+export type H5AdminView = 'pages' | 'pools' | 'settings' | 'stats';
 
 export function H5ControlPlanePage({ view }: { view: H5AdminView }) {
   const [pages, setPages] = useState<H5Page[]>([]);
   const [pools, setPools] = useState<H5ConversionPool[]>([]);
-  const [settings, setSettings] = useState<H5Settings>({ publicOrigin: null });
+  const [settings, setSettings] = useState<H5Settings>({
+    publicOrigin: null,
+    chatPublicOrigin: null,
+  });
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
 
@@ -95,6 +100,82 @@ export function H5ControlPlanePage({ view }: { view: H5AdminView }) {
           onRun={run}
         />
       ) : null}
+      {view === 'stats' ? <H5StatisticsWorkspace /> : null}
+    </div>
+  );
+}
+
+function H5StatisticsWorkspace() {
+  const [days, setDays] = useState<7 | 30 | 90>(7);
+  const [stats, setStats] = useState<H5TrafficStats | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const to = new Date().toISOString().slice(0, 10);
+    const from = new Date(Date.now() - (days - 1) * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    void getH5TrafficStats(from, to)
+      .then(setStats)
+      .catch(() => setError('无法加载 H5 统计'));
+  }, [days]);
+  return (
+    <>
+      <WorkspaceHeading
+        title="H5 统计 / Performance"
+        hint="只统计已进入客服系统的真实 H5 咨询，不包含页面浏览、CTR 或外部点击。"
+        action={
+          <select
+            aria-label="统计周期"
+            value={days}
+            onChange={(event) =>
+              setDays(Number(event.target.value) as 7 | 30 | 90)
+            }
+          >
+            <option value="7">最近 7 天</option>
+            <option value="30">最近 30 天</option>
+            <option value="90">最近 90 天</option>
+          </select>
+        }
+      />
+      {error ? <div className="notice error">{error}</div> : null}
+      <section className="h5-table-card admin-table-card h5-statistics-grid">
+        <StatGroup
+          title={`H5 咨询：${stats?.total ?? 0}`}
+          rows={stats?.pages.map((row) => [row.productTitle, row.count]) ?? []}
+        />
+        <StatGroup
+          title="坐席接待分布"
+          rows={stats?.agents.map((row) => [row.agentName, row.count]) ?? []}
+        />
+        <StatGroup
+          title="Conversion Pool 分布"
+          rows={stats?.pools.map((row) => [row.poolName, row.count]) ?? []}
+        />
+      </section>
+    </>
+  );
+}
+
+function StatGroup({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<[string, number]>;
+}) {
+  return (
+    <div className="h5-stat-group">
+      <h3>{title}</h3>
+      {rows.length ? (
+        rows.map(([label, count]) => (
+          <p key={label}>
+            <span>{label}</span>
+            <strong>{count}</strong>
+          </p>
+        ))
+      ) : (
+        <p>暂无数据</p>
+      )}
     </div>
   );
 }
@@ -468,9 +549,14 @@ function H5SettingsWorkspace({
   onRun: (action: () => Promise<void>, fallback: string) => Promise<void>;
 }) {
   const [origin, setOrigin] = useState(settings.publicOrigin ?? '');
+  const [chatOrigin, setChatOrigin] = useState(settings.chatPublicOrigin ?? '');
   useEffect(
     () => setOrigin(settings.publicOrigin ?? ''),
     [settings.publicOrigin],
+  );
+  useEffect(
+    () => setChatOrigin(settings.chatPublicOrigin ?? ''),
+    [settings.chatPublicOrigin],
   );
   const [saving, setSaving] = useState(false);
   async function submit(event: FormEvent) {
@@ -478,7 +564,7 @@ function H5SettingsWorkspace({
     setSaving(true);
     try {
       await onRun(async () => {
-        onSaved(await updateH5Settings(origin));
+        onSaved(await updateH5Settings(origin, chatOrigin));
       }, '保存 H5 公网域名失败');
     } finally {
       setSaving(false);
@@ -510,6 +596,20 @@ function H5SettingsWorkspace({
               Origin，不接受路径、查询参数或片段。
             </FieldDescription>
           </Field>
+          <Field>
+            <FieldLabel htmlFor="h5-chat-origin">
+              Visitor Chat 公网域名
+            </FieldLabel>
+            <Input
+              id="h5-chat-origin"
+              value={chatOrigin}
+              onChange={(event) => setChatOrigin(event.target.value)}
+              placeholder="https://customer-service.example.com"
+            />
+            <FieldDescription>
+              只接受客服 Worker 的 HTTPS Origin；H5 页面不会直接请求 API。
+            </FieldDescription>
+          </Field>
           <div className="h5-settings-actions">
             <Button type="submit" disabled={saving}>
               {saving ? '保存中…' : '保存公网域名'}
@@ -521,6 +621,11 @@ function H5SettingsWorkspace({
             ) : (
               <span className="h5-secondary-text">尚未配置 H5 公网域名</span>
             )}
+            {settings.chatPublicOrigin ? (
+              <span className="h5-current-setting">
+                Chat：{settings.chatPublicOrigin}
+              </span>
+            ) : null}
           </div>
         </form>
       </section>

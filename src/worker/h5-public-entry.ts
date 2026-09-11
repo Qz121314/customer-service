@@ -35,10 +35,14 @@ h5PublicApp.all('*', async (c) => {
   const slug = normalizeH5Slug(decodePathPart(parts[1]));
   if (!slug) return new Response('Not Found', { status: 404 });
   const row = await c.env.DB.prepare(
-    `SELECT p.id, c.published_asset_id
+    `SELECT p.id, c.published_asset_id, pool.action_type, pool.cta_label,
+       pool.external_url, settings.chat_public_origin
      FROM h5_product_catalog p
      JOIN h5_page_content c
        ON c.site_id = p.site_id AND c.page_id = p.id
+     LEFT JOIN h5_conversion_pools pool
+       ON pool.site_id = p.site_id AND pool.id = p.conversion_pool_id
+     LEFT JOIN h5_settings settings ON settings.site_id = p.site_id
      WHERE p.site_id = ?1
        AND p.slug = ?2
        AND p.is_enabled = 1
@@ -46,7 +50,14 @@ h5PublicApp.all('*', async (c) => {
      LIMIT 1`,
   )
     .bind('default', slug)
-    .first<{ id: string; published_asset_id: string }>();
+    .first<{
+      id: string;
+      published_asset_id: string;
+      action_type: 'chat' | 'external' | null;
+      cta_label: string | null;
+      external_url: string | null;
+      chat_public_origin: string | null;
+    }>();
   if (!row) return new Response('Not Found', { status: 404 });
 
   const object = await c.env.H5_PAGES.get(
@@ -59,11 +70,38 @@ h5PublicApp.all('*', async (c) => {
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy':
-      "sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; media-src https: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "sandbox allow-scripts allow-forms allow-top-navigation-by-user-activation allow-popups allow-popups-to-escape-sandbox; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https:; img-src https: data: blob:; font-src https: data:; media-src https: blob:; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'none'",
   });
-  if (object.size !== undefined)
-    headers.set('Content-Length', String(object.size));
-  return new Response(c.req.method === 'HEAD' ? null : object.body, {
+  if (c.req.method === 'HEAD') {
+    if (object.size !== undefined)
+      headers.set('Content-Length', String(object.size));
+    return new Response(null, { status: 200, headers });
+  }
+  const html =
+    object.body instanceof Uint8Array
+      ? new TextDecoder().decode(object.body)
+      : await new Response(object.body).text();
+  if (!/data-h5-cta/iu.test(html)) {
+    if (object.size !== undefined)
+      headers.set('Content-Length', String(object.size));
+    return new Response(html, { status: 200, headers });
+  }
+  const config = JSON.stringify({
+    action: row.action_type,
+    label: row.cta_label,
+    externalUrl: row.external_url,
+    chatOrigin: row.chat_public_origin,
+    productId: row.id,
+  }).replace(/</gu, '\\u003c');
+  const bootstrap = `<script>window.__H5_CTA__=${config};(()=>{const c=window.__H5_CTA__;for(const e of document.querySelectorAll('[data-h5-cta]')){const l=e.querySelector('[data-h5-cta-label]');if(l&&c.label)l.textContent=c.label;else if(c.label&&!e.textContent.trim())e.textContent=c.label;if(c.label)e.setAttribute('aria-label',c.label);if(c.action==='external'&&c.externalUrl)e.setAttribute('href',c.externalUrl);else if(c.action==='chat'&&c.chatOrigin){const u=new URL('/chat',c.chatOrigin);u.searchParams.set('productId',c.productId);u.searchParams.set('sourceHandoffId',crypto.randomUUID());e.setAttribute('href',u.toString());e.addEventListener('click',()=>{u.searchParams.set('sourceHandoffId',crypto.randomUUID());e.setAttribute('href',u.toString())})}else e.setAttribute('aria-disabled','true');e.addEventListener('click',t=>{if(!e.getAttribute('href')||e.getAttribute('aria-disabled')==='true')t.preventDefault()},{passive:false})}})();</script>`;
+  const injectedHtml = /<\/body>/iu.test(html)
+    ? html.replace(/<\/body>/iu, `${bootstrap}</body>`)
+    : `${html}${bootstrap}`;
+  headers.set(
+    'Content-Length',
+    String(new TextEncoder().encode(injectedHtml).byteLength),
+  );
+  return new Response(injectedHtml, {
     status: 200,
     headers,
   });

@@ -9,6 +9,80 @@ export type TrafficStatisticsRow = {
   count: number;
 };
 
+export type H5TrafficStatistics = {
+  total: number;
+  pages: Array<{ productId: string; productTitle: string; count: number }>;
+  agents: Array<{ agentId: string | null; agentName: string; count: number }>;
+  pools: Array<{ poolId: string | null; poolName: string; count: number }>;
+};
+
+export async function loadH5TrafficStatistics(
+  db: D1Database,
+  from: string,
+  to: string,
+): Promise<H5TrafficStatistics> {
+  const result = await db
+    .prepare(
+      `SELECT product_id, product_title, agent_id, agent_name,
+         h5_conversion_pool_id
+       FROM conversation_traffic_receipts
+       WHERE site_id = 'default'
+         AND product_id LIKE 'h5:product:%'
+         AND business_date >= ?1 AND business_date <= ?2`,
+    )
+    .bind(from, to)
+    .all<{
+      product_id: string;
+      product_title: string | null;
+      agent_id: string | null;
+      agent_name: string | null;
+      h5_conversion_pool_id: string | null;
+    }>();
+  const pages = new Map<
+    string,
+    { productId: string; productTitle: string; count: number }
+  >();
+  const agents = new Map<
+    string,
+    { agentId: string | null; agentName: string; count: number }
+  >();
+  const pools = new Map<
+    string,
+    { poolId: string | null; poolName: string; count: number }
+  >();
+  for (const row of result.results ?? []) {
+    const page = pages.get(row.product_id) ?? {
+      productId: row.product_id,
+      productTitle: row.product_title ?? '未知 H5 页面',
+      count: 0,
+    };
+    page.count += 1;
+    pages.set(row.product_id, page);
+    const agentKey = row.agent_id ?? '__pending__';
+    const agent = agents.get(agentKey) ?? {
+      agentId: row.agent_id,
+      agentName: row.agent_name ?? '待接待',
+      count: 0,
+    };
+    agent.count += 1;
+    agents.set(agentKey, agent);
+    const poolKey = row.h5_conversion_pool_id ?? '__unknown__';
+    const pool = pools.get(poolKey) ?? {
+      poolId: row.h5_conversion_pool_id,
+      poolName: row.h5_conversion_pool_id ?? '历史归因不可用',
+      count: 0,
+    };
+    pool.count += 1;
+    pools.set(poolKey, pool);
+  }
+  return {
+    total: result.results?.length ?? 0,
+    pages: [...pages.values()].sort((a, b) => b.count - a.count),
+    agents: [...agents.values()].sort((a, b) => b.count - a.count),
+    pools: [...pools.values()].sort((a, b) => b.count - a.count),
+  };
+}
+
 type TrafficStatisticsReadPlan =
   | {
       mode: 'raw';

@@ -237,6 +237,7 @@ jobs:
           pnpm exec playwright test \
             test/admin-browser-smoke.spec.mjs \
             test/admin-routing-diagnostics-browser-smoke.spec.mjs \
+            test/h5-final-integration-browser-smoke.spec.mjs \
             --workers=1 \
             --reporter=github
 

@@ -82,6 +82,11 @@ type H5Page = {
   updatedAt: string;
 };
 
+type H5SettingsRow = {
+  public_origin: string | null;
+  chat_public_origin: string | null;
+};
+
 type H5Pool = {
   id: string;
   name: string;
@@ -477,25 +482,33 @@ h5AdminApi.get('/api/admin/h5/settings', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   const row = await loadSettings(c.env.DB);
   return c.json({
-    settings: { publicOrigin: row?.public_origin ?? null },
+    settings: {
+      publicOrigin: row?.public_origin ?? null,
+      chatPublicOrigin: row?.chat_public_origin ?? null,
+    },
   });
 });
 
 h5AdminApi.put('/api/admin/h5/settings', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const body = await readJson<{ publicOrigin?: unknown }>(c.req.raw);
+  const body = await readJson<{
+    publicOrigin?: unknown;
+    chatPublicOrigin?: unknown;
+  }>(c.req.raw);
   const publicOrigin = normalizePublicOrigin(body?.publicOrigin);
+  const chatPublicOrigin = normalizePublicOrigin(body?.chatPublicOrigin);
   if (!publicOrigin) return c.json({ error: 'INVALID_PUBLIC_ORIGIN' }, 400);
   await c.env.DB.prepare(
-    `INSERT INTO h5_settings (site_id, public_origin)
-     VALUES (?1, ?2)
+    `INSERT INTO h5_settings (site_id, public_origin, chat_public_origin)
+     VALUES (?1, ?2, ?3)
      ON CONFLICT(site_id) DO UPDATE SET
        public_origin = excluded.public_origin,
+       chat_public_origin = excluded.chat_public_origin,
        updated_at = CURRENT_TIMESTAMP`,
   )
-    .bind(SITE_ID, publicOrigin)
+    .bind(SITE_ID, publicOrigin, chatPublicOrigin)
     .run();
-  return c.json({ settings: { publicOrigin } });
+  return c.json({ settings: { publicOrigin, chatPublicOrigin } });
 });
 
 async function loadPages(db: D1Database): Promise<H5Page[]> {
@@ -646,10 +659,11 @@ function toPool(row: H5PoolRow): H5Pool {
 async function loadSettings(db: D1Database) {
   return db
     .prepare(
-      'SELECT public_origin, updated_at FROM h5_settings WHERE site_id = ?1',
+      `SELECT public_origin, chat_public_origin, updated_at
+       FROM h5_settings WHERE site_id = ?1`,
     )
     .bind(SITE_ID)
-    .first<{ public_origin: string; updated_at: string }>();
+    .first<H5SettingsRow & { updated_at: string }>();
 }
 
 type PoolInput = {

@@ -205,6 +205,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                   active: h5View === 'settings',
                   onSelect: () => setH5View('settings'),
                 },
+                {
+                  id: 'stats',
+                  label: 'H5 统计',
+                  description: '咨询、坐席与转化池分布',
+                  active: h5View === 'stats',
+                  onSelect: () => setH5View('stats'),
+                },
               ],
             }
           : null;

@@ -59,6 +59,7 @@ export type H5ConversionPool = {
 
 export type H5Settings = {
   publicOrigin: string | null;
+  chatPublicOrigin: string | null;
 };
 
 export type AgentRoutingScope =
@@ -128,6 +129,16 @@ export type TrafficOverviewStats = {
     count: number;
   }>;
   retainedFrom: string;
+};
+
+export type H5TrafficStats = {
+  from: string;
+  to: string;
+  retainedFrom: string;
+  total: number;
+  pages: Array<{ productId: string; productTitle: string; count: number }>;
+  agents: Array<{ agentId: string | null; agentName: string; count: number }>;
+  pools: Array<{ poolId: string | null; poolName: string; count: number }>;
 };
 
 export type AdminTrafficRealtimeEvent = {
@@ -345,6 +356,7 @@ const errorMessages: Record<string, string> = {
   H5_HTML_PERSIST_FAILED: 'HTML 草稿保存失败，请重试',
   H5_NO_DRAFT: '当前页面没有可发布的 HTML 草稿',
   H5_DRAFT_NOT_FOUND: 'HTML 草稿对象不存在，请重新上传',
+  NO_AGENT_AVAILABLE: '当前暂无可接待客服，请稍后再试。',
 };
 
 export async function getAdminSession(): Promise<AdminSessionState> {
@@ -567,10 +579,14 @@ export async function getH5Settings(): Promise<H5Settings> {
 
 export async function updateH5Settings(
   publicOrigin: string,
+  chatPublicOrigin: string,
 ): Promise<H5Settings> {
   const response = await request<{ settings: H5Settings }>(
     '/api/admin/h5/settings',
-    { method: 'PUT', body: JSON.stringify({ publicOrigin }) },
+    {
+      method: 'PUT',
+      body: JSON.stringify({ publicOrigin, chatPublicOrigin }),
+    },
   );
   return response.settings;
 }
@@ -581,6 +597,15 @@ export async function getTrafficOverviewStats(
 ): Promise<TrafficOverviewStats> {
   return request(
     `/api/admin/traffic-stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export async function getH5TrafficStats(
+  from: string,
+  to: string,
+): Promise<H5TrafficStats> {
+  return request(
+    `/api/admin/h5/stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
   );
 }
 
@@ -692,6 +717,85 @@ export async function getConversation(
   const suffix = parameters.toString();
   return request(
     `/api/agent/conversations/${encodeURIComponent(id)}/messages${suffix ? `?${suffix}` : ''}`,
+  );
+}
+
+export async function startVisitorConversation(input: {
+  visitorId: string;
+  visitorToken: string | null;
+  sourceHandoffId: string;
+  productId: string;
+}): Promise<{
+  conversation: ConversationDetail['conversation'];
+  visitorToken?: string;
+}> {
+  const response = await request<{
+    conversation: ConversationDetail['conversation'];
+    visitorToken?: string;
+  }>('/client/v1/conversations', {
+    method: 'POST',
+    body: JSON.stringify({
+      visitorId: input.visitorId,
+      ...(input.visitorToken ? { visitorToken: input.visitorToken } : {}),
+      sourceHandoffId: input.sourceHandoffId,
+      product: { id: input.productId },
+    }),
+  });
+  return response;
+}
+
+export async function getVisitorConversation(
+  id: string,
+  visitorId: string,
+  visitorToken: string,
+): Promise<ConversationDetail> {
+  return request(
+    `/client/v1/conversations/${encodeURIComponent(id)}?visitorId=${encodeURIComponent(visitorId)}&visitorToken=${encodeURIComponent(visitorToken)}`,
+  );
+}
+
+export async function sendVisitorMessage(
+  id: string,
+  visitorId: string,
+  visitorToken: string,
+  body: string,
+  clientMessageId: string,
+): Promise<Message> {
+  const response = await request<{ message: Message }>(
+    `/client/v1/conversations/${encodeURIComponent(id)}/messages`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        visitorId,
+        visitorToken,
+        body,
+        clientMessageId,
+      }),
+    },
+  );
+  return response.message;
+}
+
+export async function markVisitorConversationRead(
+  id: string,
+  visitorId: string,
+  visitorToken: string,
+  lastMessageId: string | null,
+): Promise<void> {
+  await request(`/client/v1/conversations/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+    body: JSON.stringify({ visitorId, visitorToken, lastMessageId }),
+  });
+}
+
+export function openVisitorConversationSocket(
+  id: string,
+  visitorId: string,
+  visitorToken: string,
+): WebSocket {
+  const query = `?visitorId=${encodeURIComponent(visitorId)}&visitorToken=${encodeURIComponent(visitorToken)}`;
+  return openSocket(
+    `/client/v1/conversations/${encodeURIComponent(id)}/realtime${query}`,
   );
 }
 
@@ -813,11 +917,18 @@ async function request<T = { ok: boolean }>(
     },
   });
   const body = (await response.json().catch(() => ({}))) as T & {
-    error?: string;
+    error?: string | { code?: string; message?: string };
+    message?: string;
   };
   if (!response.ok) {
-    const code = body.error ?? 'REQUEST_FAILED';
-    throw new Error(errorMessages[code] ?? code);
+    const errorBody = body.error;
+    const code =
+      typeof errorBody === 'string'
+        ? errorBody
+        : (errorBody?.code ?? 'REQUEST_FAILED');
+    const errorMessage =
+      typeof errorBody === 'object' ? errorBody.message : body.message;
+    throw new Error(errorMessage ?? errorMessages[code] ?? code);
   }
   return body;
 }

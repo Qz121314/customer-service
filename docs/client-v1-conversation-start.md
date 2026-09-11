@@ -37,6 +37,8 @@ The product ID is resolved by namespace: normal IDs use the Site-synchronized `p
 
 H5 Product starts use this same endpoint and therefore the same routing scopes, two-hour reuse/affinity, daily and traffic quota, strict site-global round robin, and `NO_AGENT_AVAILABLE` cleanup semantics as Site Product starts. The browser CTA Runtime and visitor Chat UI are not part of this contract.
 
+The final H5 CTA runtime navigates to the configured Customer Service public origin at `/chat` with only `productId` and a UUID v4 `sourceHandoffId`. The `/chat` surface owns stable visitor identity in browser storage, calls this endpoint once per launch, and uses the existing conversation detail, message, read and realtime endpoints. It never treats title, agent, pool, quota or product href from the URL as authoritative.
+
 `sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing conversation and must not create a second conversation, traffic receipt, quota charge or greeting.
 
 ## Optional legacy body compatibility
