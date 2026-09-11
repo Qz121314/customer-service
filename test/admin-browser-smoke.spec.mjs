@@ -394,6 +394,52 @@ test('context navigation stays inside the primary sidebar across breakpoints', a
   await capture(page, '1024x768-tablet-context-navigation');
 });
 
+test('H5 control plane supports navigation, settings, pools and page creation', async ({
+  page,
+}) => {
+  await loginAdmin(page);
+  await page.goto(url('/'));
+  const slug = `h5-ui-${Date.now().toString(36)}`;
+
+  await page.getByRole('button', { name: 'H5', exact: true }).click();
+  const context = page.locator('.admin-context-navigation');
+  await expect(context).toBeVisible();
+  await expect(context.getByRole('button', { name: /H5 页面/u })).toBeVisible();
+  await expect(context.getByRole('button', { name: /转化池/u })).toBeVisible();
+  await expect(context.getByRole('button', { name: /H5 设置/u })).toBeVisible();
+
+  await context.getByRole('button', { name: /H5 设置/u }).click();
+  await page.getByLabel('H5 公网域名').fill('https://h5.example.com/');
+  await page.getByRole('button', { name: '保存公网域名' }).click();
+  await expect(
+    page.getByText('当前：https://h5.example.com', { exact: true }),
+  ).toBeVisible();
+
+  await context.getByRole('button', { name: /转化池/u }).click();
+  await page.getByRole('button', { name: '新建转化池' }).click();
+  const poolDialog = page.getByRole('dialog', { name: '新建转化池' });
+  await poolDialog.getByLabel('名称').fill('Smoke Chat Pool');
+  await poolDialog.getByLabel('CTA 文案').fill('立即咨询');
+  await poolDialog.getByRole('button', { name: '保存' }).click();
+  await expect(
+    page.getByText('Smoke Chat Pool', { exact: true }),
+  ).toBeVisible();
+
+  await context.getByRole('button', { name: /H5 页面/u }).click();
+  await page.getByRole('button', { name: '新建 H5 页面' }).click();
+  const pageDialog = page.getByRole('dialog', { name: '新建 H5 页面' });
+  await pageDialog.getByLabel('名称 / Title').fill('Smoke H5 Page');
+  await pageDialog.getByLabel('Slug').fill(slug);
+  await pageDialog
+    .getByLabel('Conversion Pool')
+    .selectOption({ label: 'Smoke Chat Pool' });
+  await pageDialog.getByRole('button', { name: '保存' }).click();
+  const row = page.getByRole('row').filter({ hasText: 'Smoke H5 Page' });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText(`https://h5.example.com/${slug}/`);
+  await expectNoHorizontalOverflow(page);
+});
+
 test('agent directory lets the document own long-list vertical scrolling', async ({
   page,
 }) => {

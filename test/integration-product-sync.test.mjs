@@ -132,10 +132,10 @@ test('Site product sync leaves the independent H5 catalog untouched', async () =
     .prepare(
       `INSERT INTO h5_product_catalog (
          site_id, id, title, href, section_id, section_name,
-         category_id, category_name, is_enabled
+         category_id, category_name, slug, is_enabled
        ) VALUES ('default', 'h5:product:landing-a', 'Landing A',
          'https://h5.example/landing-a', 'h5:section:pages', 'H5 页面',
-         'h5:category:landing', 'Landing', 1)`,
+         'h5:category:landing', 'Landing', 'landing-a', 1)`,
     )
     .run();
 
