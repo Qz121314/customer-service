@@ -442,14 +442,14 @@ test('admin preserves mixed Site and H5 section and product scopes across save a
   database.exec(`
     INSERT INTO product_catalog (
       site_id, id, title, section_id, section_name,
-      category_id, category_name, slug, is_enabled
+      category_id, category_name, is_enabled
     ) VALUES (
       'default', 'site:product:escort-a', 'Escort A',
       'site:section:escorts', 'ESCORTS', 'site:category:vip', 'VIP', 1
     );
     INSERT INTO h5_product_catalog (
       site_id, id, title, section_id, section_name,
-      category_id, category_name, is_enabled
+      category_id, category_name, slug, is_enabled
     ) VALUES
       ('default', 'h5:product:landing-a', 'Landing A',
        'h5:section:pages', 'H5 页面', 'h5:category:landing', 'Landing', 'landing-a', 1),
