@@ -15,9 +15,11 @@ import {
   getH5ConversionPools,
   getH5Pages,
   getH5Settings,
+  publishH5Page,
   type H5ConversionPool,
   type H5Page,
   type H5Settings,
+  uploadH5PageHtml,
   updateH5ConversionPool,
   updateH5Page,
   updateH5Settings,
@@ -111,6 +113,7 @@ function H5PagesWorkspace({
   onRun: (action: () => Promise<void>, fallback: string) => Promise<void>;
 }) {
   const [editor, setEditor] = useState<EditorState | null>(null);
+  const [htmlEditor, setHtmlEditor] = useState<H5Page | null>(null);
   const enabledPools = useMemo(
     () => pools.filter((pool) => pool.isEnabled),
     [pools],
@@ -147,6 +150,7 @@ function H5PagesWorkspace({
                   <th>Slug</th>
                   <th>转化池</th>
                   <th>状态</th>
+                  <th>HTML 内容</th>
                   <th>Public URL</th>
                   <th>更新时间</th>
                   <th aria-label="操作" />
@@ -174,6 +178,13 @@ function H5PagesWorkspace({
                       </span>
                     </td>
                     <td>
+                      <span
+                        className={`h5-status ${page.contentStatus === 'published' ? 'is-enabled' : ''}`}
+                      >
+                        {contentStatusLabel(page.contentStatus)}
+                      </span>
+                    </td>
+                    <td>
                       <div className="h5-url-cell">
                         <span>{page.publicUrl ?? '未配置 H5 公网域名'}</span>
                         {page.publicUrl ? (
@@ -194,6 +205,65 @@ function H5PagesWorkspace({
                     <td>{formatDate(page.updatedAt)}</td>
                     <td>
                       <div className="h5-row-actions">
+                        <button
+                          type="button"
+                          className="table-action"
+                          onClick={() => setHtmlEditor(page)}
+                        >
+                          {page.contentStatus === 'unuploaded'
+                            ? '上传 HTML'
+                            : '替换 HTML'}
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action"
+                          disabled={
+                            page.contentStatus !== 'pending' &&
+                            page.contentStatus !== 'updated'
+                          }
+                          onClick={() =>
+                            void onRun(async () => {
+                              await publishH5Page(page.id);
+                            }, '发布 H5 页面失败')
+                          }
+                        >
+                          发布
+                        </button>
+                        <a
+                          className={`table-action ${
+                            page.publicUrl &&
+                            page.isEnabled &&
+                            page.contentStatus === 'published'
+                              ? ''
+                              : 'is-disabled'
+                          }`}
+                          href={
+                            page.publicUrl &&
+                            page.isEnabled &&
+                            page.contentStatus === 'published'
+                              ? page.publicUrl
+                              : undefined
+                          }
+                          target="_blank"
+                          rel="noreferrer"
+                          aria-disabled={
+                            !(
+                              page.publicUrl &&
+                              page.isEnabled &&
+                              page.contentStatus === 'published'
+                            )
+                          }
+                          onClick={(event) => {
+                            if (
+                              !page.publicUrl ||
+                              !page.isEnabled ||
+                              page.contentStatus !== 'published'
+                            )
+                              event.preventDefault();
+                          }}
+                        >
+                          打开公网 URL
+                        </a>
                         <button
                           type="button"
                           className="table-action"
@@ -259,6 +329,13 @@ function H5PagesWorkspace({
           }
           publicOrigin={publicOrigin}
           onClose={() => setEditor(null)}
+          onRun={onRun}
+        />
+      ) : null}
+      {htmlEditor ? (
+        <H5HtmlEditor
+          page={htmlEditor}
+          onClose={() => setHtmlEditor(null)}
           onRun={onRun}
         />
       ) : null}
@@ -594,6 +671,65 @@ function H5PageEditor({
   );
 }
 
+function H5HtmlEditor({
+  page,
+  onClose,
+  onRun,
+}: {
+  page: H5Page;
+  onClose: () => void;
+  onRun: (action: () => Promise<void>, fallback: string) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!file) return;
+    setSaving(true);
+    try {
+      await onRun(async () => {
+        await uploadH5PageHtml(page.id, await file.text());
+        onClose();
+      }, '上传 H5 HTML 失败');
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <Modal
+      title={page.contentStatus === 'unuploaded' ? '上传 HTML' : '替换 HTML'}
+      onClose={onClose}
+    >
+      <form className="h5-editor-form" onSubmit={(event) => void submit(event)}>
+        <Field>
+          <FieldLabel htmlFor="h5-page-html">HTML 文件</FieldLabel>
+          <Input
+            id="h5-page-html"
+            type="file"
+            accept=".html,text/html"
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            required
+          />
+          <FieldDescription>
+            只接受单个 UTF-8 HTML 文件，最大 5 MB；不允许外部脚本和追踪 SDK。
+          </FieldDescription>
+          {file ? (
+            <span className="h5-secondary-text">已选择：{file.name}</span>
+          ) : null}
+        </Field>
+        <div className="h5-modal-actions">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            取消
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? '上传中…' : '上传 HTML'}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function H5PoolEditor({
   editor,
   onClose,
@@ -780,6 +916,16 @@ function newPageEditor(): EditorState {
     isEnabled: true,
   };
 }
+
+function contentStatusLabel(status: H5Page['contentStatus']): string {
+  return {
+    unuploaded: '未上传',
+    pending: '待发布',
+    published: '已发布',
+    updated: '有未发布更新',
+  }[status];
+}
+
 function editPageEditor(page: H5Page): EditorState {
   return {
     id: page.id,

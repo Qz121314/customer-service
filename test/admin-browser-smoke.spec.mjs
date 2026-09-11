@@ -437,6 +437,17 @@ test('H5 control plane supports navigation, settings, pools and page creation', 
   const row = page.getByRole('row').filter({ hasText: 'Smoke H5 Page' });
   await expect(row).toBeVisible();
   await expect(row).toContainText(`https://h5.example.com/${slug}/`);
+  await row.getByRole('button', { name: '上传 HTML' }).click();
+  const htmlDialog = page.getByRole('dialog', { name: '上传 HTML' });
+  await htmlDialog.getByLabel('HTML 文件').setInputFiles({
+    name: 'index.html',
+    mimeType: 'text/html',
+    buffer: Buffer.from('<!doctype html><html><body>Smoke H5</body></html>'),
+  });
+  await htmlDialog.getByRole('button', { name: '上传 HTML' }).click();
+  await expect(row).toContainText('待发布');
+  await row.getByRole('button', { name: '发布' }).click();
+  await expect(row).toContainText('已发布');
   await expectNoHorizontalOverflow(page);
 });
 
