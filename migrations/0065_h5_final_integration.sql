@@ -5,16 +5,6 @@ ALTER TABLE h5_settings ADD COLUMN chat_public_origin TEXT;
 ALTER TABLE conversation_traffic_receipts
   ADD COLUMN h5_conversion_pool_id TEXT;
 
-UPDATE conversation_traffic_receipts
-SET h5_conversion_pool_id = (
-  SELECT p.conversion_pool_id
-  FROM h5_product_catalog p
-  WHERE p.site_id = conversation_traffic_receipts.site_id
-    AND p.id = conversation_traffic_receipts.product_id
-    AND p.id LIKE 'h5:product:%'
-)
-WHERE product_id LIKE 'h5:product:%';
-
 DROP TRIGGER IF EXISTS trg_conversation_start_traffic_receipt;
 CREATE TRIGGER trg_conversation_start_traffic_receipt
 AFTER INSERT ON conversations
