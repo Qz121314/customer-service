@@ -20,6 +20,7 @@ export type ProductCatalogItem = {
   categoryId: string | null;
   categoryName: string | null;
   isEnabled: boolean;
+  sourceType: 'site' | 'h5';
 };
 
 export type AgentRoutingScope =

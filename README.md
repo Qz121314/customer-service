@@ -30,7 +30,7 @@ Site / 产品页
 
 `site` 只保存客服系统公网 URL 和验证 Token，并批量同步产品目录。实际访客咨询直接访问本项目；Site 后台不代理聊天，也不参与坐席选择。
 
-产品目录以 Site 的 `/integration/v1/verify` 全量同步结果为权威。访客请求只提交 `product.id`；客服系统从 `product_catalog` 读取标题、链接、图片、分区和分类，不能通过访客请求覆盖目录或重新启用已禁用产品。
+产品目录以 Site 的 `/integration/v1/verify` 全量同步结果为权威。访客请求只提交 `product.id`；客服系统从 `product_catalog` 读取标题、链接、图片、分区和分类，不能通过访客请求覆盖目录或重新启用已禁用产品。H5 Product 使用 Customer Service 内部独立的 `h5_product_catalog`，不写入 Site 管理的 `product_catalog`。
 
 ### 明确不做
 
@@ -58,7 +58,7 @@ Site / 产品页
 
 ### 2.2 负责范围如何命中
 
-正式路由表为 `agent_routing_scopes`。
+正式路由表为 `agent_routing_scopes`。Site Product 与 H5 Product 共用这张表、现有 section/category/product 三种 Scope 类型和同一个 site-global strict round robin；H5 不建立第二套路由系统。H5 Worker、页面发布、H5 Chat 和 Conversation Start endpoint 尚未实现。
 
 支持三种范围：
 

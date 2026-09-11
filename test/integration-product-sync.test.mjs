@@ -104,6 +104,41 @@ test('product sync rejects relative detail URLs', async () => {
   database.close();
 });
 
+test('Site product sync leaves the independent H5 catalog untouched', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  database
+    .prepare(
+      `INSERT INTO h5_product_catalog (
+         site_id, id, title, href, section_id, section_name,
+         category_id, category_name, is_enabled
+       ) VALUES ('default', 'h5:product:landing-a', 'Landing A',
+         'https://h5.example/landing-a', 'h5:section:pages', 'H5 页面',
+         'h5:category:landing', 'Landing', 1)`,
+    )
+    .run();
+
+  const response = await syncRequest(d1(database), [product(1)]);
+  assert.equal(response.status, 200);
+  assert.deepEqual(
+    {
+      ...database
+        .prepare(
+          `SELECT id, title, is_enabled
+         FROM h5_product_catalog
+         WHERE site_id = 'default'`,
+        )
+        .get(),
+    },
+    {
+      id: 'h5:product:landing-a',
+      title: 'Landing A',
+      is_enabled: 1,
+    },
+  );
+  database.close();
+});
+
 function scalar(database, sql, column) {
   return database.prepare(sql).get()[column];
 }
