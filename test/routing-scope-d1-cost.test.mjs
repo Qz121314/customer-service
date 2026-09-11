@@ -13,7 +13,7 @@ test('routing scope validation checks only requested identifiers', () => {
   const migration = source(
     '../migrations/0026_product_catalog_scope_index.sql',
   );
-  const h5Migration = source('../migrations/0063_h5_product_catalog.sql');
+  const h5Migration = source('../migrations/0062_h5_product_catalog.sql');
 
   const validations = [
     topLevelDeclaration(admin, 'async function allEnabledSectionsExist('),
