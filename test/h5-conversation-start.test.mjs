@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
-import { fileURLToPath, URL } from 'node:url';
 import test from 'node:test';
-import { clientApi } from '../src/worker/client-api.ts';
+import {
+  applyMigrations,
+  clientApi,
+  DatabaseSync,
+} from './helpers/performance-runtime.mjs';
 
 const PRODUCT_ID = 'h5:product:conversation-start';
 const POOL_ID = 'h5:pool:conversation-start';
@@ -16,15 +17,6 @@ const H5_PRODUCT = {
   categoryName: 'Landing',
   slug: 'conversation-start',
 };
-
-function applyMigrations(database) {
-  const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
-  for (const name of readdirSync(directory)
-    .filter((value) => /^\d+.*\.sql$/u.test(value))
-    .sort()) {
-    database.exec(readFileSync(`${directory}/${name}`, 'utf8'));
-  }
-}
 
 function d1(database, prepared = []) {
   function statement(sql) {
