@@ -33,7 +33,10 @@ export type H5AdminView = 'pages' | 'pools' | 'settings';
 export function H5ControlPlanePage({ view }: { view: H5AdminView }) {
   const [pages, setPages] = useState<H5Page[]>([]);
   const [pools, setPools] = useState<H5ConversionPool[]>([]);
-  const [settings, setSettings] = useState<H5Settings>({ publicOrigin: null });
+  const [settings, setSettings] = useState<H5Settings>({
+    publicOrigin: null,
+    chatPublicOrigin: null,
+  });
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
 
@@ -468,9 +471,14 @@ function H5SettingsWorkspace({
   onRun: (action: () => Promise<void>, fallback: string) => Promise<void>;
 }) {
   const [origin, setOrigin] = useState(settings.publicOrigin ?? '');
+  const [chatOrigin, setChatOrigin] = useState(settings.chatPublicOrigin ?? '');
   useEffect(
     () => setOrigin(settings.publicOrigin ?? ''),
     [settings.publicOrigin],
+  );
+  useEffect(
+    () => setChatOrigin(settings.chatPublicOrigin ?? ''),
+    [settings.chatPublicOrigin],
   );
   const [saving, setSaving] = useState(false);
   async function submit(event: FormEvent) {
@@ -478,7 +486,7 @@ function H5SettingsWorkspace({
     setSaving(true);
     try {
       await onRun(async () => {
-        onSaved(await updateH5Settings(origin));
+        onSaved(await updateH5Settings(origin, chatOrigin));
       }, '保存 H5 公网域名失败');
     } finally {
       setSaving(false);
@@ -510,6 +518,20 @@ function H5SettingsWorkspace({
               Origin，不接受路径、查询参数或片段。
             </FieldDescription>
           </Field>
+          <Field>
+            <FieldLabel htmlFor="h5-chat-origin">
+              Visitor Chat 公网域名
+            </FieldLabel>
+            <Input
+              id="h5-chat-origin"
+              value={chatOrigin}
+              onChange={(event) => setChatOrigin(event.target.value)}
+              placeholder="https://customer-service.example.com"
+            />
+            <FieldDescription>
+              只接受客服 Worker 的 HTTPS Origin；H5 页面不会直接请求 API。
+            </FieldDescription>
+          </Field>
           <div className="h5-settings-actions">
             <Button type="submit" disabled={saving}>
               {saving ? '保存中…' : '保存公网域名'}
@@ -521,6 +543,11 @@ function H5SettingsWorkspace({
             ) : (
               <span className="h5-secondary-text">尚未配置 H5 公网域名</span>
             )}
+            {settings.chatPublicOrigin ? (
+              <span className="h5-current-setting">
+                Chat：{settings.chatPublicOrigin}
+              </span>
+            ) : null}
           </div>
         </form>
       </section>
@@ -694,6 +721,9 @@ function H5HtmlEditor({
           />
           <FieldDescription>
             只接受单个 UTF-8 HTML 文件，最大 5 MB；不允许外部脚本和追踪 SDK。
+            CTA 请在 HTML 中加入：
+            <code>&lt;a data-h5-cta&gt;立即咨询&lt;/a&gt;</code>；动作和文案由
+            Chat Conversion Pool 控制，无需写 API 或客服链接。
           </FieldDescription>
           {file ? (
             <span className="h5-secondary-text">已选择：{file.name}</span>

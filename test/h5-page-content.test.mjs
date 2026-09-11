@@ -321,6 +321,65 @@ test('H5 HTML upload, publish, replacement and public runtime lifecycle', async 
   database.close();
 });
 
+test('H5 public runtime binds a published Chat CTA to the existing chat entry', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  const h5Pages = new FakeR2();
+  database
+    .prepare(
+      `INSERT INTO h5_settings (site_id, public_origin, chat_public_origin)
+       VALUES ('default', 'https://h5.example.com', 'https://customer.example.com')`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO h5_conversion_pools (
+         site_id, id, name, is_enabled, action_type, cta_label
+       ) VALUES ('default', 'h5:pool:cta', 'Sales Chat', 1, 'chat', '立即咨询')`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO h5_product_catalog (
+         site_id, id, title, section_id, section_name, slug,
+         conversion_pool_id, is_enabled
+       ) VALUES ('default', 'h5:product:cta', 'CTA Page', 'h5:section:pages',
+         'H5 页面', 'cta-page', 'h5:pool:cta', 1)`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO h5_page_content (
+         site_id, page_id, published_asset_id, published_byte_size, published_at
+       ) VALUES ('default', 'h5:product:cta', 'asset-cta', 54, CURRENT_TIMESTAMP)`,
+    )
+    .run();
+  await h5Pages.put(
+    h5PageAssetKey('default', 'h5:product:cta', 'asset-cta'),
+    '<html><body><a data-h5-cta><span data-h5-cta-label></span></a></body></html>',
+  );
+
+  const response = await h5PublicApp.request(
+    '/cta-page/',
+    {},
+    {
+      DB: d1(database),
+      H5_PAGES: h5Pages,
+    },
+  );
+  const html = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(html, /data-h5-cta/u);
+  assert.match(html, /chatOrigin":"https:\/\/customer\.example\.com"/u);
+  assert.match(html, /new URL\('\/chat',c\.chatOrigin\)/u);
+  assert.match(html, /productId',c\.productId/u);
+  assert.match(
+    response.headers.get('content-security-policy'),
+    /allow-top-navigation-by-user-activation/u,
+  );
+  database.close();
+});
+
 test('H5 HTML validation, slug changes, duplicate isolation and delete cleanup', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);
