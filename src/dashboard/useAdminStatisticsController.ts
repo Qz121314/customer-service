@@ -13,9 +13,13 @@ import {
   trafficRangePeriod,
   type TrafficRange,
 } from './traffic-statistics-range';
+import {
+  readTrafficStatsCache,
+  writeTrafficStatsCache,
+} from './traffic-statistics-cache';
 
 export function useAdminStatisticsController(section: AdminSection) {
-  const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
+  const [trafficRange, setTrafficRange] = useState<TrafficRange>('3d');
   const [trafficStats, setTrafficStats] = useState<TrafficOverviewStats | null>(
     null,
   );
@@ -25,6 +29,7 @@ export function useAdminStatisticsController(section: AdminSection) {
   const [statsBusy, setStatsBusy] = useState(false);
   const [statsError, setStatsError] = useState('');
   const statsRef = useRef<TrafficOverviewStats | null>(null);
+  const requestIdRef = useRef(0);
   const appliedEventIdsRef = useRef(new Set<string>());
   const trafficPeriod = useMemo(
     () => trafficRangePeriod(trafficRange),
@@ -33,6 +38,7 @@ export function useAdminStatisticsController(section: AdminSection) {
 
   const loadStats = useCallback(
     async (activeRef?: { current: boolean }) => {
+      const requestId = ++requestIdRef.current;
       setStatsError('');
       setStatsBusy(true);
       try {
@@ -40,17 +46,29 @@ export function useAdminStatisticsController(section: AdminSection) {
           trafficPeriod.from,
           trafficPeriod.to,
         );
-        if (!activeRef || activeRef.current) {
+        if (
+          (!activeRef || activeRef.current) &&
+          requestId === requestIdRef.current
+        ) {
           statsRef.current = result;
           setTrafficStats(result);
+          writeTrafficStatsCache(result);
         }
       } catch (reason) {
-        if (!activeRef || activeRef.current) {
+        if (
+          (!activeRef || activeRef.current) &&
+          requestId === requestIdRef.current
+        ) {
           setStatsError(message(reason, '无法加载流量统计'));
         }
         throw reason;
       } finally {
-        if (!activeRef || activeRef.current) setStatsBusy(false);
+        if (
+          (!activeRef || activeRef.current) &&
+          requestId === requestIdRef.current
+        ) {
+          setStatsBusy(false);
+        }
       }
     },
     [trafficPeriod.from, trafficPeriod.to],
@@ -60,11 +78,17 @@ export function useAdminStatisticsController(section: AdminSection) {
     if (section !== 'dashboard') return;
     const active = { current: true };
     appliedEventIdsRef.current.clear();
+    const cached = readTrafficStatsCache(trafficPeriod.from, trafficPeriod.to);
+    if (cached) {
+      statsRef.current = cached;
+      setTrafficStats(cached);
+      setStatsBusy(false);
+    }
     void loadStats(active).catch(() => undefined);
     return () => {
       active.current = false;
     };
-  }, [loadStats, section]);
+  }, [loadStats, section, trafficPeriod.from, trafficPeriod.to]);
 
   useEffect(() => {
     if (section !== 'dashboard' || trafficRange !== 'today') return;
@@ -148,7 +172,6 @@ export function useAdminStatisticsController(section: AdminSection) {
       error: statsError,
       onClearError: () => setStatsError(''),
       onRangeChange: (range: TrafficRange) => {
-        setStatsBusy(true);
         setTrafficRange(range);
       },
     },

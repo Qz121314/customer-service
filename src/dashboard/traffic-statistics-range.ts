@@ -1,4 +1,5 @@
-export type TrafficRangePreset = 'today' | 'yesterday' | '7d' | '30d' | '90d';
+export type TrafficRangePreset =
+  'today' | 'yesterday' | '3d' | '7d' | '30d' | '90d';
 
 export type TrafficRange = TrafficRangePreset | `custom:${string}:${string}`;
 
@@ -64,6 +65,14 @@ export function trafficRangePeriod(
     return { from: yesterday, to: yesterday };
   }
   const days =
-    range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : 1;
+    range === '3d'
+      ? 3
+      : range === '7d'
+        ? 7
+        : range === '30d'
+          ? 30
+          : range === '90d'
+            ? 90
+            : 1;
   return { from: shiftReportingDate(today, -(days - 1)), to: today };
 }
