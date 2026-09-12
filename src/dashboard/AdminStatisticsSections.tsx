@@ -11,6 +11,7 @@ import {
 const RANGE_OPTIONS: Array<{ value: TrafficRangePreset; label: string }> = [
   { value: 'today', label: '今日' },
   { value: 'yesterday', label: '昨日' },
+  { value: '3d', label: '近 3 天' },
   { value: '7d', label: '近 7 天' },
   { value: '30d', label: '近 30 天' },
   { value: '90d', label: '近 90 天' },
