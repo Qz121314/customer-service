@@ -258,3 +258,6 @@ function formatShare(value: number, total: number): string {
 }
 
 function formatPeriod(from: string, to: string): string {
+  if (from === to) return from;
+  return `${from} — ${to}`;
+}
