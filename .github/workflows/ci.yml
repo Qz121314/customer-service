@@ -415,7 +415,6 @@ jobs:
             echo '- Optional: attach a Worker custom domain; keep the private chat-media R2 bucket without a public domain'
           } >> "$GITHUB_STEP_SUMMARY"
 
-
   build-windows-release:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
