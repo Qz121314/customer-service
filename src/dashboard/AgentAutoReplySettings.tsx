@@ -373,20 +373,42 @@ export function AgentAutoReplySettingsModal({
                   <div className="agent-greeting-cta-item" key={cta.id}>
                     <div className="agent-greeting-cta-item-head">
                       <strong>CTA {index + 1}</strong>
-                      <button
-                        type="button"
-                        aria-label={`删除 CTA ${index + 1}`}
-                        onClick={() =>
-                          setSettings((current) => ({
-                            ...current,
-                            ctas: current.ctas.filter(
-                              (item) => item.id !== cta.id,
-                            ),
-                          }))
-                        }
-                      >
-                        <UiIcon name="close" />
-                      </button>
+                      <div className="agent-greeting-cta-item-actions">
+                        <label className="agent-greeting-cta-enabled">
+                          <input
+                            type="checkbox"
+                            checked={cta.enabled}
+                            onChange={(event) =>
+                              setSettings((current) => ({
+                                ...current,
+                                ctas: current.ctas.map((item) =>
+                                  item.id === cta.id
+                                    ? {
+                                        ...item,
+                                        enabled: event.target.checked,
+                                      }
+                                    : item,
+                                ),
+                              }))
+                            }
+                          />
+                          对访客显示
+                        </label>
+                        <button
+                          type="button"
+                          aria-label={`删除 CTA ${index + 1}`}
+                          onClick={() =>
+                            setSettings((current) => ({
+                              ...current,
+                              ctas: current.ctas.filter(
+                                (item) => item.id !== cta.id,
+                              ),
+                            }))
+                          }
+                        >
+                          <UiIcon name="close" />
+                        </button>
+                      </div>
                     </div>
                     <input
                       value={cta.label}
@@ -421,23 +443,6 @@ export function AgentAutoReplySettingsModal({
                         }))
                       }
                     />
-                    <label className="agent-greeting-cta-enabled">
-                      <input
-                        type="checkbox"
-                        checked={cta.enabled}
-                        onChange={(event) =>
-                          setSettings((current) => ({
-                            ...current,
-                            ctas: current.ctas.map((item) =>
-                              item.id === cta.id
-                                ? { ...item, enabled: event.target.checked }
-                                : item,
-                            ),
-                          }))
-                        }
-                      />
-                      对访客显示
-                    </label>
                   </div>
                 ))}
                 {settings.ctas.length === 0 ? (
