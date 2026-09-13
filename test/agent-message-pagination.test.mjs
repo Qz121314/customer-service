@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mergeAgentConversationPage } from '../src/dashboard/dashboard-runtime.ts';
+import {
+  mergeAgentConversationPage,
+  mergeAgentMessage,
+} from '../src/dashboard/dashboard-runtime.ts';
 
 function message(id, createdAt, readByVisitorAt = null) {
   return {
@@ -101,4 +104,30 @@ test('after-cursor recovery keeps the existing backward-history cursor', () => {
     ['message-2', 'message-3'],
   );
   assert.deepEqual(merged.page, current.page);
+});
+
+test('realtime messages merge by id and stay chronologically ordered', () => {
+  const current = {
+    conversation: { id: 'conversation-1', status: 'pending' },
+    messages: [message('message-2', '2026-01-01T00:00:02.000Z')],
+    media: [],
+    readState: [],
+    page: { hasMoreBefore: false, before: null },
+  };
+
+  const added = mergeAgentMessage(
+    current,
+    message('message-1', '2026-01-01T00:00:01.000Z'),
+  );
+  const replaced = mergeAgentMessage(
+    added,
+    message('message-2', '2026-01-01T00:00:02.000Z'),
+  );
+
+  assert.deepEqual(
+    replaced.messages.map((item) => item.id),
+    ['message-1', 'message-2'],
+  );
+  assert.equal(replaced.messages.length, 2);
+  assert.equal(replaced.messages[1].body, 'message-2');
 });
