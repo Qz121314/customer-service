@@ -219,6 +219,11 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
     return error(c, identity.status, identity.code, identity.message);
 
   const before = c.req.query('before')?.trim() || null;
+  const afterId = c.req.query('afterId')?.trim() || null;
+  const afterCreatedAt = c.req.query('afterCreatedAt')?.trim() || null;
+  if ((afterId && !afterCreatedAt) || (!afterId && afterCreatedAt)) {
+    return error(c, 400, 'INVALID_MESSAGE_CURSOR', 'Invalid message cursor.');
+  }
   const limit = clampLimit(c.req.query('limit'));
   return c.json({
     conversation: await conversationDetail(
@@ -226,6 +231,9 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
       identity.conversation,
       limit,
       before,
+      afterId && afterCreatedAt
+        ? { id: afterId, createdAt: afterCreatedAt }
+        : null,
     ),
   });
 });
@@ -2201,6 +2209,7 @@ async function conversationDetail(
   conversation: ConversationRow,
   limit: number,
   before: string | null,
+  after: { id: string; createdAt: string } | null = null,
 ) {
   const db = env.DB;
   const greetingCtas = await loadVisitorGreetingCtas(
@@ -2208,6 +2217,11 @@ async function conversationDetail(
     conversation.id,
     conversation.assigned_agent,
   );
+  const cursorClause = after
+    ? `AND (m.created_at > ?2 OR (m.created_at = ?2 AND m.id > ?3))`
+    : before
+      ? `AND m.created_at < ?2`
+      : '';
   const result = await db
     .prepare(
       `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
@@ -2246,15 +2260,21 @@ async function conversationDetail(
      FROM messages m
      JOIN conversations c ON c.id = m.conversation_id
      WHERE m.conversation_id = ?1
-       AND (?2 IS NULL OR m.created_at < ?2)
-     ORDER BY m.created_at DESC, m.id DESC
-     LIMIT ?3`,
+       ${cursorClause}
+     ORDER BY m.created_at ${after ? 'ASC' : 'DESC'}, m.id ${after ? 'ASC' : 'DESC'}
+     LIMIT ${after ? '?4' : before ? '?3' : '?2'}`,
     )
-    .bind(conversation.id, before, limit + 1)
+    .bind(
+      ...(after
+        ? [conversation.id, after.createdAt, after.id, limit]
+        : before
+          ? [conversation.id, before, limit + 1]
+          : [conversation.id, limit + 1]),
+    )
     .all<MessageRow>();
   const rows = result.results ?? [];
-  const hasMore = rows.length > limit;
-  const page = rows.slice(0, limit).reverse();
+  const hasMore = !after && rows.length > limit;
+  const page = after ? rows.slice(0, limit) : rows.slice(0, limit).reverse();
   const signer = await createDownloadSigningContext(
     env,
     conversation.expires_at,
