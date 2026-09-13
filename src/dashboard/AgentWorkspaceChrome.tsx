@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
+import { AgentWindowsAppSettings } from './AgentWindowsAppSettings';
 import {
   AGENT_SOUND_PRESET_OPTIONS,
   loadAgentSoundPreset,
@@ -375,6 +376,11 @@ export function AgentMobileSettingsPage({
               <p>锁屏或切后台后可能无法收到客户消息提醒。</p>
             )}
           </div>
+        </section>
+
+        <section className="mobile-agent-settings-group">
+          <h2 className="mobile-agent-settings-label">桌面应用</h2>
+          <AgentWindowsAppSettings />
         </section>
 
         <section className="mobile-agent-settings-group">

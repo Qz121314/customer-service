@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Default permissions for the客服坐席工作台",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

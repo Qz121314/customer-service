@@ -1734,3 +1734,67 @@
     animation: none;
   }
 }
+
+.agent-windows-app-settings {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--agent-border, rgba(15, 23, 42, 0.12));
+  border-radius: 14px;
+  background: var(--agent-surface, #fff);
+}
+
+.agent-windows-app-copy,
+.agent-windows-app-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.agent-windows-app-copy > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-windows-app-copy small,
+.agent-windows-app-action small {
+  color: var(--agent-muted, #6b7280);
+}
+
+.agent-windows-app-glyph {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 18px;
+}
+
+.agent-windows-app-actions {
+  align-items: stretch;
+}
+
+.agent-windows-app-action {
+  min-height: 44px;
+  flex: 1;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.agent-windows-app-update {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--agent-accent, #2563eb);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 520px) {
+  .agent-windows-app-actions {
+    display: grid;
+  }
+}
