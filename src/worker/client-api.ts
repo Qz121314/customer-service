@@ -875,6 +875,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
   }
 
+  const persistStartedAt = Date.now();
   const persistedMessage = await persistClientMessage(c.env.DB, {
     conversationId: conversation.id,
     senderType: 'visitor',
@@ -882,6 +883,10 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     body: messageBody!,
     clientMessageId,
   });
+  c.header(
+    'Server-Timing',
+    `message-persist;dur=${Date.now() - persistStartedAt}`,
+  );
   if (persistedMessage.duplicate) {
     return c.json({ message: clientMessage(persistedMessage.message) });
   }

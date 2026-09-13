@@ -633,19 +633,29 @@ export async function sendVisitorMessage(
   body: string,
   clientMessageId: string,
 ): Promise<Message> {
-  const response = await request<{ message: Message }>(
-    `/client/v1/conversations/${encodeURIComponent(id)}/messages`,
-    {
-      method: 'POST',
-      body: JSON.stringify({
-        visitorId,
-        visitorToken,
-        body,
-        clientMessageId,
-      }),
-    },
-  );
-  return normalizeVisitorMessage(response.message);
+  const startedAt = performance.now();
+  try {
+    const response = await request<{ message: Message }>(
+      `/client/v1/conversations/${encodeURIComponent(id)}/messages`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          visitorId,
+          visitorToken,
+          body,
+          clientMessageId,
+        }),
+      },
+    );
+    return normalizeVisitorMessage(response.message);
+  } finally {
+    if (window.location.hostname === 'localhost') {
+      console.debug('[message-send]', {
+        conversationId: id,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    }
+  }
 }
 
 export async function sendVisitorGreetingCta(
