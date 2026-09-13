@@ -2,11 +2,12 @@ export type AgentAutoReplySettings = {
   enabled: boolean;
   text: string;
   attachmentIds: string[];
+  ctas: AgentGreetingCta[];
 };
 
-export type AgentQuickReply = {
+export type AgentGreetingCta = {
   id: string;
-  question: string;
+  label: string;
   answer: string;
   enabled: boolean;
 };
@@ -35,25 +36,6 @@ export async function updateAgentAutoReplySettings(
   return response.settings;
 }
 
-export async function getAgentQuickReplies(): Promise<AgentQuickReply[]> {
-  const response = await autoReplyRequest<{
-    quickReplies: AgentQuickReply[];
-  }>('/api/agent/settings/quick-replies');
-  return response.quickReplies;
-}
-
-export async function updateAgentQuickReplies(
-  quickReplies: AgentQuickReply[],
-): Promise<AgentQuickReply[]> {
-  const response = await autoReplyRequest<{
-    quickReplies: AgentQuickReply[];
-  }>('/api/agent/settings/quick-replies', {
-    method: 'PUT',
-    body: JSON.stringify({ quickReplies }),
-  });
-  return response.quickReplies;
-}
-
 async function autoReplyRequest<T>(
   path: string,
   init?: RequestInit,
@@ -74,9 +56,6 @@ async function autoReplyRequest<T>(
     }
     if (body.error === 'INVALID_AUTO_REPLY') {
       throw new Error('问候语或附件设置无效，请检查后保存');
-    }
-    if (body.error === 'INVALID_QUICK_REPLIES') {
-      throw new Error('快捷问答无效，请检查问题和答案后保存');
     }
     throw new Error(body.error ?? '自动回复设置保存失败');
   }

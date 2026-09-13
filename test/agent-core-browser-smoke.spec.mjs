@@ -125,6 +125,7 @@ test('core multi-device agent workflow remains usable', async ({
           enabled: true,
           text: 'Hello from the core smoke agent',
           attachmentIds: [],
+          ctas: [],
         },
       },
     );

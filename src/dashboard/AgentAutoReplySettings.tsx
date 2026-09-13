@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   getAgentAutoReplySettings,
-  getAgentQuickReplies,
   updateAgentAutoReplySettings,
-  updateAgentQuickReplies,
-  type AgentQuickReply,
   type AgentAutoReplySettings,
 } from './agent-auto-reply-client';
 import {
@@ -22,10 +19,11 @@ const EMPTY_SETTINGS: AgentAutoReplySettings = {
   enabled: false,
   text: '',
   attachmentIds: [],
+  ctas: [],
 };
 const AUTO_GREETING_LIMIT = 1000;
 const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
-const QUICK_REPLY_LIMIT = 10;
+const CTA_LIMIT = 10;
 const CONTACT_CARD_LABELS: Record<AgentContactCardKind, string> = {
   sms: 'SMS',
   whatsapp: 'WhatsApp',
@@ -43,10 +41,6 @@ export function AgentAutoReplySettingsModal({
   const [settings, setSettings] =
     useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
   const [saved, setSaved] = useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
-  const [quickReplies, setQuickReplies] = useState<AgentQuickReply[]>([]);
-  const [savedQuickReplies, setSavedQuickReplies] = useState<AgentQuickReply[]>(
-    [],
-  );
   const [presets, setPresets] = useState<AgentAttachmentPreset[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -58,18 +52,12 @@ export function AgentAutoReplySettingsModal({
     let active = true;
     setLoading(true);
     setError('');
-    void Promise.all([
-      getAgentAutoReplySettings(),
-      getAgentAttachmentPresets(),
-      getAgentQuickReplies(),
-    ])
-      .then(([value, attachmentPresets, replies]) => {
+    void Promise.all([getAgentAutoReplySettings(), getAgentAttachmentPresets()])
+      .then(([value, attachmentPresets]) => {
         if (!active) return;
         setSettings(value);
         setSaved(value);
         setPresets(attachmentPresets);
-        setQuickReplies(replies);
-        setSavedQuickReplies(replies);
       })
       .catch((reason) => {
         if (!active) return;
@@ -106,9 +94,9 @@ export function AgentAutoReplySettingsModal({
     settings.enabled !== saved.enabled ||
     settings.text !== saved.text ||
     settings.attachmentIds.join('\n') !== saved.attachmentIds.join('\n');
-  const quickRepliesChanged =
-    JSON.stringify(quickReplies) !== JSON.stringify(savedQuickReplies);
-  const changed = greetingChanged || quickRepliesChanged;
+  const changed =
+    greetingChanged ||
+    JSON.stringify(settings.ctas) !== JSON.stringify(saved.ctas);
   const hasContent = Boolean(
     normalizedText || settings.attachmentIds.length > 0,
   );
@@ -117,13 +105,13 @@ export function AgentAutoReplySettingsModal({
     !saving &&
     !imageUploading &&
     changed &&
-    quickReplies.length <= QUICK_REPLY_LIMIT &&
-    quickReplies.every(
-      (reply) =>
-        reply.question.trim().length > 0 &&
-        reply.question.trim().length <= 120 &&
-        reply.answer.trim().length > 0 &&
-        reply.answer.trim().length <= 2000,
+    settings.ctas.length <= CTA_LIMIT &&
+    settings.ctas.every(
+      (cta) =>
+        cta.label.trim().length > 0 &&
+        cta.label.trim().length <= 120 &&
+        cta.answer.trim().length > 0 &&
+        cta.answer.trim().length <= 2000,
     ) &&
     settings.text.length <= AUTO_GREETING_LIMIT &&
     settings.attachmentIds.length <= AUTO_GREETING_ATTACHMENT_LIMIT &&
@@ -134,24 +122,18 @@ export function AgentAutoReplySettingsModal({
     setSaving(true);
     setError('');
     try {
-      const [next, nextReplies] = await Promise.all([
-        updateAgentAutoReplySettings({
-          enabled: settings.enabled,
-          text: normalizedText,
-          attachmentIds: settings.attachmentIds,
-        }),
-        updateAgentQuickReplies(
-          quickReplies.map((reply) => ({
-            ...reply,
-            question: reply.question.trim(),
-            answer: reply.answer.trim(),
-          })),
-        ),
-      ]);
+      const next = await updateAgentAutoReplySettings({
+        enabled: settings.enabled,
+        text: normalizedText,
+        attachmentIds: settings.attachmentIds,
+        ctas: settings.ctas.map((cta) => ({
+          ...cta,
+          label: cta.label.trim(),
+          answer: cta.answer.trim(),
+        })),
+      });
       setSettings(next);
       setSaved(next);
-      setQuickReplies(nextReplies);
-      setSavedQuickReplies(nextReplies);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : '自动回复设置保存失败',
@@ -354,104 +336,113 @@ export function AgentAutoReplySettingsModal({
               </div>
             </section>
 
-            <section className="agent-quick-replies">
+            <section className="agent-greeting-ctas">
               <div className="agent-auto-reply-attachments-head">
                 <span>
-                  <strong>点击式问答</strong>
+                  <strong>CTA 按钮</strong>
                   <small>
-                    客户点击问题后，系统会自动发送对应答案。最多{' '}
-                    {QUICK_REPLY_LIMIT} 组。
+                    显示在首次问候语下方；客户点击后会发送按钮文案，并收到自动回复。最多{' '}
+                    {CTA_LIMIT} 个。
                   </small>
                 </span>
                 <Button
                   type="button"
                   variant="ghost"
-                  disabled={quickReplies.length >= QUICK_REPLY_LIMIT}
+                  disabled={settings.ctas.length >= CTA_LIMIT}
                   onClick={() =>
-                    setQuickReplies((current) => [
+                    setSettings((current) => ({
                       ...current,
-                      {
-                        id: crypto.randomUUID(),
-                        question: '',
-                        answer: '',
-                        enabled: true,
-                      },
-                    ])
+                      ctas: [
+                        ...current.ctas,
+                        {
+                          id: crypto.randomUUID(),
+                          label: '',
+                          answer: '',
+                          enabled: true,
+                        },
+                      ],
+                    }))
                   }
                 >
                   <UiIcon name="plus" />
-                  添加问题
+                  添加 CTA
                 </Button>
               </div>
-              <div className="agent-quick-reply-list">
-                {quickReplies.map((reply, index) => (
-                  <div className="agent-quick-reply-item" key={reply.id}>
-                    <div className="agent-quick-reply-item-head">
-                      <strong>问题 {index + 1}</strong>
+              <div className="agent-greeting-cta-list">
+                {settings.ctas.map((cta, index) => (
+                  <div className="agent-greeting-cta-item" key={cta.id}>
+                    <div className="agent-greeting-cta-item-head">
+                      <strong>CTA {index + 1}</strong>
                       <button
                         type="button"
-                        aria-label={`删除问题 ${index + 1}`}
+                        aria-label={`删除 CTA ${index + 1}`}
                         onClick={() =>
-                          setQuickReplies((current) =>
-                            current.filter((item) => item.id !== reply.id),
-                          )
+                          setSettings((current) => ({
+                            ...current,
+                            ctas: current.ctas.filter(
+                              (item) => item.id !== cta.id,
+                            ),
+                          }))
                         }
                       >
                         <UiIcon name="close" />
                       </button>
                     </div>
                     <input
-                      value={reply.question}
+                      value={cta.label}
                       maxLength={120}
-                      placeholder="例如：你们怎么收费？"
-                      aria-label={`问题 ${index + 1}`}
+                      placeholder="按钮文案，例如：你们怎么收费？"
+                      aria-label={`CTA ${index + 1} 按钮文案`}
                       onChange={(event) =>
-                        setQuickReplies((current) =>
-                          current.map((item) =>
-                            item.id === reply.id
-                              ? { ...item, question: event.target.value }
+                        setSettings((current) => ({
+                          ...current,
+                          ctas: current.ctas.map((item) =>
+                            item.id === cta.id
+                              ? { ...item, label: event.target.value }
                               : item,
                           ),
-                        )
+                        }))
                       }
                     />
                     <Textarea
-                      value={reply.answer}
+                      value={cta.answer}
                       maxLength={2000}
                       rows={3}
-                      placeholder="输入客户点击后收到的自动答案…"
-                      aria-label={`问题 ${index + 1} 的答案`}
+                      placeholder="输入客户点击后收到的自动回复…"
+                      aria-label={`CTA ${index + 1} 自动回复`}
                       onChange={(event) =>
-                        setQuickReplies((current) =>
-                          current.map((item) =>
-                            item.id === reply.id
+                        setSettings((current) => ({
+                          ...current,
+                          ctas: current.ctas.map((item) =>
+                            item.id === cta.id
                               ? { ...item, answer: event.target.value }
                               : item,
                           ),
-                        )
+                        }))
                       }
                     />
-                    <label className="agent-quick-reply-enabled">
+                    <label className="agent-greeting-cta-enabled">
                       <input
                         type="checkbox"
-                        checked={reply.enabled}
+                        checked={cta.enabled}
                         onChange={(event) =>
-                          setQuickReplies((current) =>
-                            current.map((item) =>
-                              item.id === reply.id
+                          setSettings((current) => ({
+                            ...current,
+                            ctas: current.ctas.map((item) =>
+                              item.id === cta.id
                                 ? { ...item, enabled: event.target.checked }
                                 : item,
                             ),
-                          )
+                          }))
                         }
                       />
                       对访客显示
                     </label>
                   </div>
                 ))}
-                {quickReplies.length === 0 ? (
+                {settings.ctas.length === 0 ? (
                   <p className="agent-auto-reply-attachment-empty">
-                    还没有快捷问题。添加后，客户会在聊天窗口看到可点击的问题。
+                    还没有 CTA。添加后，客户会在首次问候语下方看到可点击的按钮。
                   </p>
                 ) : null}
               </div>

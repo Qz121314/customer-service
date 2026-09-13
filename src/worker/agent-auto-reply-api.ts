@@ -14,6 +14,7 @@ type AgentAutoReplySettings = {
   enabled: boolean;
   text: string;
   attachmentIds: string[];
+  ctas: AgentGreetingCta[];
 };
 
 type AgentSettingsRow = Pick<
@@ -23,9 +24,9 @@ type AgentSettingsRow = Pick<
 
 const AUTO_GREETING_LIMIT = 1000;
 const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
-const QUICK_REPLY_LIMIT = 10;
-const QUICK_REPLY_QUESTION_LIMIT = 120;
-const QUICK_REPLY_ANSWER_LIMIT = 2000;
+const CTA_LIMIT = 10;
+const CTA_LABEL_LIMIT = 120;
+const CTA_ANSWER_LIMIT = 2000;
 
 export const agentAutoReplyApi = new Hono<Env>();
 
@@ -45,6 +46,7 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
     enabled?: boolean;
     text?: string;
     attachmentIds?: string[];
+    ctas?: unknown;
   }>(c.req.raw);
   if (
     !body ||
@@ -57,11 +59,13 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
 
   const text = body.text.trim();
   const attachmentIds = normalizeAttachmentIds(body.attachmentIds);
+  const ctas = normalizeGreetingCtas(body.ctas);
   if (
     text.length > AUTO_GREETING_LIMIT ||
     attachmentIds.length > AUTO_GREETING_ATTACHMENT_LIMIT ||
     attachmentIds.length !== body.attachmentIds.length ||
-    (body.enabled && !text && attachmentIds.length === 0)
+    (body.enabled && !text && attachmentIds.length === 0) ||
+    !ctas
   ) {
     return c.json({ error: 'INVALID_AUTO_REPLY' }, 400);
   }
@@ -91,12 +95,29 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
     c.env.DB.prepare(
       `DELETE FROM agent_auto_greeting_attachments WHERE agent_id = ?1`,
     ).bind(agent.id),
+    c.env.DB.prepare(
+      `DELETE FROM agent_auto_greeting_ctas WHERE agent_id = ?1`,
+    ).bind(agent.id),
     ...attachmentIds.map((presetId, index) =>
       c.env.DB.prepare(
         `INSERT INTO agent_auto_greeting_attachments (
            agent_id, preset_id, sort_order
          ) VALUES (?1, ?2, ?3)`,
       ).bind(agent.id, presetId, index),
+    ),
+    ...ctas.map((cta, index) =>
+      c.env.DB.prepare(
+        `INSERT INTO agent_auto_greeting_ctas (
+           id, agent_id, label, answer, enabled, sort_order
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+      ).bind(
+        cta.id,
+        agent.id,
+        cta.label,
+        cta.answer,
+        cta.enabled ? 1 : 0,
+        index,
+      ),
     ),
   ];
   await c.env.DB.batch(statements);
@@ -114,42 +135,9 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
       enabled: updated.auto_greeting_enabled === 1,
       text: updated.auto_greeting_text ?? '',
       attachmentIds,
+      ctas,
     },
   });
-});
-
-agentAutoReplyApi.get('/api/agent/settings/quick-replies', async (c) => {
-  const agent = await requireAgentSession(c);
-  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  return c.json({ quickReplies: await loadQuickReplies(c.env.DB, agent.id) });
-});
-
-agentAutoReplyApi.put('/api/agent/settings/quick-replies', async (c) => {
-  const agent = await requireAgentSession(c);
-  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const body = await readJson<{ quickReplies?: unknown }>(c.req.raw);
-  const quickReplies = normalizeQuickReplies(body?.quickReplies);
-  if (!quickReplies) return c.json({ error: 'INVALID_QUICK_REPLIES' }, 400);
-  await c.env.DB.batch([
-    c.env.DB.prepare(
-      'DELETE FROM agent_quick_replies WHERE agent_id = ?1',
-    ).bind(agent.id),
-    ...quickReplies.map((reply, index) =>
-      c.env.DB.prepare(
-        `INSERT INTO agent_quick_replies (
-           id, agent_id, question, answer, enabled, sort_order
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
-      ).bind(
-        reply.id,
-        agent.id,
-        reply.question,
-        reply.answer,
-        reply.enabled ? 1 : 0,
-        index,
-      ),
-    ),
-  ]);
-  return c.json({ quickReplies });
 });
 
 async function settingsPayload(
@@ -165,69 +153,70 @@ async function settingsPayload(
     )
     .bind(row.id)
     .all<{ preset_id: string }>();
+  const ctas = await loadGreetingCtas(db, row.id);
   return {
     enabled: row.auto_greeting_enabled === 1,
     text: row.auto_greeting_text ?? '',
     attachmentIds: (relations.results ?? []).map((item) => item.preset_id),
+    ctas,
   };
 }
 
-async function loadQuickReplies(
+async function loadGreetingCtas(
   db: D1Database,
   agentId: string,
-): Promise<AgentQuickReply[]> {
+): Promise<AgentGreetingCta[]> {
   const rows = await db
     .prepare(
-      `SELECT id, question, answer, enabled
-       FROM agent_quick_replies
+      `SELECT id, label, answer, enabled
+       FROM agent_auto_greeting_ctas
        WHERE agent_id = ?1
        ORDER BY sort_order ASC, id ASC`,
     )
     .bind(agentId)
-    .all<AgentQuickReplyRow>();
+    .all<AgentGreetingCtaRow>();
   return (rows.results ?? []).map((row) => ({
     id: row.id,
-    question: row.question,
+    label: row.label,
     answer: row.answer,
     enabled: row.enabled === 1,
   }));
 }
 
-type AgentQuickReply = {
+type AgentGreetingCta = {
   id: string;
-  question: string;
+  label: string;
   answer: string;
   enabled: boolean;
 };
 
-type AgentQuickReplyRow = Omit<AgentQuickReply, 'enabled'> & {
+type AgentGreetingCtaRow = Omit<AgentGreetingCta, 'enabled'> & {
   enabled: number;
 };
 
-function normalizeQuickReplies(value: unknown): AgentQuickReply[] | null {
-  if (!Array.isArray(value) || value.length > QUICK_REPLY_LIMIT) return null;
-  const result: AgentQuickReply[] = [];
+function normalizeGreetingCtas(value: unknown): AgentGreetingCta[] | null {
+  if (!Array.isArray(value) || value.length > CTA_LIMIT) return null;
+  const result: AgentGreetingCta[] = [];
   for (const item of value) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
     const record = item as Record<string, unknown>;
     const id = typeof record.id === 'string' ? record.id.trim() : '';
-    const question =
-      typeof record.question === 'string' ? record.question.trim() : '';
+    const label = typeof record.label === 'string' ? record.label.trim() : '';
     const answer =
       typeof record.answer === 'string' ? record.answer.trim() : '';
     if (
       !id ||
       id.length > 80 ||
-      !question ||
-      question.length > QUICK_REPLY_QUESTION_LIMIT ||
+      !label ||
+      label.length > CTA_LABEL_LIMIT ||
       !answer ||
-      answer.length > QUICK_REPLY_ANSWER_LIMIT ||
+      answer.length > CTA_ANSWER_LIMIT ||
       typeof record.enabled !== 'boolean' ||
-      result.some((reply) => reply.id === id)
+      result.some((cta) => cta.id === id)
     ) {
       return null;
     }
-    result.push({ id, question, answer, enabled: record.enabled });
+    result.push({ id, label, answer, enabled: record.enabled });
   }
   return result;
 }

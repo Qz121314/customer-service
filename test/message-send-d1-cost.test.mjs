@@ -512,3 +512,149 @@ test('visitor duplicate returns the existing message without a second state muta
   );
   database.close();
 });
+
+test('greeting CTA atomically creates a visitor question and an agent answer', async () => {
+  const { database, instrumentation } = createMessageFixture('open');
+  const rooms = fakeRooms();
+  const env = {
+    DB: instrumentation.db,
+    CONVERSATION_ROOMS: rooms.namespace,
+  };
+  database.exec(`
+    INSERT INTO conversation_automation_receipts (
+      conversation_id, automation_key, agent_id, outcome, message_id,
+      message_body, resolved_at
+    ) VALUES (
+      '${CONVERSATION_ID}', 'initial_greeting', '${AGENT_ID}', 'sent',
+      'greeting-message', '您好，有什么可以帮您？', CURRENT_TIMESTAMP
+    );
+    INSERT INTO agent_auto_greeting_ctas (
+      id, agent_id, label, answer, enabled, sort_order
+    ) VALUES (
+      'cta-pricing', '${AGENT_ID}', '如何收费', '收费100', 1, 0
+    );
+  `);
+
+  const detail = await clientApi.request(
+    `/client/v1/conversations/${CONVERSATION_ID}?visitorId=${VISITOR_ID}&projectId=default`,
+    undefined,
+    env,
+  );
+  assert.equal(detail.status, 200);
+  assert.deepEqual((await detail.json()).conversation.greetingCtas, [
+    {
+      id: 'cta-pricing',
+      label: '如何收费',
+      greetingMessageId: 'greeting-message',
+    },
+  ]);
+  instrumentation.reset();
+
+  const firstExecution = createExecutionContext();
+  const first = await clientApi.request(
+    `/client/v1/conversations/${CONVERSATION_ID}/greeting-ctas/cta-pricing`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId: VISITOR_ID,
+        projectId: 'default',
+        clientMessageId: 'cta-pricing-click-1',
+      }),
+    },
+    env,
+    firstExecution.context,
+  );
+  const firstPayload = await first.json();
+  assert.equal(first.status, 201);
+  assert.deepEqual(
+    firstPayload.messages.map((message) => [
+      message.direction,
+      message.body,
+      message.kind,
+    ]),
+    [
+      ['customer', '如何收费', 'text'],
+      ['agent', '收费100', 'text'],
+    ],
+  );
+  assert.equal(instrumentation.metrics().batch, 1);
+  assert.equal(instrumentation.metrics().batchStatements, 3);
+  await firstExecution.drain();
+
+  const stateAfterFirst = {
+    ...database
+      .prepare(
+        `SELECT visitor_unread_count, agent_unread_count, last_message_preview
+         FROM conversations WHERE id = ?1`,
+      )
+      .get(CONVERSATION_ID),
+  };
+  assert.deepEqual(stateAfterFirst, {
+    visitor_unread_count: 2,
+    agent_unread_count: 1,
+    last_message_preview: '收费100',
+  });
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT sender_type, sender_id, body, message_kind
+         FROM messages
+         WHERE conversation_id = ?1
+           AND client_message_id IN (?2, ?3)
+         ORDER BY created_at, id`,
+      )
+      .all(
+        CONVERSATION_ID,
+        'cta-pricing-click-1',
+        'greeting-cta-answer:cta-pricing-click-1',
+      )
+      .map((message) => ({ ...message })),
+    [
+      {
+        sender_type: 'visitor',
+        sender_id: VISITOR_DATABASE_ID,
+        body: '如何收费',
+        message_kind: 'text',
+      },
+      {
+        sender_type: 'agent',
+        sender_id: AGENT_ID,
+        body: '收费100',
+        message_kind: 'text',
+      },
+    ],
+  );
+
+  instrumentation.reset();
+  const duplicateExecution = createExecutionContext();
+  const duplicate = await clientApi.request(
+    `/client/v1/conversations/${CONVERSATION_ID}/greeting-ctas/cta-pricing`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        visitorId: VISITOR_ID,
+        projectId: 'default',
+        clientMessageId: 'cta-pricing-click-1',
+      }),
+    },
+    env,
+    duplicateExecution.context,
+  );
+  assert.equal(duplicate.status, 201);
+  assert.equal(duplicateExecution.tasks.length, 0);
+  assert.equal(instrumentation.metrics().batch, 0);
+  assert.deepEqual(
+    {
+      ...database
+        .prepare(
+          `SELECT visitor_unread_count, agent_unread_count, last_message_preview
+           FROM conversations WHERE id = ?1`,
+        )
+        .get(CONVERSATION_ID),
+    },
+    stateAfterFirst,
+  );
+  database.close();
+});

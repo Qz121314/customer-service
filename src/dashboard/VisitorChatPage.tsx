@@ -4,7 +4,7 @@ import {
   markVisitorConversationRead,
   openVisitorConversationSocket,
   sendVisitorMessage,
-  sendVisitorQuickReply,
+  sendVisitorGreetingCta,
   startVisitorConversation,
   type ConversationDetail,
   type Message,
@@ -26,7 +26,7 @@ export function VisitorChatPage() {
   const [error, setError] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
-  const [sendingQuickReply, setSendingQuickReply] = useState<string | null>(
+  const [sendingGreetingCta, setSendingGreetingCta] = useState<string | null>(
     null,
   );
   const socketRef = useRef<WebSocket | null>(null);
@@ -142,16 +142,16 @@ export function VisitorChatPage() {
     }
   }
 
-  async function submitQuickReply(quickReplyId: string) {
-    if (!detail || !visitorToken || sending || sendingQuickReply) return;
-    setSendingQuickReply(quickReplyId);
+  async function submitGreetingCta(ctaId: string) {
+    if (!detail || !visitorToken || sending || sendingGreetingCta) return;
+    setSendingGreetingCta(ctaId);
     setError('');
     try {
-      const messages = await sendVisitorQuickReply(
+      const messages = await sendVisitorGreetingCta(
         detail.conversation.id,
         visitorId,
         visitorToken,
-        quickReplyId,
+        ctaId,
         crypto.randomUUID(),
       );
       setDetail((current) =>
@@ -169,9 +169,9 @@ export function VisitorChatPage() {
           : current,
       );
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '快捷问答发送失败');
+      setError(reason instanceof Error ? reason.message : 'CTA 发送失败');
     } finally {
-      setSendingQuickReply(null);
+      setSendingGreetingCta(null);
     }
   }
 
@@ -199,41 +199,38 @@ export function VisitorChatPage() {
           </section>
           <section className="visitor-chat-messages">
             {detail.messages.map((message) => (
-              <article
-                className={`visitor-message is-${message.sender_type}`}
-                key={message.id}
-              >
-                {message.body ||
-                  (message.product_context
-                    ? message.product_context.title
-                    : '')}
-              </article>
+              <div key={message.id}>
+                <article
+                  className={`visitor-message is-${message.sender_type}`}
+                >
+                  {message.body ||
+                    (message.product_context
+                      ? message.product_context.title
+                      : '')}
+                </article>
+                {message.sender_type === 'agent' ? (
+                  <div className="visitor-greeting-ctas">
+                    {detail.greetingCtas
+                      ?.filter((cta) => cta.greetingMessageId === message.id)
+                      .map((cta) => (
+                        <button
+                          type="button"
+                          key={cta.id}
+                          disabled={Boolean(sendingGreetingCta) || sending}
+                          onClick={() => void submitGreetingCta(cta.id)}
+                        >
+                          <span>
+                            {sendingGreetingCta === cta.id
+                              ? '正在发送…'
+                              : cta.label}
+                          </span>
+                          <span aria-hidden="true">›</span>
+                        </button>
+                      ))}
+                  </div>
+                ) : null}
+              </div>
             ))}
-            {detail.quickReplies && detail.quickReplies.length > 0 ? (
-              <section className="visitor-quick-replies" aria-label="常见问题">
-                <div className="visitor-quick-replies-heading">
-                  <strong>常见问题</strong>
-                  <span>点击问题，客服会马上为你回复</span>
-                </div>
-                <div className="visitor-quick-replies-list">
-                  {detail.quickReplies.map((reply) => (
-                    <button
-                      type="button"
-                      key={reply.id}
-                      disabled={Boolean(sendingQuickReply) || sending}
-                      onClick={() => void submitQuickReply(reply.id)}
-                    >
-                      <span>
-                        {sendingQuickReply === reply.id
-                          ? '正在发送…'
-                          : reply.question}
-                      </span>
-                      <span aria-hidden="true">›</span>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ) : null}
           </section>
           <form
             className="visitor-chat-composer"
