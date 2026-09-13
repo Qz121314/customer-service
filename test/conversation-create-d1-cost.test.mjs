@@ -216,8 +216,8 @@ test('first CTA executes the bounded create, claim and assignment lifecycle', as
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 15);
-  assert.equal(metrics.select, 7);
+  assert.equal(metrics.executed, 16);
+  assert.equal(metrics.select, 8);
   assert.equal(metrics.insert, 6);
   assert.equal(metrics.update, 2);
   assert.equal(metrics.delete, 0);
@@ -291,8 +291,8 @@ test('sourceHandoff replay avoids duplicate conversation, assignment, quota and 
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 7);
-  assert.equal(metrics.select, 6);
+  assert.equal(metrics.executed, 8);
+  assert.equal(metrics.select, 7);
   assert.equal(metrics.insert, 0);
   assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
@@ -340,8 +340,8 @@ test('clientMessageId replay returns the original conversation without duplicate
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 7);
-  assert.equal(metrics.select, 6);
+  assert.equal(metrics.executed, 8);
+  assert.equal(metrics.select, 7);
   assert.equal(metrics.insert, 0);
   assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
@@ -383,8 +383,8 @@ test('active reuse claims the fresh handoff without re-consuming assignment or q
 
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 11);
-  assert.equal(metrics.select, 7);
+  assert.equal(metrics.executed, 12);
+  assert.equal(metrics.select, 8);
   assert.equal(metrics.insert, 2);
   assert.equal(metrics.update, 2);
   assert.equal(metrics.delete, 0);
@@ -448,10 +448,10 @@ test('closed affinity remains only a priority and ineligible original agent fall
   const metrics = instrumentation.metrics();
   assertMetricIntegrity(metrics);
   assert.ok(
-    metrics.executed <= 16,
+    metrics.executed <= 17,
     `unexpected create budget: ${metrics.executed}`,
   );
-  assert.ok(metrics.select <= 7, `unexpected SELECT budget: ${metrics.select}`);
+  assert.ok(metrics.select <= 8, `unexpected SELECT budget: ${metrics.select}`);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);

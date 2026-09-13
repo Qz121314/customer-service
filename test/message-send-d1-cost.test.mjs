@@ -526,7 +526,7 @@ test('greeting CTA atomically creates a visitor question and an agent answer', a
       message_kind, client_message_id, created_at
     ) VALUES (
       'greeting-message', '${CONVERSATION_ID}', 'agent', '${AGENT_ID}',
-      '您好，有什么可以帮您？', 'text', 'auto-greeting:v2', CURRENT_TIMESTAMP
+      '您好，有什么可以帮您？', 'text', 'greeting-cta-fixture', CURRENT_TIMESTAMP
     );
     INSERT INTO conversation_automation_receipts (
       conversation_id, automation_key, agent_id, outcome, message_id,

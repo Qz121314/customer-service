@@ -849,6 +849,7 @@ test('agent surfaces share one session lookup and preserve disabled-agent access
     enabled: false,
     text: '',
     attachmentIds: [],
+    ctas: [],
   });
 
   const presets = await json(
