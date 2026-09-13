@@ -424,6 +424,15 @@ function mergeAgentConversationPage(
   };
 }
 
+function mergeAgentMessage(
+  current: ConversationDetail,
+  incoming: Message,
+): ConversationDetail {
+  const messages = new Map(current.messages.map((item) => [item.id, item]));
+  messages.set(incoming.id, incoming);
+  return { ...current, messages: [...messages.values()].sort(compareMessages) };
+}
+
 function mergeAgentOverview(current: Overview, realtime: Overview): Overview {
   return { ...current, ...realtime };
 }
@@ -612,6 +621,7 @@ export {
   sortedConversationList,
   compareMessages,
   mergeAgentConversationPage,
+  mergeAgentMessage,
   mergeAgentOverview,
   productsForScope,
   agentScopeSummary,

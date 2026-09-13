@@ -54,6 +54,7 @@ import {
   parseRealtimeEvent,
   sortedConversationList,
   mergeAgentConversationPage,
+  mergeAgentMessage,
   mergeAgentOverview,
   message,
 } from './dashboard-runtime';
@@ -194,6 +195,16 @@ function useEventCallback<Arguments extends unknown[], Result>(
   return useCallback((...args: Arguments) => callbackRef.current(...args), []);
 }
 
+const AgentThreadMessage = memo(function AgentThreadMessage({
+  message,
+  attachments,
+}: {
+  message: Message;
+  attachments: AgentMessageAttachment[];
+}) {
+  return <Bubble message={message} attachments={attachments} />;
+});
+
 const AgentThreadMessageTree = memo(function AgentThreadMessageTree({
   messages,
   attachmentsByMessageId,
@@ -202,7 +213,7 @@ const AgentThreadMessageTree = memo(function AgentThreadMessageTree({
   attachmentsByMessageId: ReadonlyMap<string, AgentMessageAttachment[]>;
 }) {
   return messages.map((item) => (
-    <Bubble
+    <AgentThreadMessage
       key={item.id}
       message={item}
       attachments={attachmentsByMessageId.get(item.id) ?? []}
@@ -434,6 +445,7 @@ function AgentWorkspace({
   const visitorTypingTimerRef = useRef<number | null>(null);
   const soundContextRef = useRef<AudioContext | null>(null);
   const unreadCountRef = useRef(new Map<string, number>());
+  const inboxRefreshRef = useRef<Promise<void> | null>(null);
   const reminderDeliveryRef = useRef<ReturnType<
     typeof createAgentReminderDelivery
   > | null>(null);
@@ -684,8 +696,14 @@ function AgentWorkspace({
   }, []);
 
   const refresh = useCallback(async () => {
-    const inbox = await getAgentInbox();
-    applyInbox(inbox);
+    if (inboxRefreshRef.current) return inboxRefreshRef.current;
+    const request = getAgentInbox()
+      .then(applyInbox)
+      .finally(() => {
+        inboxRefreshRef.current = null;
+      });
+    inboxRefreshRef.current = request;
+    return request;
   }, [applyInbox]);
 
   const removeExpiredConversations = useCallback(
@@ -929,13 +947,19 @@ function AgentWorkspace({
     let stableTimer: number | null = null;
     let openedOnce = false;
     let retryAttempt = 0;
+    let loadInFlight: Promise<void> | null = null;
+    let queuedLoad: boolean | null = null;
     const load = (incremental = false) => {
+      if (loadInFlight) {
+        queuedLoad = queuedLoad === false ? false : incremental;
+        return loadInFlight;
+      }
       const current = detailRef.current;
       const lastMessage =
         incremental && current?.conversation.id === selectedId
           ? current.messages.at(-1)
           : null;
-      return getConversation(
+      const request = getConversation(
         selectedId,
         lastMessage
           ? {
@@ -1010,6 +1034,15 @@ function AgentWorkspace({
         .catch((reason) => {
           if (active) setError(message(reason, '无法加载会话'));
         });
+      loadInFlight = request.finally(() => {
+        loadInFlight = null;
+        if (queuedLoad !== null && active) {
+          const nextLoad = queuedLoad;
+          queuedLoad = null;
+          void load(nextLoad);
+        }
+      });
+      return loadInFlight;
     };
     const connect = () => {
       if (!active) return;
@@ -1089,21 +1122,13 @@ function AgentWorkspace({
           setDetail((current) => {
             if (!current || current.conversation.id !== selectedId)
               return current;
-            const exists = current.messages.some(
-              (item) => item.id === incoming.id,
-            );
             return {
-              ...current,
+              ...mergeAgentMessage(current, incoming),
               conversation: {
                 ...current.conversation,
                 last_message: preview,
                 last_message_at: incoming.created_at,
               },
-              messages: exists
-                ? current.messages.map((item) =>
-                    item.id === incoming.id ? incoming : item,
-                  )
-                : [...current.messages, incoming],
             };
           });
           if (
@@ -1388,7 +1413,6 @@ function AgentWorkspace({
         if (!current || current.conversation.id !== pending.conversationId) {
           return current;
         }
-        const exists = current.messages.some((item) => item.id === sent.id);
         return {
           ...current,
           conversation: {
@@ -1396,7 +1420,7 @@ function AgentWorkspace({
             last_message: sent.body,
             last_message_at: sent.created_at,
           },
-          messages: exists ? current.messages : [...current.messages, sent],
+          messages: mergeAgentMessage(current, sent).messages,
         };
       });
       setPendingTextMessages((current) => {
@@ -1493,9 +1517,6 @@ function AgentWorkspace({
       );
       setDetail((current) => {
         if (!current || current.conversation.id !== selectedId) return current;
-        const exists = current.messages.some(
-          (item) => item.id === sent.message.id,
-        );
         return {
           ...current,
           conversation: {
@@ -1503,11 +1524,7 @@ function AgentWorkspace({
             last_message: sent.message.body || preset.label,
             last_message_at: sent.message.created_at,
           },
-          messages: exists
-            ? current.messages.map((item) =>
-                item.id === sent.message.id ? sent.message : item,
-              )
-            : [...current.messages, sent.message],
+          messages: mergeAgentMessage(current, sent.message).messages,
         };
       });
       if (body) updateDraft('');
@@ -1554,9 +1571,6 @@ function AgentWorkspace({
       );
       setDetail((current) => {
         if (!current || current.conversation.id !== selectedId) return current;
-        const exists = current.messages.some(
-          (item) => item.id === sentMessage.id,
-        );
         return {
           ...current,
           conversation: {
@@ -1564,9 +1578,7 @@ function AgentWorkspace({
             last_message: attachment?.label || '图片',
             last_message_at: sent.createdAt,
           },
-          messages: exists
-            ? current.messages
-            : [...current.messages, sentMessage],
+          messages: mergeAgentMessage(current, sentMessage).messages,
         };
       });
       if (attachment) {
