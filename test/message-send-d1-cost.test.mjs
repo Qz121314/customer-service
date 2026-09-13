@@ -521,13 +521,6 @@ test('greeting CTA atomically creates a visitor question and an agent answer', a
     CONVERSATION_ROOMS: rooms.namespace,
   };
   database.exec(`
-    INSERT INTO messages (
-      id, conversation_id, sender_type, sender_id, body,
-      message_kind, client_message_id, created_at
-    ) VALUES (
-      'greeting-message', '${CONVERSATION_ID}', 'agent', '${AGENT_ID}',
-      '您好，有什么可以帮您？', 'text', 'greeting-cta-fixture', CURRENT_TIMESTAMP
-    );
     INSERT INTO conversation_automation_receipts (
       conversation_id, automation_key, agent_id, outcome, message_id,
       message_body, resolved_at
