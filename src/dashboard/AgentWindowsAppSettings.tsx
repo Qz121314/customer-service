@@ -11,7 +11,11 @@ export function AgentWindowsAppSettings() {
   const windows = isWindowsBrowser();
 
   return (
-    <div className="agent-windows-app-settings" role="group" aria-label="Windows 应用">
+    <div
+      className="agent-windows-app-settings"
+      role="group"
+      aria-label="Windows 应用"
+    >
       <div className="agent-windows-app-copy">
         <i className="is-accent" aria-hidden="true">
           <span className="agent-windows-app-glyph">▣</span>
