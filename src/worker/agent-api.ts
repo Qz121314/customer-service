@@ -757,13 +757,41 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
 
   const messageId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const inserted = await c.env.DB.prepare(
-    `INSERT OR IGNORE INTO messages
-       (id, conversation_id, sender_type, sender_id, body, client_message_id, created_at)
-     VALUES (?1, ?2, 'agent', ?3, ?4, ?5, ?6)`,
-  )
-    .bind(messageId, id, agent.id, text, clientMessageId, now)
-    .run();
+  const [inserted, updatedConversationResult] = await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT OR IGNORE INTO messages
+         (id, conversation_id, sender_type, sender_id, body, message_kind,
+          structured_payload_json, client_message_id, created_at)
+       SELECT ?1, ?2, 'agent', ?3, ?4, 'text', NULL, ?5, ?6
+       WHERE EXISTS (
+         SELECT 1 FROM conversations
+         WHERE id = ?2
+           AND assigned_agent = ?3
+           AND status <> 'closed'
+           AND expires_at > CURRENT_TIMESTAMP
+       )`,
+    ).bind(messageId, id, agent.id, text, clientMessageId, now),
+    c.env.DB.prepare(
+      `UPDATE conversations
+       SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
+           visitor_unread_count = visitor_unread_count + 1,
+           agent_unread_count = 0,
+           last_message_at = ?1,
+           last_message_preview = ?2,
+           updated_at = ?1
+       WHERE id = ?3 AND assigned_agent = ?4
+         AND status <> 'closed'
+         AND expires_at > CURRENT_TIMESTAMP
+         AND EXISTS (SELECT 1 FROM messages WHERE id = ?5)
+       RETURNING id, site_id, visitor_id, status, assigned_agent, subject,
+         product_id, section_id, section_name, category_id, category_name,
+         product_title, product_cover_url, product_href, expires_at,
+         visitor_unread_count, agent_unread_count, last_message_at, created_at,
+         last_message_preview AS last_message`,
+    ).bind(now, text, id, agent.id, messageId),
+  ]);
+  const updatedConversation = updatedConversationResult.results?.[0] as
+    UpdatedConversationSnapshot | undefined;
 
   if (!inserted.meta.changes && clientMessageId) {
     const existing = await findAgentMessageByClientId(
@@ -776,24 +804,9 @@ agentApi.post('/api/agent/conversations/:id/messages', async (c) => {
     return c.json({ error: 'MESSAGE_ID_CONFLICT' }, 409);
   }
 
-  const updatedConversation = await c.env.DB.prepare(
-    `UPDATE conversations
-     SET status = CASE WHEN status = 'open' THEN 'pending' ELSE status END,
-         visitor_unread_count = visitor_unread_count + 1,
-         agent_unread_count = 0,
-         last_message_at = ?1,
-         last_message_preview = ?2,
-         updated_at = ?1
-     WHERE id = ?3 AND assigned_agent = ?4
-       AND expires_at > CURRENT_TIMESTAMP
-     RETURNING id, site_id, visitor_id, status, assigned_agent, subject,
-       product_id, section_id, section_name, category_id, category_name,
-       product_title, product_cover_url, product_href, expires_at,
-       visitor_unread_count, agent_unread_count, last_message_at, created_at,
-       last_message_preview AS last_message`,
-  )
-    .bind(now, text, id, agent.id)
-    .first<UpdatedConversationSnapshot>();
+  if (!inserted.meta.changes || !updatedConversation) {
+    return c.json({ error: 'NOT_FOUND' }, 404);
+  }
   const conversationSnapshot: ConversationEventSnapshot | undefined =
     updatedConversation
       ? {

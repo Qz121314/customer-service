@@ -157,7 +157,8 @@ test('agent text normal success has an executable bounded D1 budget and snapshot
   assert.equal(durableMetrics.insert, 1);
   assert.equal(durableMetrics.update, 1);
   assert.equal(durableMetrics.delete, 0);
-  assert.equal(durableMetrics.batch, 0);
+  assert.equal(durableMetrics.batch, 1);
+  assert.equal(durableMetrics.batchStatements, 2);
   assertMetricIntegrity(durableMetrics);
   assert.equal(messageInserts(durableMetrics).length, 1);
   assert.equal(changedRows(messageInserts(durableMetrics)), 1);
@@ -195,8 +196,8 @@ test('agent text normal success has an executable bounded D1 budget and snapshot
   assert.equal(finalMetrics.insert, 1);
   assert.equal(finalMetrics.update, 1);
   assert.equal(finalMetrics.delete, 0);
-  assert.equal(finalMetrics.batch, 0);
-  assert.equal(finalMetrics.batchStatements, 0);
+  assert.equal(finalMetrics.batch, 1);
+  assert.equal(finalMetrics.batchStatements, 2);
   assertMetricIntegrity(finalMetrics);
   assert.equal(broadcasterConversationReads(finalMetrics).length, 0);
   assert.equal(rooms.calls.length, 3);
@@ -243,15 +244,17 @@ test('agent duplicate clientMessageId does not repeat state mutation or realtime
   assert.equal(rooms.calls.length, callsAfterFirst);
 
   const metrics = instrumentation.metrics();
-  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.executed <= 5);
   assert.ok(metrics.select <= 3);
   assert.ok(metrics.insert <= 1);
-  assert.equal(metrics.update, 0);
+  assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
-  assert.equal(metrics.batch, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
   assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
-  assert.equal(conversationUpdates(metrics).length, 0);
+  assert.equal(conversationUpdates(metrics).length, 1);
+  assert.equal(changedRows(conversationUpdates(metrics)), 0);
   assert.ok(messageReads(metrics).length <= 1);
   assert.equal(
     database
@@ -291,12 +294,13 @@ test('agent message conflict performs only the necessary idempotency lookup', as
   assert.equal(execution.tasks.length, 0);
   assert.equal(rooms.calls.length, 0);
   const metrics = instrumentation.metrics();
-  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.executed <= 5);
   assert.ok(metrics.select <= 3);
   assert.ok(metrics.insert <= 1);
-  assert.equal(metrics.update, 0);
+  assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
-  assert.equal(metrics.batch, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
   assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
   assert.ok(messageReads(metrics).length <= 1);
