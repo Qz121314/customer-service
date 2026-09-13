@@ -99,7 +99,7 @@ type MessageRow = {
   sender_type: SenderType;
   sender_id: string | null;
   body: string;
-  message_kind: 'text' | 'image' | 'product_context';
+  message_kind: 'text' | 'image' | 'product_context' | 'auto_reply';
   structured_payload_json: string | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
@@ -908,6 +908,123 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
   return c.json({ message: clientMessage(createdMessage) }, 201);
 });
 
+clientApi.post(
+  '/client/v1/conversations/:id/quick-replies/:replyId',
+  async (c) => {
+    const body = await readJson<{
+      visitorId?: string;
+      visitorToken?: string;
+      projectId?: string | null;
+      clientMessageId?: string;
+    }>(c.req.raw);
+    const visitorId = normalizeVisitorId(body?.visitorId);
+    const visitorToken = normalizeVisitorToken(
+      body?.visitorToken ?? c.req.header('X-CS-Visitor-Token'),
+    );
+    const clientMessageId = normalizeId(body?.clientMessageId, 160);
+    if (!visitorId && !visitorToken)
+      return error(c, 400, 'INVALID_VISITOR_ID', 'Visitor ID is invalid.');
+    if (!clientMessageId) {
+      return error(
+        c,
+        400,
+        'INVALID_CLIENT_MESSAGE_ID',
+        'Client message ID is invalid.',
+      );
+    }
+
+    const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
+    if (!site)
+      return error(c, 404, 'PROJECT_NOT_FOUND', 'Project was not found.');
+    const visitor = await resolveVisitor(c.env.DB, site.id, {
+      externalId: visitorId,
+      accessToken: visitorToken,
+    });
+    if (!visitor)
+      return error(
+        c,
+        401,
+        'INVALID_VISITOR_TOKEN',
+        'Visitor access token is invalid.',
+      );
+    const conversation = await ownedConversationForMessageWrite(
+      c.env.DB,
+      c.req.param('id'),
+      site.id,
+      visitor.external_id,
+    );
+    if (!conversation)
+      return error(
+        c,
+        404,
+        'CONVERSATION_NOT_FOUND',
+        'Conversation was not found.',
+      );
+    if (conversation.status === 'closed')
+      return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
+
+    const reply = await c.env.DB.prepare(
+      `SELECT question, answer
+       FROM agent_quick_replies
+       WHERE id = ?1 AND agent_id = ?2 AND enabled = 1
+       LIMIT 1`,
+    )
+      .bind(c.req.param('replyId'), conversation.assigned_agent)
+      .first<{ question: string; answer: string }>();
+    if (!reply)
+      return error(c, 404, 'QUICK_REPLY_NOT_FOUND', 'Quick reply not found.');
+
+    const question = await persistClientMessage(c.env.DB, {
+      conversationId: conversation.id,
+      senderType: 'visitor',
+      senderId: conversation.visitor_id,
+      body: reply.question,
+      clientMessageId,
+    });
+    const answer = await persistAutoReplyMessage(c.env.DB, {
+      conversationId: conversation.id,
+      body: reply.answer,
+      clientMessageId: `quick-reply-answer:${clientMessageId}`,
+    });
+
+    await deferClientRealtime(
+      c,
+      Promise.allSettled([
+        broadcastRoomSafely(c.env, conversation.id, {
+          type: 'message',
+          message: adminMessage(question.message),
+        }),
+        broadcastRoomSafely(c.env, conversation.id, {
+          type: 'message',
+          message: adminMessage(answer.message),
+        }),
+        broadcastClientConversationEvent(
+          c.env,
+          conversation.id,
+          'message.created',
+          { message: clientMessage(question.message) },
+        ),
+        broadcastClientConversationEvent(
+          c.env,
+          conversation.id,
+          'message.created',
+          { message: clientMessage(answer.message) },
+        ),
+      ]),
+    );
+
+    return c.json(
+      {
+        messages: [
+          clientMessage(question.message),
+          clientMessage(answer.message),
+        ],
+      },
+      201,
+    );
+  },
+);
+
 clientApi.post('/client/v1/conversations/:id/read', async (c) => {
   const body = await readJson<{
     visitorId?: string;
@@ -954,7 +1071,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
   const boundary = await c.env.DB.prepare(
     `SELECT id, created_at
      FROM messages
-     WHERE conversation_id = ?1 AND sender_type = 'agent'
+     WHERE conversation_id = ?1 AND sender_type IN ('agent', 'system')
      ORDER BY CASE WHEN id = ?2 THEN 0 ELSE 1 END,
        created_at DESC, id DESC
      LIMIT 1`,
@@ -972,7 +1089,7 @@ clientApi.post('/client/v1/conversations/:id/read', async (c) => {
                SELECT COUNT(*)
                FROM messages
                WHERE conversation_id = ?1
-                 AND sender_type = 'agent'
+                 AND sender_type IN ('agent', 'system')
                  AND read_by_visitor_at IS NULL
                  AND (
                    created_at > ?2
@@ -2075,6 +2192,10 @@ async function conversationDetail(
   before: string | null,
 ) {
   const db = env.DB;
+  const quickReplies = await loadVisitorQuickReplies(
+    db,
+    conversation.assigned_agent,
+  );
   const result = await db
     .prepare(
       `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
@@ -2082,7 +2203,7 @@ async function conversationDetail(
        COALESCE(
          m.read_by_visitor_at,
          CASE
-           WHEN m.sender_type = 'agent'
+           WHEN m.sender_type IN ('agent', 'system')
              AND c.visitor_read_through_at IS NOT NULL
              AND (
                m.created_at < c.visitor_read_through_at
@@ -2152,8 +2273,26 @@ async function conversationDetail(
       ...clientMessage(message),
       attachments: attachmentsByMessageId.get(message.id) ?? [],
     })),
+    quickReplies,
     nextMessageCursor: hasMore && page.length > 0 ? page[0].created_at : null,
   };
+}
+
+async function loadVisitorQuickReplies(
+  db: D1Database,
+  agentId: string | null,
+): Promise<Array<{ id: string; question: string }>> {
+  if (!agentId) return [];
+  const result = await db
+    .prepare(
+      `SELECT id, question
+       FROM agent_quick_replies
+       WHERE agent_id = ?1 AND enabled = 1
+       ORDER BY sort_order ASC, id ASC`,
+    )
+    .bind(agentId)
+    .all<{ id: string; question: string }>();
+  return result.results ?? [];
 }
 
 async function persistClientMessage(
@@ -2248,6 +2387,77 @@ async function persistClientMessage(
   };
 }
 
+async function persistAutoReplyMessage(
+  db: D1Database,
+  input: {
+    conversationId: string;
+    body: string;
+    clientMessageId: string;
+  },
+): Promise<{
+  message: MessageRow;
+  duplicate: boolean;
+}> {
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const [inserted] = await db.batch([
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO messages (
+         id, conversation_id, sender_type, sender_id, body,
+         message_kind, structured_payload_json, client_message_id, created_at
+       ) VALUES (?1, ?2, 'system', NULL, ?3, 'auto_reply', NULL, ?4, ?5)`,
+      )
+      .bind(
+        id,
+        input.conversationId,
+        input.body,
+        input.clientMessageId,
+        createdAt,
+      ),
+    db
+      .prepare(
+        `UPDATE conversations
+         SET visitor_unread_count = visitor_unread_count + 1,
+             last_message_at = ?1, last_message_preview = ?2, updated_at = ?1
+         WHERE id = ?3
+           AND EXISTS (SELECT 1 FROM messages WHERE id = ?4)`,
+      )
+      .bind(createdAt, input.body, input.conversationId, id),
+  ]);
+  if (!inserted?.meta.changes) {
+    const existing = await db
+      .prepare(
+        `SELECT id, conversation_id, sender_type, sender_id, body,
+         message_kind, structured_payload_json, client_message_id,
+         read_by_visitor_at, read_by_agent_at, created_at
+       FROM messages
+       WHERE conversation_id = ?1 AND client_message_id = ?2
+       LIMIT 1`,
+      )
+      .bind(input.conversationId, input.clientMessageId)
+      .first<MessageRow>();
+    if (!existing) throw new Error('Auto reply persistence conflict');
+    return { message: existing, duplicate: true };
+  }
+  return {
+    message: {
+      id,
+      conversation_id: input.conversationId,
+      sender_type: 'system',
+      sender_id: null,
+      body: input.body,
+      message_kind: 'auto_reply',
+      structured_payload_json: null,
+      client_message_id: input.clientMessageId,
+      read_by_visitor_at: null,
+      read_by_agent_at: null,
+      created_at: createdAt,
+    },
+    duplicate: false,
+  };
+}
+
 function assignmentVisitorMessage(
   message: MessageRow,
 ): AssignmentVisitorMessage {
@@ -2288,7 +2498,14 @@ function clientMessage(message: MessageRow) {
         : 'sent';
   return {
     id: message.id,
-    direction: message.sender_type === 'agent' ? 'agent' : 'customer',
+    sender_type: message.sender_type,
+    sender_id: message.sender_id,
+    direction:
+      message.sender_type === 'agent'
+        ? 'agent'
+        : message.sender_type === 'system'
+          ? 'system'
+          : 'customer',
     body: message.body,
     kind: message.message_kind,
     productContext: productContextFromMessage(message),

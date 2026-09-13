@@ -16,7 +16,7 @@ test('agent inbox returns overview, conversations, messages and media in two req
   assert.match(api, /request<AgentInbox>\('\/api\/agent\/conversations'\)/u);
   assert.match(worker, /loadAgentInbox/u);
   assert.doesNotMatch(worker, /quickReplies/u);
-  assert.doesNotMatch(api, /quickReplies|listLocalQuickReplies/u);
+  assert.doesNotMatch(api, /export type AgentInbox = \{[\s\S]*?quickReplies/u);
   assert.match(
     worker,
     /messages: pageMessages\.map\(agentMessage\),[\s\S]*media,[\s\S]*readState/u,

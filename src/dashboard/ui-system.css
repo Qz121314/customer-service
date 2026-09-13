@@ -139,8 +139,8 @@ p {
 
 .visitor-chat {
   min-height: 100dvh;
-  display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  display: flex;
+  flex-direction: column;
   background: #f7f8fa;
   color: #1f2937;
 }
@@ -184,7 +184,93 @@ p {
   background: #e9f0fb;
   border-radius: 0.75rem;
 }
+
+.visitor-quick-replies {
+  width: min(44rem, calc(100% - 2rem));
+  margin: 0.85rem auto 0;
+  padding: 1rem;
+  border: 1px solid #dbe5f1;
+  border-radius: 1rem;
+  background: linear-gradient(145deg, #f8fbff 0%, #eef5ff 100%);
+  box-shadow: 0 8px 24px rgb(30 64 175 / 7%);
+}
+
+.visitor-quick-replies-heading {
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.visitor-quick-replies-heading strong {
+  color: #173b70;
+  font-size: 0.95rem;
+}
+
+.visitor-quick-replies-heading span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+.visitor-quick-replies-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.visitor-quick-replies button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  border: 1px solid #cfdbeb;
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.8rem 0.7rem 0.9rem;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.visitor-quick-replies button:hover:not(:disabled),
+.visitor-quick-replies button:focus-visible {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  box-shadow: 0 4px 12px rgb(37 99 235 / 12%);
+  transform: translateY(-1px);
+}
+
+.visitor-quick-replies button > span:last-child {
+  flex: 0 0 auto;
+  color: #7892b5;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.visitor-quick-replies button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+@media (max-width: 600px) {
+  .visitor-quick-replies,
+  .visitor-chat-messages {
+    width: min(100% - 1rem, 44rem);
+  }
+
+  .visitor-quick-replies {
+    margin-top: 0.65rem;
+    padding: 0.85rem;
+  }
+}
 .visitor-chat-messages {
+  flex: 1 1 auto;
+  min-height: 0;
   width: min(44rem, calc(100% - 2rem));
   margin: 1rem auto;
   display: grid;
@@ -204,8 +290,7 @@ p {
   background: #d9e9ff;
 }
 .visitor-chat-composer {
-  position: sticky;
-  bottom: 0;
+  flex: 0 0 auto;
   display: flex;
   gap: 0.6rem;
   padding: 0.75rem max(0.75rem, env(safe-area-inset-left))

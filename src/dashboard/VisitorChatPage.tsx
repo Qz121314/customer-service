@@ -4,6 +4,7 @@ import {
   markVisitorConversationRead,
   openVisitorConversationSocket,
   sendVisitorMessage,
+  sendVisitorQuickReply,
   startVisitorConversation,
   type ConversationDetail,
   type Message,
@@ -25,6 +26,9 @@ export function VisitorChatPage() {
   const [error, setError] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendingQuickReply, setSendingQuickReply] = useState<string | null>(
+    null,
+  );
   const socketRef = useRef<WebSocket | null>(null);
   const handoffId = useMemo(
     () =>
@@ -65,7 +69,7 @@ export function VisitorChatPage() {
           next.conversation.id,
           visitorId,
           token,
-          lastAgentMessage(next.messages)?.id ?? null,
+          lastReadableMessage(next.messages)?.id ?? null,
         );
         const socket = openVisitorConversationSocket(
           next.conversation.id,
@@ -138,6 +142,39 @@ export function VisitorChatPage() {
     }
   }
 
+  async function submitQuickReply(quickReplyId: string) {
+    if (!detail || !visitorToken || sending || sendingQuickReply) return;
+    setSendingQuickReply(quickReplyId);
+    setError('');
+    try {
+      const messages = await sendVisitorQuickReply(
+        detail.conversation.id,
+        visitorId,
+        visitorToken,
+        quickReplyId,
+        crypto.randomUUID(),
+      );
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              messages: [
+                ...current.messages,
+                ...messages.filter(
+                  (message) =>
+                    !current.messages.some((item) => item.id === message.id),
+                ),
+              ],
+            }
+          : current,
+      );
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '快捷问答发送失败');
+    } finally {
+      setSendingQuickReply(null);
+    }
+  }
+
   return (
     <main className="visitor-chat" aria-live="polite">
       <header className="visitor-chat-header">
@@ -172,6 +209,31 @@ export function VisitorChatPage() {
                     : '')}
               </article>
             ))}
+            {detail.quickReplies && detail.quickReplies.length > 0 ? (
+              <section className="visitor-quick-replies" aria-label="常见问题">
+                <div className="visitor-quick-replies-heading">
+                  <strong>常见问题</strong>
+                  <span>点击问题，客服会马上为你回复</span>
+                </div>
+                <div className="visitor-quick-replies-list">
+                  {detail.quickReplies.map((reply) => (
+                    <button
+                      type="button"
+                      key={reply.id}
+                      disabled={Boolean(sendingQuickReply) || sending}
+                      onClick={() => void submitQuickReply(reply.id)}
+                    >
+                      <span>
+                        {sendingQuickReply === reply.id
+                          ? '正在发送…'
+                          : reply.question}
+                      </span>
+                      <span aria-hidden="true">›</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </section>
           <form
             className="visitor-chat-composer"
@@ -202,10 +264,13 @@ function getOrCreateVisitorId(): string {
   return value;
 }
 
-function lastAgentMessage(messages: Message[]): Message | null {
+function lastReadableMessage(messages: Message[]): Message | null {
   return (
     [...messages]
       .reverse()
-      .find((message) => message.sender_type === 'agent') ?? null
+      .find(
+        (message) =>
+          message.sender_type === 'agent' || message.sender_type === 'system',
+      ) ?? null
   );
 }

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   getAgentAutoReplySettings,
+  getAgentQuickReplies,
   updateAgentAutoReplySettings,
+  updateAgentQuickReplies,
+  type AgentQuickReply,
   type AgentAutoReplySettings,
 } from './agent-auto-reply-client';
 import {
@@ -22,6 +25,7 @@ const EMPTY_SETTINGS: AgentAutoReplySettings = {
 };
 const AUTO_GREETING_LIMIT = 1000;
 const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
+const QUICK_REPLY_LIMIT = 10;
 const CONTACT_CARD_LABELS: Record<AgentContactCardKind, string> = {
   sms: 'SMS',
   whatsapp: 'WhatsApp',
@@ -39,6 +43,10 @@ export function AgentAutoReplySettingsModal({
   const [settings, setSettings] =
     useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
   const [saved, setSaved] = useState<AgentAutoReplySettings>(EMPTY_SETTINGS);
+  const [quickReplies, setQuickReplies] = useState<AgentQuickReply[]>([]);
+  const [savedQuickReplies, setSavedQuickReplies] = useState<AgentQuickReply[]>(
+    [],
+  );
   const [presets, setPresets] = useState<AgentAttachmentPreset[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -50,12 +58,18 @@ export function AgentAutoReplySettingsModal({
     let active = true;
     setLoading(true);
     setError('');
-    void Promise.all([getAgentAutoReplySettings(), getAgentAttachmentPresets()])
-      .then(([value, attachmentPresets]) => {
+    void Promise.all([
+      getAgentAutoReplySettings(),
+      getAgentAttachmentPresets(),
+      getAgentQuickReplies(),
+    ])
+      .then(([value, attachmentPresets, replies]) => {
         if (!active) return;
         setSettings(value);
         setSaved(value);
         setPresets(attachmentPresets);
+        setQuickReplies(replies);
+        setSavedQuickReplies(replies);
       })
       .catch((reason) => {
         if (!active) return;
@@ -88,10 +102,13 @@ export function AgentAutoReplySettingsModal({
   if (!open) return null;
 
   const normalizedText = settings.text.trim();
-  const changed =
+  const greetingChanged =
     settings.enabled !== saved.enabled ||
     settings.text !== saved.text ||
     settings.attachmentIds.join('\n') !== saved.attachmentIds.join('\n');
+  const quickRepliesChanged =
+    JSON.stringify(quickReplies) !== JSON.stringify(savedQuickReplies);
+  const changed = greetingChanged || quickRepliesChanged;
   const hasContent = Boolean(
     normalizedText || settings.attachmentIds.length > 0,
   );
@@ -100,6 +117,14 @@ export function AgentAutoReplySettingsModal({
     !saving &&
     !imageUploading &&
     changed &&
+    quickReplies.length <= QUICK_REPLY_LIMIT &&
+    quickReplies.every(
+      (reply) =>
+        reply.question.trim().length > 0 &&
+        reply.question.trim().length <= 120 &&
+        reply.answer.trim().length > 0 &&
+        reply.answer.trim().length <= 2000,
+    ) &&
     settings.text.length <= AUTO_GREETING_LIMIT &&
     settings.attachmentIds.length <= AUTO_GREETING_ATTACHMENT_LIMIT &&
     (!settings.enabled || hasContent);
@@ -109,13 +134,24 @@ export function AgentAutoReplySettingsModal({
     setSaving(true);
     setError('');
     try {
-      const next = await updateAgentAutoReplySettings({
-        enabled: settings.enabled,
-        text: normalizedText,
-        attachmentIds: settings.attachmentIds,
-      });
+      const [next, nextReplies] = await Promise.all([
+        updateAgentAutoReplySettings({
+          enabled: settings.enabled,
+          text: normalizedText,
+          attachmentIds: settings.attachmentIds,
+        }),
+        updateAgentQuickReplies(
+          quickReplies.map((reply) => ({
+            ...reply,
+            question: reply.question.trim(),
+            answer: reply.answer.trim(),
+          })),
+        ),
+      ]);
       setSettings(next);
       setSaved(next);
+      setQuickReplies(nextReplies);
+      setSavedQuickReplies(nextReplies);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : '自动回复设置保存失败',
@@ -313,6 +349,109 @@ export function AgentAutoReplySettingsModal({
                 {presets.length === 0 ? (
                   <p className="agent-auto-reply-attachment-empty">
                     还没有附件。可先在坐席设置的“名片”中添加渠道名片，也可在这里添加问候图片。
+                  </p>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="agent-quick-replies">
+              <div className="agent-auto-reply-attachments-head">
+                <span>
+                  <strong>点击式问答</strong>
+                  <small>
+                    客户点击问题后，系统会自动发送对应答案。最多{' '}
+                    {QUICK_REPLY_LIMIT} 组。
+                  </small>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={quickReplies.length >= QUICK_REPLY_LIMIT}
+                  onClick={() =>
+                    setQuickReplies((current) => [
+                      ...current,
+                      {
+                        id: crypto.randomUUID(),
+                        question: '',
+                        answer: '',
+                        enabled: true,
+                      },
+                    ])
+                  }
+                >
+                  <UiIcon name="plus" />
+                  添加问题
+                </Button>
+              </div>
+              <div className="agent-quick-reply-list">
+                {quickReplies.map((reply, index) => (
+                  <div className="agent-quick-reply-item" key={reply.id}>
+                    <div className="agent-quick-reply-item-head">
+                      <strong>问题 {index + 1}</strong>
+                      <button
+                        type="button"
+                        aria-label={`删除问题 ${index + 1}`}
+                        onClick={() =>
+                          setQuickReplies((current) =>
+                            current.filter((item) => item.id !== reply.id),
+                          )
+                        }
+                      >
+                        <UiIcon name="close" />
+                      </button>
+                    </div>
+                    <input
+                      value={reply.question}
+                      maxLength={120}
+                      placeholder="例如：你们怎么收费？"
+                      aria-label={`问题 ${index + 1}`}
+                      onChange={(event) =>
+                        setQuickReplies((current) =>
+                          current.map((item) =>
+                            item.id === reply.id
+                              ? { ...item, question: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                    <Textarea
+                      value={reply.answer}
+                      maxLength={2000}
+                      rows={3}
+                      placeholder="输入客户点击后收到的自动答案…"
+                      aria-label={`问题 ${index + 1} 的答案`}
+                      onChange={(event) =>
+                        setQuickReplies((current) =>
+                          current.map((item) =>
+                            item.id === reply.id
+                              ? { ...item, answer: event.target.value }
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                    <label className="agent-quick-reply-enabled">
+                      <input
+                        type="checkbox"
+                        checked={reply.enabled}
+                        onChange={(event) =>
+                          setQuickReplies((current) =>
+                            current.map((item) =>
+                              item.id === reply.id
+                                ? { ...item, enabled: event.target.checked }
+                                : item,
+                            ),
+                          )
+                        }
+                      />
+                      对访客显示
+                    </label>
+                  </div>
+                ))}
+                {quickReplies.length === 0 ? (
+                  <p className="agent-auto-reply-attachment-empty">
+                    还没有快捷问题。添加后，客户会在聊天窗口看到可点击的问题。
                   </p>
                 ) : null}
               </div>

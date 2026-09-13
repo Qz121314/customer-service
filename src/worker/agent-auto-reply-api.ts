@@ -23,6 +23,9 @@ type AgentSettingsRow = Pick<
 
 const AUTO_GREETING_LIMIT = 1000;
 const AUTO_GREETING_ATTACHMENT_LIMIT = 6;
+const QUICK_REPLY_LIMIT = 10;
+const QUICK_REPLY_QUESTION_LIMIT = 120;
+const QUICK_REPLY_ANSWER_LIMIT = 2000;
 
 export const agentAutoReplyApi = new Hono<Env>();
 
@@ -115,6 +118,40 @@ agentAutoReplyApi.patch('/api/agent/settings/auto-reply', async (c) => {
   });
 });
 
+agentAutoReplyApi.get('/api/agent/settings/quick-replies', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  return c.json({ quickReplies: await loadQuickReplies(c.env.DB, agent.id) });
+});
+
+agentAutoReplyApi.put('/api/agent/settings/quick-replies', async (c) => {
+  const agent = await requireAgentSession(c);
+  if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  const body = await readJson<{ quickReplies?: unknown }>(c.req.raw);
+  const quickReplies = normalizeQuickReplies(body?.quickReplies);
+  if (!quickReplies) return c.json({ error: 'INVALID_QUICK_REPLIES' }, 400);
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      'DELETE FROM agent_quick_replies WHERE agent_id = ?1',
+    ).bind(agent.id),
+    ...quickReplies.map((reply, index) =>
+      c.env.DB.prepare(
+        `INSERT INTO agent_quick_replies (
+           id, agent_id, question, answer, enabled, sort_order
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+      ).bind(
+        reply.id,
+        agent.id,
+        reply.question,
+        reply.answer,
+        reply.enabled ? 1 : 0,
+        index,
+      ),
+    ),
+  ]);
+  return c.json({ quickReplies });
+});
+
 async function settingsPayload(
   db: D1Database,
   row: AgentSettingsRow,
@@ -133,6 +170,66 @@ async function settingsPayload(
     text: row.auto_greeting_text ?? '',
     attachmentIds: (relations.results ?? []).map((item) => item.preset_id),
   };
+}
+
+async function loadQuickReplies(
+  db: D1Database,
+  agentId: string,
+): Promise<AgentQuickReply[]> {
+  const rows = await db
+    .prepare(
+      `SELECT id, question, answer, enabled
+       FROM agent_quick_replies
+       WHERE agent_id = ?1
+       ORDER BY sort_order ASC, id ASC`,
+    )
+    .bind(agentId)
+    .all<AgentQuickReplyRow>();
+  return (rows.results ?? []).map((row) => ({
+    id: row.id,
+    question: row.question,
+    answer: row.answer,
+    enabled: row.enabled === 1,
+  }));
+}
+
+type AgentQuickReply = {
+  id: string;
+  question: string;
+  answer: string;
+  enabled: boolean;
+};
+
+type AgentQuickReplyRow = Omit<AgentQuickReply, 'enabled'> & {
+  enabled: number;
+};
+
+function normalizeQuickReplies(value: unknown): AgentQuickReply[] | null {
+  if (!Array.isArray(value) || value.length > QUICK_REPLY_LIMIT) return null;
+  const result: AgentQuickReply[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+    const record = item as Record<string, unknown>;
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    const question =
+      typeof record.question === 'string' ? record.question.trim() : '';
+    const answer =
+      typeof record.answer === 'string' ? record.answer.trim() : '';
+    if (
+      !id ||
+      id.length > 80 ||
+      !question ||
+      question.length > QUICK_REPLY_QUESTION_LIMIT ||
+      !answer ||
+      answer.length > QUICK_REPLY_ANSWER_LIMIT ||
+      typeof record.enabled !== 'boolean' ||
+      result.some((reply) => reply.id === id)
+    ) {
+      return null;
+    }
+    result.push({ id, question, answer, enabled: record.enabled });
+  }
+  return result;
 }
 
 function normalizeAttachmentIds(value: unknown[]): string[] {
