@@ -47,16 +47,33 @@ const workerModule = (name) =>
 
 let agentApi;
 let clientApi;
+let broadcastClientConversationEvent;
+let loadAgentOverview;
+let routingBusinessDate;
 try {
-  [{ agentApi }, { clientApi }] = await Promise.all([
+  [
+    { agentApi },
+    { clientApi, broadcastClientConversationEvent },
+    { loadAgentOverview },
+    { routingBusinessDate },
+  ] = await Promise.all([
     import(workerModule('agent-api.ts')),
     import(workerModule('client-api.ts')),
+    import(workerModule('agent-inbox.ts')),
+    import(workerModule('routing.ts')),
   ]);
 } finally {
   rmSync(runtimeDirectory, { recursive: true, force: true });
 }
 
-export { agentApi, clientApi, DatabaseSync };
+export {
+  agentApi,
+  broadcastClientConversationEvent,
+  clientApi,
+  DatabaseSync,
+  loadAgentOverview,
+  routingBusinessDate,
+};
 
 export function applyMigrations(database) {
   const directory = fileURLToPath(

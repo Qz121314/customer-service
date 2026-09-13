@@ -452,10 +452,7 @@ test('closed affinity remains only a priority and ineligible original agent fall
     metrics.executed <= 13,
     `unexpected create budget: ${metrics.executed}`,
   );
-  assert.ok(
-    metrics.select <= 7,
-    `unexpected SELECT budget: ${metrics.select}`,
-  );
+  assert.ok(metrics.select <= 7, `unexpected SELECT budget: ${metrics.select}`);
   assert.equal(replayQueries(metrics).length, 1);
   assert.equal(conversationCreates(metrics).length, 1);
   assert.equal(changedRows(conversationCreates(metrics)), 1);
