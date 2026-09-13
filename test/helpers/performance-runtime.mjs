@@ -105,6 +105,8 @@ export function createInstrumentedD1(database) {
         column === undefined || row === null ? row : (row[column] ?? null);
     } else if (method === 'all') {
       value = { results: prepared.all(...bindings) };
+    } else if (/\bRETURNING\b/u.test(sql)) {
+      value = { results: prepared.all(...bindings) };
     } else {
       const result = prepared.run(...bindings);
       value = { meta: { changes: Number(result.changes) } };
