@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getVisitorConversation,
   markVisitorConversationRead,
+  normalizeVisitorMessage,
   openVisitorConversationSocket,
   sendVisitorMessage,
   sendVisitorGreetingCta,
@@ -30,6 +31,7 @@ export function VisitorChatPage() {
     null,
   );
   const socketRef = useRef<WebSocket | null>(null);
+  const detailRef = useRef<ConversationDetail | null>(null);
   const handoffId = useMemo(
     () =>
       new URLSearchParams(window.location.search).get('sourceHandoffId') ??
@@ -43,6 +45,7 @@ export function VisitorChatPage() {
       return;
     }
     let active = true;
+    let cleanupRealtime: (() => void) | null = null;
     void startVisitorConversation({
       visitorId,
       visitorToken: visitorTokenRef.current || null,
@@ -65,41 +68,127 @@ export function VisitorChatPage() {
         );
         if (!active) return;
         setDetail(next);
+        detailRef.current = next;
         await markVisitorConversationRead(
           next.conversation.id,
           visitorId,
           token,
           lastReadableMessage(next.messages)?.id ?? null,
         );
-        const socket = openVisitorConversationSocket(
-          next.conversation.id,
-          visitorId,
-          token,
-        );
-        socketRef.current = socket;
-        socket.addEventListener('message', (event) => {
-          try {
-            const value = JSON.parse(String(event.data)) as {
-              type?: string;
-              message?: Message;
-            };
-            if (value.type === 'message.created' && value.message) {
-              setDetail((current) =>
-                current &&
-                current.messages.some((m) => m.id === value.message!.id)
-                  ? current
-                  : current
-                    ? {
-                        ...current,
-                        messages: [...current.messages, value.message!],
-                      }
-                    : current,
-              );
+        let socket: WebSocket | null = null;
+        let timer: number | null = null;
+        let retryAttempt = 0;
+        let openedOnce = false;
+        let loadInFlight: Promise<void> | null = null;
+        let stableTimer: number | null = null;
+        const loadMissing = () => {
+          if (loadInFlight) return loadInFlight;
+          const current = detailRef.current;
+          const lastMessage = current?.messages.at(-1);
+          if (!lastMessage) return Promise.resolve();
+          const request = getVisitorConversation(
+            next.conversation.id,
+            visitorId,
+            token,
+            {
+              after: {
+                id: lastMessage.id,
+                createdAt: lastMessage.created_at,
+              },
+            },
+          )
+            .then((value) => {
+              if (!active) return;
+              setDetail((currentDetail) => {
+                if (!currentDetail) return currentDetail;
+                const merged = mergeVisitorMessages(
+                  currentDetail.messages,
+                  value.messages,
+                );
+                const updated = { ...currentDetail, messages: merged };
+                detailRef.current = updated;
+                return updated;
+              });
+            })
+            .catch((reason) => {
+              if (active)
+                setError(
+                  reason instanceof Error ? reason.message : '消息同步失败',
+                );
+            });
+          loadInFlight = request.finally(() => {
+            loadInFlight = null;
+          });
+          return loadInFlight;
+        };
+        const connect = () => {
+          if (!active) return;
+          socket = openVisitorConversationSocket(
+            next.conversation.id,
+            visitorId,
+            token,
+          );
+          socketRef.current = socket;
+          socket.addEventListener('open', () => {
+            if (!active) return;
+            if (openedOnce) void loadMissing();
+            openedOnce = true;
+            if (stableTimer !== null) window.clearTimeout(stableTimer);
+            stableTimer = window.setTimeout(() => {
+              retryAttempt = 0;
+            }, 10_000);
+          });
+          socket.addEventListener('message', (event) => {
+            try {
+              const value = JSON.parse(String(event.data)) as {
+                type?: string;
+                message?: Message;
+              };
+              if (value.type === 'message.created' && value.message) {
+                setDetail((currentDetail) => {
+                  if (!currentDetail) return currentDetail;
+                  const updated = {
+                    ...currentDetail,
+                    messages: mergeVisitorMessages(currentDetail.messages, [
+                      normalizeVisitorMessage(value.message!),
+                    ]),
+                  };
+                  detailRef.current = updated;
+                  return updated;
+                });
+              }
+            } catch {
+              // Ignore heartbeat and malformed frames.
             }
-          } catch {
-            // Ignore heartbeat and malformed frames.
-          }
-        });
+          });
+          socket.addEventListener('close', () => {
+            if (!active) return;
+            socket = null;
+            socketRef.current = null;
+            if (stableTimer !== null) window.clearTimeout(stableTimer);
+            stableTimer = null;
+            const delay = Math.min(30_000, 1_000 * 2 ** retryAttempt);
+            retryAttempt += 1;
+            timer = window.setTimeout(connect, delay);
+          });
+          socket.addEventListener('error', () => socket?.close());
+        };
+        const reconnectNow = () => {
+          if (!active || socket) return;
+          if (timer !== null) window.clearTimeout(timer);
+          timer = null;
+          retryAttempt = 0;
+          connect();
+        };
+        connect();
+        window.addEventListener('online', reconnectNow);
+        cleanupRealtime = () => {
+          active = false;
+          window.removeEventListener('online', reconnectNow);
+          socket?.close();
+          if (timer !== null) window.clearTimeout(timer);
+          if (stableTimer !== null) window.clearTimeout(stableTimer);
+        };
       })
       .catch((reason) => {
         if (active)
@@ -109,6 +198,7 @@ export function VisitorChatPage() {
       });
     return () => {
       active = false;
+      cleanupRealtime?.();
       socketRef.current?.close();
     };
   }, [handoffId, productId, visitorId]);
@@ -127,13 +217,15 @@ export function VisitorChatPage() {
         messageBody,
         crypto.randomUUID(),
       );
-      setDetail((current) =>
-        current && current.messages.some((item) => item.id === message.id)
-          ? current
-          : current
-            ? { ...current, messages: [...current.messages, message] }
-            : current,
-      );
+      setDetail((current) => {
+        if (!current) return current;
+        const updated = {
+          ...current,
+          messages: mergeVisitorMessages(current.messages, [message]),
+        };
+        detailRef.current = updated;
+        return updated;
+      });
     } catch (reason) {
       setBody(messageBody);
       setError(reason instanceof Error ? reason.message : '发送失败');
@@ -154,20 +246,15 @@ export function VisitorChatPage() {
         ctaId,
         crypto.randomUUID(),
       );
-      setDetail((current) =>
-        current
-          ? {
-              ...current,
-              messages: [
-                ...current.messages,
-                ...messages.filter(
-                  (message) =>
-                    !current.messages.some((item) => item.id === message.id),
-                ),
-              ],
-            }
-          : current,
-      );
+      setDetail((current) => {
+        if (!current) return current;
+        const updated = {
+          ...current,
+          messages: mergeVisitorMessages(current.messages, messages),
+        };
+        detailRef.current = updated;
+        return updated;
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'CTA 发送失败');
     } finally {
@@ -259,6 +346,19 @@ function getOrCreateVisitorId(): string {
   const value = `visitor-${crypto.randomUUID()}`;
   localStorage.setItem(VISITOR_ID_KEY, value);
   return value;
+}
+
+function mergeVisitorMessages(
+  current: Message[],
+  incoming: Message[],
+): Message[] {
+  const messages = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) messages.set(message.id, message);
+  return [...messages.values()].sort((left, right) => {
+    const difference =
+      Date.parse(left.created_at) - Date.parse(right.created_at);
+    return difference || left.id.localeCompare(right.id);
+  });
 }
 
 function lastReadableMessage(messages: Message[]): Message | null {

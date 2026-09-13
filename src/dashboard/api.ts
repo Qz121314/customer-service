@@ -541,10 +541,89 @@ export async function getVisitorConversation(
   id: string,
   visitorId: string,
   visitorToken: string,
+  query?: { after?: ConversationMessageCursor },
 ): Promise<ConversationDetail> {
-  return request(
-    `/client/v1/conversations/${encodeURIComponent(id)}?visitorId=${encodeURIComponent(visitorId)}&visitorToken=${encodeURIComponent(visitorToken)}`,
+  const parameters = new URLSearchParams({
+    visitorId,
+    visitorToken,
+  });
+  if (query?.after) {
+    parameters.set('afterId', query.after.id);
+    parameters.set('afterCreatedAt', query.after.createdAt);
+  }
+  const response = await request<{
+    conversation: VisitorConversationPayload;
+  }>(
+    `/client/v1/conversations/${encodeURIComponent(id)}?${parameters.toString()}`,
   );
+  return {
+    conversation: normalizeVisitorConversation(response.conversation),
+    messages: response.conversation.messages.map(normalizeVisitorMessage),
+    greetingCtas: response.conversation.greetingCtas,
+    media: [],
+    page: { hasMoreBefore: false, before: null },
+  };
+}
+
+type VisitorConversationPayload = {
+  id: string;
+  site_id?: string;
+  visitor_id?: string;
+  status: 'active' | 'closed';
+  subject?: string | null;
+  productId?: string;
+  sectionId?: string;
+  productTitle?: string | null;
+  productCoverUrl?: string | null;
+  productHref?: string | null;
+  agentName?: string | null;
+  messages: Array<
+    Message & {
+      sentAt?: string;
+      kind?: Message['message_kind'];
+      productContext?: ProductContextSnapshot | null;
+    }
+  >;
+  greetingCtas?: VisitorGreetingCta[];
+};
+
+function normalizeVisitorConversation(
+  value: VisitorConversationPayload,
+): Conversation {
+  return {
+    id: value.id,
+    site_id: value.site_id ?? '',
+    visitor_id: value.visitor_id ?? '',
+    status: value.status === 'closed' ? 'closed' : 'open',
+    subject: value.subject ?? null,
+    product_id: value.productId ?? null,
+    section_id: value.sectionId ?? null,
+    section_name: null,
+    category_id: null,
+    category_name: null,
+    product_title: value.productTitle ?? null,
+    product_cover_url: value.productCoverUrl ?? null,
+    product_href: value.productHref ?? null,
+    assigned_agent: null,
+    agent_unread_count: 0,
+    last_message_at: '',
+    created_at: '',
+    expires_at: null,
+    visitor_name: null,
+    last_message: null,
+    agent_name: value.agentName ?? null,
+  } as Conversation & Record<string, unknown>;
+}
+
+export function normalizeVisitorMessage(
+  value: VisitorConversationPayload['messages'][number],
+): Message {
+  return {
+    ...value,
+    created_at: value.created_at ?? value.sentAt ?? '',
+    message_kind: value.message_kind ?? value.kind ?? 'text',
+    product_context: value.product_context ?? value.productContext ?? null,
+  };
 }
 
 export async function sendVisitorMessage(
@@ -566,7 +645,7 @@ export async function sendVisitorMessage(
       }),
     },
   );
-  return response.message;
+  return normalizeVisitorMessage(response.message);
 }
 
 export async function sendVisitorGreetingCta(
@@ -583,7 +662,7 @@ export async function sendVisitorGreetingCta(
       body: JSON.stringify({ visitorId, visitorToken, clientMessageId }),
     },
   );
-  return response.messages;
+  return response.messages.map(normalizeVisitorMessage);
 }
 
 export async function markVisitorConversationRead(
