@@ -447,7 +447,7 @@ jobs:
         shell: bash
         run: |
           cargo install tauri-cli --version "^2" --locked
-          cargo tauri build --manifest-path src-tauri/Cargo.toml --bundles nsis
+          cargo tauri build --bundles nsis
 
       - name: Publish Windows installer
         env:
