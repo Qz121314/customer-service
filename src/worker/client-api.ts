@@ -99,7 +99,7 @@ type MessageRow = {
   sender_type: SenderType;
   sender_id: string | null;
   body: string;
-  message_kind: 'text' | 'image' | 'product_context' | 'auto_reply';
+  message_kind: 'text' | 'image' | 'product_context';
   structured_payload_json: string | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
@@ -226,7 +226,6 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
       identity.conversation,
       limit,
       before,
-      true,
     ),
   });
 });
@@ -910,7 +909,7 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
 });
 
 clientApi.post(
-  '/client/v1/conversations/:id/quick-replies/:replyId',
+  '/client/v1/conversations/:id/greeting-ctas/:ctaId',
   async (c) => {
     const body = await readJson<{
       visitorId?: string;
@@ -964,61 +963,72 @@ clientApi.post(
     if (conversation.status === 'closed')
       return error(c, 409, 'CONVERSATION_CLOSED', 'Conversation is closed.');
 
-    const reply = await c.env.DB.prepare(
-      `SELECT question, answer
-       FROM agent_quick_replies
-       WHERE id = ?1 AND agent_id = ?2 AND enabled = 1
+    const cta = await c.env.DB.prepare(
+      `SELECT label, answer
+       FROM agent_auto_greeting_ctas cta
+       JOIN conversation_automation_receipts receipt
+         ON receipt.agent_id = cta.agent_id
+       WHERE cta.id = ?1
+         AND cta.agent_id = ?2
+         AND cta.enabled = 1
+         AND receipt.conversation_id = ?3
+         AND receipt.automation_key = 'initial_greeting'
+         AND receipt.outcome = 'sent'
+         AND receipt.message_id IS NOT NULL
        LIMIT 1`,
     )
-      .bind(c.req.param('replyId'), conversation.assigned_agent)
-      .first<{ question: string; answer: string }>();
-    if (!reply)
-      return error(c, 404, 'QUICK_REPLY_NOT_FOUND', 'Quick reply not found.');
+      .bind(c.req.param('ctaId'), conversation.assigned_agent, conversation.id)
+      .first<{ label: string; answer: string }>();
+    if (!cta)
+      return error(c, 404, 'GREETING_CTA_NOT_FOUND', 'Greeting CTA not found.');
 
-    const question = await persistClientMessage(c.env.DB, {
+    const messages = await persistGreetingCtaMessages(c.env.DB, {
       conversationId: conversation.id,
-      senderType: 'visitor',
-      senderId: conversation.visitor_id,
-      body: reply.question,
+      visitorId: conversation.visitor_id,
+      agentId: conversation.assigned_agent,
+      label: cta.label,
+      answer: cta.answer,
       clientMessageId,
     });
-    const answer = await persistAutoReplyMessage(c.env.DB, {
-      conversationId: conversation.id,
-      body: reply.answer,
-      clientMessageId: `quick-reply-answer:${clientMessageId}`,
-    });
-
-    await deferClientRealtime(
-      c,
-      Promise.allSettled([
-        broadcastRoomSafely(c.env, conversation.id, {
-          type: 'message',
-          message: adminMessage(question.message),
-        }),
-        broadcastRoomSafely(c.env, conversation.id, {
-          type: 'message',
-          message: adminMessage(answer.message),
-        }),
-        broadcastClientConversationEvent(
-          c.env,
-          conversation.id,
-          'message.created',
-          { message: clientMessage(question.message) },
-        ),
-        broadcastClientConversationEvent(
-          c.env,
-          conversation.id,
-          'message.created',
-          { message: clientMessage(answer.message) },
-        ),
-      ]),
-    );
+    if (!messages.question.duplicate) {
+      c.set('agentNotification', {
+        type: 'CUSTOMER_REPLY',
+        conversationId: conversation.id,
+        messageId: messages.question.message.id,
+        preview: messages.question.message.body,
+      });
+      await deferClientRealtime(
+        c,
+        Promise.allSettled([
+          broadcastRoomSafely(c.env, conversation.id, {
+            type: 'message',
+            message: adminMessage(messages.question.message),
+          }),
+          broadcastRoomSafely(c.env, conversation.id, {
+            type: 'message',
+            message: adminMessage(messages.answer.message),
+          }),
+          broadcastClientConversationEvent(
+            c.env,
+            conversation.id,
+            'message.created',
+            { message: clientMessage(messages.question.message) },
+          ),
+          broadcastClientConversationEvent(
+            c.env,
+            conversation.id,
+            'message.created',
+            { message: clientMessage(messages.answer.message) },
+          ),
+        ]),
+      );
+    }
 
     return c.json(
       {
         messages: [
-          clientMessage(question.message),
-          clientMessage(answer.message),
+          clientMessage(messages.question.message),
+          clientMessage(messages.answer.message),
         ],
       },
       201,
@@ -2191,12 +2201,13 @@ async function conversationDetail(
   conversation: ConversationRow,
   limit: number,
   before: string | null,
-  includeQuickReplies = false,
 ) {
   const db = env.DB;
-  const quickReplies = includeQuickReplies
-    ? await loadVisitorQuickReplies(db, conversation.assigned_agent)
-    : [];
+  const greetingCtas = await loadVisitorGreetingCtas(
+    db,
+    conversation.id,
+    conversation.assigned_agent,
+  );
   const result = await db
     .prepare(
       `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
@@ -2274,26 +2285,37 @@ async function conversationDetail(
       ...clientMessage(message),
       attachments: attachmentsByMessageId.get(message.id) ?? [],
     })),
-    quickReplies,
+    greetingCtas,
     nextMessageCursor: hasMore && page.length > 0 ? page[0].created_at : null,
   };
 }
 
-async function loadVisitorQuickReplies(
+async function loadVisitorGreetingCtas(
   db: D1Database,
+  conversationId: string,
   agentId: string | null,
-): Promise<Array<{ id: string; question: string }>> {
+): Promise<Array<{ id: string; label: string; greetingMessageId: string }>> {
   if (!agentId) return [];
   const result = await db
     .prepare(
-      `SELECT id, question
-       FROM agent_quick_replies
-       WHERE agent_id = ?1 AND enabled = 1
-       ORDER BY sort_order ASC, id ASC`,
+      `SELECT cta.id, cta.label, receipt.message_id AS greeting_message_id
+       FROM conversation_automation_receipts receipt
+       JOIN agent_auto_greeting_ctas cta ON cta.agent_id = receipt.agent_id
+       WHERE receipt.conversation_id = ?1
+         AND receipt.automation_key = 'initial_greeting'
+         AND receipt.outcome = 'sent'
+         AND receipt.agent_id = ?2
+         AND receipt.message_id IS NOT NULL
+         AND cta.enabled = 1
+       ORDER BY cta.sort_order ASC, cta.id ASC`,
     )
-    .bind(agentId)
-    .all<{ id: string; question: string }>();
-  return result.results ?? [];
+    .bind(conversationId, agentId)
+    .all<{ id: string; label: string; greeting_message_id: string }>();
+  return (result.results ?? []).map((cta) => ({
+    id: cta.id,
+    label: cta.label,
+    greetingMessageId: cta.greeting_message_id,
+  }));
 }
 
 async function persistClientMessage(
@@ -2388,75 +2410,147 @@ async function persistClientMessage(
   };
 }
 
-async function persistAutoReplyMessage(
+async function persistGreetingCtaMessages(
   db: D1Database,
   input: {
     conversationId: string;
-    body: string;
+    visitorId: string;
+    agentId: string | null;
+    label: string;
+    answer: string;
     clientMessageId: string;
   },
 ): Promise<{
-  message: MessageRow;
-  duplicate: boolean;
+  question: { message: MessageRow; duplicate: boolean };
+  answer: { message: MessageRow; duplicate: boolean };
 }> {
-  const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
-  const [inserted] = await db.batch([
+  const answerClientMessageId = `greeting-cta-answer:${input.clientMessageId}`;
+  const existingQuestion = await messageByClientMessageId(
+    db,
+    input.conversationId,
+    input.clientMessageId,
+  );
+  if (existingQuestion) {
+    const existingAnswer = await messageByClientMessageId(
+      db,
+      input.conversationId,
+      answerClientMessageId,
+    );
+    if (!existingAnswer) throw new Error('Greeting CTA persistence conflict');
+    return {
+      question: { message: existingQuestion, duplicate: true },
+      answer: { message: existingAnswer, duplicate: true },
+    };
+  }
+
+  if (!input.agentId) throw new Error('Greeting CTA agent is unavailable');
+  const questionId = crypto.randomUUID();
+  const answerId = crypto.randomUUID();
+  const questionCreatedAt = new Date().toISOString();
+  const answerCreatedAt = new Date(Date.now() + 1).toISOString();
+  const [questionInserted, answerInserted] = await db.batch([
     db
       .prepare(
-        `INSERT OR IGNORE INTO messages (
+        `INSERT INTO messages (
          id, conversation_id, sender_type, sender_id, body,
          message_kind, structured_payload_json, client_message_id, created_at
-       ) VALUES (?1, ?2, 'system', NULL, ?3, 'auto_reply', NULL, ?4, ?5)`,
+       ) VALUES (?1, ?2, 'visitor', ?3, ?4, 'text', NULL, ?5, ?6)`,
       )
       .bind(
-        id,
+        questionId,
         input.conversationId,
-        input.body,
+        input.visitorId,
+        input.label,
         input.clientMessageId,
-        createdAt,
+        questionCreatedAt,
+      ),
+    db
+      .prepare(
+        `INSERT INTO messages (
+         id, conversation_id, sender_type, sender_id, body,
+         message_kind, structured_payload_json, client_message_id, created_at
+       ) VALUES (?1, ?2, 'agent', ?3, ?4, 'text', NULL, ?5, ?6)`,
+      )
+      .bind(
+        answerId,
+        input.conversationId,
+        input.agentId,
+        input.answer,
+        answerClientMessageId,
+        answerCreatedAt,
       ),
     db
       .prepare(
         `UPDATE conversations
-         SET visitor_unread_count = visitor_unread_count + 1,
+         SET agent_unread_count = agent_unread_count + 1,
+             visitor_unread_count = visitor_unread_count + 1,
              last_message_at = ?1, last_message_preview = ?2, updated_at = ?1
          WHERE id = ?3
-           AND EXISTS (SELECT 1 FROM messages WHERE id = ?4)`,
+           AND EXISTS (SELECT 1 FROM messages WHERE id = ?4)
+           AND EXISTS (SELECT 1 FROM messages WHERE id = ?5)`,
       )
-      .bind(createdAt, input.body, input.conversationId, id),
+      .bind(
+        answerCreatedAt,
+        input.answer,
+        input.conversationId,
+        questionId,
+        answerId,
+      ),
   ]);
-  if (!inserted?.meta.changes) {
-    const existing = await db
-      .prepare(
-        `SELECT id, conversation_id, sender_type, sender_id, body,
-         message_kind, structured_payload_json, client_message_id,
-         read_by_visitor_at, read_by_agent_at, created_at
+  if (!questionInserted?.meta.changes || !answerInserted?.meta.changes)
+    throw new Error('Greeting CTA persistence conflict');
+  return {
+    question: {
+      message: {
+        id: questionId,
+        conversation_id: input.conversationId,
+        sender_type: 'visitor',
+        sender_id: input.visitorId,
+        body: input.label,
+        message_kind: 'text',
+        structured_payload_json: null,
+        client_message_id: input.clientMessageId,
+        read_by_visitor_at: null,
+        read_by_agent_at: null,
+        created_at: questionCreatedAt,
+      },
+      duplicate: false,
+    },
+    answer: {
+      message: {
+        id: answerId,
+        conversation_id: input.conversationId,
+        sender_type: 'agent',
+        sender_id: input.agentId,
+        body: input.answer,
+        message_kind: 'text',
+        structured_payload_json: null,
+        client_message_id: answerClientMessageId,
+        read_by_visitor_at: null,
+        read_by_agent_at: null,
+        created_at: answerCreatedAt,
+      },
+      duplicate: false,
+    },
+  };
+}
+
+async function messageByClientMessageId(
+  db: D1Database,
+  conversationId: string,
+  clientMessageId: string,
+): Promise<MessageRow | null> {
+  return db
+    .prepare(
+      `SELECT id, conversation_id, sender_type, sender_id, body,
+       message_kind, structured_payload_json, client_message_id,
+       read_by_visitor_at, read_by_agent_at, created_at
        FROM messages
        WHERE conversation_id = ?1 AND client_message_id = ?2
        LIMIT 1`,
-      )
-      .bind(input.conversationId, input.clientMessageId)
-      .first<MessageRow>();
-    if (!existing) throw new Error('Auto reply persistence conflict');
-    return { message: existing, duplicate: true };
-  }
-  return {
-    message: {
-      id,
-      conversation_id: input.conversationId,
-      sender_type: 'system',
-      sender_id: null,
-      body: input.body,
-      message_kind: 'auto_reply',
-      structured_payload_json: null,
-      client_message_id: input.clientMessageId,
-      read_by_visitor_at: null,
-      read_by_agent_at: null,
-      created_at: createdAt,
-    },
-    duplicate: false,
-  };
+    )
+    .bind(conversationId, clientMessageId)
+    .first<MessageRow>();
 }
 
 function assignmentVisitorMessage(

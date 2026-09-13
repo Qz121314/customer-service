@@ -93,6 +93,42 @@ function addImagePreset(database, agentId, id, label) {
     .run(id, agentId, label, `agent-assets/${agentId}/${id}.png`, `${id}.png`);
 }
 
+test('greeting CTA migration preserves saved agent answers while removing the old table', () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database, '0067_agent_quick_replies.sql');
+  addAgent(database, 'cta-migration-agent');
+  database
+    .prepare(
+      `INSERT INTO agent_quick_replies (
+         id, agent_id, question, answer, enabled, sort_order
+       ) VALUES ('saved-cta', 'cta-migration-agent', '如何收费', '收费100', 1, 3)`,
+    )
+    .run();
+
+  applyMigrations(database, null, '0067_agent_quick_replies.sql');
+
+  assert.deepEqual(
+    {
+      ...database
+        .prepare(
+          `SELECT id, agent_id, label, answer, enabled, sort_order
+           FROM agent_auto_greeting_ctas`,
+        )
+        .get(),
+    },
+    {
+      id: 'saved-cta',
+      agent_id: 'cta-migration-agent',
+      label: '如何收费',
+      answer: '收费100',
+      enabled: 1,
+      sort_order: 3,
+    },
+  );
+  assert.throws(() => database.prepare('SELECT * FROM agent_quick_replies'));
+  database.close();
+});
+
 function addGreetingAttachment(database, agentId, presetId, sortOrder) {
   database
     .prepare(
