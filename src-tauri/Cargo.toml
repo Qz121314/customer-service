@@ -1,0 +1,16 @@
+[package]
+name = "customer-service-agent"
+version = "1.0.0"
+description = "客服坐席 Windows 工作台"
+authors = ["Qz121314"]
+edition = "2021"
+
+[lib]
+name = "customer_service_agent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
