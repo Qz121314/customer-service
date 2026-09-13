@@ -105,6 +105,9 @@ function d1(database) {
         return { results: database.prepare(sql).all(...bindings) };
       },
       async run() {
+        if (/\bRETURNING\b/u.test(sql)) {
+          return { results: database.prepare(sql).all(...bindings) };
+        }
         const result = database.prepare(sql).run(...bindings);
         return { meta: { changes: Number(result.changes) } };
       },
