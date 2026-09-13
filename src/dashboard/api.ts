@@ -182,7 +182,8 @@ export type Message = {
   sender_type: 'visitor' | 'agent' | 'system';
   sender_id: string | null;
   body: string;
-  message_kind?: 'text' | 'image' | 'product_context';
+  message_kind?: 'text' | 'image' | 'product_context' | 'auto_reply';
+  direction?: 'customer' | 'agent' | 'system';
   product_context?: ProductContextSnapshot | null;
   client_message_id: string | null;
   read_by_visitor_at: string | null;
@@ -213,6 +214,7 @@ export type ConversationMessageQuery =
 export type ConversationDetail = {
   conversation: Conversation & Record<string, unknown>;
   messages: Message[];
+  quickReplies?: VisitorQuickReply[];
   media: ConversationMediaItem[];
   readState?: Array<
     Pick<Message, 'id' | 'read_by_visitor_at' | 'read_by_agent_at'>
@@ -221,6 +223,11 @@ export type ConversationDetail = {
     hasMoreBefore: boolean;
     before: ConversationMessageCursor | null;
   };
+};
+
+export type VisitorQuickReply = {
+  id: string;
+  question: string;
 };
 
 export type ConversationMediaItem = {
@@ -559,6 +566,23 @@ export async function sendVisitorMessage(
     },
   );
   return response.message;
+}
+
+export async function sendVisitorQuickReply(
+  id: string,
+  visitorId: string,
+  visitorToken: string,
+  quickReplyId: string,
+  clientMessageId: string,
+): Promise<Message[]> {
+  const response = await request<{ messages: Message[] }>(
+    `/client/v1/conversations/${encodeURIComponent(id)}/quick-replies/${encodeURIComponent(quickReplyId)}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ visitorId, visitorToken, clientMessageId }),
+    },
+  );
+  return response.messages;
 }
 
 export async function markVisitorConversationRead(
