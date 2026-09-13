@@ -226,6 +226,7 @@ clientApi.get('/client/v1/conversations/:id', async (c) => {
       identity.conversation,
       limit,
       before,
+      true,
     ),
   });
 });
@@ -2190,12 +2191,12 @@ async function conversationDetail(
   conversation: ConversationRow,
   limit: number,
   before: string | null,
+  includeQuickReplies = false,
 ) {
   const db = env.DB;
-  const quickReplies = await loadVisitorQuickReplies(
-    db,
-    conversation.assigned_agent,
-  );
+  const quickReplies = includeQuickReplies
+    ? await loadVisitorQuickReplies(db, conversation.assigned_agent)
+    : [];
   const result = await db
     .prepare(
       `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.body,
