@@ -416,6 +416,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   build-windows-release:
+    permissions:
+      contents: write
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     timeout-minutes: 30
