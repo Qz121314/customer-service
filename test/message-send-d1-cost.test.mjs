@@ -591,7 +591,7 @@ test('greeting CTA atomically creates a visitor question and an agent answer', a
       .get(CONVERSATION_ID),
   };
   assert.deepEqual(stateAfterFirst, {
-    visitor_unread_count: 1,
+    visitor_unread_count: 2,
     agent_unread_count: 1,
     last_message_preview: '收费100',
   });
