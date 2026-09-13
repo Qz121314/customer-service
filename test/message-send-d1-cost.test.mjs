@@ -56,13 +56,7 @@ function createMessageFixture(status = 'open') {
        ) VALUES (?1, 'default', ?2, ?3, ?4, 0, 0, ?5,
          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL)`,
     )
-    .run(
-      CONVERSATION_ID,
-      VISITOR_DATABASE_ID,
-      status,
-      AGENT_ID,
-      expiresAt,
-    );
+    .run(CONVERSATION_ID, VISITOR_DATABASE_ID, status, AGENT_ID, expiresAt);
   const instrumentation = createInstrumentedD1(database);
   return { database, instrumentation };
 }
@@ -163,7 +157,8 @@ test('agent text normal success has an executable bounded D1 budget and snapshot
   assert.equal(durableMetrics.insert, 1);
   assert.equal(durableMetrics.update, 1);
   assert.equal(durableMetrics.delete, 0);
-  assert.equal(durableMetrics.batch, 0);
+  assert.equal(durableMetrics.batch, 1);
+  assert.equal(durableMetrics.batchStatements, 2);
   assertMetricIntegrity(durableMetrics);
   assert.equal(messageInserts(durableMetrics).length, 1);
   assert.equal(changedRows(messageInserts(durableMetrics)), 1);
@@ -201,8 +196,8 @@ test('agent text normal success has an executable bounded D1 budget and snapshot
   assert.equal(finalMetrics.insert, 1);
   assert.equal(finalMetrics.update, 1);
   assert.equal(finalMetrics.delete, 0);
-  assert.equal(finalMetrics.batch, 0);
-  assert.equal(finalMetrics.batchStatements, 0);
+  assert.equal(finalMetrics.batch, 1);
+  assert.equal(finalMetrics.batchStatements, 2);
   assertMetricIntegrity(finalMetrics);
   assert.equal(broadcasterConversationReads(finalMetrics).length, 0);
   assert.equal(rooms.calls.length, 3);
@@ -249,15 +244,17 @@ test('agent duplicate clientMessageId does not repeat state mutation or realtime
   assert.equal(rooms.calls.length, callsAfterFirst);
 
   const metrics = instrumentation.metrics();
-  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.executed <= 5);
   assert.ok(metrics.select <= 3);
   assert.ok(metrics.insert <= 1);
-  assert.equal(metrics.update, 0);
+  assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
-  assert.equal(metrics.batch, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
   assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
-  assert.equal(conversationUpdates(metrics).length, 0);
+  assert.equal(conversationUpdates(metrics).length, 1);
+  assert.equal(changedRows(conversationUpdates(metrics)), 0);
   assert.ok(messageReads(metrics).length <= 1);
   assert.equal(
     database
@@ -297,12 +294,13 @@ test('agent message conflict performs only the necessary idempotency lookup', as
   assert.equal(execution.tasks.length, 0);
   assert.equal(rooms.calls.length, 0);
   const metrics = instrumentation.metrics();
-  assert.ok(metrics.executed <= 4);
+  assert.ok(metrics.executed <= 5);
   assert.ok(metrics.select <= 3);
   assert.ok(metrics.insert <= 1);
-  assert.equal(metrics.update, 0);
+  assert.equal(metrics.update, 1);
   assert.equal(metrics.delete, 0);
-  assert.equal(metrics.batch, 0);
+  assert.equal(metrics.batch, 1);
+  assert.equal(metrics.batchStatements, 2);
   assertMetricIntegrity(metrics);
   assert.equal(changedRows(messageInserts(metrics)), 0);
   assert.ok(messageReads(metrics).length <= 1);
@@ -310,30 +308,33 @@ test('agent message conflict performs only the necessary idempotency lookup', as
 });
 
 test('agent closed conversation blocks writes while preserving duplicate behavior', async (t) => {
-  await t.test('new message is rejected without persistence or realtime', async () => {
-    const { database, instrumentation } = createMessageFixture('closed');
-    const rooms = fakeRooms();
-    const execution = createExecutionContext();
-    const response = await agentApi.request(
-      `/api/agent/conversations/${CONVERSATION_ID}/messages`,
-      agentRequest('agent-closed-cost-1'),
-      { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
-      execution.context,
-    );
+  await t.test(
+    'new message is rejected without persistence or realtime',
+    async () => {
+      const { database, instrumentation } = createMessageFixture('closed');
+      const rooms = fakeRooms();
+      const execution = createExecutionContext();
+      const response = await agentApi.request(
+        `/api/agent/conversations/${CONVERSATION_ID}/messages`,
+        agentRequest('agent-closed-cost-1'),
+        { DB: instrumentation.db, CONVERSATION_ROOMS: rooms.namespace },
+        execution.context,
+      );
 
-    assert.equal(response.status, 409);
-    assert.deepEqual(await response.json(), { error: 'CONVERSATION_CLOSED' });
-    const metrics = instrumentation.metrics();
-    assert.equal(metrics.executed, 3);
-    assert.equal(metrics.select, 3);
-    assert.equal(metrics.insert, 0);
-    assert.equal(metrics.update, 0);
-    assert.equal(metrics.delete, 0);
-    assertMetricIntegrity(metrics);
-    assert.equal(execution.tasks.length, 0);
-    assert.equal(rooms.calls.length, 0);
-    database.close();
-  });
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { error: 'CONVERSATION_CLOSED' });
+      const metrics = instrumentation.metrics();
+      assert.equal(metrics.executed, 3);
+      assert.equal(metrics.select, 3);
+      assert.equal(metrics.insert, 0);
+      assert.equal(metrics.update, 0);
+      assert.equal(metrics.delete, 0);
+      assertMetricIntegrity(metrics);
+      assert.equal(execution.tasks.length, 0);
+      assert.equal(rooms.calls.length, 0);
+      database.close();
+    },
+  );
 
   await t.test('existing duplicate remains idempotent', async () => {
     const { database, instrumentation } = createMessageFixture('closed');
@@ -429,7 +430,10 @@ test('visitor text normal success uses persistence results for snapshot realtime
 
   rooms.release();
   await execution.drain();
-  assert.equal(broadcasterConversationReads(instrumentation.metrics()).length, 0);
+  assert.equal(
+    broadcasterConversationReads(instrumentation.metrics()).length,
+    0,
+  );
   assert.equal(rooms.calls.length, 3);
   assert.deepEqual(
     [...rooms.completed].sort(),

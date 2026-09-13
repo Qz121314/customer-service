@@ -7,6 +7,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -20,7 +21,7 @@ const runtimeDirectory = mkdtempSync(
 symlinkSync(
   join(repositoryDirectory, 'node_modules'),
   join(runtimeDirectory, 'node_modules'),
-  'dir',
+  'junction',
 );
 for (const relativeDirectory of ['src/worker', 'src/shared']) {
   const sourceDirectory = join(repositoryDirectory, relativeDirectory);
@@ -28,9 +29,15 @@ for (const relativeDirectory of ['src/worker', 'src/shared']) {
   mkdirSync(targetDirectory, { recursive: true });
   for (const name of readdirSync(sourceDirectory)) {
     if (!name.endsWith('.ts')) continue;
-    copyFileSync(join(sourceDirectory, name), join(targetDirectory, name));
+    const targetPath = join(targetDirectory, name);
+    copyFileSync(join(sourceDirectory, name), targetPath);
     if (!name.endsWith('.d.ts')) {
-      symlinkSync(name, join(targetDirectory, name.slice(0, -3)));
+      const source = readFileSync(targetPath, 'utf8').replace(
+        /from '((?:\.\.\/|\.\/)[^']+)'/gu,
+        (match, specifier) =>
+          /\.[a-z]+$/iu.test(specifier) ? match : `from '${specifier}.ts'`,
+      );
+      writeFileSync(targetPath, source);
     }
   }
 }
@@ -52,7 +59,9 @@ try {
 export { agentApi, clientApi, DatabaseSync };
 
 export function applyMigrations(database) {
-  const directory = fileURLToPath(new URL('../../migrations/', import.meta.url));
+  const directory = fileURLToPath(
+    new URL('../../migrations/', import.meta.url),
+  );
   for (const name of readdirSync(directory)
     .filter((value) => /^\d+.*\.sql$/u.test(value))
     .sort()) {
@@ -82,12 +91,18 @@ export function createInstrumentedD1(database) {
     let value;
     if (method === 'first') {
       const row = prepared.get(...bindings) ?? null;
-      value = column === undefined || row === null ? row : (row[column] ?? null);
+      value =
+        column === undefined || row === null ? row : (row[column] ?? null);
     } else if (method === 'all') {
       value = { results: prepared.all(...bindings) };
     } else {
-      const result = prepared.run(...bindings);
-      value = { meta: { changes: Number(result.changes) } };
+      if (/\bRETURNING\b/iu.test(sql)) {
+        const rows = prepared.all(...bindings);
+        value = { meta: { changes: rows.length }, results: rows };
+      } else {
+        const result = prepared.run(...bindings);
+        value = { meta: { changes: Number(result.changes) } };
+      }
     }
     const changes =
       kind === 'SELECT'
@@ -203,7 +218,7 @@ function createMetricState() {
 function statementKind(sql) {
   let depth = 0;
   let quote = null;
-  for (let index = 0; index < sql.length; ) {
+  for (let index = 0; index < sql.length;) {
     const char = sql[index];
     if (quote) {
       if (char === quote) {

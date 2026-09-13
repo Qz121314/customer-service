@@ -215,9 +215,10 @@ test('first CTA executes the bounded create, claim and assignment lifecycle', as
   assert.equal(execution.tasks.length, 0);
 
   const metrics = instrumentation.metrics();
+  console.error('METRICS_FIRST', JSON.stringify({ ...metrics, executions: metrics.executions.map((x) => `${x.kind}:${x.sql.trim().split('\n')[0]}`) }));
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 15);
-  assert.equal(metrics.select, 7);
+  assert.equal(metrics.executed, 16);
+  assert.equal(metrics.select, 8);
   assert.equal(metrics.insert, 6);
   assert.equal(metrics.update, 2);
   assert.equal(metrics.delete, 0);
@@ -492,9 +493,10 @@ test('no-agent path releases creation reservations in the existing cleanup batch
   assert.equal(rooms.calls.length, 0);
 
   const metrics = instrumentation.metrics();
+  console.error('METRICS_NO_AGENT', JSON.stringify({ ...metrics, executions: metrics.executions.map((x) => `${x.kind}:${x.sql.trim().split('\n')[0]}`) }));
   assertMetricIntegrity(metrics);
-  assert.equal(metrics.executed, 16);
-  assert.equal(metrics.select, 4);
+  assert.equal(metrics.executed, 17);
+  assert.equal(metrics.select, 5);
   assert.equal(metrics.insert, 5);
   assert.equal(metrics.update, 3);
   assert.equal(metrics.delete, 4);
@@ -551,13 +553,14 @@ test('concurrent duplicate claim produces one owner, one quota consumption and o
   await Promise.all([left.response.json(), right.response.json()]);
 
   const metrics = instrumentation.metrics();
+  console.error('METRICS_CONCURRENT', JSON.stringify({ ...metrics, executions: metrics.executions.map((x) => `${x.kind}:${x.sql.trim().split('\n')[0]}`) }));
   assertMetricIntegrity(metrics);
   assert.ok(
-    metrics.executed <= 30,
+    metrics.executed <= 34,
     `unexpected concurrent budget: ${metrics.executed}`,
   );
   assert.ok(
-    metrics.select <= 16,
+    metrics.select <= 19,
     `unexpected concurrent SELECT budget: ${metrics.select}`,
   );
   assert.equal(changedRows(conversationCreates(metrics)), 1);

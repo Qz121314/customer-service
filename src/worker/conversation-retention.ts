@@ -28,6 +28,31 @@ const MAX_CONVERSATION_DELETE_PASSES = 5;
 const MAX_ORPHAN_VISITOR_DELETE_PASSES = 2;
 const PUSH_SUBSCRIPTION_DELETE_BATCH_SIZE = 1000;
 const REPORTING_HISTORY_CLEANUP_UTC_HOUR = 12;
+const HOUR_MS = 60 * 60 * 1000;
+
+export const STALE_PENDING_MEDIA_UPDATE_SQL = `UPDATE media_items
+     SET status = 'failed', updated_at = ?1
+     WHERE status = 'pending'
+       AND updated_at <= ?2`;
+
+export const STALE_FAILED_MEDIA_SELECT_SQL = `SELECT id, object_key
+     FROM media_items
+     WHERE status = 'failed'
+       AND updated_at <= ?1
+     ORDER BY updated_at ASC, id ASC
+     LIMIT ?2`;
+
+export const ORPHAN_VISITOR_BATCH_SQL = `SELECT v.id, v.site_id, v.external_id
+           FROM visitors v
+           WHERE v.expires_at <= ?1
+             AND NOT EXISTS (
+               SELECT 1
+               FROM conversations c
+               WHERE c.site_id = v.site_id
+                 AND c.visitor_id = v.id
+             )
+           ORDER BY v.expires_at ASC, v.id ASC
+           LIMIT ?2`;
 
 export function conversationExpiresAt(createdAt: string | Date): string {
   const created = createdAt instanceof Date ? createdAt : new Date(createdAt);
@@ -92,9 +117,7 @@ export async function purgeExpiredConversations(
   }
 
   const staleMediaObjects =
-    now.getUTCMinutes() % 10 === 0
-      ? await purgeStaleMediaUploads(env, nowIso)
-      : 0;
+    now.getUTCMinutes() % 10 === 0 ? await purgeStaleMediaUploads(env, now) : 0;
   const visitors = await purgeOrphanVisitors(env.DB, nowIso);
   if (now.getUTCHours() === 0 && now.getUTCMinutes() === 0) {
     await purgeExpiredPushSubscriptions(env.DB, now.getTime());
@@ -166,29 +189,21 @@ async function purgeExpiredPushSubscriptions(
 
 async function purgeStaleMediaUploads(
   env: RetentionBindings,
-  nowIso: string,
+  now: Date,
 ): Promise<number> {
+  const nowIso = now.toISOString();
+  const pendingCutoffIso = new Date(now.getTime() - 2 * HOUR_MS).toISOString();
+  const failedCutoffIso = new Date(now.getTime() - HOUR_MS).toISOString();
+
   // First quarantine abandoned uploads. A separate pass deletes them only
   // after a one-hour grace period, so a slow in-flight PUT cannot escape R2
   // cleanup even if it started before the reservation was quarantined.
-  await env.DB.prepare(
-    `UPDATE media_items
-     SET status = 'failed', updated_at = ?1
-     WHERE status = 'pending'
-       AND datetime(updated_at) <= datetime(?1, '-2 hours')`,
-  )
-    .bind(nowIso)
+  await env.DB.prepare(STALE_PENDING_MEDIA_UPDATE_SQL)
+    .bind(nowIso, pendingCutoffIso)
     .run();
 
-  const result = await env.DB.prepare(
-    `SELECT id, object_key
-     FROM media_items
-     WHERE status = 'failed'
-       AND datetime(updated_at) <= datetime(?1, '-1 hour')
-     ORDER BY updated_at ASC, id ASC
-     LIMIT ?2`,
-  )
-    .bind(nowIso, DELETE_BATCH_SIZE)
+  const result = await env.DB.prepare(STALE_FAILED_MEDIA_SELECT_SQL)
+    .bind(failedCutoffIso, DELETE_BATCH_SIZE)
     .all<StaleMediaRow>();
   const rows = result.results ?? [];
   if (rows.length === 0) return 0;
@@ -204,10 +219,10 @@ async function purgeStaleMediaUploads(
   await env.DB.prepare(
     `DELETE FROM media_items
      WHERE status = 'failed'
-       AND datetime(updated_at) <= datetime(?1, '-1 hour')
+       AND updated_at <= ?1
        AND id IN (${placeholders})`,
   )
-    .bind(nowIso, ...ids)
+    .bind(failedCutoffIso, ...ids)
     .run();
   return keys.length;
 }
@@ -223,14 +238,7 @@ async function purgeOrphanVisitors(
     await db
       .prepare(
         `WITH orphan_batch AS (
-           SELECT v.site_id, v.external_id
-           FROM visitors v
-           WHERE datetime(COALESCE(v.expires_at, v.created_at)) <= datetime(?1)
-             AND NOT EXISTS (
-               SELECT 1 FROM conversations c WHERE c.visitor_id = v.id
-             )
-           ORDER BY COALESCE(v.expires_at, v.created_at) ASC, v.id ASC
-           LIMIT ?2
+           ${ORPHAN_VISITOR_BATCH_SQL}
          )
          DELETE FROM visitor_push_subscriptions
          WHERE EXISTS (
@@ -247,14 +255,7 @@ async function purgeOrphanVisitors(
     const result = await db
       .prepare(
         `WITH orphan_batch AS (
-           SELECT v.id
-           FROM visitors v
-           WHERE datetime(COALESCE(v.expires_at, v.created_at)) <= datetime(?1)
-             AND NOT EXISTS (
-               SELECT 1 FROM conversations c WHERE c.visitor_id = v.id
-             )
-           ORDER BY COALESCE(v.expires_at, v.created_at) ASC, v.id ASC
-           LIMIT ?2
+           ${ORPHAN_VISITOR_BATCH_SQL}
          )
          DELETE FROM visitors
          WHERE id IN (SELECT id FROM orphan_batch)
