@@ -1524,11 +1524,14 @@
 }
 
 .agent-greeting-cta-item-head,
-.agent-greeting-cta-enabled {
+.agent-greeting-cta-item-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
+}
+
+.agent-greeting-cta-item-head {
+  justify-content: space-between;
 }
 
 .agent-greeting-cta-item-head button {
@@ -1544,6 +1547,7 @@
   justify-content: flex-start;
   color: var(--ui-muted, #64748b);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .message-attachments {
