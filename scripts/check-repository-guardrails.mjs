@@ -126,10 +126,22 @@ assert.match(
   /permissions:\s*\n\s+contents:\s*read\s*$/mu,
   'CI must keep repository contents read-only',
 );
+const windowsReleaseJob =
+  ciWorkflow.match(/^ {2}build-windows-release:[\s\S]*$/mu)?.[0] ?? '';
+assert.match(
+  windowsReleaseJob,
+  /permissions:\s*\n\s+contents:\s*write/u,
+  'Windows release publication must have explicit contents write permission',
+);
+assert.match(
+  windowsReleaseJob,
+  /if:\s*startsWith\(github\.ref, 'refs\/tags\/v'\)/u,
+  'Windows release publication must run only for version tags',
+);
 assert.doesNotMatch(
-  ciWorkflow,
+  ciWorkflow.replace(windowsReleaseJob, ''),
   /\b(?:git\s+push|gh\s+pr|contents:\s*write)\b/u,
-  'CI must validate and deploy only; it must never patch or push repository code',
+  'CI must validate and deploy only; repository write permission is limited to the tagged Windows release job',
 );
 
 assert.doesNotMatch(
