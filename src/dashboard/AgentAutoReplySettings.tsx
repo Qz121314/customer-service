@@ -374,7 +374,10 @@ export function AgentAutoReplySettingsModal({
                     <div className="agent-greeting-cta-item-head">
                       <strong>CTA {index + 1}</strong>
                       <div className="agent-greeting-cta-item-actions">
-                        <label className="agent-greeting-cta-enabled">
+                        <label
+                          className="agent-greeting-cta-switch"
+                          aria-label={`启用 CTA ${index + 1}`}
+                        >
                           <input
                             type="checkbox"
                             checked={cta.enabled}
@@ -392,7 +395,7 @@ export function AgentAutoReplySettingsModal({
                               }))
                             }
                           />
-                          对访客显示
+                          <i aria-hidden="true" />
                         </label>
                         <button
                           type="button"
