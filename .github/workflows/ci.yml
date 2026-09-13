@@ -443,10 +443,22 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Tauri CLI and Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/cargo-tauri.exe
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: windows-tauri-${{ hashFiles('src-tauri/Cargo.toml', 'src-tauri/tauri.conf.json') }}
+          restore-keys: |
+            windows-tauri-
+
       - name: Build Windows installer
         shell: bash
         run: |
-          cargo install tauri-cli --version "^2" --locked
+          cargo install tauri-cli --version 2.11.4 --locked
           cargo tauri build --bundles nsis
 
       - name: Publish Windows installer
