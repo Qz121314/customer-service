@@ -46,6 +46,22 @@ const CTA_ANSWER_LIMIT = 2000;
 const MATERIAL_NAME_LIMIT = 80;
 const PROFILE_LIMIT = 20;
 
+export function removeMissingLegacyAttachmentIds(
+  profiles: AgentFirstReplyProfile[],
+  ownedAttachmentIds: ReadonlySet<string>,
+): AgentFirstReplyProfile[] {
+  return profiles.map((profile) =>
+    profile.id === 'legacy-first-reply'
+      ? {
+          ...profile,
+          attachmentIds: profile.attachmentIds.filter((id) =>
+            ownedAttachmentIds.has(id),
+          ),
+        }
+      : profile,
+  );
+}
+
 export const agentAutoReplyApi = new Hono<Env>();
 
 agentAutoReplyApi.get('/api/agent/first-reply', async (c) => {
@@ -80,6 +96,19 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
     return c.json({ error: 'INVALID_FIRST_REPLY' }, 400);
   }
 
+  const canonicalProfile = await c.env.DB.prepare(
+    `SELECT 1
+     FROM agent_first_reply_profiles
+     WHERE agent_id = ?1
+     LIMIT 1`,
+  )
+    .bind(agent.id)
+    .first();
+  const isLegacyPayload =
+    !canonicalProfile &&
+    profiles.some((profile) => profile.id === 'legacy-first-reply');
+  let profilesToPersist = profiles;
+
   const greetingIds = new Set(greetings.map((item) => item.id));
   const ctaIds = new Set(ctas.map((item) => item.id));
   const profileIds = new Set(profiles.map((item) => item.id));
@@ -97,24 +126,35 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
   const attachmentIds = [
     ...new Set(profiles.flatMap((profile) => profile.attachmentIds)),
   ];
+  const ownedAttachmentIds = new Set<string>();
   if (attachmentIds.length > 0) {
     const owned = await c.env.DB.prepare(
-      `SELECT COUNT(*) AS count
+      `SELECT id
        FROM agent_attachment_presets
        WHERE agent_id = ?1
          AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?2))`,
     )
       .bind(agent.id, JSON.stringify(attachmentIds))
-      .first<{ count: number }>();
-    if (Number(owned?.count ?? 0) !== attachmentIds.length) {
+      .all<{ id: string }>();
+    for (const item of owned.results ?? []) {
+      ownedAttachmentIds.add(item.id);
+    }
+    if (!isLegacyPayload && ownedAttachmentIds.size !== attachmentIds.length) {
       return c.json({ error: 'INVALID_FIRST_REPLY' }, 400);
+    }
+    if (isLegacyPayload) {
+      profilesToPersist = removeMissingLegacyAttachmentIds(
+        profiles,
+        ownedAttachmentIds,
+      );
     }
   }
 
   const activeProfile =
     typeof body.activeProfileId === 'string'
-      ? (profiles.find((profile) => profile.id === body.activeProfileId) ??
-        null)
+      ? (profilesToPersist.find(
+          (profile) => profile.id === body.activeProfileId,
+        ) ?? null)
       : null;
   const activeGreeting = activeProfile?.greetingId
     ? (greetings.find((item) => item.id === activeProfile.greetingId) ?? null)
@@ -130,12 +170,12 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
       (!activeGreeting?.text.trim() &&
         activeProfile.attachmentIds.length === 0))
   ) {
-    return c.json({ error: 'INVALID_FIRST_REPLY' }, 400);
+    return c.json({ error: 'FIRST_REPLY_CONTENT_REQUIRED' }, 400);
   }
 
   const greetingsJson = JSON.stringify(greetings);
   const ctasJson = JSON.stringify(ctas);
-  const profilesJson = JSON.stringify(profiles);
+  const profilesJson = JSON.stringify(profilesToPersist);
   const activeAttachmentsJson = JSON.stringify(
     activeProfile?.attachmentIds ?? [],
   );
