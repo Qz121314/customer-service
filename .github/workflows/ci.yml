@@ -451,14 +451,14 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
-          key: windows-tauri-${{ hashFiles('src-tauri/Cargo.toml', 'src-tauri/tauri.conf.json') }}
+          key: windows-tauri-2.11.4-${{ hashFiles('src-tauri/Cargo.toml', 'src-tauri/tauri.conf.json') }}
           restore-keys: |
-            windows-tauri-
+            windows-tauri-2.11.4-
 
       - name: Build Windows installer
         shell: bash
         run: |
-          cargo install tauri-cli --version 2.11.4 --locked
+          cargo tauri --version >/dev/null 2>&1 || cargo install tauri-cli --version 2.11.4 --locked
           cargo tauri icon src-tauri/icons/app-icon.svg
           cargo tauri build --bundles nsis
 
