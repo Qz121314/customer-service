@@ -2470,17 +2470,8 @@ select:focus-visible {
   margin-top: 0;
 }
 
-.workspace-sidebar .workspace-notification-button.is-enabled {
-  color: #8ce2b7;
-}
-
 .workspace-sidebar .workspace-sound-button.is-enabled {
   color: #8ce2b7;
-}
-
-.workspace-sidebar .workspace-notification-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.48;
 }
 
 @media (max-width: 760px) {

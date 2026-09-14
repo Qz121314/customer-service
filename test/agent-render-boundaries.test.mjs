@@ -27,8 +27,6 @@ test('agent workspace isolates inbox, thread messages, settings, and composer re
     'const handleSendPreset = useEventCallback(',
     'const handleSendImage = useEventCallback(',
     'const handleToggleAvailability = useEventCallback(',
-    'const handleToggleNotifications = useEventCallback(',
-    'const handleTestSound = useEventCallback(',
     'const handleToggleUnreadFirst = useEventCallback(',
     '<AgentThreadMessageTree',
     '<AgentComposer',

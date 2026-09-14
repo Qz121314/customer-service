@@ -11,7 +11,6 @@ import {
   agentNotificationMessageTarget,
   agentNotificationOpenTarget,
   resolveAgentNotificationConversation,
-  type AgentNotificationState,
 } from './agent-push';
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
@@ -29,17 +28,11 @@ import {
 export const AgentSidebar = memo(function AgentSidebar({
   identity,
   availability,
-  notificationState,
-  notificationBusy,
-  vibrationSupported,
   realtimeReady,
   audioReady,
   soundEnabled,
   reminderPending,
-  onToggleNotifications,
-  onTestSound,
   onToggleSound,
-  onTestVibration,
   onNicknameChange,
   overlay,
   onOpenCardSettings,
@@ -52,17 +45,11 @@ export const AgentSidebar = memo(function AgentSidebar({
 }: {
   identity: AgentIdentity;
   availability: AgentAvailability;
-  notificationState: AgentNotificationState;
-  notificationBusy: boolean;
-  vibrationSupported: boolean;
   realtimeReady: boolean;
   audioReady: boolean;
   soundEnabled: boolean;
   reminderPending: boolean;
-  onToggleNotifications: () => void;
-  onTestSound: () => void;
   onToggleSound: () => void;
-  onTestVibration: () => void;
   onNicknameChange: (nickname: string) => Promise<void>;
   overlay: AgentOverlayView;
   onOpenCardSettings: () => void;
@@ -94,12 +81,8 @@ export const AgentSidebar = memo(function AgentSidebar({
           <i className={`presence ${availability}`} />
         </div>
         <AgentActionToolbar
-          notificationState={notificationState}
-          notificationBusy={notificationBusy}
           soundEnabled={soundEnabled}
-          onTestSound={onTestSound}
           onToggleSound={onToggleSound}
-          onToggleNotifications={onToggleNotifications}
           onOpenCardSettings={onOpenCardSettings}
           onOpenAutoReply={onOpenAutoReply}
           onOpenStatistics={onOpenStatistics}
@@ -109,18 +92,12 @@ export const AgentSidebar = memo(function AgentSidebar({
       </aside>
       <AgentMobileSettingsPage
         open={overlay === 'menu'}
-        notificationState={notificationState}
-        notificationBusy={notificationBusy}
-        vibrationSupported={vibrationSupported}
         realtimeReady={realtimeReady}
         audioReady={audioReady}
         soundEnabled={soundEnabled}
         reminderPending={reminderPending}
         onClose={onCloseOverlay}
-        onToggleNotifications={onToggleNotifications}
-        onTestSound={onTestSound}
         onToggleSound={onToggleSound}
-        onTestVibration={onTestVibration}
         onOpenCardSettings={onOpenCardSettings}
         onOpenAutoReply={onOpenAutoReply}
         onOpenStatistics={onOpenStatistics}

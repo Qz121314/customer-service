@@ -108,12 +108,11 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.match(dashboard, /AGENT_SERVICE_WORKER_READY_TIMEOUT_MS = 15_000/u);
   assert.match(dashboard, /Promise\.race\(\[/u);
   assert.match(dashboard, /通知服务启动超时，请刷新页面后重试/u);
-  assert.match(chrome, /客户消息通知/u);
-  assert.match(chrome, /切后台、锁屏或离开页面也会提醒/u);
   assert.match(chrome, /消息提示音/u);
-  assert.match(chrome, /震动提醒/u);
-  assert.match(chrome, /测试提示音/u);
-  assert.match(chrome, /测试震动/u);
+  assert.doesNotMatch(chrome, /客户消息通知/u);
+  assert.doesNotMatch(chrome, /系统通知/u);
+  assert.doesNotMatch(chrome, /测试提示音/u);
+  assert.doesNotMatch(chrome, /测试震动/u);
   assert.match(chrome, /消息提醒：/u);
   assert.doesNotMatch(chrome, /新会话通知/u);
   assert.doesNotMatch(chrome, /前台提示音/u);

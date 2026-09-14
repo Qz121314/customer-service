@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
 import { UiIcon } from './icons';
 import { Button } from './ui';
@@ -10,24 +9,16 @@ const ANDROID_DOWNLOAD_URL =
   'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-android.apk';
 
 export function AgentActionToolbar({
-  notificationState,
-  notificationBusy,
   soundEnabled,
-  onTestSound,
   onToggleSound,
-  onToggleNotifications,
   onOpenCardSettings,
   onOpenAutoReply,
   onOpenStatistics,
   onLogout,
   onOpenMobileSettings,
 }: {
-  notificationState: AgentNotificationState;
-  notificationBusy: boolean;
   soundEnabled: boolean;
-  onTestSound: () => void;
   onToggleSound: () => void;
-  onToggleNotifications: () => void;
   onOpenCardSettings: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
@@ -51,42 +42,6 @@ export function AgentActionToolbar({
         <Button
           type="button"
           variant="ghost"
-          className={`full workspace-notification-button${notificationState === 'enabled' ? ' is-enabled' : ''}`}
-          aria-label={
-            notificationState === 'enabled'
-              ? '重新确认客户消息通知'
-              : '开启客户消息通知'
-          }
-          title={
-            notificationState === 'unsupported'
-              ? '当前浏览器不支持系统通知'
-              : notificationState === 'install-required'
-                ? '请先添加到主屏幕，再从桌面打开并开启通知'
-                : notificationState === 'blocked'
-                  ? '通知已被浏览器阻止'
-                  : notificationState === 'enabled'
-                    ? '客户消息通知已开启'
-                    : '开启客户消息通知'
-          }
-          disabled={notificationBusy || notificationState === 'unsupported'}
-          onClick={onToggleNotifications}
-        >
-          <UiIcon name="notification" />
-          <span>
-            {notificationBusy
-              ? '正在设置…'
-              : notificationState === 'enabled'
-                ? '客户消息通知已开启'
-                : notificationState === 'install-required'
-                  ? '添加到主屏幕后开启通知'
-                  : notificationState === 'blocked'
-                    ? '通知已被阻止'
-                    : '开启客户消息通知'}
-          </span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
           className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
           aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
           title={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
@@ -94,18 +49,6 @@ export function AgentActionToolbar({
         >
           <UiIcon name="sound" />
           <span>{soundEnabled ? '消息提示音已开启' : '开启消息提示音'}</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="full workspace-sound-test-button"
-          aria-label="测试提示音"
-          title="测试提示音"
-          disabled={!soundEnabled}
-          onClick={onTestSound}
-        >
-          <UiIcon name="sound" />
-          <span>测试提示音</span>
         </Button>
         <Button
           type="button"
@@ -189,60 +132,26 @@ function AgentHealthState({ ready, label }: { ready: boolean; label: string }) {
   );
 }
 
-function AgentReminderTest({
-  label,
-  onTest,
-  disabled = false,
-}: {
-  label: string;
-  onTest: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      className="secondary-button"
-      aria-label={label}
-      disabled={disabled}
-      onClick={onTest}
-    >
-      测试
-    </button>
-  );
-}
-
 export function AgentMobileSettingsPage({
   open,
-  notificationState,
-  notificationBusy,
-  vibrationSupported,
   realtimeReady,
   audioReady,
   soundEnabled,
   reminderPending,
   onClose,
-  onToggleNotifications,
-  onTestSound,
   onToggleSound,
-  onTestVibration,
   onOpenCardSettings,
   onOpenAutoReply,
   onOpenStatistics,
   onLogout,
 }: {
   open: boolean;
-  notificationState: AgentNotificationState;
-  notificationBusy: boolean;
-  vibrationSupported: boolean;
   realtimeReady: boolean;
   audioReady: boolean;
   soundEnabled: boolean;
   reminderPending: boolean;
   onClose: () => void;
-  onToggleNotifications: () => void;
-  onTestSound: () => void;
   onToggleSound: () => void;
-  onTestVibration: () => void;
   onOpenCardSettings: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
@@ -281,9 +190,8 @@ export function AgentMobileSettingsPage({
       : installState === 'available'
         ? '获得更接近 App 的全屏体验'
         : '通过浏览器菜单完成安装';
-  const notificationsReady = notificationState === 'enabled';
   const pwaReady = installState === 'installed';
-  const soundReady = soundEnabled && (notificationsReady || audioReady);
+  const soundReady = soundEnabled && (audioReady || realtimeReady);
   const reminderReady = realtimeReady && soundEnabled && !reminderPending;
 
   const openInstall = () => {
@@ -335,49 +243,14 @@ export function AgentMobileSettingsPage({
                 </dd>
               </div>
               <div>
-                <dt>系统通知</dt>
-                <dd>
-                  <AgentHealthState
-                    ready={notificationsReady}
-                    label={notificationsReady ? '已开启' : '未开启'}
-                  />
-                </dd>
-              </div>
-              <div>
-                <dt>后台 Push</dt>
-                <dd>
-                  <AgentHealthState
-                    ready={notificationsReady}
-                    label={notificationsReady ? '已订阅' : '不可用'}
-                  />
-                </dd>
-              </div>
-              <div>
-                <dt>提示音</dt>
+                <dt>消息提示音</dt>
                 <dd>
                   <AgentHealthState
                     ready={soundReady}
-                    label={
-                      notificationsReady
-                        ? '系统提醒'
-                        : audioReady
-                          ? '已解锁'
-                          : '待解锁'
-                    }
+                    label={soundEnabled ? '已开启' : '已关闭'}
                   />
                 </dd>
               </div>
-              {vibrationSupported && (
-                <div>
-                  <dt>震动</dt>
-                  <dd>
-                    <AgentHealthState
-                      ready={!reminderPending}
-                      label={reminderPending ? '待重试' : '每条提醒'}
-                    />
-                  </dd>
-                </div>
-              )}
               <div>
                 <dt>PWA</dt>
                 <dd>
@@ -390,11 +263,8 @@ export function AgentMobileSettingsPage({
             </dl>
             {reminderPending && (
               <p role="status">
-                有消息提醒尚未成功，请点击测试或开启系统通知。
+                消息提示音暂未成功，将在下一次消息或页面交互时重试。
               </p>
-            )}
-            {!notificationsReady && (
-              <p>锁屏或切后台后可能无法收到客户消息提醒。</p>
             )}
           </div>
         </section>
@@ -434,33 +304,6 @@ export function AgentMobileSettingsPage({
               </span>
               {installState !== 'installed' && <UiIcon name="chevron" />}
             </button>
-            <button
-              type="button"
-              className={`mobile-agent-settings-item${notificationState === 'enabled' ? ' is-enabled' : ''}`}
-              disabled={notificationBusy || notificationState === 'unsupported'}
-              onClick={onToggleNotifications}
-            >
-              <i aria-hidden="true">
-                <UiIcon name="notification" />
-              </i>
-              <span>
-                <strong>客户消息通知</strong>
-                <small>
-                  {notificationBusy
-                    ? '正在设置…'
-                    : notificationState === 'enabled'
-                      ? '已开启 · 切后台、锁屏或离开页面也会提醒'
-                      : notificationState === 'install-required'
-                        ? 'iPhone/iPad 请先添加到主屏幕'
-                        : notificationState === 'blocked'
-                          ? '已被浏览器阻止'
-                          : notificationState === 'unsupported'
-                            ? '当前浏览器不支持'
-                            : '每条客户消息到达时显示系统通知'}
-                </small>
-              </span>
-              <UiIcon name="chevron" />
-            </button>
             <div className="mobile-agent-settings-item">
               <i aria-hidden="true">
                 <UiIcon name="sound" />
@@ -492,31 +335,8 @@ export function AgentMobileSettingsPage({
                 >
                   {soundEnabled ? '关闭' : '开启'}
                 </button>
-                <AgentReminderTest
-                  label="测试提示音"
-                  onTest={onTestSound}
-                  disabled={!soundEnabled}
-                />
               </div>
             </div>
-            {!vibrationSupported && (
-              <p>
-                本浏览器不支持网页震动。iPhone/iPad
-                请从主屏幕打开并开启系统通知，由系统提供声音和震动。
-              </p>
-            )}
-            {vibrationSupported && (
-              <div className="mobile-agent-settings-item">
-                <i aria-hidden="true">
-                  <UiIcon name="notification" />
-                </i>
-                <span>
-                  <strong>震动提醒</strong>
-                  <small>每条客户消息请求震动，实际效果由设备决定</small>
-                </span>
-                <AgentReminderTest label="测试震动" onTest={onTestVibration} />
-              </div>
-            )}
           </div>
           {showManualInstall && (
             <p className="mobile-agent-install-help" role="status">

@@ -113,7 +113,8 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(settingsPage.getByText('设备与提醒')).toBeVisible();
   await expect(settingsPage.getByText(/消息提醒：/u)).toBeVisible();
   await expect(settingsPage.getByText('实时连接')).toBeVisible();
-  await expect(settingsPage.getByText('后台 Push')).toBeVisible();
+  await expect(settingsPage.getByText('系统通知')).toHaveCount(0);
+  await expect(settingsPage.getByText('后台 Push')).toHaveCount(0);
   const androidDownload = settingsPage.getByRole('link', {
     name: '下载安卓客服端',
   });
@@ -131,21 +132,20 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     name: '关闭消息提示音',
   });
   await expect(soundToggle).toBeVisible();
-  const soundTest = soundRow.getByRole('button', { name: '测试提示音' });
-  await expect(soundTest).toBeVisible();
+  await expect(
+    soundRow.getByRole('button', { name: '测试提示音' }),
+  ).toHaveCount(0);
   await soundToggle.click();
   await expect(
     soundRow.getByRole('button', { name: '开启消息提示音' }),
   ).toBeVisible();
-  await expect(soundTest).toBeDisabled();
   await soundRow.getByRole('button', { name: '开启消息提示音' }).click();
   await expect(
     soundRow.getByRole('button', { name: '关闭消息提示音' }),
   ).toBeVisible();
-  await expect(soundTest).toBeEnabled();
   await expect(
     settingsPage.getByRole('button', { name: '测试提示音' }),
-  ).toHaveCount(1);
+  ).toHaveCount(0);
 
   const healthSummary = settingsPage.locator('.agent-notification-health');
   await expect(healthSummary.locator('dd .ui-icon').first()).toBeVisible();

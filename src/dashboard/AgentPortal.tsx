@@ -84,14 +84,7 @@ import {
   type AgentMessageAttachment,
 } from './agent-attachments-client';
 import { sendAgentImage } from './agent-media';
-import {
-  enableAgentNotifications,
-  clearAgentPushBindingMarker,
-  prepareAgentNotifications,
-  runBestEffortAgentCapability,
-  updateAgentAppBadge,
-  type AgentNotificationState,
-} from './agent-push';
+import { clearAgentPushBindingMarker, updateAgentAppBadge } from './agent-push';
 import { UiIcon } from './icons';
 import {
   createAgentReminderDelivery,
@@ -386,9 +379,6 @@ function AgentWorkspace({
   const [filter, setFilter] = useState<Filter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [unreadFirst, setUnreadFirst] = useState(true);
-  const [notificationState, setNotificationState] =
-    useState<AgentNotificationState>('disabled');
-  const [notificationBusy, setNotificationBusy] = useState(false);
   const [reminderPending, setReminderPending] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(loadAgentSoundEnabled);
   const vibrationSupported = supportsAgentVibration();
@@ -519,20 +509,6 @@ function AgentWorkspace({
     if (!window.location.pathname.startsWith('/agent/stats')) return;
     window.history.replaceState(null, '', '/agent');
   }, []);
-
-  useEffect(() => {
-    let active = true;
-    void prepareAgentNotifications(identity.id)
-      .then((state) => {
-        if (active) setNotificationState(state);
-      })
-      .catch(() => {
-        if (active) setNotificationState('disabled');
-      });
-    return () => {
-      active = false;
-    };
-  }, [identity.id]);
 
   useEffect(() => {
     draftSaveScheduler.schedule(identity.id, drafts);
@@ -1682,59 +1658,11 @@ function AgentWorkspace({
     }
   }
 
-  async function toggleNotifications() {
-    if (notificationBusy || notificationState === 'unsupported') return;
-    if (notificationState === 'install-required') {
-      setError(
-        'iPhone 或 iPad 需要先添加到主屏幕，再从桌面打开客服坐席并开启通知',
-      );
-      return;
-    }
-    if (notificationState === 'blocked') {
-      setError('浏览器已阻止通知，请在站点权限中重新开启');
-      return;
-    }
-    setNotificationBusy(true);
-    try {
-      const nextState = await enableAgentNotifications(identity.id);
-      reminderDeliveryRef.current?.retry();
-      setNotificationState(nextState);
-      if (nextState === 'blocked') {
-        setError('浏览器已阻止通知，请在站点权限中重新开启');
-      }
-    } catch (reason) {
-      setError(message(reason, '通知设置失败'));
-    } finally {
-      setNotificationBusy(false);
-    }
-  }
-
-  function testSound() {
-    if (!soundEnabledRef.current) {
-      setError('消息提示音已关闭，请先开启后再测试');
-      return;
-    }
-    void playIncomingTone('CUSTOMER_REPLY').then((played) => {
-      if (!played) setError('提示音未能播放，请检查设备声音设置并再次点击测试');
-      reminderDeliveryRef.current?.retry();
-    });
-  }
-
   function toggleSound() {
     const next = !soundEnabledRef.current;
     soundEnabledRef.current = next;
     setSoundEnabled(next);
     saveAgentSoundEnabled(next);
-    if (next) testSound();
-  }
-
-  function testVibration() {
-    if (!vibrationSupported) return;
-    runBestEffortAgentCapability(() => {
-      if (!navigator.vibrate(agentReminderVibrationPattern('CUSTOMER_REPLY'))) {
-        setError('设备未接受震动请求，请检查系统设置；iOS 请开启系统通知');
-      }
-    });
   }
 
   async function logoutFromWorkspace() {
@@ -1746,11 +1674,6 @@ function AgentWorkspace({
     const updated = await updateAgentNickname(nickname);
     onIdentityChange(updated);
   });
-  const handleToggleNotifications = useEventCallback(() => {
-    void toggleNotifications();
-  });
-  const handleTestSound = useEventCallback(testSound);
-  const handleTestVibration = useEventCallback(testVibration);
   const handleOpenStatistics = useEventCallback(() => {
     navigate(withOverlay(navigation, 'statistics'));
   });
@@ -1825,18 +1748,12 @@ function AgentWorkspace({
       <AgentSidebar
         identity={identity}
         availability={availability}
-        notificationState={notificationState}
-        notificationBusy={notificationBusy}
-        vibrationSupported={vibrationSupported}
         realtimeReady={inboxConnected}
         audioReady={audioUnlocked}
         soundEnabled={soundEnabled}
         reminderPending={reminderPending}
         onNicknameChange={handleNicknameChange}
-        onToggleNotifications={handleToggleNotifications}
-        onTestSound={handleTestSound}
         onToggleSound={toggleSound}
-        onTestVibration={handleTestVibration}
         overlay={navigation.overlay}
         onOpenCardSettings={handleOpenCardSettings}
         onOpenAutoReply={handleOpenAutoReply}
