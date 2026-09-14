@@ -205,7 +205,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     }
     await route.continue();
   });
-  await settingsPage.getByRole('button', { name: /问候语/u }).click();
+  await settingsPage.getByRole('button', { name: /^问候语 设置/u }).click();
   const autoReplyDialog = page.getByRole('dialog', { name: '问候语' });
   await expect(autoReplyDialog).toBeVisible();
   await expect(autoReplyDialog).toHaveCSS(
