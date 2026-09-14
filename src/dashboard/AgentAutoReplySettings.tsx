@@ -1119,7 +1119,7 @@ export function AgentMaterialsModal({
                     <div className="agent-inline-card-editor-head">
                       <span>
                         <strong id="agent-card-editor-title">
-                          {cardEditingId ? '编辑名片' : '名片'}
+                          {cardEditingId ? '编辑名片' : '录入名片'}
                         </strong>
                         <small>
                           填写联系方式，保存后可在首次回复中组合使用
