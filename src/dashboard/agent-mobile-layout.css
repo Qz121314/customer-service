@@ -89,6 +89,7 @@
     min-width: 0;
     max-width: min(34vw, 132px);
     flex: 1 1 auto;
+    order: 1;
     grid-template-columns: 34px minmax(0, 1fr);
     gap: 8px;
     margin: 0;
@@ -146,6 +147,7 @@
     height: 40px;
     min-height: 40px;
     flex: 0 0 40px;
+    order: 2;
     place-items: center;
     margin: 0 0 0 auto;
     padding: 0;

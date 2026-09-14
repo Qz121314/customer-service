@@ -31,17 +31,6 @@ export function AgentActionToolbar({
         <Button
           type="button"
           variant="ghost"
-          className="full workspace-card-settings-button"
-          aria-label="打开名片设置"
-          title="名片"
-          onClick={onOpenCardSettings}
-        >
-          <UiIcon name="contact" />
-          <span>名片</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
           className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
           aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
           title={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
@@ -71,6 +60,17 @@ export function AgentActionToolbar({
         >
           <UiIcon name="statistics" />
           <span>接待流量</span>
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="full workspace-card-settings-button"
+          aria-label="打开名片设置"
+          title="名片"
+          onClick={onOpenCardSettings}
+        >
+          <UiIcon name="contact" />
+          <span>名片</span>
         </Button>
         <Button
           asChild

@@ -129,7 +129,7 @@
 .workspace-sidebar-actions {
   display: grid;
   gap: 7px;
-  margin-top: auto;
+  margin-top: 0;
 }
 
 .conversation-pane {

@@ -4,6 +4,8 @@ const isTauriDesktop =
   window.location.protocol === 'tauri:' ||
   window.location.hostname === 'tauri.localhost';
 
+document.documentElement.classList.toggle('is-tauri-desktop', isTauriDesktop);
+
 if (isTauriDesktop && !window.location.pathname.startsWith('/agent')) {
   window.history.replaceState(null, '', '/agent');
 }

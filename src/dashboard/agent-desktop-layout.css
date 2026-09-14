@@ -88,7 +88,7 @@
   .workspace-shell .workspace-sidebar-actions {
     display: grid;
     gap: 7px;
-    margin-top: auto;
+    margin-top: 0;
   }
 
   .workspace-shell .workspace-sidebar .ghost-button,
@@ -131,6 +131,25 @@
   .workspace-shell .workspace-sidebar .ghost-button.is-enabled {
     background: rgba(68, 201, 142, 0.12);
     color: #7be0b2;
+  }
+
+  html.is-tauri-desktop body:has(.workspace-shell) {
+    background: #fff;
+  }
+
+  html.is-tauri-desktop #root:has(.workspace-shell) {
+    place-items: stretch;
+    padding: 0;
+  }
+
+  html.is-tauri-desktop .workspace-shell {
+    width: 100%;
+    max-width: none;
+    height: 100dvh;
+    min-height: 100dvh;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .workspace-shell .conversation-pane {

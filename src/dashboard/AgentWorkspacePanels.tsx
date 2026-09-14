@@ -67,6 +67,15 @@ export const AgentSidebar = memo(function AgentSidebar({
           <div className="workspace-brand">CS</div>
           <span>坐席中心</span>
         </div>
+        <AgentActionToolbar
+          soundEnabled={soundEnabled}
+          onToggleSound={onToggleSound}
+          onOpenCardSettings={onOpenCardSettings}
+          onOpenAutoReply={onOpenAutoReply}
+          onOpenStatistics={onOpenStatistics}
+          onLogout={onLogout}
+          onOpenMobileSettings={onOpenMobileSettings}
+        />
         <div className="agent-profile">
           <AgentAvatarControl
             agentId={identity.id}
@@ -80,15 +89,6 @@ export const AgentSidebar = memo(function AgentSidebar({
           </div>
           <i className={`presence ${availability}`} />
         </div>
-        <AgentActionToolbar
-          soundEnabled={soundEnabled}
-          onToggleSound={onToggleSound}
-          onOpenCardSettings={onOpenCardSettings}
-          onOpenAutoReply={onOpenAutoReply}
-          onOpenStatistics={onOpenStatistics}
-          onLogout={onLogout}
-          onOpenMobileSettings={onOpenMobileSettings}
-        />
       </aside>
       <AgentMobileSettingsPage
         open={overlay === 'menu'}
