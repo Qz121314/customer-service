@@ -48,6 +48,11 @@ test('agent can configure channel cards, preset text and custom icon override', 
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
   await expect(settingsPage).toBeVisible();
   await settingsPage.getByRole('button', { name: /名片/u }).click();
+  const materialsDialog = page.getByRole('dialog', { name: '素材库' });
+  await expect(materialsDialog).toBeVisible();
+  await expect(materialsDialog.getByText('正在读取素材…')).toBeHidden();
+  await materialsDialog.getByRole('button', { name: /名片与图片/u }).click();
+  await materialsDialog.getByRole('button', { name: '管理名片' }).click();
   const dialog = page.getByRole('dialog', { name: '名片' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('正在读取名片…')).toBeHidden();

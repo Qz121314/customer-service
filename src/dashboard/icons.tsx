@@ -14,6 +14,7 @@ import {
   Globe2,
   Headphones,
   ImagePlus,
+  Library,
   LayoutDashboard,
   Link,
   LogOut,
@@ -53,6 +54,7 @@ export type UiIconName =
   | 'calendar'
   | 'close'
   | 'image-plus'
+  | 'library'
   | 'send'
   | 'clock'
   | 'check'
@@ -88,6 +90,7 @@ const ICONS: Record<UiIconName, LucideIcon> = {
   calendar: CalendarDays,
   close: X,
   'image-plus': ImagePlus,
+  library: Library,
   send: Send,
   clock: Clock,
   check: Check,
