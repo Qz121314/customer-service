@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import {
   requireAgentSession,
   type AgentSessionIdentity,
-} from './agent-session';
+} from './agent-session.ts';
 
 type Bindings = {
   DB: D1Database;
