@@ -2088,6 +2088,157 @@
   }
 }
 
+/* Shared compact dialog surface. Keep the frame stable while each body owns its scroll. */
+.agent-dialog-surface {
+  width: min(1120px, calc(100vw - 48px));
+  height: min(760px, calc(100dvh - 48px));
+  max-height: none;
+  display: grid;
+  grid-template-rows: 64px minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid #e3e7ee;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 64px rgb(15 23 42 / 18%);
+}
+
+.agent-dialog-surface > .agent-auto-reply-head,
+.agent-dialog-surface > header {
+  min-height: 0;
+  padding: 12px 20px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.agent-dialog-surface .eyebrow {
+  color: #8a95a5;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.agent-dialog-surface h2 {
+  margin: 2px 0 0;
+  color: #202735;
+  font-size: 21px;
+  font-weight: 760;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+}
+
+.agent-dialog-surface > .agent-auto-reply-head > div:first-child,
+.agent-dialog-surface > header > div:first-child {
+  min-width: 0;
+}
+
+.agent-dialog-surface > .agent-auto-reply-head > .agent-auto-reply-head-tools,
+.agent-dialog-surface > header > .agent-attachment-manager-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.agent-dialog-surface
+  > .agent-auto-reply-head
+  > .agent-auto-reply-head-tools
+  > .primary-button,
+.agent-dialog-surface
+  > header
+  > .agent-attachment-manager-head-actions
+  > .primary-button {
+  min-height: 34px;
+  padding-inline: 13px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.agent-dialog-surface .agent-auto-reply-close,
+.agent-dialog-surface .agent-attachment-manager-head-actions > .ghost-button {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.agent-dialog-surface > .agent-auto-reply-loading {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+.agent-dialog-surface > .agent-first-reply-body,
+.agent-dialog-surface > .agent-materials-body,
+.agent-dialog-surface > .agent-attachment-manager-body {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.agent-dialog-surface > .agent-first-reply-body,
+.agent-dialog-surface > .agent-materials-body {
+  padding: 18px 20px 20px;
+}
+
+.agent-dialog-surface > .agent-attachment-manager-body {
+  padding: 18px 20px 20px;
+}
+
+.agent-dialog-surface .agent-first-reply-editor,
+.agent-dialog-surface .agent-material-editor,
+.agent-dialog-surface .agent-attachment-editor {
+  border-color: #e3e7ee;
+  border-radius: 13px;
+  background: #fbfcfd;
+  box-shadow: none;
+}
+
+.agent-dialog-surface .agent-first-reply-section-head,
+.agent-dialog-surface .agent-material-attachments-head,
+.agent-dialog-surface .agent-attachment-section-heading {
+  min-height: 34px;
+}
+
+.agent-dialog-surface .agent-first-reply-profile-list,
+.agent-dialog-surface .agent-first-reply-choice-list,
+.agent-dialog-surface .agent-material-list,
+.agent-dialog-surface .agent-material-attachment-grid,
+.agent-dialog-surface .agent-attachment-preset-list {
+  margin-top: 10px;
+}
+
+@media (max-width: 760px) {
+  .agent-dialog-surface {
+    width: 100%;
+    height: min(760px, calc(100dvh - 12px));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 18px 18px 0 0;
+    grid-template-rows: 60px minmax(0, 1fr);
+  }
+
+  .agent-dialog-surface > .agent-auto-reply-head,
+  .agent-dialog-surface > header {
+    padding: 11px 16px;
+  }
+
+  .agent-dialog-surface h2 {
+    font-size: 19px;
+  }
+
+  .agent-dialog-surface > .agent-first-reply-body,
+  .agent-dialog-surface > .agent-materials-body,
+  .agent-dialog-surface > .agent-attachment-manager-body {
+    padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+    scrollbar-width: none;
+  }
+
+  .agent-dialog-surface > .agent-first-reply-body::-webkit-scrollbar,
+  .agent-dialog-surface > .agent-materials-body::-webkit-scrollbar,
+  .agent-dialog-surface > .agent-attachment-manager-body::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .agent-auto-reply-head-tools {
     display: flex;
