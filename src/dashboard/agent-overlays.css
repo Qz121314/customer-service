@@ -752,6 +752,31 @@
   cursor: pointer;
 }
 
+.agent-material-image-edit {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  color: #657286;
+  background: transparent;
+  cursor: pointer;
+}
+
+.agent-material-image-edit:hover {
+  color: #4338ca;
+  background: #f0efff;
+}
+
+.agent-material-image-edit input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
 .agent-material-card-actions button:hover,
 .agent-material-attachment-card > button:hover {
   color: #4338ca;
