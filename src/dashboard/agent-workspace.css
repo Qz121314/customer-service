@@ -1875,39 +1875,50 @@
   }
 }
 
-/* Codex-minimal settings forms: keep actions and high-value fields in one view. */
+/* Compact settings forms: keep the working area dense without changing behavior. */
 @media (min-width: 761px) {
-  .agent-auto-reply-dialog {
-    width: min(1120px, calc(100vw - 96px));
-    height: min(760px, calc(100dvh - 64px));
+  .agent-auto-reply-dialog,
+  .agent-attachment-manager-dialog {
+    width: min(1040px, calc(100vw - 64px));
+    height: auto;
+    min-height: 0;
+    max-height: calc(100dvh - 48px);
   }
 
-  .agent-auto-reply-head {
-    min-height: 82px;
-    padding: 18px 32px;
+  .agent-auto-reply-head,
+  .agent-attachment-manager-dialog > header {
+    min-height: 68px;
+    padding: 14px 24px;
   }
 
-  .agent-auto-reply-head-tools {
+  .agent-auto-reply-head h2,
+  .agent-attachment-manager-dialog h2 {
+    font-size: 24px;
+    letter-spacing: -0.025em;
+  }
+
+  .agent-auto-reply-head-tools,
+  .agent-attachment-manager-head-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     margin-left: auto;
   }
 
   .agent-auto-reply-tabs {
     display: grid;
-    grid-template-columns: repeat(2, minmax(76px, 1fr));
-    padding: 3px;
+    grid-template-columns: repeat(2, minmax(68px, 1fr));
+    padding: 2px;
     border: 1px solid #e1e5ec;
-    border-radius: 10px;
+    border-radius: 9px;
     background: #f7f8fa;
   }
 
   .agent-auto-reply-tabs button {
-    min-height: 34px;
-    padding: 0 12px;
+    min-height: 32px;
+    padding: 0 11px;
     border: 0;
-    border-radius: 8px;
+    border-radius: 7px;
     color: #687386;
     background: transparent;
     font: inherit;
@@ -1923,7 +1934,7 @@
   }
 
   .agent-auto-reply-switch {
-    min-height: 34px;
+    min-height: 32px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -1938,38 +1949,55 @@
   }
 
   .agent-auto-reply-switch i {
-    width: 38px;
-    height: 22px;
+    width: 36px;
+    height: 20px;
   }
 
   .agent-auto-reply-switch i::after {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
   }
 
   .agent-auto-reply-switch input:checked + i::after {
     transform: translateX(16px);
   }
 
-  .agent-auto-reply-head-tools > .primary-button {
-    min-height: 38px;
-    padding-inline: 16px;
+  .agent-auto-reply-head-tools > .primary-button,
+  .agent-attachment-manager-head-actions > .primary-button {
+    min-height: 36px;
+    padding-inline: 14px;
   }
 
   .agent-auto-reply-body {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
+    grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+    align-content: start;
+    gap: 16px 22px;
     overflow-y: auto;
-    padding: 24px 32px 28px;
+    padding: 20px 24px 22px;
   }
 
   .agent-auto-reply-field textarea {
-    min-height: 276px;
+    min-height: 176px;
   }
 
   .agent-auto-reply-attachment-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
     gap: 8px;
+  }
+
+  .agent-auto-reply-attachment {
+    grid-template-columns: 34px minmax(0, 1fr) 16px;
+    gap: 7px;
+    padding: 7px;
+  }
+
+  .agent-auto-reply-attachment > img,
+  .agent-auto-reply-attachment > i,
+  .agent-auto-reply-attachment > .agent-contact-card-icon {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
   }
 
   .agent-greeting-ctas {
@@ -1979,46 +2007,25 @@
 
   .agent-greeting-cta-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 10px;
   }
 
   .agent-greeting-cta-item {
-    gap: 8px;
-    padding: 14px;
-    border-radius: 12px;
+    gap: 7px;
+    padding: 11px;
+    border-radius: 11px;
     background: #fafbfc;
   }
 
   .agent-greeting-cta-item textarea {
-    min-height: 82px;
-  }
-
-  .agent-attachment-manager-dialog {
-    width: min(1120px, calc(100vw - 96px));
-    height: min(760px, calc(100dvh - 64px));
-  }
-
-  .agent-attachment-manager-dialog > header {
-    min-height: 82px;
-    padding: 18px 32px;
-  }
-
-  .agent-attachment-manager-head-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .agent-attachment-manager-head-actions > .primary-button {
-    min-height: 38px;
-    padding-inline: 16px;
+    min-height: 74px;
   }
 
   .agent-attachment-manager-body {
-    grid-template-columns: minmax(260px, 0.8fr) minmax(540px, 1.2fr);
-    gap: 24px;
+    grid-template-columns: minmax(220px, 0.78fr) minmax(500px, 1.22fr);
+    gap: 20px;
     overflow-y: auto;
-    padding: 24px 32px 28px;
+    padding: 20px 24px 22px;
   }
 
   .agent-attachment-preset-section,
@@ -2027,9 +2034,9 @@
   }
 
   .agent-attachment-editor {
-    gap: 14px;
-    padding: 20px;
-    border-radius: 16px;
+    gap: 10px;
+    padding: 16px;
+    border-radius: 14px;
     background: #fafbfc;
     box-shadow: none;
   }
@@ -2037,7 +2044,7 @@
   .agent-attachment-fields-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px 16px;
+    gap: 10px 12px;
   }
 
   .agent-attachment-kind-field,
@@ -2045,21 +2052,27 @@
     min-width: 0;
   }
 
-  .agent-attachment-kind-trigger {
-    min-height: 52px;
+  .agent-attachment-kind-trigger,
+  .agent-card-icon-control {
+    min-height: 48px;
   }
 
-  .agent-card-icon-control {
-    min-height: 52px;
-    grid-template-columns: 36px minmax(0, 1fr) auto;
+  .agent-attachment-kind-trigger {
+    grid-template-columns: 32px minmax(0, 1fr) 18px;
     gap: 8px;
     padding: 6px 8px;
   }
 
+  .agent-card-icon-control {
+    grid-template-columns: 32px minmax(0, 1fr) auto;
+    gap: 7px;
+    padding: 5px 7px;
+  }
+
   .agent-card-icon-control > .agent-contact-card-icon {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
   }
 
   .agent-card-icon-control small {
@@ -2067,7 +2080,7 @@
   }
 
   .agent-attachment-editor > label textarea {
-    min-height: 94px;
+    min-height: 76px;
   }
 
   .agent-attachment-editor-actions {
@@ -2091,6 +2104,8 @@
   }
 
   .agent-auto-reply-tabs button {
+    min-height: 30px;
+    padding-inline: 9px;
     border: 0;
     border-radius: 7px;
     color: #687386;
@@ -2113,12 +2128,7 @@
   .agent-auto-reply-head-tools {
     flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 8px;
-  }
-
-  .agent-auto-reply-tabs button {
-    min-height: 32px;
-    padding-inline: 10px;
+    gap: 7px;
   }
 
   .agent-auto-reply-switch {
@@ -2129,16 +2139,23 @@
     font-size: 11px;
   }
 
-  .agent-auto-reply-head-tools > .primary-button {
-    min-height: 34px;
-    padding-inline: 12px;
+  .agent-auto-reply-head-tools > .primary-button,
+  .agent-attachment-manager-head-actions > .primary-button {
+    min-height: 32px;
+    padding-inline: 11px;
   }
 
   .agent-auto-reply-body {
     grid-template-columns: 1fr;
+    gap: 14px;
   }
 
-  .agent-greeting-cta-list {
+  .agent-auto-reply-field textarea {
+    min-height: 150px;
+  }
+
+  .agent-greeting-cta-list,
+  .agent-attachment-fields-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2154,17 +2171,11 @@
     right: 12px;
     display: flex;
     align-items: center;
-    justify-items: initial;
     gap: 6px;
   }
 
-  .agent-attachment-manager-head-actions > .primary-button {
-    min-height: 34px;
-    padding-inline: 10px;
-  }
-
-  .agent-attachment-fields-grid {
-    grid-template-columns: 1fr;
+  .agent-attachment-editor > label textarea {
+    min-height: 86px;
   }
 
   .agent-attachment-editor-actions {
