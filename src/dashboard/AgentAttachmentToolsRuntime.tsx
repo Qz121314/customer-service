@@ -407,7 +407,7 @@ export function AgentCardSettingsModal({
       }}
     >
       <section
-        className="agent-attachment-manager-dialog"
+        className="agent-attachment-manager-dialog agent-dialog-surface"
         role="dialog"
         aria-modal="true"
         aria-labelledby="agent-attachment-manager-title"
