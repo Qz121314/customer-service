@@ -120,7 +120,7 @@ test('agent web push is authenticated, session-scoped and dispatched after visit
   assert.doesNotMatch(chrome, /后台可接收系统通知/u);
   assert.match(portal, /createAgentReminderDelivery/u);
   assert.match(portal, /agentReminderVibrationPattern\(type\)/u);
-  assert.doesNotMatch(portal, /soundEnabledRef|vibrationEnabledRef/u);
+  assert.match(portal, /soundEnabledRef|playAgentNativeAlert/u);
 });
 
 test('normal prepare deduplicates binding while logout makes same-device relogin bind again', () => {

@@ -50,6 +50,9 @@ import {
   agentReminderVibrationPattern,
   supportsAgentVibration,
   emitAgentMessageTone,
+  loadAgentSoundEnabled,
+  playAgentNativeAlert,
+  saveAgentSoundEnabled,
   type AgentReminderType,
   parseRealtimeEvent,
   sortedConversationList,
@@ -387,6 +390,7 @@ function AgentWorkspace({
     useState<AgentNotificationState>('disabled');
   const [notificationBusy, setNotificationBusy] = useState(false);
   const [reminderPending, setReminderPending] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(loadAgentSoundEnabled);
   const vibrationSupported = supportsAgentVibration();
   const [availability, setAvailability] = useState<AgentAvailability>(
     identity.status === 'busy' ? 'busy' : 'online',
@@ -434,6 +438,7 @@ function AgentWorkspace({
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const [networkOnline, setNetworkOnline] = useState(() => navigator.onLine);
   const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const soundEnabledRef = useRef(soundEnabled);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const messagesRef = useRef<HTMLDivElement | null>(null);
@@ -581,6 +586,9 @@ function AgentWorkspace({
 
   const playIncomingTone = useCallback(
     async (type: AgentReminderType) => {
+      if (!soundEnabledRef.current) return true;
+      const nativeResult = await playAgentNativeAlert(type);
+      if (nativeResult !== null) return nativeResult;
       const context = ensureSoundContext();
       if (!context || !(await resumeAgentAudio(context))) return false;
       setAudioUnlocked(context.state === 'running');
@@ -1702,10 +1710,22 @@ function AgentWorkspace({
   }
 
   function testSound() {
+    if (!soundEnabledRef.current) {
+      setError('消息提示音已关闭，请先开启后再测试');
+      return;
+    }
     void playIncomingTone('CUSTOMER_REPLY').then((played) => {
       if (!played) setError('提示音未能播放，请检查设备声音设置并再次点击测试');
       reminderDeliveryRef.current?.retry();
     });
+  }
+
+  function toggleSound() {
+    const next = !soundEnabledRef.current;
+    soundEnabledRef.current = next;
+    setSoundEnabled(next);
+    saveAgentSoundEnabled(next);
+    if (next) testSound();
   }
 
   function testVibration() {
@@ -1810,10 +1830,12 @@ function AgentWorkspace({
         vibrationSupported={vibrationSupported}
         realtimeReady={inboxConnected}
         audioReady={audioUnlocked}
+        soundEnabled={soundEnabled}
         reminderPending={reminderPending}
         onNicknameChange={handleNicknameChange}
         onToggleNotifications={handleToggleNotifications}
         onTestSound={handleTestSound}
+        onToggleSound={toggleSound}
         onTestVibration={handleTestVibration}
         overlay={navigation.overlay}
         onOpenCardSettings={handleOpenCardSettings}

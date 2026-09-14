@@ -27,6 +27,7 @@ export type AgentReminder = {
 
 type PendingReminder = {
   reminder: AgentReminder;
+  system: boolean;
   sound: boolean;
   vibration: boolean;
   running: boolean;
@@ -47,32 +48,28 @@ export function createAgentReminderDelivery(runtime: {
     if (!active || item.running || (item.sound && item.vibration)) return;
     item.running = true;
     try {
-      // A partially delivered local reminder retries only its missing channel.
-      if (!item.sound && (!runtime.vibrationSupported || !item.vibration)) {
-        let delivered = false;
+      // System notifications are best-effort and must not delay or replace the
+      // local/native alert. Attempt them once per durable message id.
+      if (!item.system) {
+        item.system = true;
+        void Promise.resolve()
+          .then(() => (active ? runtime.system(item.reminder) : false))
+          .catch(() => {
+            /* Local/native capabilities remain the delivery contract. */
+          });
+      }
+      if (!active) return;
+      if (!item.sound) {
         try {
-          delivered = await runtime.system(item.reminder);
+          item.sound = await runtime.sound(item.reminder.type);
         } catch {
-          /* Fall back to browser capabilities. */
-        }
-        if (!active) return;
-        if (delivered) {
-          item.sound = true;
-          item.vibration = true;
-          return;
+          /* Retry on interaction. */
         }
       }
       if (!active) return;
       if (!item.vibration) {
         try {
           item.vibration = runtime.vibrate(item.reminder.type);
-        } catch {
-          /* Retry on interaction. */
-        }
-      }
-      if (!item.sound) {
-        try {
-          item.sound = await runtime.sound(item.reminder.type);
         } catch {
           /* Retry on interaction. */
         }
@@ -94,6 +91,7 @@ export function createAgentReminderDelivery(runtime: {
       if (!item) {
         item = {
           reminder,
+          system: false,
           sound: false,
           vibration: !runtime.vibrationSupported,
           running: false,

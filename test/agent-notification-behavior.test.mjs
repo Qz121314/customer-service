@@ -282,7 +282,7 @@ test('iOS browser tabs ask for Home Screen installation before notification perm
   }
 });
 
-test('agent reception has no local mute preference or mute action', () => {
+test('agent reception has a local sound preference and mute action', () => {
   const portal = readFileSync(
     new URL('../src/dashboard/AgentPortal.tsx', import.meta.url),
     'utf8',
@@ -291,11 +291,8 @@ test('agent reception has no local mute preference or mute action', () => {
     new URL('../src/dashboard/AgentWorkspaceChrome.tsx', import.meta.url),
     'utf8',
   );
-  assert.doesNotMatch(
-    portal,
-    /loadAgentSoundEnabled|loadAgentVibrationEnabled|disableAgentNotifications/u,
-  );
-  assert.doesNotMatch(chrome, /关闭消息提示音|关闭震动提醒|关闭客户消息通知/u);
+  assert.match(portal, /loadAgentSoundEnabled|saveAgentSoundEnabled/u);
+  assert.match(chrome, /关闭消息提示音|开启消息提示音/u);
 });
 
 test('sound preset defaults to strong and persists on the current device', () => {

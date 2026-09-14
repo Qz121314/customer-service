@@ -127,26 +127,22 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     .locator('.mobile-agent-settings-item')
     .filter({ hasText: '消息提示音' });
   await expect(soundRow).toBeVisible();
-  const soundPresetSelect = soundRow.getByRole('combobox', {
-    name: '选择消息提示音',
+  const soundToggle = soundRow.getByRole('button', {
+    name: '关闭消息提示音',
   });
-  await expect(soundPresetSelect).toBeVisible();
-  await expect(soundPresetSelect).toHaveValue('strong');
-  await expect(soundPresetSelect.locator('option')).toHaveText([
-    '强提醒',
-    '经典双音',
-    '清脆提示',
-    '三连音',
-    '柔和水滴',
-  ]);
+  await expect(soundToggle).toBeVisible();
+  const soundTest = soundRow.getByRole('button', { name: '测试提示音' });
+  await expect(soundTest).toBeVisible();
+  await soundToggle.click();
   await expect(
-    soundRow.getByRole('button', {
-      name: /关闭消息提示音|开启消息提示音/u,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    soundRow.getByRole('button', { name: '测试提示音' }),
+    soundRow.getByRole('button', { name: '开启消息提示音' }),
   ).toBeVisible();
+  await expect(soundTest).toBeDisabled();
+  await soundRow.getByRole('button', { name: '开启消息提示音' }).click();
+  await expect(
+    soundRow.getByRole('button', { name: '关闭消息提示音' }),
+  ).toBeVisible();
+  await expect(soundTest).toBeEnabled();
   await expect(
     settingsPage.getByRole('button', { name: '测试提示音' }),
   ).toHaveCount(1);

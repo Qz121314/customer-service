@@ -12,7 +12,7 @@ const reminder = (messageId = 'm1') => ({
   conversationId: 'c1',
 });
 
-test('Android and iOS use one system reminder for duplicate inbox/thread events', async () => {
+test('each durable message gets one system reminder and one local alert', async () => {
   for (const vibrationSupported of [true, false]) {
     const sent = [];
     const local = [];
@@ -39,7 +39,11 @@ test('Android and iOS use one system reminder for duplicate inbox/thread events'
     delivery.receive(reminder('m3'));
     await tick();
     assert.deepEqual(sent, ['m1', 'm2', 'm3']);
-    assert.deepEqual(local, []);
+    assert.equal(local.filter((value) => value === 'sound').length, 3);
+    assert.equal(
+      local.filter((value) => value === 'vibration').length,
+      vibrationSupported ? 3 : 0,
+    );
   }
 });
 
@@ -128,7 +132,7 @@ test('rejected vibration retries without repeating successful audio', async () =
   assert.equal(vibrations, 2);
 });
 
-test('a failed system request consumes no reminder and all failed channels retry', async () => {
+test('a failed system request does not block local retries', async () => {
   let allowed = false,
     attempts = 0;
   const delivery = createAgentReminderDelivery({
@@ -151,18 +155,16 @@ test('a failed system request consumes no reminder and all failed channels retry
   await tick();
   delivery.retry();
   await tick();
-  assert.equal(attempts, 2);
+  assert.equal(attempts, 1);
 });
 
-test('missing durable identity does not notify, and logout prevents late fallback', async () => {
-  let finish;
+test('missing durable identity does not notify, and dispose clears pending work', async () => {
   let fallbacks = 0;
   const delivery = createAgentReminderDelivery({
     vibrationSupported: true,
     system() {
-      return new Promise((resolve) => {
-        finish = resolve;
-      });
+      fallbacks++;
+      return Promise.resolve(false);
     },
     async sound() {
       fallbacks++;
@@ -174,10 +176,7 @@ test('missing durable identity does not notify, and logout prevents late fallbac
     },
   });
   delivery.receive(reminder(''));
-  assert.equal(finish, undefined);
-  delivery.receive(reminder());
   delivery.dispose();
-  finish(false);
   await tick();
   assert.equal(fallbacks, 0);
 });

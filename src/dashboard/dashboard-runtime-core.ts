@@ -189,6 +189,23 @@ const AGENT_SOUND_PRESET_OPTIONS: readonly {
 ];
 
 const AGENT_SOUND_PRESET_KEY = 'cs-agent-sound-preset';
+const AGENT_SOUND_ENABLED_KEY = 'cs-agent-sound-enabled';
+
+function loadAgentSoundEnabled(): boolean {
+  try {
+    return localStorage.getItem(AGENT_SOUND_ENABLED_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+function saveAgentSoundEnabled(enabled: boolean): void {
+  try {
+    localStorage.setItem(AGENT_SOUND_ENABLED_KEY, String(enabled));
+  } catch {
+    // Sound preference is best effort.
+  }
+}
 
 function isAgentSoundPreset(value: string | null): value is AgentSoundPreset {
   return AGENT_SOUND_PRESET_OPTIONS.some((option) => option.id === value);
@@ -611,6 +628,8 @@ export {
   saveAgentConversationDrafts,
   createAgentDraftSaveScheduler,
   AGENT_SOUND_PRESET_OPTIONS,
+  loadAgentSoundEnabled,
+  saveAgentSoundEnabled,
   loadAgentSoundPreset,
   saveAgentSoundPreset,
   agentReminderVibrationPattern,

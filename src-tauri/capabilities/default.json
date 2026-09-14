@@ -3,5 +3,8 @@
   "identifier": "default",
   "description": "Default permissions for the客服坐席工作台",
   "windows": ["main"],
+  "remote": {
+    "urls": ["https://customer-service-app.fcqz121314.workers.dev/*"]
+  },
   "permissions": ["core:default"]
 }
