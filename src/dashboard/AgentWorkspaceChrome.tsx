@@ -2,10 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
 import {
-  AgentWindowsAppSettings,
-  WINDOWS_DOWNLOAD_URL,
-} from './AgentWindowsAppSettings';
-import {
   AGENT_SOUND_PRESET_OPTIONS,
   loadAgentSoundPreset,
   saveAgentSoundPreset,
@@ -13,6 +9,9 @@ import {
 } from './dashboard-runtime';
 import { UiIcon } from './icons';
 import { Button } from './ui';
+
+const WINDOWS_DOWNLOAD_URL =
+  'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-windows-x64.exe';
 
 export function AgentActionToolbar({
   notificationState,
@@ -127,11 +126,11 @@ export function AgentActionToolbar({
             href={WINDOWS_DOWNLOAD_URL}
             target="_blank"
             rel="noreferrer"
-            aria-label="下载 Windows 应用"
-            title="下载 Windows 应用"
+            aria-label="下载/更新客服应用"
+            title="下载/更新客服应用"
           >
             <UiIcon name="install" />
-            <span>下载 Windows 应用</span>
+            <span>下载/更新客服应用</span>
           </a>
         </Button>
         <Button
@@ -395,11 +394,6 @@ export function AgentMobileSettingsPage({
               <p>锁屏或切后台后可能无法收到客户消息提醒。</p>
             )}
           </div>
-        </section>
-
-        <section className="mobile-agent-settings-group">
-          <h2 className="mobile-agent-settings-label">桌面应用</h2>
-          <AgentWindowsAppSettings />
         </section>
 
         <section className="mobile-agent-settings-group">

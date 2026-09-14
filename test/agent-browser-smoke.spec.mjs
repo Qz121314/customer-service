@@ -261,7 +261,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   }
 
   const windowsDownload = page.getByRole('link', {
-    name: '下载 Windows 应用',
+    name: '下载/更新客服应用',
   });
   await expect(windowsDownload).toBeVisible();
   await expect(windowsDownload).toHaveAttribute(

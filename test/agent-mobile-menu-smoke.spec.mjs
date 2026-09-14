@@ -157,6 +157,12 @@ test('mobile settings keeps its navigation context after child dialogs close', a
 
   await expect(settingsPage.getByText('接待', { exact: true })).toBeVisible();
   await expect(settingsPage.getByText('账号', { exact: true })).toBeVisible();
+  await expect(settingsPage.getByText('桌面应用', { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    settingsPage.getByRole('link', { name: /Windows/u }),
+  ).toHaveCount(0);
 
   const settingsGeometry = await settingsPage.evaluate((element) => {
     const cards = [...element.querySelectorAll('.mobile-agent-settings-card')];
