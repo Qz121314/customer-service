@@ -938,7 +938,6 @@ export function AgentMaterialsModal({
                 selectedId={greetingId}
                 onSelect={setGreetingId}
                 onDelete={removeGreeting}
-                onAdd={resetGreetingEditor}
                 empty="还没有问候语素材。"
               >
                 <div className="agent-material-editor">
@@ -989,7 +988,6 @@ export function AgentMaterialsModal({
                 selectedId={ctaId}
                 onSelect={setCtaId}
                 onDelete={removeCta}
-                onAdd={resetCtaEditor}
                 empty="还没有 CTA 素材。"
               >
                 <div className="agent-material-editor">
@@ -1284,7 +1282,6 @@ function MaterialEditorList({
   selectedId,
   onSelect,
   onDelete,
-  onAdd,
   empty,
   children,
 }: {
@@ -1292,7 +1289,6 @@ function MaterialEditorList({
   selectedId: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
-  onAdd: () => void;
   empty: string;
   children: React.ReactNode;
 }) {
@@ -1319,9 +1315,6 @@ function MaterialEditorList({
           </div>
         ))}
         {items.length === 0 ? <p>{empty}</p> : null}
-        <Button type="button" variant="ghost" onClick={onAdd}>
-          新增
-        </Button>
       </div>
       {children}
     </div>
