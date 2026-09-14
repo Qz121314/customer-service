@@ -277,12 +277,11 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   const materialsDialog = page.getByRole('dialog', { name: '素材库' });
   await expect(materialsDialog).toBeVisible();
   await materialsDialog.getByRole('button', { name: /^名片/u }).click();
-  await materialsDialog.getByRole('button', { name: '添加名片' }).click();
   const cardSettingsDialog = materialsDialog;
   await expect(
     cardSettingsDialog
       .locator('.agent-inline-card-editor')
-      .getByText('添加名片', { exact: true }),
+      .getByText('录入名片', { exact: true }),
   ).toBeVisible();
   const cardTypeSelect = cardSettingsDialog.getByRole('combobox', {
     name: '名片类型',
@@ -295,7 +294,6 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     .fill('您好，我想了解更多信息');
   await cardSettingsDialog.getByRole('button', { name: '保存名片' }).click();
   await expect(cardSettingsDialog.getByText('短信联系')).toBeVisible();
-  await cardSettingsDialog.getByRole('button', { name: '添加名片' }).click();
   await cardTypeSelect.selectOption('website');
   await expect(cardSettingsDialog.getByLabel('预设话术（可选）')).toHaveCount(
     0,

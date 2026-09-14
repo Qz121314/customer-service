@@ -384,6 +384,87 @@
   min-width: 0;
 }
 
+.agent-card-workspace {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(230px, 0.78fr) minmax(360px, 1.22fr);
+  gap: 16px;
+}
+
+.agent-card-library-pane,
+.agent-card-editor-pane {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid #e1e6ee;
+  border-radius: 14px;
+  background: #fbfcfe;
+  padding: 16px;
+}
+
+.agent-card-library-pane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.agent-card-library-pane .agent-material-attachments-head {
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8ebf0;
+}
+
+.agent-card-library-pane .agent-material-attachments-head > small {
+  flex: 0 0 auto;
+  color: #9aa4b3;
+  white-space: nowrap;
+}
+
+.agent-card-library-pane .agent-material-attachment-grid {
+  grid-template-columns: 1fr;
+  align-content: start;
+  overflow: auto;
+  margin-top: 12px;
+  padding-right: 2px;
+}
+
+.agent-card-editor-pane {
+  display: grid;
+  align-content: start;
+}
+
+.agent-card-editor-pane .agent-inline-card-editor {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.agent-card-editor-pane .agent-inline-card-editor-head {
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e8ebf0;
+}
+
+.agent-card-editor-pane .agent-inline-card-fields {
+  padding-top: 2px;
+}
+
+.agent-card-library-pane .agent-material-attachment-card {
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+}
+
+.agent-card-library-pane .agent-material-attachment-card > span:nth-child(2) {
+  overflow: hidden;
+}
+
+.agent-card-library-pane
+  .agent-material-attachment-card
+  > span:nth-child(2)
+  small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .agent-material-attachments-head > div {
   display: flex;
   flex-wrap: wrap;
@@ -432,8 +513,13 @@
   }
 
   .agent-first-reply-body,
-  .agent-material-editor-layout {
+  .agent-material-editor-layout,
+  .agent-card-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .agent-card-library-pane .agent-material-attachment-grid {
+    max-height: 220px;
   }
 
   .agent-first-reply-profiles {

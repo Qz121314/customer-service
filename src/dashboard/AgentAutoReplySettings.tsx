@@ -555,7 +555,6 @@ export function AgentMaterialsModal({
   const [ctaId, setCtaId] = useState<string | null>(null);
   const [ctaLabel, setCtaLabel] = useState('');
   const [ctaAnswer, setCtaAnswer] = useState('');
-  const [cardEditorOpen, setCardEditorOpen] = useState(false);
   const [cardEditingId, setCardEditingId] = useState<string | null>(null);
   const [cardKind, setCardKind] = useState<AgentContactCardKind>('sms');
   const [cardLabel, setCardLabel] = useState('');
@@ -604,7 +603,6 @@ export function AgentMaterialsModal({
     setCtaId(null);
     setCtaLabel('');
     setCtaAnswer('');
-    setCardEditorOpen(false);
     setCardEditingId(null);
     setCardKind('sms');
     setCardLabel('');
@@ -758,7 +756,6 @@ export function AgentMaterialsModal({
   };
 
   const resetCardEditor = () => {
-    setCardEditorOpen(false);
     setCardEditingId(null);
     setCardKind('sms');
     setCardLabel('');
@@ -769,12 +766,10 @@ export function AgentMaterialsModal({
   };
   const startNewCard = () => {
     resetCardEditor();
-    setCardEditorOpen(true);
   };
   const editCard = (
     preset: Extract<AgentAttachmentPreset, { kind: AgentContactCardKind }>,
   ) => {
-    setCardEditorOpen(true);
     setCardEditingId(preset.id);
     setCardKind(preset.kind);
     setCardLabel(preset.label);
@@ -1047,35 +1042,83 @@ export function AgentMaterialsModal({
               </MaterialEditorList>
             ) : null}
             {tab === 'cards' ? (
-              <div className="agent-material-attachments">
-                <div className="agent-material-attachments-head">
-                  <span>
-                    <strong>名片</strong>
-                    <small>保存客服可直接使用的联系方式</small>
-                  </span>
-                  <Button type="button" variant="ghost" onClick={startNewCard}>
-                    添加名片
-                  </Button>
-                </div>
-                {cardEditorOpen ? (
+              <div className="agent-card-workspace">
+                <section
+                  className="agent-card-library-pane"
+                  aria-labelledby="agent-card-library-title"
+                >
+                  <div className="agent-material-attachments-head">
+                    <span>
+                      <strong id="agent-card-library-title">已保存名片</strong>
+                      <small>客服可直接使用的联系方式</small>
+                    </span>
+                    <small>{cardPresets.length} 张</small>
+                  </div>
+                  <div className="agent-material-attachment-grid">
+                    {cardPresets.map((preset) => (
+                      <div
+                        className="agent-material-attachment-card"
+                        key={preset.id}
+                      >
+                        <AgentContactCardIcon
+                          id={preset.id}
+                          kind={preset.kind}
+                          source="preset"
+                          hasCustomIcon={preset.hasCustomIcon}
+                        />
+                        <span>
+                          <strong>{preset.label}</strong>
+                          <small>{`${CONTACT_CARD_LABELS[preset.kind]} · ${preset.value}`}</small>
+                        </span>
+                        <span className="agent-material-card-actions">
+                          <button
+                            type="button"
+                            aria-label={`编辑 ${preset.label}`}
+                            disabled={saving}
+                            onClick={() => editCard(preset)}
+                          >
+                            <UiIcon name="edit" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`删除 ${preset.label}`}
+                            disabled={saving}
+                            onClick={() => void removeCard(preset)}
+                          >
+                            <UiIcon name="trash" />
+                          </button>
+                        </span>
+                      </div>
+                    ))}
+                    {cardPresets.length === 0 ? (
+                      <p>还没有名片，右侧填写第一张。</p>
+                    ) : null}
+                  </div>
+                </section>
+                <section
+                  className="agent-card-editor-pane"
+                  aria-labelledby="agent-card-editor-title"
+                >
                   <div className="agent-inline-card-editor">
                     <div className="agent-inline-card-editor-head">
                       <span>
-                        <strong>
-                          {cardEditingId ? '编辑名片' : '添加名片'}
+                        <strong id="agent-card-editor-title">
+                          {cardEditingId ? '编辑名片' : '录入名片'}
                         </strong>
-                        <small>填写后立即保存到素材库</small>
+                        <small>
+                          填写联系方式，保存后可在首次回复中组合使用
+                        </small>
                       </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="关闭名片编辑"
-                        disabled={saving}
-                        onClick={resetCardEditor}
-                      >
-                        <UiIcon name="close" />
-                      </Button>
+                      {cardEditingId ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={startNewCard}
+                        >
+                          添加名片
+                        </Button>
+                      ) : null}
                     </div>
                     <div className="agent-inline-card-fields">
                       <label>
@@ -1165,7 +1208,7 @@ export function AgentMaterialsModal({
                         disabled={saving}
                         onClick={resetCardEditor}
                       >
-                        取消
+                        清空
                       </Button>
                       <Button
                         type="button"
@@ -1182,47 +1225,7 @@ export function AgentMaterialsModal({
                       </Button>
                     </div>
                   </div>
-                ) : null}
-                <div className="agent-material-attachment-grid">
-                  {cardPresets.map((preset) => (
-                    <div
-                      className="agent-material-attachment-card"
-                      key={preset.id}
-                    >
-                      <AgentContactCardIcon
-                        id={preset.id}
-                        kind={preset.kind}
-                        source="preset"
-                        hasCustomIcon={preset.hasCustomIcon}
-                      />
-                      <span>
-                        <strong>{preset.label}</strong>
-                        <small>{`${CONTACT_CARD_LABELS[preset.kind]} · ${preset.value}`}</small>
-                      </span>
-                      <span className="agent-material-card-actions">
-                        <button
-                          type="button"
-                          aria-label={`编辑 ${preset.label}`}
-                          disabled={saving}
-                          onClick={() => editCard(preset)}
-                        >
-                          <UiIcon name="edit" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`删除 ${preset.label}`}
-                          disabled={saving}
-                          onClick={() => void removeCard(preset)}
-                        >
-                          <UiIcon name="trash" />
-                        </button>
-                      </span>
-                    </div>
-                  ))}
-                  {cardPresets.length === 0 ? (
-                    <p>还没有名片，点击上方“添加名片”开始。</p>
-                  ) : null}
-                </div>
+                </section>
               </div>
             ) : null}
             {tab === 'images' ? (
