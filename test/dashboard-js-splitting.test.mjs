@@ -30,6 +30,18 @@ test('dashboard keeps admin and agent route entries isolated behind dynamic impo
   assert.doesNotMatch(mainEntry, /from ['"]\.\/admin-entry['"]/u);
 });
 
+test('Tauri desktop always opens the agent login route', () => {
+  assert.match(mainEntry, /window\.location\.protocol === ['"]tauri:['"]/u);
+  assert.match(
+    mainEntry,
+    /window\.location\.hostname === ['"]tauri\.localhost['"]/u,
+  );
+  assert.match(
+    mainEntry,
+    /window\.history\.replaceState\(null, '', '\/agent'\)/u,
+  );
+});
+
 test('optional dashboard surfaces keep runtime implementations deferred', () => {
   for (const [wrapperPath, implementationPath] of deferredSurfaces) {
     const wrapper = readFileSync(wrapperPath, 'utf8');
