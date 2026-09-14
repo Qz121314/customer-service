@@ -726,9 +726,14 @@ export function AgentMaterialsModal({
     setImageUploading(true);
     setError('');
     try {
-      const replacement = await uploadAgentAttachmentImage(file, file.name || '素材图片');
+      const replacement = await uploadAgentAttachmentImage(
+        file,
+        file.name || '素材图片',
+      );
       await deleteAgentAttachmentPreset(current.id);
-      setPresets((items) => items.map((item) => (item.id === current.id ? replacement : item)));
+      setPresets((items) =>
+        items.map((item) => (item.id === current.id ? replacement : item)),
+      );
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '图片替换失败');
     } finally {
@@ -956,7 +961,11 @@ export function AgentMaterialsModal({
                 <div className="agent-material-editor">
                   <div className="agent-material-editor-head">
                     <SectionHead title="问候语" />
-                    <Button type="button" variant="ghost" onClick={resetGreetingEditor}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={resetGreetingEditor}
+                    >
                       新增
                     </Button>
                   </div>
@@ -1006,7 +1015,11 @@ export function AgentMaterialsModal({
                 <div className="agent-material-editor">
                   <div className="agent-material-editor-head">
                     <SectionHead title="CTA" />
-                    <Button type="button" variant="ghost" onClick={resetCtaEditor}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={resetCtaEditor}
+                    >
                       新增
                     </Button>
                   </div>
@@ -1267,7 +1280,10 @@ export function AgentMaterialsModal({
                         <small>{preset.originalName || '图片'}</small>
                       </span>
                       <div className="agent-material-card-actions">
-                        <label className="agent-material-image-edit" aria-label={`编辑 ${preset.label}`}>
+                        <label
+                          className="agent-material-image-edit"
+                          aria-label={`编辑 ${preset.label}`}
+                        >
                           <UiIcon name="edit" />
                           <input
                             type="file"
@@ -1325,7 +1341,11 @@ function MaterialEditorList({
       <div className="agent-material-list">
         {items.map((item) => (
           <div
-            className={item.id === selectedId ? 'agent-material-card is-selected' : 'agent-material-card'}
+            className={
+              item.id === selectedId
+                ? 'agent-material-card is-selected'
+                : 'agent-material-card'
+            }
             key={item.id}
           >
             <button type="button" onClick={() => onSelect(item.id)}>
@@ -1333,10 +1353,18 @@ function MaterialEditorList({
               <small>{item.text}</small>
             </button>
             <div className="agent-material-card-actions">
-              <button type="button" aria-label={'编辑 ' + item.name} onClick={() => onSelect(item.id)}>
+              <button
+                type="button"
+                aria-label={'编辑 ' + item.name}
+                onClick={() => onSelect(item.id)}
+              >
                 <UiIcon name="edit" />
               </button>
-              <button type="button" aria-label={'删除 ' + item.name} onClick={() => onDelete(item.id)}>
+              <button
+                type="button"
+                aria-label={'删除 ' + item.name}
+                onClick={() => onDelete(item.id)}
+              >
                 <UiIcon name="trash" />
               </button>
             </div>
