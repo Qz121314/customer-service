@@ -4,9 +4,11 @@ import test from 'node:test';
 
 const mainEntry = readFileSync('src/dashboard/main.tsx', 'utf8');
 const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
 const tauriConfig = JSON.parse(
   readFileSync('src-tauri/tauri.conf.json', 'utf8'),
 );
+const cargoManifest = readFileSync('src-tauri/Cargo.toml', 'utf8');
 
 const deferredSurfaces = [
   ['src/dashboard/AdminStatisticsPage.tsx', './AdminStatisticsPageImpl'],
@@ -57,6 +59,14 @@ test('Tauri desktop loads the agent page from the production Worker', () => {
   const agentUrl = 'https://customer-service-app.fcqz121314.workers.dev/agent';
   assert.equal(tauriConfig.app.windows[0].url, agentUrl);
   assert.equal(tauriConfig.build.frontendDist, agentUrl);
+});
+
+test('desktop package versions stay aligned across manifests', () => {
+  assert.equal(packageJson.version, tauriConfig.version);
+  assert.match(
+    cargoManifest,
+    new RegExp(`^version = "${escapeRegExp(tauriConfig.version)}"$`, 'mu'),
+  );
 });
 
 test('optional dashboard surfaces keep runtime implementations deferred', () => {
