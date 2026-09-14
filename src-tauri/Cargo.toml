@@ -1,6 +1,6 @@
 [package]
 name = "customer-service-agent"
-version = "1.0.0"
+version = "1.0.2"
 description = "客服坐席 Windows 工作台"
 authors = ["Qz121314"]
 edition = "2021"

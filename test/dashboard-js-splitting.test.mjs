@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const mainEntry = readFileSync('src/dashboard/main.tsx', 'utf8');
+const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
 
 const deferredSurfaces = [
   ['src/dashboard/AdminStatisticsPage.tsx', './AdminStatisticsPageImpl'],
@@ -39,6 +40,13 @@ test('Tauri desktop always opens the agent login route', () => {
   assert.match(
     mainEntry,
     /window\.history\.replaceState\(null, '', '\/agent'\)/u,
+  );
+});
+
+test('release Tauri builds hide the Windows console window', () => {
+  assert.match(
+    tauriMain,
+    /#!\[cfg_attr\(not\(debug_assertions\), windows_subsystem = "windows"\)\]/u,
   );
 });
 
