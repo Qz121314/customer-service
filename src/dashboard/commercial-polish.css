@@ -147,13 +147,6 @@
     background: #171817;
   }
 
-  .workspace-shell .workspace-brand {
-    border: 1px solid rgb(183 238 70 / 60%);
-    color: #171817;
-    background: var(--cs-accent);
-    box-shadow: none;
-  }
-
   .workspace-shell .agent-profile .avatar {
     border: 1px solid rgb(255 255 255 / 8%);
     background: #2b2d2a;

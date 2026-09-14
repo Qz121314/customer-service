@@ -44,21 +44,6 @@
     color: #fff;
   }
 
-  .workspace-shell .workspace-brand-lockup {
-    min-height: 46px;
-    justify-content: center;
-    padding: 0;
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-  }
-
-  .workspace-shell .workspace-brand-lockup > span {
-    display: none;
-  }
-
-  .workspace-shell .workspace-brand {
-    margin-inline: auto;
-  }
-
   .workspace-shell .agent-profile {
     position: relative;
     min-height: 66px;
