@@ -260,6 +260,15 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     expect(desktopVisuals.rowRadius).toBeGreaterThanOrEqual(10);
   }
 
+  const windowsDownload = page.getByRole('link', {
+    name: '下载/更新客服应用',
+  });
+  await expect(windowsDownload).toBeVisible();
+  await expect(windowsDownload).toHaveAttribute(
+    'href',
+    'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-windows-x64.exe',
+  );
+
   const cardSettingsButton = page.getByRole('button', {
     name: '打开名片设置',
   });
