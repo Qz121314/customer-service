@@ -459,7 +459,7 @@ jobs:
         shell: bash
         run: |
           cargo install tauri-cli --version 2.11.4 --locked
-          cargo tauri icon public/icons/customer-service-512.svg
+          cargo tauri icon src-tauri/icons/app-icon.svg
           cargo tauri build --bundles nsis
 
       - name: Publish Windows installer
