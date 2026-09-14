@@ -37,6 +37,7 @@
 
   .workspace-shell .workspace-sidebar {
     position: relative;
+    z-index: 2;
     padding: 14px 10px;
     border-right: 1px solid #2b3038;
     background: #1d2026;
@@ -124,6 +125,40 @@
     flex: 0 0 auto;
     margin: 3px 0 2px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .workspace-shell .workspace-sidebar [data-tooltip] {
+    position: relative;
+  }
+
+  .workspace-shell .workspace-sidebar [data-tooltip]::after {
+    position: absolute;
+    z-index: 3;
+    top: 50%;
+    left: calc(100% + 10px);
+    padding: 7px 9px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+    color: #fff;
+    background: #252a33;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
+    content: attr(data-tooltip);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.2;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(4px, -50%);
+    transition:
+      opacity 120ms ease,
+      transform 120ms ease;
+    white-space: nowrap;
+  }
+
+  .workspace-shell .workspace-sidebar [data-tooltip]:hover::after,
+  .workspace-shell .workspace-sidebar [data-tooltip]:focus-visible::after {
+    opacity: 1;
+    transform: translate(0, -50%);
   }
 
   .workspace-shell .workspace-sidebar .ghost-button:focus-visible {
