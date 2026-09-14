@@ -888,7 +888,7 @@ export function AgentMaterialsModal({
         className="agent-auto-reply-dialog agent-materials-dialog agent-dialog-surface"
         role="dialog"
         aria-modal="true"
-        aria-label="素材管理"
+        aria-label="素材库"
       >
         <header className="agent-auto-reply-head">
           <div>
