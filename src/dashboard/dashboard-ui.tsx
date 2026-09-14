@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent, ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import type { Message } from './api';
 import {
   agentAttachmentContentUrl,
@@ -132,14 +131,33 @@ function AuthPage({
   children: ReactNode;
 }) {
   const agent = variant === 'agent';
+  const [siteLogoFailed, setSiteLogoFailed] = useState(false);
+  const hasSiteLogo = agent && !siteLogoFailed;
   return (
     <div className={`auth-page${agent ? ' agent-auth-page' : ''}`}>
       <div className={`auth-card${agent ? ' agent-auth-card' : ''}`}>
-        <div className="auth-mark" aria-hidden="true">
-          CS
-        </div>
+        {agent ? (
+          <div className="agent-auth-brand-row">
+            <div className="auth-mark" aria-hidden="true">
+              {hasSiteLogo ? (
+                <img
+                  src="/client/v1/site-logo"
+                  alt=""
+                  onError={() => setSiteLogoFailed(true)}
+                />
+              ) : (
+                'CS'
+              )}
+            </div>
+            <h1>{title}</h1>
+          </div>
+        ) : (
+          <div className="auth-mark" aria-hidden="true">
+            CS
+          </div>
+        )}
         {eyebrow ? <span className="eyebrow">{eyebrow}</span> : null}
-        <h1>{title}</h1>
+        {!agent ? <h1>{title}</h1> : null}
         {description ? <p>{description}</p> : null}
         {children}
       </div>

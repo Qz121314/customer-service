@@ -65,10 +65,6 @@ export const AgentSidebar = memo(function AgentSidebar({
   return (
     <>
       <aside className="workspace-sidebar">
-        <div className="workspace-brand-lockup">
-          <div className="workspace-brand">CS</div>
-          <span>坐席中心</span>
-        </div>
         <div className="agent-profile">
           <AgentAvatarControl
             agentId={identity.id}
