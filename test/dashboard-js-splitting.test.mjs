@@ -4,6 +4,9 @@ import test from 'node:test';
 
 const mainEntry = readFileSync('src/dashboard/main.tsx', 'utf8');
 const tauriMain = readFileSync('src-tauri/src/main.rs', 'utf8');
+const tauriConfig = JSON.parse(
+  readFileSync('src-tauri/tauri.conf.json', 'utf8'),
+);
 
 const deferredSurfaces = [
   ['src/dashboard/AdminStatisticsPage.tsx', './AdminStatisticsPageImpl'],
@@ -47,6 +50,13 @@ test('release Tauri builds hide the Windows console window', () => {
   assert.match(
     tauriMain,
     /#!\[cfg_attr\(not\(debug_assertions\), windows_subsystem = "windows"\)\]/u,
+  );
+});
+
+test('Tauri desktop loads the agent page from the production Worker', () => {
+  assert.equal(
+    tauriConfig.app.windows[0].url,
+    'https://customer-service-app.fcqz121314.workers.dev/agent',
   );
 });
 

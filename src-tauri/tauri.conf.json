@@ -9,6 +9,7 @@
   "app": {
     "windows": [
       {
+        "url": "https://customer-service-app.fcqz121314.workers.dev/agent",
         "title": "客服坐席工作台",
         "width": 1440,
         "height": 900,
