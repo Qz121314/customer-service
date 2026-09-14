@@ -86,9 +86,17 @@
   }
 
   .workspace-shell .workspace-sidebar-actions {
-    display: grid;
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: center;
     gap: 7px;
     margin-top: 0;
+  }
+
+  .workspace-shell .workspace-sidebar .workspace-logout-button {
+    margin: auto auto 0;
   }
 
   .workspace-shell .workspace-sidebar .ghost-button,
