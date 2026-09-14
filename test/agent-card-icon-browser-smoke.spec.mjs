@@ -53,13 +53,15 @@ test('agent can configure cards inline with preset text and custom icon', async 
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('正在读取素材…')).toBeHidden();
   await dialog.getByRole('button', { name: /^名片/u }).click();
-  await dialog.getByRole('button', { name: '添加名片' }).click();
   await expect(
-    dialog.locator('.agent-inline-card-editor').getByText('添加名片', {
+    dialog.locator('.agent-inline-card-editor').getByText('录入名片', {
       exact: true,
     }),
   ).toBeVisible();
   await expect(page.getByRole('dialog', { name: '名片' })).toHaveCount(0);
+  await expect(dialog.locator('.agent-card-workspace')).toBeVisible();
+  await expect(dialog.locator('.agent-card-library-pane')).toBeVisible();
+  await expect(dialog.locator('.agent-card-editor-pane')).toBeVisible();
 
   const initialLayout = await dialog.evaluate((element) => {
     const browser = element.ownerDocument.defaultView;
@@ -122,7 +124,6 @@ test('agent can configure cards inline with preset text and custom icon', async 
     ),
   ).toBeVisible();
 
-  await dialog.getByRole('button', { name: '添加名片' }).click();
   await typeSelect.selectOption('whatsapp');
   await expect(typeSelect).toHaveValue('whatsapp');
   await dialog.getByLabel('名称').fill('WhatsApp 名片');
@@ -145,7 +146,7 @@ test('agent can configure cards inline with preset text and custom icon', async 
   await expect(
     whatsappCard.locator('.agent-contact-card-custom-icon'),
   ).toBeVisible();
-  await expect(dialog.locator('.agent-inline-card-editor')).toHaveCount(0);
+  await expect(dialog.locator('.agent-inline-card-editor')).toBeVisible();
 
   await whatsappCard
     .getByRole('button', { name: '编辑 WhatsApp 名片' })
@@ -158,8 +159,6 @@ test('agent can configure cards inline with preset text and custom icon', async 
   await expect(dialog.getByLabel('名称')).toHaveValue('WhatsApp 名片');
   await expect(dialog.getByLabel('WhatsApp 号码')).toHaveValue('+12135559999');
 
-  await dialog.getByRole('button', { name: '关闭名片编辑' }).click();
-  await expect(dialog.locator('.agent-inline-card-editor')).toHaveCount(0);
   await whatsappCard
     .getByRole('button', { name: '删除 WhatsApp 名片' })
     .click();
