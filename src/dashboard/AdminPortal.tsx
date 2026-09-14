@@ -89,6 +89,7 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
   const [settingsView, setSettingsView] =
     useState<SettingsView>('availability');
   const logoPickerRef = useRef<() => void>(() => undefined);
+  const siteLogoVersion = useRef(0);
   const [busy, setBusy] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -116,7 +117,9 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       .catch((reason) => setError(message(reason, '无法加载配置')))
       .finally(() => setBusy(false));
     getSiteLogo()
-      .then(setSiteLogo)
+      .then((nextSiteLogo) => {
+        if (siteLogoVersion.current === 0) setSiteLogo(nextSiteLogo);
+      })
       .catch((reason) => setError(message(reason, '无法加载站点 Logo')));
   }, [refresh]);
 
@@ -212,7 +215,10 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
       }
     >
       <SiteLogoQuickUpload
-        onChange={setSiteLogo}
+        onChange={(nextSiteLogo) => {
+          siteLogoVersion.current += 1;
+          setSiteLogo(nextSiteLogo);
+        }}
         onReady={(openPicker) => {
           logoPickerRef.current = openPicker;
         }}
