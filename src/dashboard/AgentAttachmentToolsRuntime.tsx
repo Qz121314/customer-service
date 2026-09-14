@@ -417,16 +417,25 @@ export function AgentCardSettingsModal({
             <span className="eyebrow">坐席设置</span>
             <h2 id="agent-attachment-manager-title">名片</h2>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="关闭名片设置"
-            disabled={saving}
-            onClick={onClose}
-          >
-            <UiIcon name="close" />
-          </Button>
+          <div className="agent-attachment-manager-head-actions">
+            <Button
+              type="button"
+              disabled={loading || saving || !label.trim() || !value.trim()}
+              onClick={() => void save()}
+            >
+              {saving ? '保存中…' : editingId ? '保存修改' : '添加'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="关闭名片设置"
+              disabled={saving}
+              onClick={onClose}
+            >
+              <UiIcon name="close" />
+            </Button>
+          </div>
         </header>
 
         <div className="agent-attachment-manager-body" ref={bodyRef}>
@@ -504,147 +513,153 @@ export function AgentCardSettingsModal({
               </span>
               {editingId ? <i>编辑中</i> : null}
             </div>
-            <div className="agent-attachment-kind-field">
-              <span>类型</span>
-              <div className="agent-attachment-kind-select" ref={kindMenuRef}>
-                <button
-                  type="button"
-                  className="agent-attachment-kind-trigger"
-                  role="combobox"
-                  aria-label="名片类型"
-                  aria-controls="agent-contact-card-kind-options"
-                  aria-expanded={kindMenuOpen}
-                  disabled={loading || Boolean(editingId)}
-                  onClick={() => setKindMenuOpen((current) => !current)}
-                >
-                  <AgentContactCardIcon
-                    id={`channel-${kind}`}
-                    kind={kind}
-                    source="preset"
-                    hasCustomIcon={false}
-                  />
-                  <span>
-                    <strong>{currentChannel.label}</strong>
-                    <small>{currentChannel.description}</small>
-                  </span>
-                  <UiIcon name="chevron" />
-                </button>
-
-                {kindMenuOpen ? (
-                  <div
-                    className="agent-attachment-kind-options"
-                    id="agent-contact-card-kind-options"
-                    role="listbox"
-                    aria-label="名片类型选项"
+            <div className="agent-attachment-fields-grid">
+              <div className="agent-attachment-kind-field">
+                <span>类型</span>
+                <div className="agent-attachment-kind-select" ref={kindMenuRef}>
+                  <button
+                    type="button"
+                    className="agent-attachment-kind-trigger"
+                    role="combobox"
+                    aria-label="名片类型"
+                    aria-controls="agent-contact-card-kind-options"
+                    aria-expanded={kindMenuOpen}
+                    disabled={loading || Boolean(editingId)}
+                    onClick={() => setKindMenuOpen((current) => !current)}
                   >
-                    {CONTACT_CARD_CHANNELS.map((channel) => (
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={kind === channel.kind}
-                        key={channel.kind}
-                        onClick={() => {
-                          setKind(channel.kind);
-                          setKindMenuOpen(false);
-                          if (channel.kind === 'website') setPresetMessage('');
-                        }}
-                      >
-                        <AgentContactCardIcon
-                          id={`channel-option-${channel.kind}`}
-                          kind={channel.kind}
-                          source="preset"
-                          hasCustomIcon={false}
-                        />
-                        <span>
-                          <strong>{channel.label}</strong>
-                          <small>{channel.description}</small>
-                        </span>
-                        {kind === channel.kind ? <UiIcon name="check" /> : null}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="agent-card-icon-editor">
-              <span>图标</span>
-              <div className="agent-card-icon-control">
-                <AgentContactCardIcon
-                  id={editingPreset?.id ?? 'new-card'}
-                  kind={kind}
-                  source="preset"
-                  hasCustomIcon={currentHasCustomIcon}
-                  previewUrl={iconPreviewUrl}
-                />
-                <span>
-                  <strong>
-                    {iconFile
-                      ? iconFile.name
-                      : currentHasCustomIcon
-                        ? '自定义图标'
-                        : `${CONTACT_CARD_LABELS[kind]} 官方图标`}
-                  </strong>
-                  <small>默认使用官方渠道样式；可上传自定义图标作为覆盖</small>
-                </span>
-                <div className="agent-card-icon-actions">
-                  <label className="agent-card-icon-picker">
-                    {currentHasCustomIcon ? '更换图标' : '上传图标'}
-                    <input
-                      aria-label="名片图标"
-                      type="file"
-                      accept="image/png,image/jpeg,image/webp"
-                      disabled={loading || saving}
-                      onChange={(event) => {
-                        const file = event.target.files?.[0] ?? null;
-                        event.currentTarget.value = '';
-                        if (!file) return;
-                        setIconFile(file);
-                        setRemoveIconRequested(false);
-                      }}
+                    <AgentContactCardIcon
+                      id={`channel-${kind}`}
+                      kind={kind}
+                      source="preset"
+                      hasCustomIcon={false}
                     />
-                  </label>
-                  {currentHasCustomIcon ? (
-                    <button
-                      type="button"
-                      className="agent-card-icon-remove"
-                      disabled={loading || saving}
-                      onClick={() => {
-                        setIconFile(null);
-                        setRemoveIconRequested(
-                          Boolean(editingPreset?.hasCustomIcon),
-                        );
-                      }}
+                    <span>
+                      <strong>{currentChannel.label}</strong>
+                      <small>{currentChannel.description}</small>
+                    </span>
+                    <UiIcon name="chevron" />
+                  </button>
+
+                  {kindMenuOpen ? (
+                    <div
+                      className="agent-attachment-kind-options"
+                      id="agent-contact-card-kind-options"
+                      role="listbox"
+                      aria-label="名片类型选项"
                     >
-                      恢复内置图标
-                    </button>
+                      {CONTACT_CARD_CHANNELS.map((channel) => (
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={kind === channel.kind}
+                          key={channel.kind}
+                          onClick={() => {
+                            setKind(channel.kind);
+                            setKindMenuOpen(false);
+                            if (channel.kind === 'website')
+                              setPresetMessage('');
+                          }}
+                        >
+                          <AgentContactCardIcon
+                            id={`channel-option-${channel.kind}`}
+                            kind={channel.kind}
+                            source="preset"
+                            hasCustomIcon={false}
+                          />
+                          <span>
+                            <strong>{channel.label}</strong>
+                            <small>{channel.description}</small>
+                          </span>
+                          {kind === channel.kind ? (
+                            <UiIcon name="check" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
               </div>
-            </div>
+              <div className="agent-card-icon-editor">
+                <span>图标</span>
+                <div className="agent-card-icon-control">
+                  <AgentContactCardIcon
+                    id={editingPreset?.id ?? 'new-card'}
+                    kind={kind}
+                    source="preset"
+                    hasCustomIcon={currentHasCustomIcon}
+                    previewUrl={iconPreviewUrl}
+                  />
+                  <span>
+                    <strong>
+                      {iconFile
+                        ? iconFile.name
+                        : currentHasCustomIcon
+                          ? '自定义图标'
+                          : `${CONTACT_CARD_LABELS[kind]} 官方图标`}
+                    </strong>
+                    <small>
+                      默认使用官方渠道样式；可上传自定义图标作为覆盖
+                    </small>
+                  </span>
+                  <div className="agent-card-icon-actions">
+                    <label className="agent-card-icon-picker">
+                      {currentHasCustomIcon ? '更换图标' : '上传图标'}
+                      <input
+                        aria-label="名片图标"
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={loading || saving}
+                        onChange={(event) => {
+                          const file = event.target.files?.[0] ?? null;
+                          event.currentTarget.value = '';
+                          if (!file) return;
+                          setIconFile(file);
+                          setRemoveIconRequested(false);
+                        }}
+                      />
+                    </label>
+                    {currentHasCustomIcon ? (
+                      <button
+                        type="button"
+                        className="agent-card-icon-remove"
+                        disabled={loading || saving}
+                        onClick={() => {
+                          setIconFile(null);
+                          setRemoveIconRequested(
+                            Boolean(editingPreset?.hasCustomIcon),
+                          );
+                        }}
+                      >
+                        恢复内置图标
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
 
-            <label>
-              <span>名称</span>
-              <Input
-                value={label}
-                maxLength={80}
-                disabled={loading || saving}
-                placeholder={`例如：${CONTACT_CARD_LABELS[kind]} 联系`}
-                onChange={(event) => setLabel(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>{field.label}</span>
-              <Input
-                aria-label={field.ariaLabel}
-                value={value}
-                maxLength={2048}
-                disabled={loading || saving}
-                inputMode={field.inputMode}
-                placeholder={field.placeholder}
-                onChange={(event) => setValue(event.target.value)}
-              />
-            </label>
+              <label>
+                <span>名称</span>
+                <Input
+                  value={label}
+                  maxLength={80}
+                  disabled={loading || saving}
+                  placeholder={`例如：${CONTACT_CARD_LABELS[kind]} 联系`}
+                  onChange={(event) => setLabel(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{kind === 'sms' ? '号码' : field.label}</span>
+                <Input
+                  aria-label={field.ariaLabel}
+                  value={value}
+                  maxLength={2048}
+                  disabled={loading || saving}
+                  inputMode={field.inputMode}
+                  placeholder={field.placeholder}
+                  onChange={(event) => setValue(event.target.value)}
+                />
+              </label>
+            </div>
             {kind !== 'website' ? (
               <label>
                 <span>预设话术（可选）</span>
@@ -659,25 +674,6 @@ export function AgentCardSettingsModal({
               </label>
             ) : null}
             {error ? <div className="auth-error">{error}</div> : null}
-            <div className="agent-attachment-editor-actions">
-              {editingId ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  disabled={saving}
-                  onClick={resetForm}
-                >
-                  取消编辑
-                </Button>
-              ) : null}
-              <Button
-                type="button"
-                disabled={loading || saving || !label.trim() || !value.trim()}
-                onClick={() => void save()}
-              >
-                {saving ? '保存中…' : editingId ? '保存修改' : '添加'}
-              </Button>
-            </div>
           </div>
         </div>
       </section>
