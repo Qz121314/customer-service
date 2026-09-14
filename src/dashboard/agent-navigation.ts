@@ -6,7 +6,9 @@ export type AgentWorkspaceView =
   { kind: 'inbox' } | { kind: 'thread'; conversationId: string };
 
 export type AgentOverlayView =
-  'none' | 'menu' | 'cards' | 'autoReply' | 'statistics';
+  'none' | 'menu' | 'cards' | 'materials' | 'autoReply' | 'statistics';
+
+// 'none' | 'menu' | 'cards' | 'autoReply' | 'statistics'
 
 export type AgentNavigationState = {
   workspace: AgentWorkspaceView;
@@ -43,6 +45,7 @@ function readOverlayView(value: unknown): AgentOverlayView | null {
   return value === 'none' ||
     value === 'menu' ||
     value === 'cards' ||
+    value === 'materials' ||
     value === 'autoReply' ||
     value === 'statistics'
     ? value

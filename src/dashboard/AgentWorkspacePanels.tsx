@@ -16,7 +16,10 @@ import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
 import { AgentCardSettingsModal } from './AgentAttachmentTools';
-import { AgentAutoReplySettingsModal } from './AgentAutoReplySettings';
+import {
+  AgentAutoReplySettingsModal,
+  AgentMaterialsModal,
+} from './AgentAutoReplySettings';
 import { AgentStatisticsModal } from './AgentStatisticsWorkspace';
 import { UiIcon } from './icons';
 import { useAgentPullRefresh } from './useAgentPullRefresh';
@@ -36,6 +39,7 @@ export const AgentSidebar = memo(function AgentSidebar({
   onNicknameChange,
   overlay,
   onOpenCardSettings,
+  onOpenMaterials,
   onOpenAutoReply,
   onOpenStatistics,
   onOpenMobileSettings,
@@ -53,6 +57,7 @@ export const AgentSidebar = memo(function AgentSidebar({
   onNicknameChange: (nickname: string) => Promise<void>;
   overlay: AgentOverlayView;
   onOpenCardSettings: () => void;
+  onOpenMaterials: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
   onOpenMobileSettings: () => void;
@@ -83,7 +88,7 @@ export const AgentSidebar = memo(function AgentSidebar({
         <AgentActionToolbar
           soundEnabled={soundEnabled}
           onToggleSound={onToggleSound}
-          onOpenCardSettings={onOpenCardSettings}
+          onOpenMaterials={onOpenMaterials}
           onOpenAutoReply={onOpenAutoReply}
           onOpenStatistics={onOpenStatistics}
           onLogout={onLogout}
@@ -98,7 +103,7 @@ export const AgentSidebar = memo(function AgentSidebar({
         reminderPending={reminderPending}
         onClose={onCloseOverlay}
         onToggleSound={onToggleSound}
-        onOpenCardSettings={onOpenCardSettings}
+        onOpenMaterials={onOpenMaterials}
         onOpenAutoReply={onOpenAutoReply}
         onOpenStatistics={onOpenStatistics}
         onLogout={onLogout}
@@ -106,6 +111,11 @@ export const AgentSidebar = memo(function AgentSidebar({
       <AgentAutoReplySettingsModal
         open={overlay === 'autoReply'}
         onClose={onCloseOverlay}
+      />
+      <AgentMaterialsModal
+        open={overlay === 'materials'}
+        onClose={onCloseOverlay}
+        onOpenCardSettings={onOpenCardSettings}
       />
       <AgentCardSettingsModal
         open={overlay === 'cards'}

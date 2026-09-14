@@ -274,6 +274,9 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   });
   await expect(cardSettingsButton).toBeVisible();
   await cardSettingsButton.click();
+  const materialsDialog = page.getByRole('dialog', { name: '素材库' });
+  await expect(materialsDialog).toBeVisible();
+  await materialsDialog.getByRole('button', { name: '管理名片' }).click();
   const cardSettingsDialog = page.getByRole('dialog', { name: '名片' });
   await expect(cardSettingsDialog).toBeVisible();
   await expect(cardSettingsDialog.getByText('正在读取名片…')).toBeHidden();

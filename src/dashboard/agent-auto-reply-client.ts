@@ -12,6 +12,30 @@ export type AgentGreetingCta = {
   enabled: boolean;
 };
 
+export type AgentGreetingPreset = {
+  id: string;
+  name: string;
+  text: string;
+};
+
+export type AgentCtaPreset = AgentGreetingCta;
+
+export type AgentFirstReplyProfile = {
+  id: string;
+  name: string;
+  greetingId: string | null;
+  attachmentIds: string[];
+  ctaIds: string[];
+};
+
+export type AgentFirstReplySettings = {
+  enabled: boolean;
+  activeProfileId: string | null;
+  greetings: AgentGreetingPreset[];
+  ctas: AgentCtaPreset[];
+  profiles: AgentFirstReplyProfile[];
+};
+
 type AgentAutoReplyPayload = {
   settings: AgentAutoReplySettings;
 };
@@ -36,6 +60,25 @@ export async function updateAgentAutoReplySettings(
   return response.settings;
 }
 
+export async function getAgentFirstReplySettings(): Promise<AgentFirstReplySettings> {
+  const response = await autoReplyRequest<{
+    settings: AgentFirstReplySettings;
+  }>('/api/agent/first-reply');
+  return response.settings;
+}
+
+export async function updateAgentFirstReplySettings(
+  settings: AgentFirstReplySettings,
+): Promise<AgentFirstReplySettings> {
+  const response = await autoReplyRequest<{
+    settings: AgentFirstReplySettings;
+  }>('/api/agent/first-reply', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
+  return response.settings;
+}
+
 async function autoReplyRequest<T>(
   path: string,
   init?: RequestInit,
@@ -56,6 +99,9 @@ async function autoReplyRequest<T>(
     }
     if (body.error === 'INVALID_AUTO_REPLY') {
       throw new Error('问候语或附件设置无效，请检查后保存');
+    }
+    if (body.error === 'INVALID_FIRST_REPLY') {
+      throw new Error('首次回复配置无效，请检查素材和组合关系');
     }
     throw new Error(body.error ?? '自动回复设置保存失败');
   }

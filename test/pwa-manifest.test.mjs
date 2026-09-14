@@ -62,8 +62,8 @@ test('agent shell exposes mobile standalone metadata and registers an agent-only
   assert.match(install, /addEventListener\('appinstalled'/u);
   assert.match(chrome, /aria-label="打开功能菜单"/u);
   assert.match(chrome, /aria-label="安装到手机"/u);
-  assert.match(chrome, />名片</u);
-  assert.match(chrome, />问候语</u);
+  assert.match(chrome, />素材库</u);
+  assert.match(chrome, />首次回复</u);
   assert.match(mobileCss, /\.workspace-sidebar-actions \{\s*display: none;/u);
   assert.match(mobileCss, /\.mobile-agent-settings-page/u);
 });

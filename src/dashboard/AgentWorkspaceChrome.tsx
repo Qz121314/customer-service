@@ -11,7 +11,7 @@ const ANDROID_DOWNLOAD_URL =
 export function AgentActionToolbar({
   soundEnabled,
   onToggleSound,
-  onOpenCardSettings,
+  onOpenMaterials,
   onOpenAutoReply,
   onOpenStatistics,
   onLogout,
@@ -19,7 +19,7 @@ export function AgentActionToolbar({
 }: {
   soundEnabled: boolean;
   onToggleSound: () => void;
-  onOpenCardSettings: () => void;
+  onOpenMaterials: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
   onLogout: () => void;
@@ -46,11 +46,11 @@ export function AgentActionToolbar({
             variant="ghost"
             className="full workspace-auto-reply-button"
             aria-label="打开自动回复设置"
-            data-tooltip="自动回复"
+            data-tooltip="首次回复"
             onClick={onOpenAutoReply}
           >
             <UiIcon name="auto-reply" />
-            <span>自动回复</span>
+            <span>首次回复</span>
           </Button>
           <Button
             type="button"
@@ -68,11 +68,11 @@ export function AgentActionToolbar({
             variant="ghost"
             className="full workspace-card-settings-button"
             aria-label="打开名片设置"
-            data-tooltip="名片"
-            onClick={onOpenCardSettings}
+            data-tooltip="素材库"
+            onClick={onOpenMaterials}
           >
-            <UiIcon name="contact" />
-            <span>名片</span>
+            <UiIcon name="library" />
+            <span>素材库</span>
           </Button>
         </div>
         <div className="workspace-sidebar-app-actions">
@@ -148,7 +148,7 @@ export function AgentMobileSettingsPage({
   reminderPending,
   onClose,
   onToggleSound,
-  onOpenCardSettings,
+  onOpenMaterials,
   onOpenAutoReply,
   onOpenStatistics,
   onLogout,
@@ -160,7 +160,7 @@ export function AgentMobileSettingsPage({
   reminderPending: boolean;
   onClose: () => void;
   onToggleSound: () => void;
-  onOpenCardSettings: () => void;
+  onOpenMaterials: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
   onLogout: () => void;
@@ -359,28 +359,30 @@ export function AgentMobileSettingsPage({
             <button
               type="button"
               className="mobile-agent-settings-item"
-              onClick={() => openChild(onOpenCardSettings)}
+              aria-label="名片 设置"
+              onClick={() => openChild(onOpenMaterials)}
             >
               <i aria-hidden="true">
                 <UiIcon name="contact" />
               </i>
               <span>
-                <strong>名片</strong>
-                <small>添加聊天和问候语使用的手机号或链接</small>
+                <strong>素材库</strong>
+                <small>录入问候语、CTA、名片和图片素材</small>
               </span>
               <UiIcon name="chevron" />
             </button>
             <button
               type="button"
               className="mobile-agent-settings-item"
+              aria-label="问候语 设置"
               onClick={() => openChild(onOpenAutoReply)}
             >
               <i aria-hidden="true">
                 <UiIcon name="auto-reply" />
               </i>
               <span>
-                <strong>问候语</strong>
-                <small>设置接待时自动发送的内容</small>
+                <strong>首次回复</strong>
+                <small>组合素材并选择当前启用的首次回复方案</small>
               </span>
               <UiIcon name="chevron" />
             </button>
