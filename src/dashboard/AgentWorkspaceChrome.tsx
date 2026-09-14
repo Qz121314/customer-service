@@ -12,6 +12,8 @@ import { Button } from './ui';
 
 const WINDOWS_DOWNLOAD_URL =
   'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-windows-x64.exe';
+const ANDROID_DOWNLOAD_URL =
+  'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-android.apk';
 
 export function AgentActionToolbar({
   notificationState,
@@ -399,6 +401,22 @@ export function AgentMobileSettingsPage({
         <section className="mobile-agent-settings-group">
           <h2 className="mobile-agent-settings-label">设备与提醒</h2>
           <div className="mobile-agent-settings-card">
+            <a
+              className="mobile-agent-settings-item"
+              href={ANDROID_DOWNLOAD_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="下载安卓客服端"
+            >
+              <i className="is-accent" aria-hidden="true">
+                <UiIcon name="install" />
+              </i>
+              <span>
+                <strong>下载安卓客服端</strong>
+                <small>安装 Android 客服坐席应用</small>
+              </span>
+              <UiIcon name="chevron" />
+            </a>
             <button
               type="button"
               className="mobile-agent-settings-item"

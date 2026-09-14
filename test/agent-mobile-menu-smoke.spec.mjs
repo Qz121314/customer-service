@@ -114,6 +114,14 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(settingsPage.getByText(/消息提醒：/u)).toBeVisible();
   await expect(settingsPage.getByText('实时连接')).toBeVisible();
   await expect(settingsPage.getByText('后台 Push')).toBeVisible();
+  const androidDownload = settingsPage.getByRole('link', {
+    name: '下载安卓客服端',
+  });
+  await expect(androidDownload).toBeVisible();
+  await expect(androidDownload).toHaveAttribute(
+    'href',
+    'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-android.apk',
+  );
 
   const soundRow = settingsPage
     .locator('.mobile-agent-settings-item')
