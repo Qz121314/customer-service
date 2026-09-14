@@ -18,9 +18,7 @@ const migrationNames = readdirSync(migrationsDirectory)
 
 function applyMigrations(database) {
   for (const name of migrationNames) {
-    database.exec(
-      readFileSync(`${migrationsDirectory}/${name}`, 'utf8'),
-    );
+    database.exec(readFileSync(`${migrationsDirectory}/${name}`, 'utf8'));
   }
 }
 
@@ -126,9 +124,7 @@ test('legacy first reply can be edited and materialized into the new model', asy
   assert.equal(response.status, 200);
   assert.equal(
     database
-      .prepare(
-        'SELECT text FROM agent_greeting_presets WHERE id = ?',
-      )
+      .prepare('SELECT text FROM agent_greeting_presets WHERE id = ?')
       .get('legacy-greeting').text,
     '修改后的问候语',
   );
@@ -183,7 +179,9 @@ test('deleting the last active greeting can save an explicitly disabled automati
   );
   assert.equal(
     database
-      .prepare('SELECT COUNT(*) AS count FROM agent_greeting_presets WHERE agent_id = ?')
+      .prepare(
+        'SELECT COUNT(*) AS count FROM agent_greeting_presets WHERE agent_id = ?',
+      )
       .get('legacy-delete-agent').count,
     0,
   );
