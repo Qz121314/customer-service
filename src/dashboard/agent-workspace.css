@@ -1348,6 +1348,58 @@
   gap: 8px;
 }
 
+@media (min-width: 761px) {
+  .agent-attachment-manager-backdrop {
+    padding: 32px;
+  }
+
+  .agent-attachment-manager-dialog {
+    width: min(1080px, calc(100vw - 96px));
+    height: min(760px, calc(100dvh - 64px));
+    max-height: calc(100dvh - 64px);
+  }
+
+  .agent-attachment-manager-dialog > header {
+    min-height: 86px;
+    padding: 22px 32px;
+  }
+
+  .agent-attachment-manager-dialog h2 {
+    font-size: 28px;
+    letter-spacing: -0.03em;
+  }
+
+  .agent-attachment-manager-body {
+    grid-template-columns: minmax(280px, 0.8fr) minmax(460px, 1.2fr);
+    gap: 28px;
+    overflow: hidden;
+    padding: 28px 32px 32px;
+  }
+
+  .agent-attachment-preset-section,
+  .agent-attachment-editor {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .agent-attachment-preset-section {
+    padding-right: 4px;
+  }
+
+  .agent-attachment-editor {
+    gap: 14px;
+    padding: 24px;
+    border-radius: 20px;
+  }
+
+  .agent-attachment-preset-row {
+    min-height: 62px;
+    padding: 11px 10px 11px 12px;
+  }
+}
+
 .agent-auto-reply-attachments {
   display: grid;
   gap: 10px;
