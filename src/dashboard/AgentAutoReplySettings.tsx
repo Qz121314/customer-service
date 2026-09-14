@@ -696,7 +696,24 @@ export function AgentMaterialsModal({
     const profiles = settings.profiles.map((profile) =>
       profile.greetingId === id ? { ...profile, greetingId: null } : profile,
     );
-    void saveMaterials({ ...settings, greetings, profiles });
+    const activeProfile = settings.profiles.find(
+      (profile) => profile.id === settings.activeProfileId,
+    );
+    const activeHasAttachment = Boolean(
+      activeProfile?.attachmentIds.some((presetId) =>
+        presets.some((preset) => preset.id === presetId),
+      ),
+    );
+    const disableAutomation =
+      settings.enabled &&
+      activeProfile?.greetingId === id &&
+      !activeHasAttachment;
+    void saveMaterials({
+      ...settings,
+      enabled: disableAutomation ? false : settings.enabled,
+      greetings,
+      profiles,
+    });
     if (greetingId === id) resetGreetingEditor();
   };
   const saveCta = () => {

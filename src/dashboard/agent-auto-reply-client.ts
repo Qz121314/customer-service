@@ -103,6 +103,9 @@ async function autoReplyRequest<T>(
     if (body.error === 'INVALID_FIRST_REPLY') {
       throw new Error('首次回复配置无效，请检查素材和组合关系');
     }
+    if (body.error === 'FIRST_REPLY_CONTENT_REQUIRED') {
+      throw new Error('开启自动回复时至少保留一个问候语或附件');
+    }
     throw new Error(body.error ?? '自动回复设置保存失败');
   }
   return body;
