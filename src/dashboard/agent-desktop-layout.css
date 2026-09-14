@@ -36,6 +36,7 @@
   }
 
   .workspace-shell .workspace-sidebar {
+    position: relative;
     padding: 14px 10px;
     border-right: 1px solid #2b3038;
     background: #1d2026;
@@ -95,10 +96,6 @@
     margin-top: 0;
   }
 
-  .workspace-shell .workspace-sidebar .workspace-logout-button {
-    margin: auto auto 0;
-  }
-
   .workspace-shell .workspace-sidebar .ghost-button,
   .workspace-shell .workspace-sidebar .ghost-button.full {
     width: 44px;
@@ -112,6 +109,14 @@
     background: transparent;
     color: rgba(255, 255, 255, 0.78);
     opacity: 1;
+  }
+
+  .workspace-shell .workspace-sidebar .workspace-logout-button {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    margin: 0;
+    transform: translateX(-50%);
   }
 
   .workspace-shell .workspace-sidebar .ghost-button > span {
