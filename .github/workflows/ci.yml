@@ -425,6 +425,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify release version
+        shell: pwsh
+        run: |
+          $packageVersion = (Get-Content package.json | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $cargoVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "([^"]+)"$' | Select-Object -First 1
+          $cargoVersion = $cargoVersion.Matches.Groups[1].Value
+          $tagVersion = "${{ github.ref_name }}".TrimStart('v')
+          if (@($packageVersion, $tauriVersion, $cargoVersion, $tagVersion) | Select-Object -Unique | Measure-Object | Select-Object -ExpandProperty Count -ne 1) {
+            throw "Release version mismatch: package=$packageVersion tauri=$tauriVersion cargo=$cargoVersion tag=$tagVersion"
+          }
+
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
