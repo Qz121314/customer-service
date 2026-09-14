@@ -9,7 +9,7 @@ function url(path) {
   return new URL(path, `${baseUrl}/`).toString();
 }
 
-test('agent can configure channel cards, preset text and custom icon override', async ({
+test('agent can configure cards inline with preset text and custom icon', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -48,42 +48,38 @@ test('agent can configure channel cards, preset text and custom icon override', 
   const settingsPage = page.getByRole('region', { name: '功能菜单' });
   await expect(settingsPage).toBeVisible();
   await settingsPage.getByRole('button', { name: /名片/u }).click();
-  const materialsDialog = page.getByRole('dialog', { name: '素材库' });
-  await expect(materialsDialog).toBeVisible();
-  await expect(materialsDialog.getByText('正在读取素材…')).toBeHidden();
-  await materialsDialog.getByRole('button', { name: /名片与图片/u }).click();
-  await materialsDialog.getByRole('button', { name: '管理名片' }).click();
-  const dialog = page.getByRole('dialog', { name: '名片' });
+
+  const dialog = page.getByRole('dialog', { name: '素材库' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('正在读取名片…')).toBeHidden();
-  await expect(dialog).toHaveCSS('animation-name', 'agent-overlay-sheet-in');
-  await page.waitForTimeout(220);
+  await expect(dialog.getByText('正在读取素材…')).toBeHidden();
+  await dialog.getByRole('button', { name: /^名片/u }).click();
+  await dialog.getByRole('button', { name: '添加名片' }).click();
+  await expect(
+    dialog.locator('.agent-inline-card-editor').getByText('添加名片', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '名片' })).toHaveCount(0);
 
   const initialLayout = await dialog.evaluate((element) => {
     const browser = element.ownerDocument.defaultView;
-    const body = element.querySelector('.agent-attachment-manager-body');
-    const editor = element.querySelector('.agent-attachment-editor');
-    const title = element.querySelector('#agent-attachment-manager-title');
+    const body = element.querySelector('.agent-materials-body');
+    const editor = element.querySelector('.agent-inline-card-editor');
     if (
       !browser ||
       !(body instanceof browser.HTMLElement) ||
-      !(editor instanceof browser.HTMLElement) ||
-      !(title instanceof browser.HTMLElement)
+      !(editor instanceof browser.HTMLElement)
     ) {
       return null;
     }
     const dialogRect = element.getBoundingClientRect();
-    const titleRect = title.getBoundingClientRect();
+    const bodyRect = body.getBoundingClientRect();
     return {
       dialogBottom: dialogRect.bottom,
       dialogTop: dialogRect.top,
       bodyOverflowY: browser.getComputedStyle(body).overflowY,
       editorWidth: editor.getBoundingClientRect().width,
-      bodyWidth: body.getBoundingClientRect().width,
-      titleCenterOffset:
-        titleRect.left +
-        titleRect.width / 2 -
-        (dialogRect.left + dialogRect.width / 2),
+      bodyWidth: bodyRect.width,
     };
   });
   expect(initialLayout).not.toBeNull();
@@ -91,125 +87,44 @@ test('agent can configure channel cards, preset text and custom icon override', 
     expect(initialLayout.dialogTop).toBeGreaterThanOrEqual(0);
     expect(initialLayout.dialogBottom).toBeLessThanOrEqual(844);
     expect(initialLayout.bodyOverflowY).toBe('auto');
-    expect(Math.abs(initialLayout.titleCenterOffset)).toBeLessThanOrEqual(1);
     expect(initialLayout.editorWidth).toBeLessThanOrEqual(
       initialLayout.bodyWidth,
     );
   }
 
   const typeSelect = dialog.getByRole('combobox', { name: '名片类型' });
-  await expect(typeSelect).toContainText('SMS');
-  await expect(typeSelect.locator('[data-brand="imessage"]')).toBeVisible();
-  await typeSelect.click();
-  const typeOptions = dialog.getByRole('listbox', {
-    name: '名片类型选项',
-  });
-  await expect(
-    typeOptions.getByRole('option', { name: /WhatsApp/u }),
-  ).toBeVisible();
-  await expect(
-    typeOptions.getByRole('option', { name: /Telegram/u }),
-  ).toBeVisible();
-  await expect(
-    typeOptions.getByRole('option', { name: /网站/u }),
-  ).toBeVisible();
-  await expect(
-    typeOptions.locator(
-      '[data-brand="whatsapp"] img[src="/icons/contact-card-whatsapp.svg"]',
-    ),
-  ).toBeVisible();
-  await expect(
-    typeOptions.locator(
-      '[data-brand="telegram"] img[src="/icons/contact-card-telegram.svg"]',
-    ),
-  ).toBeVisible();
-  await typeSelect.click();
-
+  await expect(typeSelect).toHaveValue('sms');
   await dialog.getByLabel('名称').fill('短信名片');
   await dialog.getByLabel('短信号码').fill('+1 213 555 1234');
   await dialog
     .getByLabel('预设话术（可选）')
     .fill('Hello, I would like more information.');
-  await dialog.getByRole('button', { name: '添加' }).click();
-
-  const smsRow = dialog.locator('.agent-attachment-preset-row').filter({
-    hasText: '短信名片',
+  const createSmsResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/agent/attachments/presets') &&
+      response.request().method() === 'POST',
+  );
+  await dialog.getByRole('button', { name: '保存名片' }).click();
+  const smsResponse = await createSmsResponse;
+  expect(smsResponse.status()).toBe(201);
+  await expect(smsResponse.json()).resolves.toMatchObject({
+    preset: { kind: 'sms', label: '短信名片' },
   });
-  await expect(smsRow).toBeVisible();
-  await expect(smsRow.getByText('SMS', { exact: false })).toBeVisible();
+
+  const smsCard = dialog
+    .locator('.agent-material-attachment-card')
+    .filter({ hasText: '短信名片' });
+  await expect(smsCard).toBeVisible();
+  await expect(smsCard.getByText('SMS', { exact: false })).toBeVisible();
   await expect(
-    smsRow.locator(
+    smsCard.locator(
       '.agent-contact-card-icon[data-channel="sms"] img[src="/icons/contact-card-imessage.svg"]',
     ),
   ).toBeVisible();
-  await expect(smsRow.locator('.agent-contact-card-custom-icon')).toHaveCount(
-    0,
-  );
-  await expect
-    .poll(() =>
-      dialog
-        .locator('.agent-attachment-manager-body')
-        .evaluate((element) => element.scrollTop),
-    )
-    .toBeLessThan(3);
 
-  const savedCardLayout = await dialog.evaluate((element) => {
-    const browser = element.ownerDocument.defaultView;
-    const body = element.querySelector('.agent-attachment-manager-body');
-    const list = element.querySelector('.agent-attachment-preset-list');
-    const row = element.querySelector('.agent-attachment-preset-row');
-    const editor = element.querySelector('.agent-attachment-editor');
-    if (
-      !browser ||
-      !(body instanceof browser.HTMLElement) ||
-      !(list instanceof browser.HTMLElement) ||
-      !(row instanceof browser.HTMLElement) ||
-      !(editor instanceof browser.HTMLElement)
-    ) {
-      return null;
-    }
-    const bodyRect = body.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    const editorRect = editor.getBoundingClientRect();
-    return {
-      listVerticalOverflow: list.scrollHeight - list.clientHeight,
-      rowTop: rowRect.top,
-      rowBottom: rowRect.bottom,
-      editorTop: editorRect.top,
-      bodyTop: bodyRect.top,
-    };
-  });
-  expect(savedCardLayout).not.toBeNull();
-  if (savedCardLayout) {
-    expect(savedCardLayout.listVerticalOverflow).toBeLessThanOrEqual(1);
-    expect(savedCardLayout.rowTop).toBeGreaterThanOrEqual(
-      savedCardLayout.bodyTop,
-    );
-    expect(savedCardLayout.rowBottom).toBeLessThanOrEqual(
-      savedCardLayout.editorTop,
-    );
-  }
-
-  const smsSwipe = dialog
-    .locator('.agent-attachment-preset-swipe')
-    .filter({ hasText: '短信名片' });
-  await smsSwipe.evaluate((element) =>
-    element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
-  );
-  await expect(
-    smsSwipe.getByRole('button', { name: '编辑 短信名片' }),
-  ).toBeVisible();
-  await expect(
-    smsSwipe.getByRole('button', { name: '删除 短信名片' }),
-  ).toBeVisible();
-  await smsSwipe.evaluate((element) =>
-    element.scrollTo({ left: 0, behavior: 'auto' }),
-  );
-
-  await typeSelect.click();
-  await dialog.getByRole('option', { name: /WhatsApp/u }).click();
-  await expect(typeSelect).toContainText('WhatsApp');
-  await expect(typeSelect.locator('[data-brand="whatsapp"]')).toBeVisible();
+  await dialog.getByRole('button', { name: '添加名片' }).click();
+  await typeSelect.selectOption('whatsapp');
+  await expect(typeSelect).toHaveValue('whatsapp');
   await dialog.getByLabel('名称').fill('WhatsApp 名片');
   await dialog.getByLabel('WhatsApp 号码').fill('+1 213 555 9999');
   await dialog.getByLabel('预设话术（可选）').fill('Need more info');
@@ -221,41 +136,32 @@ test('agent can configure channel cards, preset text and custom icon override', 
       'base64',
     ),
   });
-  await dialog.getByRole('button', { name: '添加' }).click();
+  await dialog.getByRole('button', { name: '保存名片' }).click();
 
-  const whatsappRow = dialog.locator('.agent-attachment-preset-row').filter({
-    hasText: 'WhatsApp 名片',
-  });
-  await expect(whatsappRow).toBeVisible();
-  await expect(
-    whatsappRow.locator('.agent-contact-card-custom-icon'),
-  ).toBeVisible();
-
-  const swipeLayout = await dialog
-    .locator('.agent-attachment-preset-list')
-    .evaluate((element) => ({
-      itemCount: element.querySelectorAll('.agent-attachment-preset-row')
-        .length,
-      scrollWidth: element.scrollWidth,
-      clientWidth: element.clientWidth,
-      verticalOverflow: element.scrollHeight - element.clientHeight,
-      swipeRanges: [
-        ...element.querySelectorAll('.agent-attachment-preset-swipe'),
-      ].map((item) => item.scrollWidth - item.clientWidth),
-    }));
-  expect(swipeLayout.itemCount).toBe(2);
-  expect(swipeLayout.scrollWidth).toBeLessThanOrEqual(swipeLayout.clientWidth);
-  expect(swipeLayout.verticalOverflow).toBeLessThanOrEqual(1);
-  expect(swipeLayout.swipeRanges.every((range) => range >= 120)).toBeTruthy();
-
-  const whatsappSwipe = dialog
-    .locator('.agent-attachment-preset-swipe')
+  const whatsappCard = dialog
+    .locator('.agent-material-attachment-card')
     .filter({ hasText: 'WhatsApp 名片' });
-  await whatsappSwipe.evaluate((element) =>
-    element.scrollTo({ left: element.scrollWidth, behavior: 'auto' }),
-  );
-  await whatsappSwipe
+  await expect(whatsappCard).toBeVisible();
+  await expect(
+    whatsappCard.locator('.agent-contact-card-custom-icon'),
+  ).toBeVisible();
+  await expect(dialog.locator('.agent-inline-card-editor')).toHaveCount(0);
+
+  await whatsappCard
     .getByRole('button', { name: '编辑 WhatsApp 名片' })
     .click();
-  await expect(dialog.getByText('编辑名片', { exact: true })).toBeVisible();
+  await expect(
+    dialog.locator('.agent-inline-card-editor').getByText('编辑名片', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(dialog.getByLabel('名称')).toHaveValue('WhatsApp 名片');
+  await expect(dialog.getByLabel('WhatsApp 号码')).toHaveValue('+12135559999');
+
+  await dialog.getByRole('button', { name: '关闭名片编辑' }).click();
+  await expect(dialog.locator('.agent-inline-card-editor')).toHaveCount(0);
+  await whatsappCard
+    .getByRole('button', { name: '删除 WhatsApp 名片' })
+    .click();
+  await expect(whatsappCard).toHaveCount(0);
 });

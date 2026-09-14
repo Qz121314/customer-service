@@ -1677,9 +1677,6 @@ function AgentWorkspace({
   const handleOpenStatistics = useEventCallback(() => {
     navigate(withOverlay(navigation, 'statistics'));
   });
-  const handleOpenCardSettings = useEventCallback(() => {
-    navigate(withOverlay(navigation, 'cards'));
-  });
   const handleOpenMaterials = useEventCallback(() => {
     navigate(withOverlay(navigation, 'materials'));
   });
@@ -1758,7 +1755,6 @@ function AgentWorkspace({
         onNicknameChange={handleNicknameChange}
         onToggleSound={toggleSound}
         overlay={navigation.overlay}
-        onOpenCardSettings={handleOpenCardSettings}
         onOpenMaterials={handleOpenMaterials}
         onOpenAutoReply={handleOpenAutoReply}
         onOpenStatistics={handleOpenStatistics}

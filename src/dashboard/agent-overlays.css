@@ -465,6 +465,176 @@
   }
 }
 
+/* Inline card entry keeps the library as one continuous task, without a second dialog. */
+.agent-inline-card-editor {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #dfe4ec;
+  border-radius: 13px;
+  background: #fbfcfe;
+}
+
+.agent-inline-card-editor-head,
+.agent-inline-card-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-inline-card-editor-head > span {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-inline-card-editor-head strong {
+  color: #273142;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.agent-inline-card-editor-head small {
+  color: #8b97a8;
+  font-size: 11px;
+}
+
+.agent-inline-card-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.agent-inline-card-fields > label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: #526074;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.agent-inline-card-fields > label > input,
+.agent-inline-card-fields > label > select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #dfe4ec;
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #fff;
+  color: #273142;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.agent-inline-card-fields > label > textarea {
+  min-height: 72px;
+  border-color: #dfe4ec;
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 12px;
+}
+
+.agent-inline-card-fields > label > input:focus,
+.agent-inline-card-fields > label > select:focus,
+.agent-inline-card-fields > label > textarea:focus {
+  border-color: #8f8af4;
+  box-shadow: 0 0 0 3px rgb(99 102 241 / 10%);
+}
+
+.agent-inline-card-icon-picker {
+  position: relative;
+  cursor: pointer;
+}
+
+.agent-inline-card-icon-picker > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+}
+
+.agent-inline-card-icon-value {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid #dfe4ec;
+  border-radius: 9px;
+  padding: 3px 8px;
+  background: #fff;
+  color: #7b8798;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-inline-card-icon-value > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-inline-card-icon-value .agent-contact-card-icon {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 8px;
+}
+
+.agent-inline-card-message {
+  grid-column: 1 / -1;
+}
+
+.agent-inline-card-editor-actions {
+  justify-content: flex-end;
+}
+
+.agent-material-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.agent-material-card-actions button,
+.agent-material-attachment-card > button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  color: #657286;
+  background: transparent;
+  cursor: pointer;
+}
+
+.agent-material-card-actions button:hover,
+.agent-material-attachment-card > button:hover {
+  color: #4338ca;
+  background: #f0efff;
+}
+
+.agent-material-card-actions button:last-child,
+.agent-material-attachment-card > button {
+  color: #b64a52;
+}
+
+@media (max-width: 760px) {
+  .agent-inline-card-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-inline-card-message {
+    grid-column: auto;
+  }
+}
+
 /* --- agent-auto-reply.css --- */
 
 .agent-auto-reply-backdrop {

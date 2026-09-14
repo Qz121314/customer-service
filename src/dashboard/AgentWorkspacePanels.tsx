@@ -15,7 +15,6 @@ import {
 import type { Filter } from './dashboard-runtime';
 import { filterLabels, initials, relativeTime } from './dashboard-runtime';
 import { AgentAvatarControl } from './AgentAvatarControl';
-import { AgentCardSettingsModal } from './AgentAttachmentTools';
 import {
   AgentAutoReplySettingsModal,
   AgentMaterialsModal,
@@ -38,7 +37,6 @@ export const AgentSidebar = memo(function AgentSidebar({
   onToggleSound,
   onNicknameChange,
   overlay,
-  onOpenCardSettings,
   onOpenMaterials,
   onOpenAutoReply,
   onOpenStatistics,
@@ -56,7 +54,6 @@ export const AgentSidebar = memo(function AgentSidebar({
   onToggleSound: () => void;
   onNicknameChange: (nickname: string) => Promise<void>;
   overlay: AgentOverlayView;
-  onOpenCardSettings: () => void;
   onOpenMaterials: () => void;
   onOpenAutoReply: () => void;
   onOpenStatistics: () => void;
@@ -114,11 +111,6 @@ export const AgentSidebar = memo(function AgentSidebar({
       />
       <AgentMaterialsModal
         open={overlay === 'materials'}
-        onClose={onCloseOverlay}
-        onOpenCardSettings={onOpenCardSettings}
-      />
-      <AgentCardSettingsModal
-        open={overlay === 'cards'}
         onClose={onCloseOverlay}
       />
       {overlay === 'statistics' && (

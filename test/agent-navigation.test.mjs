@@ -16,7 +16,7 @@ test('agent workspace owns browser navigation with one serializable route state'
   for (const contract of [
     "const AGENT_NAVIGATION_KEY = '__customerServiceAgentNavigation';",
     "{ kind: 'inbox' } | { kind: 'thread'; conversationId: string }",
-    "'none' | 'menu' | 'cards' | 'autoReply' | 'statistics'",
+    "'none' | 'menu' | 'materials' | 'autoReply' | 'statistics'",
     "window.addEventListener('popstate', restoreFromHistory)",
     "window.history.pushState(nextState, '', window.location.href)",
     "window.history.replaceState(nextState, '', window.location.href)",
