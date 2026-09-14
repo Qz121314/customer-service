@@ -525,12 +525,12 @@ export function AgentAutoReplySettingsModal({
   );
 }
 
-function SectionHead({ title, detail }: { title: string; detail: string }) {
+function SectionHead({ title, detail }: { title: string; detail?: string }) {
   return (
     <div className="agent-first-reply-section-head">
       <span>
         <strong>{title}</strong>
-        <small>{detail}</small>
+        {detail ? <small>{detail}</small> : null}
       </span>
     </div>
   );
@@ -667,6 +667,17 @@ export function AgentMaterialsModal({
       setSaving(false);
     }
   };
+
+  const resetGreetingEditor = () => {
+    setGreetingId(null);
+    setGreetingName('');
+    setGreetingText('');
+  };
+  const resetCtaEditor = () => {
+    setCtaId(null);
+    setCtaLabel('');
+    setCtaAnswer('');
+  };
   const saveGreeting = () => {
     const name = greetingName.trim();
     const text = greetingText.trim();
@@ -686,11 +697,7 @@ export function AgentMaterialsModal({
       profile.greetingId === id ? { ...profile, greetingId: null } : profile,
     );
     void saveMaterials({ ...settings, greetings, profiles });
-    if (greetingId === id) {
-      setGreetingId(null);
-      setGreetingName('');
-      setGreetingText('');
-    }
+    if (greetingId === id) resetGreetingEditor();
   };
   const saveCta = () => {
     const label = ctaLabel.trim();
@@ -713,11 +720,7 @@ export function AgentMaterialsModal({
       ctaIds: profile.ctaIds.filter((ctaId) => ctaId !== id),
     }));
     void saveMaterials({ ...settings, ctas, profiles });
-    if (ctaId === id) {
-      setCtaId(null);
-      setCtaLabel('');
-      setCtaAnswer('');
-    }
+    if (ctaId === id) resetCtaEditor();
   };
   const uploadImage = async (file: File) => {
     setImageUploading(true);
@@ -867,12 +870,11 @@ export function AgentMaterialsModal({
         className="agent-auto-reply-dialog agent-materials-dialog agent-dialog-surface"
         role="dialog"
         aria-modal="true"
-        aria-label="素材库"
+        aria-label="素材管理"
       >
         <header className="agent-auto-reply-head">
           <div>
-            <span className="eyebrow">客服自动化</span>
-            <h2>素材库</h2>
+            <h2>素材</h2>
           </div>
           <div className="agent-auto-reply-head-tools">
             {changed ? (
@@ -935,22 +937,17 @@ export function AgentMaterialsModal({
                 items={settings.greetings}
                 selectedId={greetingId}
                 onSelect={setGreetingId}
+                onDelete={removeGreeting}
+                onAdd={resetGreetingEditor}
                 empty="还没有问候语素材。"
               >
                 <div className="agent-material-editor">
-                  <SectionHead
-                    title={greetingId ? '编辑问候语' : '录入问候语'}
-                    detail="保存后可在首次回复方案中重复使用"
-                  />
-                  {greetingId ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => removeGreeting(greetingId)}
-                    >
-                      删除
+                  <div className="agent-material-editor-head">
+                    <SectionHead title="问候语" />
+                    <Button type="button" variant="ghost" onClick={resetGreetingEditor}>
+                      新增
                     </Button>
-                  ) : null}
+                  </div>
                   <label>
                     <span>名称</span>
                     <Input
@@ -991,22 +988,17 @@ export function AgentMaterialsModal({
                 }))}
                 selectedId={ctaId}
                 onSelect={setCtaId}
+                onDelete={removeCta}
+                onAdd={resetCtaEditor}
                 empty="还没有 CTA 素材。"
               >
                 <div className="agent-material-editor">
-                  <SectionHead
-                    title={ctaId ? '编辑 CTA' : '录入 CTA'}
-                    detail="按钮文案和客户点击后的自动回复"
-                  />
-                  {ctaId ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => removeCta(ctaId)}
-                    >
-                      删除
+                  <div className="agent-material-editor-head">
+                    <SectionHead title="CTA" />
+                    <Button type="button" variant="ghost" onClick={resetCtaEditor}>
+                      新增
                     </Button>
-                  ) : null}
+                  </div>
                   <label>
                     <span>按钮文案</span>
                     <Input
@@ -1103,22 +1095,20 @@ export function AgentMaterialsModal({
                     <div className="agent-inline-card-editor-head">
                       <span>
                         <strong id="agent-card-editor-title">
-                          {cardEditingId ? '编辑名片' : '录入名片'}
+                          {cardEditingId ? '编辑名片' : '名片'}
                         </strong>
                         <small>
                           填写联系方式，保存后可在首次回复中组合使用
                         </small>
                       </span>
-                      {cardEditingId ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          disabled={saving}
-                          onClick={startNewCard}
-                        >
-                          添加名片
-                        </Button>
-                      ) : null}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={saving}
+                        onClick={startNewCard}
+                      >
+                        新增
+                      </Button>
                     </div>
                     <div className="agent-inline-card-fields">
                       <label>
@@ -1233,11 +1223,11 @@ export function AgentMaterialsModal({
                 <div className="agent-material-attachments-head">
                   <span>
                     <strong>图片</strong>
-                    <small>上传后可在首次回复方案中自由组合</small>
+                    <small>共 {imagePresets.length} 张</small>
                   </span>
                   <label className="agent-auto-reply-image-picker">
                     <UiIcon name="image-plus" />
-                    <span>{imageUploading ? '上传中…' : '添加图片'}</span>
+                    <span>{imageUploading ? '上传中…' : '新增'}</span>
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,image/gif"
@@ -1293,12 +1283,16 @@ function MaterialEditorList({
   items,
   selectedId,
   onSelect,
+  onDelete,
+  onAdd,
   empty,
   children,
 }: {
   items: Array<{ id: string; name: string; text: string }>;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
+  onAdd: () => void;
   empty: string;
   children: React.ReactNode;
 }) {
@@ -1306,17 +1300,28 @@ function MaterialEditorList({
     <div className="agent-material-editor-layout">
       <div className="agent-material-list">
         {items.map((item) => (
-          <button
-            type="button"
-            className={item.id === selectedId ? 'is-selected' : ''}
+          <div
+            className={item.id === selectedId ? 'agent-material-card is-selected' : 'agent-material-card'}
             key={item.id}
-            onClick={() => onSelect(item.id)}
           >
-            <strong>{item.name}</strong>
-            <small>{item.text}</small>
-          </button>
+            <button type="button" onClick={() => onSelect(item.id)}>
+              <strong>{item.name}</strong>
+              <small>{item.text}</small>
+            </button>
+            <div className="agent-material-card-actions">
+              <button type="button" aria-label={'编辑 ' + item.name} onClick={() => onSelect(item.id)}>
+                <UiIcon name="edit" />
+              </button>
+              <button type="button" aria-label={'删除 ' + item.name} onClick={() => onDelete(item.id)}>
+                <UiIcon name="trash" />
+              </button>
+            </div>
+          </div>
         ))}
         {items.length === 0 ? <p>{empty}</p> : null}
+        <Button type="button" variant="ghost" onClick={onAdd}>
+          新增
+        </Button>
       </div>
       {children}
     </div>
