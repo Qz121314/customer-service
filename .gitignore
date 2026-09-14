@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .wrangler/
+.agent-status-runtime-*/
+.ci-artifacts-*/
+test-results/
 .dev.vars
 .env
 .env.*

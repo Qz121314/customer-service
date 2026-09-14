@@ -14,9 +14,4 @@ export type AgentComposerAttachmentMenuProps = {
   onSendPreset: (preset: ContactCardPreset) => void;
 };
 
-export type AgentCardSettingsModalProps = {
-  open: boolean;
-  onClose: () => void;
-};
-
 export * from './AgentAttachmentToolsRuntime';

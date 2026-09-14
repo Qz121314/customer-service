@@ -3,11 +3,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { URL } from 'node:url';
 import {
-  AGENT_SOUND_PRESET_OPTIONS,
   agentReminderVibrationPattern,
   emitAgentMessageTone,
-  loadAgentSoundPreset,
-  saveAgentSoundPreset,
   supportsAgentVibration,
 } from '../src/dashboard/dashboard-runtime.ts';
 import {
@@ -295,26 +292,6 @@ test('agent reception has a local sound preference and mute action', () => {
   assert.match(chrome, /关闭消息提示音|开启消息提示音/u);
 });
 
-test('sound preset defaults to strong and persists on the current device', () => {
-  const environment = browserEnvironment();
-  const restoreWindow = replaceGlobal('window', environment.windowValue);
-
-  try {
-    assert.deepEqual(
-      AGENT_SOUND_PRESET_OPTIONS.map((option) => option.id),
-      ['strong', 'classic', 'crisp', 'triple', 'soft'],
-    );
-    assert.equal(loadAgentSoundPreset(), 'strong');
-    saveAgentSoundPreset('classic');
-    assert.equal(loadAgentSoundPreset(), 'classic');
-    assert.equal(environment.storage.get('cs-agent-sound-preset'), 'classic');
-    environment.storage.set('cs-agent-sound-preset', 'unsupported');
-    assert.equal(loadAgentSoundPreset(), 'strong');
-  } finally {
-    restoreWindow();
-  }
-});
-
 test('vibration capability is exposed only when the device implements navigator.vibrate', () => {
   assert.equal(supportsAgentVibration({}), false);
   assert.equal(
@@ -382,7 +359,7 @@ test('strong agent message tone uses maximum in-app gain', () => {
     },
   };
 
-  emitAgentMessageTone(context, 'CUSTOMER_REPLY', 'strong');
+  emitAgentMessageTone(context, 'CUSTOMER_REPLY');
 
   assert.deepEqual(gainEvents, [
     { type: 'set', value: 0.0001, time: 5 },
@@ -424,49 +401,12 @@ test('new conversation and customer reply use distinct foreground tones', () => 
     },
   };
 
-  emitAgentMessageTone(context, 'NEW_CONVERSATION', 'strong');
+  emitAgentMessageTone(context, 'NEW_CONVERSATION');
   const newConversation = frequencies.splice(0);
-  emitAgentMessageTone(context, 'CUSTOMER_REPLY', 'strong');
+  emitAgentMessageTone(context, 'CUSTOMER_REPLY');
 
   assert.deepEqual(newConversation, [880, 1175, 1568, 1760]);
   assert.deepEqual(frequencies, [880, 1175, 1568]);
-});
-
-test('classic and crisp presets use clearly distinct synthesized signatures', () => {
-  const frequencies = [];
-  const context = {
-    currentTime: 0,
-    destination: {},
-    createGain() {
-      return {
-        gain: {
-          setValueAtTime() {},
-          exponentialRampToValueAtTime() {},
-        },
-        connect() {},
-      };
-    },
-    createOscillator() {
-      return {
-        type: 'sine',
-        frequency: {
-          setValueAtTime(value) {
-            frequencies.push(value);
-          },
-        },
-        connect() {},
-        start() {},
-        stop() {},
-      };
-    },
-  };
-
-  emitAgentMessageTone(context, 'CUSTOMER_REPLY', 'classic');
-  const classic = frequencies.splice(0);
-  emitAgentMessageTone(context, 'CUSTOMER_REPLY', 'crisp');
-
-  assert.deepEqual(classic, [784, 1047]);
-  assert.deepEqual(frequencies, [1319, 1760]);
 });
 
 test('app badge follows unread message total and clears at zero', () => {

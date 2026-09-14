@@ -1,4 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-pnpm verify
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm verify
+else
+  pnpm.cmd verify
+fi

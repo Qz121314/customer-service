@@ -1,4 +1,8 @@
 #!/usr/bin/env sh
 set -eu
 
-pnpm preflight
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm preflight
+else
+  pnpm.cmd preflight
+fi

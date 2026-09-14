@@ -568,7 +568,8 @@ function AgentWorkspace({
       const context = ensureSoundContext();
       if (!context || !(await resumeAgentAudio(context))) return false;
       setAudioUnlocked(context.state === 'running');
-      return emitAgentMessageTone(context, type);
+      emitAgentMessageTone(context, type);
+      return true;
     },
     [ensureSoundContext],
   );

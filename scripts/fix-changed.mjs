@@ -42,6 +42,13 @@ function git(args) {
   return run('git', args, { capture: true });
 }
 
+function runPnpm(args) {
+  if (process.platform === 'win32') {
+    return run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'pnpm', ...args]);
+  }
+  return run('pnpm', args);
+}
+
 function hasCommit(ref) {
   return (
     spawnSync('git', ['cat-file', '-e', `${ref}^{commit}`], {
@@ -140,15 +147,15 @@ const prettierFiles = changed.filter((file) => prettierExtensions.has(extname(fi
 const eslintFiles = changed.filter((file) => eslintExtensions.has(extname(file)));
 
 if (prettierFiles.length > 0) {
-  run('pnpm', ['exec', 'prettier', '--write', ...prettierFiles]);
+  runPnpm(['exec', 'prettier', '--write', ...prettierFiles]);
 }
 
 if (eslintFiles.length > 0) {
-  run('pnpm', ['exec', 'eslint', '--fix', ...eslintFiles]);
+  runPnpm(['exec', 'eslint', '--fix', ...eslintFiles]);
 }
 
 if (prettierFiles.length > 0) {
-  run('pnpm', ['exec', 'prettier', '--check', ...prettierFiles]);
+  runPnpm(['exec', 'prettier', '--check', ...prettierFiles]);
 }
 
 const unrelated = [...dirtyPaths()].filter((file) => !allowedPaths.has(file));
