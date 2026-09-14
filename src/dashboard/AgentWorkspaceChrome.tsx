@@ -28,68 +28,74 @@ export function AgentActionToolbar({
   return (
     <>
       <div className="workspace-sidebar-actions" aria-label="客服工具">
-        <Button
-          type="button"
-          variant="ghost"
-          className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
-          aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
-          aria-pressed={soundEnabled}
-          data-tooltip={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
-          onClick={onToggleSound}
-        >
-          <UiIcon name="sound" />
-          <span>{soundEnabled ? '消息提示音已开启' : '开启消息提示音'}</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="full workspace-auto-reply-button"
-          aria-label="打开自动回复设置"
-          data-tooltip="自动回复"
-          onClick={onOpenAutoReply}
-        >
-          <UiIcon name="auto-reply" />
-          <span>自动回复</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="full workspace-statistics-button"
-          aria-label="打开接待流量"
-          data-tooltip="接待流量"
-          onClick={onOpenStatistics}
-        >
-          <UiIcon name="statistics" />
-          <span>接待流量</span>
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="full workspace-card-settings-button"
-          aria-label="打开名片设置"
-          data-tooltip="名片"
-          onClick={onOpenCardSettings}
-        >
-          <UiIcon name="contact" />
-          <span>名片</span>
-        </Button>
-        <span className="workspace-sidebar-divider" aria-hidden="true" />
-        <Button
-          asChild
-          variant="ghost"
-          className="full workspace-windows-app-button"
-        >
-          <a
-            href={WINDOWS_DOWNLOAD_URL}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="下载/更新客服应用"
-            data-tooltip="下载/更新客服应用"
+        <div className="workspace-sidebar-primary-actions">
+          <Button
+            type="button"
+            variant="ghost"
+            className={`full workspace-sound-button${soundEnabled ? ' is-enabled' : ''}`}
+            aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
+            aria-pressed={soundEnabled}
+            data-tooltip={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
+            onClick={onToggleSound}
           >
-            <UiIcon name="install" />
-            <span>下载/更新客服应用</span>
-          </a>
-        </Button>
+            <UiIcon name="sound" />
+            <span>{soundEnabled ? '消息提示音已开启' : '开启消息提示音'}</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="full workspace-auto-reply-button"
+            aria-label="打开自动回复设置"
+            data-tooltip="自动回复"
+            onClick={onOpenAutoReply}
+          >
+            <UiIcon name="auto-reply" />
+            <span>自动回复</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="full workspace-statistics-button"
+            aria-label="打开接待流量"
+            data-tooltip="接待流量"
+            onClick={onOpenStatistics}
+          >
+            <UiIcon name="statistics" />
+            <span>接待流量</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="full workspace-card-settings-button"
+            aria-label="打开名片设置"
+            data-tooltip="名片"
+            onClick={onOpenCardSettings}
+          >
+            <UiIcon name="contact" />
+            <span>名片</span>
+          </Button>
+        </div>
+        <div className="workspace-sidebar-app-actions">
+          <span className="workspace-sidebar-divider" aria-hidden="true" />
+          <Button
+            asChild
+            variant="ghost"
+            className="full workspace-windows-app-button"
+          >
+            <a
+              href={WINDOWS_DOWNLOAD_URL}
+              target="_blank"
+              rel="noreferrer"
+              aria-label="下载/更新客服应用"
+              data-tooltip="下载/更新客服应用"
+            >
+              <UiIcon name="install" />
+              <span>下载/更新客服应用</span>
+            </a>
+          </Button>
+        </div>
+      </div>
+      <div className="workspace-sidebar-account-actions">
         <Button
           type="button"
           variant="ghost"

@@ -88,13 +88,15 @@
   }
 
   .workspace-shell .workspace-sidebar-actions {
+    width: auto;
     display: flex;
     min-height: 0;
     flex: 1 1 auto;
     flex-direction: column;
     align-items: center;
-    gap: 7px;
+    gap: 0;
     margin-top: 0;
+    padding-top: 18px;
   }
 
   .workspace-shell .workspace-sidebar .ghost-button,
@@ -112,12 +114,28 @@
     opacity: 1;
   }
 
-  .workspace-shell .workspace-sidebar .workspace-logout-button {
-    position: absolute;
-    left: 50%;
-    bottom: 14px;
-    margin: 0;
-    transform: translateX(-50%);
+  .workspace-shell .workspace-sidebar-primary-actions,
+  .workspace-shell .workspace-sidebar-app-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .workspace-shell .workspace-sidebar-primary-actions {
+    gap: 8px;
+  }
+
+  .workspace-shell .workspace-sidebar-app-actions {
+    gap: 8px;
+    margin-top: auto;
+    padding-bottom: 12px;
+  }
+
+  .workspace-shell .workspace-sidebar-account-actions {
+    display: flex;
+    flex: 0 0 auto;
+    justify-content: center;
+    padding-bottom: 14px;
   }
 
   .workspace-shell .workspace-sidebar .workspace-sidebar-divider {

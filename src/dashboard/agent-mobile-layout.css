@@ -138,6 +138,10 @@
     display: none;
   }
 
+  .workspace-sidebar-account-actions {
+    display: none;
+  }
+
   .workspace-sidebar .mobile-settings-trigger {
     position: relative;
     display: grid;
