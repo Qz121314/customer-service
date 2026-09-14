@@ -35,7 +35,6 @@ export function AgentActionToolbar({
           aria-label={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
           aria-pressed={soundEnabled}
           title={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
-          data-tooltip={soundEnabled ? '关闭消息提示音' : '开启消息提示音'}
           onClick={onToggleSound}
         >
           <UiIcon name="sound" />
@@ -47,7 +46,6 @@ export function AgentActionToolbar({
           className="full workspace-auto-reply-button"
           aria-label="打开自动回复设置"
           title="自动回复"
-          data-tooltip="自动回复"
           onClick={onOpenAutoReply}
         >
           <UiIcon name="auto-reply" />
@@ -59,7 +57,6 @@ export function AgentActionToolbar({
           className="full workspace-statistics-button"
           aria-label="打开接待流量"
           title="接待流量"
-          data-tooltip="接待流量"
           onClick={onOpenStatistics}
         >
           <UiIcon name="statistics" />
@@ -71,7 +68,6 @@ export function AgentActionToolbar({
           className="full workspace-card-settings-button"
           aria-label="打开名片设置"
           title="名片"
-          data-tooltip="名片"
           onClick={onOpenCardSettings}
         >
           <UiIcon name="contact" />
@@ -89,7 +85,6 @@ export function AgentActionToolbar({
             rel="noreferrer"
             aria-label="下载/更新客服应用"
             title="下载/更新客服应用"
-            data-tooltip="下载/更新客服应用"
           >
             <UiIcon name="install" />
             <span>下载/更新客服应用</span>
@@ -101,7 +96,6 @@ export function AgentActionToolbar({
           className="full workspace-logout-button"
           aria-label="退出客服账号"
           title="退出客服账号"
-          data-tooltip="退出客服账号"
           onClick={onLogout}
         >
           <UiIcon name="logout" />
