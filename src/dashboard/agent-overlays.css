@@ -100,12 +100,21 @@
   height: min(760px, calc(100dvh - 64px));
 }
 
+.agent-materials-dialog {
+  width: min(900px, calc(100vw - 48px));
+  height: min(620px, calc(100dvh - 48px));
+}
+
 .agent-first-reply-body,
 .agent-materials-body {
   min-height: 0;
   overflow: auto;
   padding: 22px 28px 28px;
   color: #1f2937;
+}
+
+.agent-materials-body {
+  padding: 14px 16px 16px;
 }
 
 .agent-first-reply-body {
@@ -357,7 +366,7 @@
   display: grid;
   min-height: 0;
   grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
-  gap: 22px;
+  gap: 14px;
 }
 
 .agent-material-list {
@@ -369,8 +378,8 @@
 .agent-material-editor {
   display: grid;
   align-content: start;
-  gap: 14px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px;
   border: 1px solid #e1e6ee;
   border-radius: 14px;
   background: #fbfcfd;
@@ -378,6 +387,49 @@
 
 .agent-material-editor > .agent-first-reply-section-head {
   margin-bottom: 4px;
+}
+
+.agent-material-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-material-editor-head .agent-first-reply-section-head {
+  margin: 0;
+}
+
+.agent-material-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e1e6ee;
+  border-radius: 11px;
+  padding: 4px 6px 4px 12px;
+  background: #fff;
+}
+
+.agent-material-card.is-selected {
+  border-color: #aaa5ff;
+  background: #f7f6ff;
+}
+
+.agent-material-card > button:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  border: 0;
+  padding: 7px 0;
+  background: transparent;
+  color: #344054;
+  text-align: left;
+  cursor: pointer;
+}
+
+.agent-material-card > button:first-child:hover {
+  color: #403bb6;
 }
 
 .agent-material-attachments {
