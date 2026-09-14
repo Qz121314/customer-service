@@ -7,8 +7,11 @@ import {
 } from './agent-auto-reply-client';
 import {
   agentPresetImageUrl,
+  createAgentAttachmentPreset,
   deleteAgentAttachmentPreset,
   getAgentAttachmentPresets,
+  updateAgentAttachmentPreset,
+  uploadAgentContactCardIcon,
   uploadAgentAttachmentImage,
   type AgentAttachmentPreset,
   type AgentContactCardKind,
@@ -533,16 +536,14 @@ function SectionHead({ title, detail }: { title: string; detail: string }) {
   );
 }
 
-type MaterialTab = 'greetings' | 'ctas' | 'attachments';
+type MaterialTab = 'greetings' | 'ctas' | 'cards' | 'images';
 
 export function AgentMaterialsModal({
   open,
   onClose,
-  onOpenCardSettings,
 }: {
   open: boolean;
   onClose: () => void;
-  onOpenCardSettings: () => void;
 }) {
   const [settings, setSettings] = useState(EMPTY_SETTINGS);
   const [saved, setSaved] = useState(EMPTY_SETTINGS);
@@ -554,6 +555,14 @@ export function AgentMaterialsModal({
   const [ctaId, setCtaId] = useState<string | null>(null);
   const [ctaLabel, setCtaLabel] = useState('');
   const [ctaAnswer, setCtaAnswer] = useState('');
+  const [cardEditorOpen, setCardEditorOpen] = useState(false);
+  const [cardEditingId, setCardEditingId] = useState<string | null>(null);
+  const [cardKind, setCardKind] = useState<AgentContactCardKind>('sms');
+  const [cardLabel, setCardLabel] = useState('');
+  const [cardValue, setCardValue] = useState('');
+  const [cardPresetMessage, setCardPresetMessage] = useState('');
+  const [cardIconFile, setCardIconFile] = useState<File | null>(null);
+  const [cardHasCustomIcon, setCardHasCustomIcon] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
@@ -595,6 +604,18 @@ export function AgentMaterialsModal({
     setCtaId(null);
     setCtaLabel('');
     setCtaAnswer('');
+    setCardEditorOpen(false);
+    setCardEditingId(null);
+    setCardKind('sms');
+    setCardLabel('');
+    setCardValue('');
+    setCardPresetMessage('');
+    setCardIconFile(null);
+    setCardHasCustomIcon(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !saving && !imageUploading) onClose();
     };
@@ -610,6 +631,14 @@ export function AgentMaterialsModal({
   const editingCta = useMemo(
     () => settings.ctas.find((item) => item.id === ctaId) ?? null,
     [ctaId, settings.ctas],
+  );
+  const cardPresets = useMemo(
+    () => presets.filter((item) => item.kind !== 'image'),
+    [presets],
+  );
+  const imagePresets = useMemo(
+    () => presets.filter((item) => item.kind === 'image'),
+    [presets],
   );
 
   useEffect(() => {
@@ -728,6 +757,108 @@ export function AgentMaterialsModal({
     }
   };
 
+  const resetCardEditor = () => {
+    setCardEditorOpen(false);
+    setCardEditingId(null);
+    setCardKind('sms');
+    setCardLabel('');
+    setCardValue('');
+    setCardPresetMessage('');
+    setCardIconFile(null);
+    setCardHasCustomIcon(false);
+  };
+  const startNewCard = () => {
+    resetCardEditor();
+    setCardEditorOpen(true);
+  };
+  const editCard = (
+    preset: Extract<AgentAttachmentPreset, { kind: AgentContactCardKind }>,
+  ) => {
+    setCardEditorOpen(true);
+    setCardEditingId(preset.id);
+    setCardKind(preset.kind);
+    setCardLabel(preset.label);
+    setCardValue(preset.value);
+    setCardPresetMessage(preset.presetMessage ?? '');
+    setCardIconFile(null);
+    setCardHasCustomIcon(preset.hasCustomIcon);
+  };
+  const saveCard = async () => {
+    const label = cardLabel.trim();
+    const value = cardValue.trim();
+    if (!label || !value || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      let preset = (
+        cardEditingId
+          ? await updateAgentAttachmentPreset(cardEditingId, {
+              label,
+              value,
+              presetMessage:
+                cardKind === 'website'
+                  ? null
+                  : cardPresetMessage.trim() || null,
+            })
+          : await createAgentAttachmentPreset({
+              kind: cardKind,
+              label,
+              value,
+              presetMessage:
+                cardKind === 'website'
+                  ? null
+                  : cardPresetMessage.trim() || null,
+            })
+      ) as Extract<AgentAttachmentPreset, { kind: AgentContactCardKind }>;
+      if (cardIconFile) {
+        await uploadAgentContactCardIcon(preset.id, cardIconFile);
+        preset = { ...preset, hasCustomIcon: true };
+      } else {
+        preset = { ...preset, hasCustomIcon: cardHasCustomIcon };
+      }
+      setPresets((current) => {
+        const exists = current.some((item) => item.id === preset.id);
+        return exists
+          ? current.map((item) => (item.id === preset.id ? preset : item))
+          : [...current, preset];
+      });
+      resetCardEditor();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '名片保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const removeCard = async (
+    preset: Extract<AgentAttachmentPreset, { kind: AgentContactCardKind }>,
+  ) => {
+    if (saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await deleteAgentAttachmentPreset(preset.id);
+      setPresets((current) => current.filter((item) => item.id !== preset.id));
+      setSettings((current) => ({
+        ...current,
+        profiles: current.profiles.map((profile) => ({
+          ...profile,
+          attachmentIds: profile.attachmentIds.filter((id) => id !== preset.id),
+        })),
+      }));
+      if (cardEditingId === preset.id) resetCardEditor();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '名片删除失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+  const cardValueLabel =
+    cardKind === 'website'
+      ? '网站 URL'
+      : cardKind === 'sms'
+        ? '短信号码'
+        : `${CONTACT_CARD_LABELS[cardKind]} 号码`;
+
   return (
     <div
       className="agent-auto-reply-backdrop"
@@ -791,10 +922,17 @@ export function AgentMaterialsModal({
               </button>
               <button
                 type="button"
-                className={tab === 'attachments' ? 'is-active' : ''}
-                onClick={() => setTab('attachments')}
+                className={tab === 'cards' ? 'is-active' : ''}
+                onClick={() => setTab('cards')}
               >
-                名片与图片 <small>{presets.length}</small>
+                名片 <small>{cardPresets.length}</small>
+              </button>
+              <button
+                type="button"
+                className={tab === 'images' ? 'is-active' : ''}
+                onClick={() => setTab('images')}
+              >
+                图片 <small>{imagePresets.length}</small>
               </button>
             </nav>
             {tab === 'greetings' ? (
@@ -908,78 +1046,235 @@ export function AgentMaterialsModal({
                 </div>
               </MaterialEditorList>
             ) : null}
-            {tab === 'attachments' ? (
+            {tab === 'cards' ? (
               <div className="agent-material-attachments">
                 <div className="agent-material-attachments-head">
                   <span>
-                    <strong>名片与图片</strong>
-                    <small>统一作为首次回复附件素材</small>
+                    <strong>名片</strong>
+                    <small>保存客服可直接使用的联系方式</small>
                   </span>
-                  <div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={onOpenCardSettings}
-                    >
-                      管理名片
-                    </Button>
-                    <label className="agent-auto-reply-image-picker">
-                      <UiIcon name="image-plus" />
-                      <span>{imageUploading ? '上传中…' : '添加图片'}</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        disabled={imageUploading}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          event.currentTarget.value = '';
-                          if (file) void uploadImage(file);
-                        }}
-                      />
-                    </label>
-                  </div>
+                  <Button type="button" variant="ghost" onClick={startNewCard}>
+                    添加名片
+                  </Button>
                 </div>
+                {cardEditorOpen ? (
+                  <div className="agent-inline-card-editor">
+                    <div className="agent-inline-card-editor-head">
+                      <span>
+                        <strong>
+                          {cardEditingId ? '编辑名片' : '添加名片'}
+                        </strong>
+                        <small>填写后立即保存到素材库</small>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="关闭名片编辑"
+                        disabled={saving}
+                        onClick={resetCardEditor}
+                      >
+                        <UiIcon name="close" />
+                      </Button>
+                    </div>
+                    <div className="agent-inline-card-fields">
+                      <label>
+                        <span>类型</span>
+                        <select
+                          aria-label="名片类型"
+                          value={cardKind}
+                          disabled={Boolean(cardEditingId) || saving}
+                          onChange={(event) =>
+                            setCardKind(
+                              event.target.value as AgentContactCardKind,
+                            )
+                          }
+                        >
+                          <option value="sms">SMS</option>
+                          <option value="whatsapp">WhatsApp</option>
+                          <option value="telegram">Telegram</option>
+                          <option value="website">网站</option>
+                        </select>
+                      </label>
+                      <label className="agent-inline-card-icon-picker">
+                        <span>图标</span>
+                        <span className="agent-inline-card-icon-value">
+                          <AgentContactCardIcon
+                            id={cardEditingId ?? `channel-${cardKind}`}
+                            kind={cardKind}
+                            source="preset"
+                            hasCustomIcon={cardHasCustomIcon}
+                          />
+                          <span>
+                            {cardIconFile?.name ?? '使用渠道默认图标'}
+                          </span>
+                        </span>
+                        <input
+                          type="file"
+                          aria-label="名片图标"
+                          accept="image/png,image/jpeg,image/webp"
+                          disabled={saving}
+                          onChange={(event) => {
+                            setCardIconFile(event.target.files?.[0] ?? null);
+                            event.currentTarget.value = '';
+                          }}
+                        />
+                      </label>
+                      <label>
+                        <span>名称</span>
+                        <Input
+                          value={cardLabel}
+                          maxLength={80}
+                          placeholder="例如：客服短信"
+                          onChange={(event) => setCardLabel(event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <span>{cardValueLabel}</span>
+                        <Input
+                          aria-label={cardValueLabel}
+                          value={cardValue}
+                          maxLength={2048}
+                          placeholder={
+                            cardKind === 'website'
+                              ? 'https://example.com'
+                              : '+1 213 555 1234'
+                          }
+                          onChange={(event) => setCardValue(event.target.value)}
+                        />
+                      </label>
+                      {cardKind !== 'website' ? (
+                        <label className="agent-inline-card-message">
+                          <span>预设话术（可选）</span>
+                          <Textarea
+                            value={cardPresetMessage}
+                            maxLength={2000}
+                            rows={2}
+                            placeholder="访客点击后预填的消息"
+                            onChange={(event) =>
+                              setCardPresetMessage(event.target.value)
+                            }
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                    <div className="agent-inline-card-editor-actions">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={saving}
+                        onClick={resetCardEditor}
+                      >
+                        取消
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={
+                          saving || !cardLabel.trim() || !cardValue.trim()
+                        }
+                        onClick={() => void saveCard()}
+                      >
+                        {saving
+                          ? '保存中…'
+                          : cardEditingId
+                            ? '保存修改'
+                            : '保存名片'}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="agent-material-attachment-grid">
-                  {presets.map((preset) => (
+                  {cardPresets.map((preset) => (
                     <div
                       className="agent-material-attachment-card"
                       key={preset.id}
                     >
-                      {preset.kind === 'image' ? (
-                        <img
-                          src={agentPresetImageUrl(preset.id)}
-                          alt=""
-                          loading="lazy"
-                        />
-                      ) : (
-                        <AgentContactCardIcon
-                          id={preset.id}
-                          kind={preset.kind}
-                          source="preset"
-                          hasCustomIcon={preset.hasCustomIcon}
-                        />
-                      )}
+                      <AgentContactCardIcon
+                        id={preset.id}
+                        kind={preset.kind}
+                        source="preset"
+                        hasCustomIcon={preset.hasCustomIcon}
+                      />
                       <span>
                         <strong>{preset.label}</strong>
-                        <small>
-                          {preset.kind === 'image'
-                            ? preset.originalName || '图片'
-                            : `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.value}`}
-                        </small>
+                        <small>{`${CONTACT_CARD_LABELS[preset.kind]} · ${preset.value}`}</small>
                       </span>
-                      {preset.kind === 'image' ? (
+                      <span className="agent-material-card-actions">
+                        <button
+                          type="button"
+                          aria-label={`编辑 ${preset.label}`}
+                          disabled={saving}
+                          onClick={() => editCard(preset)}
+                        >
+                          <UiIcon name="edit" />
+                        </button>
                         <button
                           type="button"
                           aria-label={`删除 ${preset.label}`}
                           disabled={saving}
-                          onClick={() => void removeImage(preset)}
+                          onClick={() => void removeCard(preset)}
                         >
                           <UiIcon name="trash" />
                         </button>
-                      ) : null}
+                      </span>
                     </div>
                   ))}
-                  {presets.length === 0 ? <p>还没有名片或图片素材。</p> : null}
+                  {cardPresets.length === 0 ? (
+                    <p>还没有名片，点击上方“添加名片”开始。</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {tab === 'images' ? (
+              <div className="agent-material-attachments">
+                <div className="agent-material-attachments-head">
+                  <span>
+                    <strong>图片</strong>
+                    <small>上传后可在首次回复方案中自由组合</small>
+                  </span>
+                  <label className="agent-auto-reply-image-picker">
+                    <UiIcon name="image-plus" />
+                    <span>{imageUploading ? '上传中…' : '添加图片'}</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      disabled={imageUploading}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.currentTarget.value = '';
+                        if (file) void uploadImage(file);
+                      }}
+                    />
+                  </label>
+                </div>
+                <div className="agent-material-attachment-grid">
+                  {imagePresets.map((preset) => (
+                    <div
+                      className="agent-material-attachment-card"
+                      key={preset.id}
+                    >
+                      <img
+                        src={agentPresetImageUrl(preset.id)}
+                        alt=""
+                        loading="lazy"
+                      />
+                      <span>
+                        <strong>{preset.label}</strong>
+                        <small>{preset.originalName || '图片'}</small>
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`删除 ${preset.label}`}
+                        disabled={saving}
+                        onClick={() => void removeImage(preset)}
+                      >
+                        <UiIcon name="trash" />
+                      </button>
+                    </div>
+                  ))}
+                  {imagePresets.length === 0 ? (
+                    <p>还没有图片，点击上方“添加图片”开始。</p>
+                  ) : null}
                 </div>
               </div>
             ) : null}
