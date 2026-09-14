@@ -205,8 +205,8 @@ test('mobile settings keeps its navigation context after child dialogs close', a
     }
     await route.continue();
   });
-  await settingsPage.getByRole('button', { name: /首次问候语/u }).click();
-  const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
+  await settingsPage.getByRole('button', { name: /^问候语 设置/u }).click();
+  const autoReplyDialog = page.getByRole('dialog', { name: '问候语' });
   await expect(autoReplyDialog).toBeVisible();
   await expect(autoReplyDialog).toHaveCSS(
     'animation-name',
@@ -216,7 +216,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await expect(autoReplyDialog.getByText('正在读取设置…')).toBeVisible();
   const autoReplyGeometryBeforeLoad = await autoReplyDialog.boundingBox();
   await expect(
-    autoReplyDialog.getByRole('checkbox', { name: /自动发送首次问候/u }),
+    autoReplyDialog.getByRole('checkbox', { name: /自动发送问候语/u }),
   ).toBeVisible();
   const autoReplyGeometryAfterLoad = await autoReplyDialog.boundingBox();
   expect(autoReplyGeometryBeforeLoad).not.toBeNull();

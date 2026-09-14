@@ -379,8 +379,8 @@ export function AgentMobileSettingsPage({
                 <UiIcon name="auto-reply" />
               </i>
               <span>
-                <strong>首次问候语</strong>
-                <small>设置首次接待时自动发送的内容</small>
+                <strong>问候语</strong>
+                <small>设置接待时自动发送的内容</small>
               </span>
               <UiIcon name="chevron" />
             </button>

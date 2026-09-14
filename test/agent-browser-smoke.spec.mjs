@@ -319,12 +319,12 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
   });
   await expect(autoReplyButton).toBeVisible();
   await autoReplyButton.click();
-  const autoReplyDialog = page.getByRole('dialog', { name: '首次问候语' });
+  const autoReplyDialog = page.getByRole('dialog', { name: '问候语' });
   await expect(autoReplyDialog).toBeVisible();
   await expect(autoReplyDialog.getByText('短信联系')).toBeVisible();
   await expect(autoReplyDialog.getByText('付款链接')).toBeVisible();
   const autoReplyToggle = autoReplyDialog.getByRole('checkbox', {
-    name: /自动发送首次问候/u,
+    name: /自动发送问候语/u,
   });
   await expect(autoReplyToggle).not.toBeChecked();
   await autoReplyToggle.check();
@@ -503,7 +503,7 @@ test('agent desktop and mobile interaction surfaces remain usable', async ({
     settingsPage.getByRole('button', { name: '安装到手机' }),
   ).toBeVisible();
   await expect(settingsPage.getByText('名片')).toBeVisible();
-  await expect(settingsPage.getByText('首次问候语')).toBeVisible();
+  await expect(settingsPage.getByText('问候语')).toBeVisible();
   await expect(settingsPage.getByText('接待流量')).toBeVisible();
   await expect(
     settingsPage.getByRole('button', { name: '退出客服账号' }),
