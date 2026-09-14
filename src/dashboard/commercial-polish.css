@@ -1,25 +1,41 @@
 /* Final visual owner for the agent workspace.
  * Geometry stays in agent-desktop-layout.css / agent-mobile-layout.css and feature CSS.
- * This layer owns only tokens, surfaces, borders, shadows, states and motion.
+ * Keep the visual system here: one palette, one interaction language, no override stack.
  */
 
 .workspace-shell {
-  --cs-accent: #625bdd;
-  --cs-accent-strong: #514ac8;
-  --cs-accent-soft: #f1f0ff;
-  --cs-ink: #1a1f28;
-  --cs-muted: #747d8b;
-  --cs-line: #e1e5eb;
-  --cs-line-strong: #d4dae3;
-  --cs-panel-soft: #f8f9fb;
-  --cs-shadow-xs: 0 1px 2px rgb(15 23 42 / 4%);
-  --cs-shadow-sm: 0 1px 2px rgb(15 23 42 / 4%), 0 8px 24px rgb(15 23 42 / 4%);
-  --cs-shadow-focus: 0 0 0 3px rgb(98 91 221 / 11%);
+  --cs-accent: #b7ee46;
+  --cs-accent-strong: #9acb2f;
+  --cs-accent-soft: #f1f6e4;
+  --cs-ink: #20221f;
+  --cs-muted: #74766f;
+  --cs-line: #e2e1da;
+  --cs-line-strong: #d1d0c8;
+  --cs-panel-soft: #f7f6f1;
+  --cs-shadow-xs: 0 1px 2px rgb(22 24 22 / 4%);
+  --cs-shadow-sm: 0 1px 2px rgb(22 24 22 / 4%), 0 8px 24px rgb(22 24 22 / 4%);
+  --cs-shadow-focus: 0 0 0 2px #171817, 0 0 0 4px rgb(183 238 70 / 80%);
   --agent-accent: var(--cs-accent);
   --agent-accent-strong: var(--cs-accent-strong);
   --agent-line: var(--cs-line);
-  --agent-shell: #f4f5f8;
-  --agent-thread: #f4f5f7;
+  --agent-shell: #f4f3ee;
+  --agent-thread: #faf9f4;
+  --agent-selected: #5d7620;
+  --agent-selected-soft: #f1f6e4;
+  --agent-selected-line: #d5e7a1;
+  --agent-unread: #c65a42;
+  --agent-unread-strong: #a94734;
+  --agent-unread-soft: #fff4ef;
+  --agent-unread-ring: rgb(198 90 66 / 16%);
+  --agent-success: #5d7620;
+  --agent-warning: #a56d2d;
+  --agent-danger: #b44e45;
+  --mobile-accent: var(--cs-accent);
+  --mobile-accent-strong: var(--cs-accent-strong);
+  --mobile-accent-soft: var(--cs-accent-soft);
+  --mobile-success: var(--agent-success);
+  --mobile-warning: var(--agent-warning);
+  --mobile-danger: var(--agent-danger);
   color: var(--cs-ink);
 }
 
@@ -50,14 +66,51 @@
 }
 
 .workspace-shell .primary-button,
-.workspace-shell .unread-total,
-.workspace-shell .unread-badge,
 .workspace-shell .composer-foot .primary-button {
   background-color: var(--cs-accent);
+  color: #17200d;
+}
+
+.workspace-shell .unread-total,
+.workspace-shell .unread-badge {
+  background-color: var(--agent-unread);
+  color: #fff;
+}
+
+.workspace-shell .conversation-status.is-pending,
+.workspace-shell .thread-status.is-pending,
+.workspace-shell .thread-status-action.is-pending {
+  border-color: var(--agent-selected-line);
+  color: #44551b;
+  background: var(--agent-selected-soft);
+}
+
+.workspace-shell .conversation-row.selected .avatar.small,
+.workspace-shell .thread-head-avatar {
+  border-color: var(--agent-selected-line);
+  color: #44551b;
+  background: #eeece5;
+}
+
+.workspace-shell .delivery-mark.is-read {
+  color: var(--agent-selected);
+}
+
+.workspace-shell .thread-status-action:hover:not(:disabled),
+.workspace-shell .quick-replies-trigger:hover:not(:disabled) {
+  border-color: #c3d68d;
+  color: #44551b;
+  background: var(--cs-accent-soft);
+}
+
+.workspace-shell .quick-replies-trigger:focus-visible,
+.workspace-shell .media-picker:focus-visible {
+  border-color: var(--cs-accent-strong);
+  box-shadow: var(--cs-shadow-focus);
 }
 .workspace-shell .conversation-list,
 .workspace-shell .messages {
-  scrollbar-color: rgb(91 96 110 / 22%) transparent;
+  scrollbar-color: rgb(89 91 82 / 22%) transparent;
   scrollbar-width: thin;
 }
 .workspace-shell .conversation-list::-webkit-scrollbar,
@@ -69,51 +122,42 @@
 .workspace-shell .messages::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: rgb(91 96 110 / 28%);
+  background: rgb(89 91 82 / 28%);
   background-clip: padding-box;
 }
 .workspace-shell .conversation-list::-webkit-scrollbar-thumb:hover,
 .workspace-shell .messages::-webkit-scrollbar-thumb:hover {
-  background: rgb(91 96 110 / 40%);
+  background: rgb(89 91 82 / 40%);
   background-clip: padding-box;
 }
 
 @media (min-width: 761px) {
   body:has(.workspace-shell) {
-    background:
-      radial-gradient(circle at 82% 2%, rgb(105 96 225 / 10%), transparent 30%),
-      radial-gradient(circle at 12% 92%, rgb(90 105 135 / 7%), transparent 32%),
-      #e9ecf1;
+    background: #ebeae4;
   }
 
   .workspace-shell {
-    border-color: #d5dae3;
-    border-radius: 24px;
-    box-shadow:
-      0 34px 90px rgb(26 34 51 / 16%),
-      0 8px 28px rgb(26 34 51 / 7%),
-      0 1px 2px rgb(26 34 51 / 8%);
+    border-color: var(--cs-line-strong);
+    border-radius: 16px;
+    box-shadow: 0 18px 44px rgb(22 24 22 / 10%);
   }
 
   .workspace-shell .workspace-sidebar {
     border-right-color: rgb(255 255 255 / 6%);
-    background:
-      radial-gradient(circle at 50% 0%, rgb(101 93 224 / 18%), transparent 27%),
-      #17191f;
+    background: #171817;
   }
 
   .workspace-shell .workspace-brand {
-    border: 1px solid rgb(164 157 255 / 34%);
-    background: linear-gradient(145deg, #756ee9 0%, #5d56d5 58%, #4f49c1 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 22%),
-      0 9px 24px rgb(72 64 190 / 26%);
+    border: 1px solid rgb(183 238 70 / 60%);
+    color: #171817;
+    background: var(--cs-accent);
+    box-shadow: none;
   }
 
   .workspace-shell .agent-profile .avatar {
     border: 1px solid rgb(255 255 255 / 8%);
-    background: linear-gradient(145deg, #363b45, #282c34);
-    box-shadow: 0 7px 16px rgb(0 0 0 / 16%);
+    background: #2b2d2a;
+    box-shadow: none;
   }
 
   .workspace-shell .workspace-sidebar .ghost-button {
@@ -137,17 +181,16 @@
   }
 
   .workspace-shell .workspace-sidebar .ghost-button.is-enabled {
-    border-color: rgb(88 211 154 / 10%);
-    background: rgb(68 201 142 / 13%);
-    color: #7be0b2;
+    border-color: rgb(183 238 70 / 18%);
+    background: rgb(183 238 70 / 12%);
+    color: var(--cs-accent);
   }
 
   .workspace-shell .conversation-head,
   .workspace-shell .thread-head {
-    border-bottom-color: #e3e6eb;
-    background: rgb(255 255 255 / 95%);
-    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
-    backdrop-filter: blur(16px) saturate(1.04);
+    border-bottom-color: var(--cs-line);
+    background: #faf9f4;
+    box-shadow: none;
   }
 
   .workspace-shell .conversation-head h1,
@@ -159,9 +202,7 @@
 
   .workspace-shell .unread-total,
   .workspace-shell .unread-badge {
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 16%),
-      0 3px 8px rgb(82 75 196 / 16%);
+    box-shadow: none;
   }
   .workspace-shell .availability-pill,
   .workspace-shell .unread-first-toggle,
@@ -184,10 +225,10 @@
   .workspace-shell .availability-pill:hover:not(:disabled),
   .workspace-shell .unread-first-toggle:hover,
   .workspace-shell .thread-status-action:hover:not(:disabled) {
-    border-color: #d5d1ff;
-    background: #f5f3ff;
-    color: #4741bd;
-    box-shadow: 0 2px 7px rgb(72 64 190 / 8%);
+    border-color: #c3d68d;
+    background: var(--cs-accent-soft);
+    color: #44551b;
+    box-shadow: none;
     transform: translateY(-1px);
   }
   .workspace-shell .availability-pill:active:not(:disabled),
@@ -217,9 +258,9 @@
 
   .workspace-shell .filter.active,
   .workspace-shell .unread-first-toggle.is-active {
-    border-color: #dddafe;
-    background: #f1efff;
-    color: #4741bd;
+    border-color: var(--agent-selected-line);
+    background: var(--cs-accent-soft);
+    color: #44551b;
   }
 
   .workspace-shell .inbox-tools {
@@ -242,7 +283,7 @@
   }
 
   .workspace-shell .inbox-search:focus-within {
-    border-color: rgb(98 91 221 / 46%);
+    border-color: var(--cs-accent-strong);
     background: #fff;
     box-shadow: var(--cs-shadow-focus);
   }
@@ -265,31 +306,29 @@
   }
 
   .workspace-shell .conversation-row:hover {
-    border-color: #e8ebef;
-    background: #f8f9fb;
-    box-shadow: 0 1px 2px rgb(15 23 42 / 2.5%);
+    border-color: var(--cs-line);
+    background: #f7f6f1;
+    box-shadow: none;
   }
 
   .workspace-shell .conversation-row.selected,
   .workspace-shell .conversation-row.selected:hover {
-    border-color: #dedbff;
-    background: linear-gradient(90deg, #f0efff 0%, #f6f5ff 100%);
-    box-shadow:
-      inset 3px 0 0 var(--agent-accent),
-      0 2px 8px rgb(69 62 177 / 6%);
+    border-color: var(--agent-selected-line);
+    background: var(--agent-selected-soft);
+    box-shadow: inset 3px 0 0 var(--agent-accent);
   }
 
   .workspace-shell .conversation-row.unread:not(.selected) {
-    background: #fcfcff;
-    box-shadow: inset 2px 0 0 rgb(98 91 221 / 68%);
+    background: var(--agent-unread-soft);
+    box-shadow: inset 2px 0 0 var(--agent-unread);
   }
 
   .workspace-shell .conversation-row .avatar.small,
   .workspace-shell .thread-head-avatar {
-    border: 1px solid #e0e3eb;
-    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
-    color: #5953b8;
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 86%);
+    border: 1px solid var(--cs-line);
+    background: #eeece5;
+    color: #454742;
+    box-shadow: none;
   }
 
   .workspace-shell .conversation-copy time,
@@ -299,53 +338,36 @@
   }
 
   .workspace-shell .thread-pane {
-    background:
-      radial-gradient(
-        circle at 86% 0%,
-        rgb(100 92 219 / 3.5%),
-        transparent 31%
-      ),
-      #f5f6f8;
+    background: var(--agent-thread);
   }
   .workspace-shell .conversation-context-card {
-    border-color: #dfe3e9;
+    border-color: var(--cs-line);
     border-radius: 14px;
-    background: rgb(255 255 255 / 96%);
-    box-shadow:
-      0 8px 24px rgb(15 23 42 / 4.5%),
-      0 1px 2px rgb(15 23 42 / 3%);
-    backdrop-filter: blur(12px);
+    background: #fffefa;
+    box-shadow: none;
   }
 
   .workspace-shell .conversation-context-card > a {
-    border: 1px solid #e1defd;
-    background: #f7f6ff;
-    color: #514ac8;
+    border: 1px solid var(--agent-selected-line);
+    background: var(--cs-accent-soft);
+    color: #44551b;
   }
 
   .workspace-shell .conversation-context-card > a:hover {
-    border-color: #d5d1ff;
-    background: #f1efff;
+    border-color: #c3d68d;
+    background: #e9f2cd;
     transform: translateY(-1px);
   }
 
   .workspace-shell .messages {
-    background:
-      radial-gradient(
-        circle at 72% 12%,
-        rgb(97 89 215 / 3.5%),
-        transparent 24%
-      ),
-      linear-gradient(180deg, #f7f8fa 0%, #f4f5f7 100%);
+    background: var(--agent-thread);
   }
 
   .workspace-shell .message > div {
-    border-color: #e1e5ea;
+    border-color: var(--cs-line);
     border-radius: 15px;
-    background: #fff;
-    box-shadow:
-      0 1px 2px rgb(15 23 42 / 3.5%),
-      0 5px 14px rgb(15 23 42 / 2.5%);
+    background: #fffefa;
+    box-shadow: none;
   }
 
   .workspace-shell .message.visitor > div {
@@ -353,28 +375,24 @@
   }
 
   .workspace-shell .message.mine > div {
-    border-color: #dbd8ff;
+    border-color: var(--agent-selected-line);
     border-bottom-right-radius: 6px;
-    background: linear-gradient(145deg, #f0efff 0%, #ebe9ff 100%);
-    box-shadow:
-      0 1px 2px rgb(73 66 184 / 4%),
-      0 5px 14px rgb(73 66 184 / 4%);
+    background: var(--cs-accent-soft);
+    box-shadow: none;
   }
 
   .workspace-shell .visitor-typing {
-    border: 1px solid #e2e5ea;
+    border: 1px solid var(--cs-line);
     border-radius: 999px;
-    background: rgb(255 255 255 / 86%);
-    color: #747d89;
-    box-shadow: var(--cs-shadow-xs);
-    backdrop-filter: blur(8px);
+    background: #fffefa;
+    color: var(--cs-muted);
+    box-shadow: none;
   }
 
   .workspace-shell .composer {
-    border-top-color: #dde1e7;
-    background: rgb(245 246 248 / 96%);
-    box-shadow: 0 -8px 24px rgb(15 23 42 / 3%);
-    backdrop-filter: blur(16px) saturate(1.02);
+    border-top-color: var(--cs-line);
+    background: var(--agent-shell);
+    box-shadow: none;
   }
 
   .workspace-shell .composer > textarea {
@@ -385,10 +403,10 @@
   }
 
   .workspace-shell .composer > textarea:focus {
-    border-color: rgb(98 91 221 / 46%);
+    border-color: var(--cs-accent-strong);
     box-shadow:
       var(--cs-shadow-focus),
-      0 2px 8px rgb(15 23 42 / 4%);
+      0 1px 2px rgb(22 24 22 / 4%);
   }
 
   .workspace-shell .media-picker {
@@ -399,84 +417,78 @@
   }
 
   .workspace-shell .media-picker:hover {
-    border-color: #d4d0ff;
-    background: #f5f3ff;
-    color: #514ac8;
+    border-color: #c3d68d;
+    background: var(--cs-accent-soft);
+    color: #44551b;
   }
 
   .workspace-shell .composer-foot .primary-button {
-    border-color: rgb(73 67 184 / 24%);
-    background: linear-gradient(180deg, #6b64e4 0%, #5a53d1 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 18%),
-      0 7px 18px rgb(76 69 188 / 22%);
+    border-color: #9acb2f;
+    background: var(--cs-accent);
+    box-shadow: none;
   }
 
   .workspace-shell .composer-foot .primary-button:hover:not(:disabled) {
-    background: linear-gradient(180deg, #625bdc 0%, #5049c2 100%);
+    background: var(--cs-accent-strong);
   }
 }
 
 @media (max-width: 760px) {
   .workspace-shell .conversation-head,
   .workspace-shell .thread-head {
-    border-bottom-color: #e8ebef;
-    background: rgb(255 255 255 / 96%);
-    box-shadow: 0 1px 0 rgb(15 23 42 / 2%);
-    backdrop-filter: blur(14px);
+    border-bottom-color: var(--cs-line);
+    background: #faf9f4;
+    box-shadow: none;
   }
 
   .workspace-shell .conversation-row.selected {
-    background: #f4f2ff;
+    background: var(--agent-selected-soft);
     box-shadow: inset 3px 0 0 var(--agent-accent);
   }
 
   .workspace-shell .conversation-row.unread:not(.selected) {
-    background: #fcfcff;
-    box-shadow: inset 2px 0 0 rgb(98 91 221 / 58%);
+    background: var(--agent-unread-soft);
+    box-shadow: inset 2px 0 0 var(--agent-unread);
   }
 
   .workspace-shell .conversation-row .avatar.small,
   .workspace-shell .thread-head-avatar {
-    border: 1px solid #e2e4ec;
-    background: linear-gradient(145deg, #f5f4ff 0%, #ecebfa 100%);
-    color: #5953b8;
+    border: 1px solid var(--cs-line);
+    background: #eeece5;
+    color: #454742;
   }
 
   .workspace-shell .messages {
-    background: linear-gradient(180deg, #f8f9fb 0%, #f5f6f8 100%);
+    background: var(--agent-thread);
   }
 
   .workspace-shell .message.mine > div {
-    border-color: #dddafe;
-    background: linear-gradient(145deg, #f1f0ff 0%, #eceaff 100%);
+    border-color: var(--agent-selected-line);
+    background: var(--cs-accent-soft);
   }
 
   .workspace-shell .composer {
-    border-top-color: #e1e4e9;
-    background: rgb(248 249 251 / 97%);
-    box-shadow: 0 -5px 18px rgb(15 23 42 / 3%);
-    backdrop-filter: blur(12px);
+    border-top-color: var(--cs-line);
+    background: var(--agent-shell);
+    box-shadow: none;
   }
 
   .workspace-shell .composer > textarea:focus,
   .workspace-shell .inbox-search:focus-within {
-    border-color: rgb(98 91 221 / 44%);
+    border-color: var(--cs-accent-strong);
     box-shadow: var(--cs-shadow-focus);
   }
 
   .workspace-shell .filter.active,
   .workspace-shell .unread-first-toggle.is-active {
-    border-color: #dddafe;
-    background: #f1efff;
-    color: #4943bc;
+    border-color: var(--agent-selected-line);
+    background: var(--cs-accent-soft);
+    color: #44551b;
   }
 
   .workspace-shell .composer-foot .primary-button {
-    background: linear-gradient(180deg, #6962e1 0%, #5851ce 100%);
-    box-shadow:
-      inset 0 1px 0 rgb(255 255 255 / 16%),
-      0 5px 14px rgb(76 69 188 / 21%);
+    background: var(--cs-accent);
+    box-shadow: none;
   }
 }
 
