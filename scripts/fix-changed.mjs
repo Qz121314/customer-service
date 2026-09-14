@@ -18,7 +18,14 @@ const prettierExtensions = new Set([
   '.yml',
   '.yaml',
 ]);
-const eslintExtensions = new Set(['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx']);
+const eslintExtensions = new Set([
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.ts',
+  '.tsx',
+]);
 const maxChangedFiles = Number(process.env.PREDEPLOY_MAX_CHANGED_FILES ?? 120);
 
 function run(command, args, options = {}) {
@@ -40,6 +47,19 @@ function run(command, args, options = {}) {
 
 function git(args) {
   return run('git', args, { capture: true });
+}
+
+function runPnpm(args) {
+  if (process.platform === 'win32') {
+    return run(process.env.ComSpec ?? 'cmd.exe', [
+      '/d',
+      '/s',
+      '/c',
+      'pnpm',
+      ...args,
+    ]);
+  }
+  return run('pnpm', args);
 }
 
 function hasCommit(ref) {
@@ -75,7 +95,8 @@ function githubRange() {
     const event = JSON.parse(readFileSync(eventPath, 'utf8'));
     return {
       base: event.pull_request?.base?.sha ?? event.before,
-      head: event.pull_request?.head?.sha ?? event.after ?? process.env.GITHUB_SHA,
+      head:
+        event.pull_request?.head?.sha ?? event.after ?? process.env.GITHUB_SHA,
     };
   } catch {
     return {};
@@ -136,19 +157,23 @@ if (changed.length > maxChangedFiles) {
 }
 
 const allowedPaths = new Set([...dirtyPaths(), ...changed]);
-const prettierFiles = changed.filter((file) => prettierExtensions.has(extname(file)));
-const eslintFiles = changed.filter((file) => eslintExtensions.has(extname(file)));
+const prettierFiles = changed.filter((file) =>
+  prettierExtensions.has(extname(file)),
+);
+const eslintFiles = changed.filter((file) =>
+  eslintExtensions.has(extname(file)),
+);
 
 if (prettierFiles.length > 0) {
-  run('pnpm', ['exec', 'prettier', '--write', ...prettierFiles]);
+  runPnpm(['exec', 'prettier', '--write', ...prettierFiles]);
 }
 
 if (eslintFiles.length > 0) {
-  run('pnpm', ['exec', 'eslint', '--fix', ...eslintFiles]);
+  runPnpm(['exec', 'eslint', '--fix', ...eslintFiles]);
 }
 
 if (prettierFiles.length > 0) {
-  run('pnpm', ['exec', 'prettier', '--check', ...prettierFiles]);
+  runPnpm(['exec', 'prettier', '--check', ...prettierFiles]);
 }
 
 const unrelated = [...dirtyPaths()].filter((file) => !allowedPaths.has(file));

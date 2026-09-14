@@ -4,7 +4,7 @@
   "version": "1.0.5",
   "identifier": "com.fcqz121314.customer-service-agent",
   "build": {
-    "frontendDist": "../dist"
+    "frontendDist": "https://customer-service-app.fcqz121314.workers.dev/agent"
   },
   "app": {
     "windows": [

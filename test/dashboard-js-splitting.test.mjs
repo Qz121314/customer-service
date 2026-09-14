@@ -54,10 +54,9 @@ test('release Tauri builds hide the Windows console window', () => {
 });
 
 test('Tauri desktop loads the agent page from the production Worker', () => {
-  assert.equal(
-    tauriConfig.app.windows[0].url,
-    'https://customer-service-app.fcqz121314.workers.dev/agent',
-  );
+  const agentUrl = 'https://customer-service-app.fcqz121314.workers.dev/agent';
+  assert.equal(tauriConfig.app.windows[0].url, agentUrl);
+  assert.equal(tauriConfig.build.frontendDist, agentUrl);
 });
 
 test('optional dashboard surfaces keep runtime implementations deferred', () => {

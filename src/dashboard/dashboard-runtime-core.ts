@@ -175,20 +175,6 @@ function createAgentDraftSaveScheduler(
   };
 }
 
-type AgentSoundPreset = 'strong' | 'classic' | 'crisp' | 'triple' | 'soft';
-
-const AGENT_SOUND_PRESET_OPTIONS: readonly {
-  id: AgentSoundPreset;
-  label: string;
-}[] = [
-  { id: 'strong', label: '强提醒' },
-  { id: 'classic', label: '经典双音' },
-  { id: 'crisp', label: '清脆提示' },
-  { id: 'triple', label: '三连音' },
-  { id: 'soft', label: '柔和水滴' },
-];
-
-const AGENT_SOUND_PRESET_KEY = 'cs-agent-sound-preset';
 const AGENT_SOUND_ENABLED_KEY = 'cs-agent-sound-enabled';
 
 function loadAgentSoundEnabled(): boolean {
@@ -204,27 +190,6 @@ function saveAgentSoundEnabled(enabled: boolean): void {
     localStorage.setItem(AGENT_SOUND_ENABLED_KEY, String(enabled));
   } catch {
     // Sound preference is best effort.
-  }
-}
-
-function isAgentSoundPreset(value: string | null): value is AgentSoundPreset {
-  return AGENT_SOUND_PRESET_OPTIONS.some((option) => option.id === value);
-}
-
-function loadAgentSoundPreset(): AgentSoundPreset {
-  try {
-    const value = window.localStorage.getItem(AGENT_SOUND_PRESET_KEY);
-    return isAgentSoundPreset(value) ? value : 'strong';
-  } catch {
-    return 'strong';
-  }
-}
-
-function saveAgentSoundPreset(preset: AgentSoundPreset): void {
-  try {
-    window.localStorage.setItem(AGENT_SOUND_PRESET_KEY, preset);
-  } catch {
-    // Sound preset is device-local and must never interrupt reception work.
   }
 }
 
@@ -259,7 +224,7 @@ type AgentToneProfile = {
 };
 
 function agentToneProfile(
-  preset: AgentSoundPreset,
+  preset: string,
   type: AgentReminderType,
 ): AgentToneProfile {
   const isNewConversation = type === 'NEW_CONVERSATION';
@@ -356,10 +321,9 @@ function agentToneProfile(
 function emitAgentMessageTone(
   context: AudioContext,
   type: AgentReminderType = 'CUSTOMER_REPLY',
-  preset: AgentSoundPreset = loadAgentSoundPreset(),
 ): void {
   const now = context.currentTime;
-  const profile = agentToneProfile(preset, type);
+  const profile = agentToneProfile('strong', type);
   const gain = context.createGain();
   gain.gain.setValueAtTime(0.0001, now);
   gain.gain.exponentialRampToValueAtTime(profile.peak, now + 0.012);
@@ -615,7 +579,6 @@ export type {
   PendingAgentText,
   InboxRealtimeEvent,
   ThreadRealtimeEvent,
-  AgentSoundPreset,
 };
 
 export {
@@ -627,11 +590,8 @@ export {
   loadAgentConversationDrafts,
   saveAgentConversationDrafts,
   createAgentDraftSaveScheduler,
-  AGENT_SOUND_PRESET_OPTIONS,
   loadAgentSoundEnabled,
   saveAgentSoundEnabled,
-  loadAgentSoundPreset,
-  saveAgentSoundPreset,
   agentReminderVibrationPattern,
   supportsAgentVibration,
   emitAgentMessageTone,
