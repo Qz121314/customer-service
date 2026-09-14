@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AgentNotificationState } from './agent-push';
 import { useAgentPwaInstall } from './agent-install';
-import { AgentWindowsAppSettings } from './AgentWindowsAppSettings';
+import {
+  AgentWindowsAppSettings,
+  WINDOWS_DOWNLOAD_URL,
+} from './AgentWindowsAppSettings';
 import {
   AGENT_SOUND_PRESET_OPTIONS,
   loadAgentSoundPreset,
@@ -114,6 +117,22 @@ export function AgentActionToolbar({
         >
           <UiIcon name="statistics" />
           <span>接待流量</span>
+        </Button>
+        <Button
+          asChild
+          variant="ghost"
+          className="full workspace-windows-app-button"
+        >
+          <a
+            href={WINDOWS_DOWNLOAD_URL}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="下载 Windows 应用"
+            title="下载 Windows 应用"
+          >
+            <UiIcon name="install" />
+            <span>下载 Windows 应用</span>
+          </a>
         </Button>
         <Button
           type="button"

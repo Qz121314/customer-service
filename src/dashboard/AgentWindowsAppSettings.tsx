@@ -1,4 +1,4 @@
-const WINDOWS_DOWNLOAD_URL =
+export const WINDOWS_DOWNLOAD_URL =
   'https://github.com/Qz121314/customer-service/releases/latest/download/customer-service-agent-windows-x64.exe';
 const WINDOWS_RELEASES_URL =
   'https://github.com/Qz121314/customer-service/releases/latest';
