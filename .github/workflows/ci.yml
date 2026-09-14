@@ -433,7 +433,8 @@ jobs:
           $cargoVersion = Select-String -Path src-tauri/Cargo.toml -Pattern '^version = "([^"]+)"$' | Select-Object -First 1
           $cargoVersion = $cargoVersion.Matches.Groups[1].Value
           $tagVersion = "${{ github.ref_name }}".TrimStart('v')
-          if (@($packageVersion, $tauriVersion, $cargoVersion, $tagVersion) | Select-Object -Unique | Measure-Object | Select-Object -ExpandProperty Count -ne 1) {
+          $versionCount = @($packageVersion, $tauriVersion, $cargoVersion, $tagVersion) | Select-Object -Unique | Measure-Object | Select-Object -ExpandProperty Count
+          if ($versionCount -ne 1) {
             throw "Release version mismatch: package=$packageVersion tauri=$tauriVersion cargo=$cargoVersion tag=$tagVersion"
           }
 
