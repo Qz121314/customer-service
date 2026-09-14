@@ -722,6 +722,19 @@ export function AgentMaterialsModal({
     void saveMaterials({ ...settings, ctas, profiles });
     if (ctaId === id) resetCtaEditor();
   };
+  const replaceImage = async (file: File, current: AgentAttachmentPreset) => {
+    setImageUploading(true);
+    setError('');
+    try {
+      const replacement = await uploadAgentAttachmentImage(file, file.name || '素材图片');
+      await deleteAgentAttachmentPreset(current.id);
+      setPresets((items) => items.map((item) => (item.id === current.id ? replacement : item)));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '图片替换失败');
+    } finally {
+      setImageUploading(false);
+    }
+  };
   const uploadImage = async (file: File) => {
     setImageUploading(true);
     setError('');
@@ -1253,14 +1266,29 @@ export function AgentMaterialsModal({
                         <strong>{preset.label}</strong>
                         <small>{preset.originalName || '图片'}</small>
                       </span>
-                      <button
-                        type="button"
-                        aria-label={`删除 ${preset.label}`}
-                        disabled={saving}
-                        onClick={() => void removeImage(preset)}
-                      >
-                        <UiIcon name="trash" />
-                      </button>
+                      <div className="agent-material-card-actions">
+                        <label className="agent-material-image-edit" aria-label={`编辑 ${preset.label}`}>
+                          <UiIcon name="edit" />
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            disabled={imageUploading}
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              event.currentTarget.value = '';
+                              if (file) void replaceImage(file, preset);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          aria-label={`删除 ${preset.label}`}
+                          disabled={saving}
+                          onClick={() => void removeImage(preset)}
+                        >
+                          <UiIcon name="trash" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {imagePresets.length === 0 ? (
