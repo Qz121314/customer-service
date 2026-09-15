@@ -126,8 +126,12 @@ test('core multi-device agent workflow remains usable', async ({
         response.url() === url('/api/agent/conversations') &&
         response.request().method() === 'GET',
     );
-    await desktop.getByRole('button', { name: '刷新会话列表' }).click();
+    const refreshButton = desktop.getByRole('button', {
+      name: '刷新会话列表',
+    });
+    await refreshButton.click();
     expect((await refreshResponse).ok()).toBeTruthy();
+    await expect(refreshButton).toBeEnabled();
 
     const autoReply = await desktop.request.patch(
       url('/api/agent/settings/auto-reply'),

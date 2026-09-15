@@ -691,6 +691,19 @@ function AgentWorkspace({
     return request;
   }, [applyInbox]);
 
+  const refreshFromUser = useCallback(async () => {
+    try {
+      await refresh();
+    } catch (reason) {
+      setError(
+        reason instanceof DOMException && reason.name === 'TimeoutError'
+          ? '刷新会话超时，请稍后重试'
+          : message(reason, '刷新会话失败'),
+      );
+      throw reason;
+    }
+  }, [refresh]);
+
   const removeExpiredConversations = useCallback(
     (now = Date.now()) => {
       const expiredIds = expiredConversationIds(conversations, now);
@@ -1767,7 +1780,7 @@ function AgentWorkspace({
 
       <AgentInboxPane
         pullRefreshEnabled={!selectedId && navigation.overlay === 'none'}
-        onRefresh={refresh}
+        onRefresh={refreshFromUser}
         filter={filter}
         searchQuery={searchQuery}
         unreadFirst={unreadFirst}

@@ -261,6 +261,7 @@ type AgentBootstrapPayload = AgentSessionState & {
 
 let adminBootstrapRequest: Promise<AdminBootstrapPayload> | null = null;
 let agentBootstrapInbox: AgentInbox | null = null;
+const AGENT_INBOX_REQUEST_TIMEOUT_MS = 15_000;
 
 const errorMessages: Record<string, string> = {
   INVALID_CREDENTIALS: '账号或密码错误',
@@ -492,7 +493,9 @@ export async function getAgentInbox(): Promise<AgentInbox> {
     agentBootstrapInbox = null;
     return inbox;
   }
-  return request<AgentInbox>('/api/agent/conversations');
+  return request<AgentInbox>('/api/agent/conversations', {
+    signal: AbortSignal.timeout(AGENT_INBOX_REQUEST_TIMEOUT_MS),
+  });
 }
 
 export async function getConversation(

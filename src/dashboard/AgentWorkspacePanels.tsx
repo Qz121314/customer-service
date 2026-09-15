@@ -277,7 +277,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
             aria-label="刷新会话列表"
             title="刷新会话列表"
             disabled={busy || refreshing || !networkOnline}
-            onClick={() => void handleRefresh()}
+            onClick={() => void handleRefresh().catch(() => undefined)}
           >
             <UiIcon name="refresh" />
           </button>
