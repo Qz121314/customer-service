@@ -108,6 +108,502 @@
   border-color: var(--cs-accent-strong);
   box-shadow: var(--cs-shadow-focus);
 }
+
+.workspace-shell .agent-first-reply-dialog {
+  border-color: var(--cs-line-strong);
+  background: #fbfaf6;
+}
+
+.workspace-shell .agent-first-reply-dialog > .agent-auto-reply-head {
+  min-height: 68px;
+  padding: 14px 20px;
+  border-bottom-color: var(--cs-line);
+  background: #fffefa;
+}
+
+.workspace-shell .agent-first-reply-dialog > .agent-auto-reply-head h2 {
+  font-size: 22px;
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-body {
+  gap: 18px;
+  color: var(--cs-ink);
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-profiles {
+  padding-right: 14px;
+  border-right-color: var(--cs-line);
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-editor {
+  border: 0;
+  background: transparent;
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-section-head
+  strong,
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-editor-head
+  label {
+  color: var(--cs-ink);
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-section-head
+  small,
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-profile-list
+  small,
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-picker-label
+  small {
+  color: var(--cs-muted);
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-profile-list
+  button {
+  border-color: var(--cs-line);
+  border-radius: 12px;
+  background: #fffefa;
+  color: var(--cs-ink);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-profile-list
+  button:hover {
+  border-color: var(--agent-selected-line);
+  background: var(--cs-accent-soft);
+  color: #44551b;
+  transform: translateY(-1px);
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-profile-list
+  button.is-selected {
+  border-color: var(--agent-selected-line);
+  background: var(--cs-accent-soft);
+  color: #44551b;
+  box-shadow: inset 3px 0 0 var(--cs-accent);
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-profile-list
+  button:active {
+  transform: translateY(0);
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-editor-head {
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom-color: var(--cs-line);
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-profile-list {
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-profile-list
+  button {
+  padding: 9px 10px;
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-choice {
+  margin-top: 10px;
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-picker-stack {
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-picker {
+  gap: 18px;
+  padding: 5px 0;
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-picker-control {
+  position: relative;
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-picker-control
+  select {
+  min-height: 38px;
+  padding: 0 36px 0 12px;
+  border-color: var(--cs-line-strong);
+  background: #fffefa;
+  color: var(--cs-ink);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-picker-control
+  select:hover:not(:disabled) {
+  border-color: var(--agent-selected-line);
+  background: var(--cs-accent-soft);
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-picker-control
+  select:focus-visible {
+  border-color: var(--cs-accent-strong);
+  box-shadow: var(--cs-shadow-focus);
+}
+
+.workspace-shell .agent-first-reply-dialog [data-ui='input'],
+.workspace-shell .agent-first-reply-dialog [data-ui='textarea'] {
+  border-color: var(--cs-line-strong);
+  background: #fffefa;
+  color: var(--cs-ink);
+  box-shadow: none;
+}
+
+.workspace-shell .agent-first-reply-dialog [data-ui='input']:focus-visible,
+.workspace-shell .agent-first-reply-dialog [data-ui='textarea']:focus-visible {
+  border-color: var(--cs-accent-strong);
+  box-shadow: var(--cs-shadow-focus);
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-auto-reply-switch {
+  border-color: var(--cs-line);
+  background: #f3f2ec;
+}
+
+.workspace-shell .agent-first-reply-dialog .agent-auto-reply-switch i {
+  background: #c8c9c1;
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-auto-reply-switch
+  input:checked
+  + i {
+  background: var(--cs-accent-strong);
+}
+
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-auto-reply-switch
+  input:focus-visible
+  + i {
+  box-shadow: var(--cs-shadow-focus);
+}
+
+.workspace-shell .agent-first-reply-dialog .auth-error {
+  border-color: #e5bdb2;
+  color: #8d3f31;
+  background: #fff4ef;
+}
+
+@media (min-width: 761px) {
+  .workspace-shell .agent-first-reply-dialog {
+    width: min(920px, calc(100vw - 96px));
+    height: auto;
+    max-height: min(620px, calc(100dvh - 48px));
+  }
+
+  .workspace-shell .agent-first-reply-dialog > .agent-first-reply-body {
+    overflow: hidden;
+    padding: 14px 20px 16px;
+  }
+
+  .workspace-shell .agent-first-reply-dialog .agent-first-reply-editor {
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 6px;
+    scrollbar-color: rgb(89 91 82 / 22%) transparent;
+    scrollbar-width: thin;
+  }
+
+  .workspace-shell .agent-first-reply-dialog .agent-first-reply-profile-list,
+  .workspace-shell .agent-first-reply-dialog .agent-first-reply-picker-stack {
+    margin-top: 6px;
+  }
+}
+
+/* Shared form language for the workbench; first-reply configuration stays bespoke. */
+.workspace-shell .agent-materials-dialog,
+.workspace-shell .agent-attachment-manager-dialog,
+.workspace-shell .agent-avatar-dialog {
+  border-color: var(--cs-line-strong);
+  border-radius: 16px;
+  background: #fbfaf6;
+  box-shadow: var(--cs-shadow-sm);
+  color: var(--cs-ink);
+}
+
+.workspace-shell .agent-materials-dialog > .agent-auto-reply-head,
+.workspace-shell .agent-attachment-manager-dialog > header,
+.workspace-shell .agent-avatar-dialog > header {
+  border-bottom-color: var(--cs-line);
+  background: #fffefa;
+  backdrop-filter: none;
+}
+
+.workspace-shell .agent-materials-dialog > .agent-auto-reply-head,
+.workspace-shell .agent-attachment-manager-dialog > header {
+  min-height: 64px;
+  padding: 14px 20px;
+}
+
+.workspace-shell .agent-materials-dialog h2,
+.workspace-shell .agent-attachment-manager-dialog h2,
+.workspace-shell .agent-avatar-dialog h2 {
+  color: var(--cs-ink);
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.workspace-shell .agent-materials-dialog > .agent-materials-body,
+.workspace-shell
+  .agent-attachment-manager-dialog
+  > .agent-attachment-manager-body {
+  gap: 12px;
+  padding: 14px 18px 16px;
+}
+
+.workspace-shell .agent-materials-dialog .agent-material-editor-layout,
+.workspace-shell .agent-materials-dialog .agent-card-workspace {
+  gap: 12px;
+}
+
+.workspace-shell .agent-materials-dialog .agent-material-editor-layout {
+  grid-template-columns: minmax(190px, 0.72fr) minmax(0, 1.28fr);
+}
+
+.workspace-shell .agent-materials-dialog .agent-materials-tabs {
+  gap: 2px;
+  padding: 3px;
+  border-color: var(--cs-line);
+  border-radius: 10px;
+  background: var(--cs-panel-soft);
+}
+
+.workspace-shell .agent-materials-dialog .agent-materials-tabs button {
+  border-radius: 8px;
+  padding: 7px 11px;
+  color: var(--cs-muted);
+}
+
+.workspace-shell
+  .agent-materials-dialog
+  .agent-materials-tabs
+  button.is-active {
+  background: #fffefa;
+  color: #44551b;
+  box-shadow: var(--cs-shadow-xs);
+}
+
+.workspace-shell .agent-material-editor,
+.workspace-shell .agent-attachment-editor,
+.workspace-shell .agent-card-library-pane,
+.workspace-shell .agent-card-editor-pane {
+  gap: 8px;
+  padding: 12px;
+  border-color: var(--cs-line);
+  border-radius: 12px;
+  background: #fffefa;
+  box-shadow: none;
+}
+
+.workspace-shell .agent-material-editor label,
+.workspace-shell .agent-inline-card-fields > label,
+.workspace-shell .agent-attachment-editor > label,
+.workspace-shell .agent-attachment-kind-field > span,
+.workspace-shell .agent-nickname-field > span {
+  gap: 5px;
+  color: var(--cs-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.workspace-shell .agent-material-editor [data-ui='input'],
+.workspace-shell .agent-material-editor [data-ui='textarea'],
+.workspace-shell .agent-inline-card-fields > label > input,
+.workspace-shell .agent-inline-card-fields > label > select,
+.workspace-shell .agent-inline-card-fields > label > textarea,
+.workspace-shell .agent-attachment-editor > label input:not([type='file']),
+.workspace-shell .agent-attachment-editor > label textarea,
+.workspace-shell .agent-nickname-field input {
+  min-height: 38px;
+  border-color: var(--cs-line-strong);
+  border-radius: 9px;
+  background: #fffefa;
+  color: var(--cs-ink);
+  box-shadow: none;
+}
+
+.workspace-shell .agent-material-editor [data-ui='input'],
+.workspace-shell .agent-inline-card-fields > label > input,
+.workspace-shell .agent-inline-card-fields > label > select,
+.workspace-shell .agent-attachment-editor > label input:not([type='file']),
+.workspace-shell .agent-nickname-field input {
+  padding: 0 10px;
+}
+
+.workspace-shell .agent-material-editor [data-ui='textarea'],
+.workspace-shell .agent-inline-card-fields > label > textarea,
+.workspace-shell .agent-attachment-editor > label textarea {
+  padding: 8px 10px;
+}
+
+.workspace-shell .agent-material-editor [data-ui='input']:focus-visible,
+.workspace-shell .agent-material-editor [data-ui='textarea']:focus-visible,
+.workspace-shell .agent-inline-card-fields > label > input:focus,
+.workspace-shell .agent-inline-card-fields > label > select:focus,
+.workspace-shell .agent-inline-card-fields > label > textarea:focus,
+.workspace-shell .agent-attachment-editor > label input:focus,
+.workspace-shell .agent-attachment-editor > label textarea:focus,
+.workspace-shell .agent-nickname-field input:focus {
+  border-color: var(--cs-accent-strong);
+  outline: 0;
+  box-shadow: var(--cs-shadow-focus);
+}
+
+.workspace-shell .agent-inline-card-fields,
+.workspace-shell .agent-attachment-fields-grid {
+  gap: 8px 10px;
+}
+
+.workspace-shell .agent-inline-card-icon-value {
+  min-height: 38px;
+  border-color: var(--cs-line-strong);
+  border-radius: 9px;
+  background: #fffefa;
+  color: var(--cs-muted);
+}
+
+.workspace-shell .agent-attachment-kind-trigger {
+  min-height: 42px;
+  border-color: var(--cs-line-strong);
+  border-radius: 9px;
+  background: #fffefa;
+  color: var(--cs-ink);
+  box-shadow: none;
+}
+
+.workspace-shell .agent-attachment-kind-trigger:hover:not(:disabled),
+.workspace-shell .agent-attachment-kind-trigger[aria-expanded='true'] {
+  border-color: var(--agent-selected-line);
+  background: var(--cs-accent-soft);
+  box-shadow: none;
+}
+
+.workspace-shell .agent-attachment-kind-options {
+  border-color: var(--cs-line);
+  border-radius: 11px;
+  background: #fffefa;
+  box-shadow: var(--cs-shadow-sm);
+  backdrop-filter: none;
+}
+
+.workspace-shell .agent-attachment-kind-options button:hover,
+.workspace-shell .agent-attachment-kind-options button[aria-selected='true'] {
+  background: var(--cs-accent-soft);
+}
+
+.workspace-shell .agent-attachment-kind-options button > .ui-icon {
+  color: var(--agent-selected);
+}
+
+.workspace-shell .agent-material-editor > button,
+.workspace-shell .agent-inline-card-editor-actions > button,
+.workspace-shell .agent-attachment-editor-actions > button,
+.workspace-shell .agent-avatar-picker-row button,
+.workspace-shell .agent-avatar-dialog footer button {
+  min-height: 36px;
+  border-radius: 9px;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.workspace-shell .agent-avatar-dialog > header {
+  padding: 14px 16px 8px;
+}
+
+.workspace-shell .agent-avatar-dialog > header p,
+.workspace-shell .agent-avatar-dialog .agent-nickname-field > small {
+  color: var(--cs-muted);
+}
+
+.workspace-shell .agent-avatar-dialog .agent-nickname-field {
+  gap: 5px;
+  padding: 8px 16px 4px;
+}
+
+.workspace-shell .agent-avatar-dialog .agent-avatar-preview-stage {
+  gap: 6px;
+  padding: 12px 16px 8px;
+}
+
+.workspace-shell .agent-avatar-dialog .agent-avatar-preview {
+  width: 132px;
+  height: 132px;
+  background: var(--cs-panel-soft);
+  box-shadow:
+    inset 0 0 0 1px var(--cs-line),
+    var(--cs-shadow-sm);
+}
+
+.workspace-shell .agent-avatar-dialog .agent-avatar-picker-row {
+  padding: 4px 16px 14px;
+}
+
+.workspace-shell .agent-avatar-dialog footer {
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top-color: var(--cs-line);
+  background: #fffefa;
+}
+
+.workspace-shell .agent-avatar-dialog .agent-avatar-confirm {
+  background: var(--cs-accent);
+  color: #17200d;
+}
+
+@media (min-width: 761px) {
+  .workspace-shell .agent-materials-dialog {
+    width: min(900px, calc(100vw - 96px));
+    height: min(600px, calc(100dvh - 48px));
+  }
+
+  .workspace-shell .agent-attachment-manager-dialog {
+    width: min(760px, calc(100vw - 96px));
+    max-height: min(620px, calc(100dvh - 48px));
+  }
+
+  .workspace-shell .agent-avatar-dialog {
+    width: min(360px, calc(100vw - 48px));
+    max-height: min(560px, calc(100dvh - 48px));
+  }
+}
+
 .workspace-shell .conversation-list,
 .workspace-shell .messages {
   scrollbar-color: rgb(89 91 82 / 22%) transparent;

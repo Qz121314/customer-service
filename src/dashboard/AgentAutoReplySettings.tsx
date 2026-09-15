@@ -34,7 +34,6 @@ const EMPTY_SETTINGS: AgentFirstReplySettings = {
   ctas: [],
   profiles: [EMPTY_PROFILE],
 };
-const ATTACHMENT_LIMIT = 6;
 const CTA_LIMIT = 10;
 const PROFILE_LIMIT = 20;
 const CONTACT_CARD_LABELS: Record<AgentContactCardKind, string> = {
@@ -57,7 +56,6 @@ export function AgentAutoReplySettingsModal({
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(
     null,
   );
-  const [quickGreetingText, setQuickGreetingText] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -67,7 +65,6 @@ export function AgentAutoReplySettingsModal({
     let active = true;
     setLoading(true);
     setError('');
-    setQuickGreetingText('');
     void Promise.all([
       getAgentFirstReplySettings(),
       getAgentAttachmentPresets(),
@@ -108,9 +105,7 @@ export function AgentAutoReplySettingsModal({
     settings.profiles.find((profile) => profile.id === selectedProfileId) ??
     settings.profiles[0] ??
     null;
-  const changed =
-    JSON.stringify(settings) !== JSON.stringify(saved) ||
-    Boolean(quickGreetingText.trim());
+  const changed = JSON.stringify(settings) !== JSON.stringify(saved);
   const activeContent = Boolean(
     selectedProfile?.greetingId || selectedProfile?.attachmentIds.length,
   );
@@ -120,7 +115,7 @@ export function AgentAutoReplySettingsModal({
     changed &&
     settings.profiles.length > 0 &&
     settings.profiles.every((profile) => profile.name.trim()) &&
-    (!settings.enabled || activeContent || Boolean(quickGreetingText.trim()));
+    (!settings.enabled || activeContent);
 
   if (!open) return null;
 
@@ -141,41 +136,21 @@ export function AgentAutoReplySettingsModal({
     setSaving(true);
     setError('');
     try {
-      const nextGreetings =
-        settings.greetings.length === 0 && quickGreetingText.trim()
-          ? [
-              {
-                id: crypto.randomUUID(),
-                name: '默认问候语',
-                text: quickGreetingText.trim(),
-              },
-            ]
-          : settings.greetings;
-      const nextProfile =
-        settings.greetings.length === 0 &&
-        quickGreetingText.trim() &&
-        selectedProfile
-          ? { ...selectedProfile, greetingId: nextGreetings[0].id }
-          : selectedProfile;
       const next = await updateAgentFirstReplySettings({
         ...settings,
-        greetings: nextGreetings,
         activeProfileId: selectedProfile?.id ?? null,
         ctas: settings.ctas.map((item) => ({
           ...item,
           label: item.label.trim(),
           answer: item.answer.trim(),
         })),
-        profiles: (nextProfile
-          ? settings.profiles.map((profile) =>
-              profile.id === nextProfile.id ? nextProfile : profile,
-            )
-          : settings.profiles
-        ).map((profile) => ({ ...profile, name: profile.name.trim() })),
+        profiles: settings.profiles.map((profile) => ({
+          ...profile,
+          name: profile.name.trim(),
+        })),
       });
       setSettings(next);
       setSaved(next);
-      setQuickGreetingText('');
       setSelectedProfileId(
         next.activeProfileId ?? next.profiles[0]?.id ?? null,
       );
@@ -211,32 +186,27 @@ export function AgentAutoReplySettingsModal({
     setSelectedProfileId(profiles[0]?.id ?? null);
   };
 
-  const toggleAttachment = (presetId: string) => {
-    updateSelectedProfile((profile) => {
-      const selected = profile.attachmentIds.includes(presetId);
-      if (!selected && profile.attachmentIds.length >= ATTACHMENT_LIMIT)
-        return profile;
-      return {
-        ...profile,
-        attachmentIds: selected
-          ? profile.attachmentIds.filter((id) => id !== presetId)
-          : [...profile.attachmentIds, presetId],
-      };
-    });
+  const replaceAttachmentType = (kind: 'card' | 'image', presetId: string) => {
+    updateSelectedProfile((profile) => ({
+      ...profile,
+      attachmentIds: [
+        ...profile.attachmentIds.filter(
+          (id) =>
+            !presets.some(
+              (preset) =>
+                preset.id === id &&
+                (kind === 'image'
+                  ? preset.kind === 'image'
+                  : preset.kind !== 'image'),
+            ),
+        ),
+        ...(presetId ? [presetId] : []),
+      ],
+    }));
   };
 
-  const toggleCta = (ctaId: string) => {
-    updateSelectedProfile((profile) => {
-      const selected = profile.ctaIds.includes(ctaId);
-      if (!selected && profile.ctaIds.length >= CTA_LIMIT) return profile;
-      return {
-        ...profile,
-        ctaIds: selected
-          ? profile.ctaIds.filter((id) => id !== ctaId)
-          : [...profile.ctaIds, ctaId],
-      };
-    });
-  };
+  const cardPresets = presets.filter((preset) => preset.kind !== 'image');
+  const imagePresets = presets.filter((preset) => preset.kind === 'image');
 
   return (
     <div
@@ -366,151 +336,78 @@ export function AgentAutoReplySettingsModal({
                   </Button>
                 </div>
                 <section className="agent-first-reply-choice">
-                  <SectionHead title="问候语" detail="可选，首次回复前置文案" />
-                  <div className="agent-first-reply-choice-list">
-                    <button
-                      type="button"
-                      className={
-                        !selectedProfile.greetingId ? 'is-selected' : ''
-                      }
-                      onClick={() =>
+                  <div className="agent-first-reply-picker-stack">
+                    <MaterialPicker
+                      label="问候语"
+                      hint="可选，首次回复前置文案"
+                      value={selectedProfile.greetingId ?? ''}
+                      options={settings.greetings.map((greeting) => ({
+                        id: greeting.id,
+                        label: greeting.name,
+                      }))}
+                      emptyLabel="不使用问候语"
+                      emptyState="素材库暂无问候语"
+                      onChange={(value) =>
                         updateSelectedProfile((profile) => ({
                           ...profile,
-                          greetingId: null,
+                          greetingId: value || null,
                         }))
                       }
-                    >
-                      不使用问候语
-                    </button>
-                    {settings.greetings.map((greeting) => (
-                      <button
-                        type="button"
-                        className={
-                          selectedProfile.greetingId === greeting.id
-                            ? 'is-selected'
-                            : ''
-                        }
-                        key={greeting.id}
-                        onClick={() =>
-                          updateSelectedProfile((profile) => ({
-                            ...profile,
-                            greetingId: greeting.id,
-                          }))
-                        }
-                      >
-                        <strong>{greeting.name}</strong>
-                        <small>{greeting.text}</small>
-                      </button>
-                    ))}
-                    {settings.greetings.length === 0 ? (
-                      <>
-                        <p>素材库还没有问候语。</p>
-                        <label className="agent-first-reply-quick-entry">
-                          <span>快速录入问候文案</span>
-                          <Textarea
-                            aria-label="问候文案"
-                            value={quickGreetingText}
-                            rows={3}
-                            maxLength={1000}
-                            placeholder="也可以先在这里录入，保存后会自动加入素材库"
-                            onChange={(event) =>
-                              setQuickGreetingText(event.target.value)
-                            }
-                          />
-                        </label>
-                      </>
-                    ) : null}
-                  </div>
-                </section>
-                <section className="agent-first-reply-choice">
-                  <SectionHead
-                    title="附件"
-                    detail={`可选，名片和图片最多 ${ATTACHMENT_LIMIT} 个`}
-                  />
-                  <div className="agent-first-reply-attachment-grid">
-                    {presets.map((preset) => {
-                      const selected = selectedProfile.attachmentIds.includes(
-                        preset.id,
-                      );
-                      return (
-                        <button
-                          type="button"
-                          className={selected ? 'is-selected' : ''}
-                          aria-pressed={selected}
-                          key={preset.id}
-                          onClick={() => toggleAttachment(preset.id)}
-                        >
-                          {preset.kind === 'image' ? (
-                            <img
-                              src={agentPresetImageUrl(preset.id)}
-                              alt=""
-                              loading="lazy"
-                            />
-                          ) : (
-                            <AgentContactCardIcon
-                              id={preset.id}
-                              kind={preset.kind}
-                              source="preset"
-                              hasCustomIcon={preset.hasCustomIcon}
-                            />
-                          )}
-                          <span>
-                            <strong>{preset.label}</strong>
-                            <small>
-                              {preset.kind === 'image'
-                                ? preset.originalName || '图片'
-                                : `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.value}`}
-                            </small>
-                          </span>
-                          {selected ? <UiIcon name="check" /> : null}
-                        </button>
-                      );
-                    })}
-                    {presets.length === 0 ? (
-                      <p>素材库还没有名片或图片。</p>
-                    ) : null}
-                  </div>
-                </section>
-                <section className="agent-first-reply-choice">
-                  <SectionHead title="CTA" detail="可选，显示在首次回复下方" />
-                  <div className="agent-first-reply-choice-list is-compact">
-                    <button
-                      type="button"
-                      className={
-                        selectedProfile.ctaIds.length === 0 ? 'is-selected' : ''
+                    />
+                    <MaterialPicker
+                      label="名片"
+                      hint="可选，选择已录入的联系方式"
+                      value={
+                        selectedProfile.attachmentIds.find((id) =>
+                          cardPresets.some((preset) => preset.id === id),
+                        ) ?? ''
                       }
-                      onClick={() =>
+                      options={cardPresets.map((preset) => ({
+                        id: preset.id,
+                        label: `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.label}`,
+                      }))}
+                      emptyLabel="不使用名片"
+                      emptyState="素材库暂无名片"
+                      onChange={(value) => replaceAttachmentType('card', value)}
+                    />
+                    <MaterialPicker
+                      label="CTA"
+                      hint="可选，显示在首次回复下方"
+                      value={selectedProfile.ctaIds[0] ?? ''}
+                      options={settings.ctas.map((cta) => ({
+                        id: cta.id,
+                        label: cta.label,
+                      }))}
+                      emptyLabel="不使用 CTA"
+                      emptyState="素材库暂无 CTA"
+                      onChange={(value) =>
                         updateSelectedProfile((profile) => ({
                           ...profile,
-                          ctaIds: [],
+                          ctaIds: value ? [value] : [],
                         }))
                       }
-                    >
-                      不使用 CTA
-                    </button>
-                    {settings.ctas.map((cta) => (
-                      <button
-                        type="button"
-                        className={
-                          selectedProfile.ctaIds.includes(cta.id)
-                            ? 'is-selected'
-                            : ''
-                        }
-                        key={cta.id}
-                        onClick={() => toggleCta(cta.id)}
-                      >
-                        <strong>{cta.label}</strong>
-                        <small>{cta.answer}</small>
-                      </button>
-                    ))}
-                    {settings.ctas.length === 0 ? (
-                      <p>素材库还没有 CTA。</p>
-                    ) : null}
+                    />
+                    <MaterialPicker
+                      label="图片"
+                      hint="可选，选择已录入的图片"
+                      value={
+                        selectedProfile.attachmentIds.find((id) =>
+                          imagePresets.some((preset) => preset.id === id),
+                        ) ?? ''
+                      }
+                      options={imagePresets.map((preset) => ({
+                        id: preset.id,
+                        label: preset.label,
+                      }))}
+                      emptyLabel="不使用图片"
+                      emptyState="素材库暂无图片"
+                      onChange={(value) =>
+                        replaceAttachmentType('image', value)
+                      }
+                    />
                   </div>
                 </section>
-                {settings.enabled &&
-                !activeContent &&
-                !quickGreetingText.trim() ? (
+                {settings.enabled && !activeContent ? (
                   <div className="auth-error">
                     开启后至少选择一个问候语或附件。
                   </div>
@@ -533,6 +430,53 @@ function SectionHead({ title, detail }: { title: string; detail?: string }) {
         {detail ? <small>{detail}</small> : null}
       </span>
     </div>
+  );
+}
+
+type MaterialPickerOption = { id: string; label: string };
+
+function MaterialPicker({
+  label,
+  hint,
+  value,
+  options,
+  emptyLabel,
+  emptyState,
+  onChange,
+}: {
+  label: string;
+  hint: string;
+  value: string;
+  options: MaterialPickerOption[];
+  emptyLabel: string;
+  emptyState: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="agent-first-reply-picker">
+      <span className="agent-first-reply-picker-label">
+        <strong>{label}</strong>
+        <small>{hint}</small>
+      </span>
+      <span className="agent-first-reply-picker-control">
+        <select
+          aria-label={`${label}素材`}
+          value={value}
+          disabled={options.length === 0}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          <option value="">
+            {options.length === 0 ? emptyState : emptyLabel}
+          </option>
+          {options.map((option) => (
+            <option value={option.id} key={option.id}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <UiIcon name="chevron" />
+      </span>
+    </label>
   );
 }
 

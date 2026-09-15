@@ -119,13 +119,13 @@
 
 .agent-first-reply-body {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
 }
 
 .agent-first-reply-profiles {
   min-width: 0;
-  padding-right: 20px;
+  padding-right: 14px;
   border-right: 1px solid #e6eaf0;
 }
 
@@ -159,7 +159,6 @@
 }
 
 .agent-first-reply-profile-list,
-.agent-first-reply-choice-list,
 .agent-material-list {
   display: grid;
   gap: 8px;
@@ -167,7 +166,6 @@
 }
 
 .agent-first-reply-profile-list button,
-.agent-first-reply-choice-list button,
 .agent-material-list button {
   display: grid;
   min-width: 0;
@@ -187,10 +185,8 @@
 }
 
 .agent-first-reply-profile-list button:hover,
-.agent-first-reply-choice-list button:hover,
 .agent-material-list button:hover,
 .agent-first-reply-profile-list button.is-selected,
-.agent-first-reply-choice-list button.is-selected,
 .agent-material-list button.is-selected {
   border-color: #aaa5ff;
   background: #f7f6ff;
@@ -198,7 +194,6 @@
 }
 
 .agent-first-reply-profile-list strong,
-.agent-first-reply-choice-list strong,
 .agent-material-list strong {
   overflow: hidden;
   color: inherit;
@@ -209,7 +204,6 @@
 }
 
 .agent-first-reply-profile-list small,
-.agent-first-reply-choice-list small,
 .agent-material-list small {
   overflow: hidden;
   color: #8a96a8;
@@ -228,8 +222,8 @@
   display: flex;
   align-items: end;
   justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 18px;
+  gap: 12px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #edf0f4;
 }
 
@@ -245,19 +239,9 @@
 }
 
 .agent-first-reply-choice {
-  margin-top: 18px;
+  margin-top: 10px;
 }
 
-.agent-first-reply-choice-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.agent-first-reply-choice-list.is-compact {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.agent-first-reply-choice-list > p,
-.agent-first-reply-attachment-grid > p,
 .agent-material-list > p,
 .agent-material-attachment-grid > p {
   grid-column: 1 / -1;
@@ -269,25 +253,83 @@
   font-size: 12px;
 }
 
-.agent-first-reply-quick-entry {
+.agent-first-reply-picker-stack {
   display: grid;
-  grid-column: 1 / -1;
-  gap: 6px;
-  color: #526074;
-  font-size: 11px;
-  font-weight: 700;
+  gap: 4px;
+  margin-top: 8px;
 }
 
-.agent-first-reply-attachment-grid {
+.agent-first-reply-picker {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 14px;
+  grid-template-columns: minmax(132px, 0.34fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  padding: 5px 0;
 }
 
-.agent-first-reply-attachment-grid button,
+.agent-first-reply-picker-label,
+.agent-first-reply-picker-control,
 .agent-material-attachment-card {
+  min-width: 0;
+}
+
+.agent-first-reply-picker-label {
   display: grid;
+  gap: 4px;
+}
+
+.agent-first-reply-picker-label strong {
+  color: #202938;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.agent-first-reply-picker-label small {
+  overflow: hidden;
+  color: #8995a7;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-first-reply-picker-control {
+  position: relative;
+}
+
+.agent-first-reply-picker-control select {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  appearance: none;
+  padding: 0 36px 0 12px;
+  border: 1px solid #e1e6ee;
+  border-radius: 11px;
+  background: #fff;
+  color: #344054;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.agent-first-reply-picker-control select:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.agent-first-reply-picker-control > svg {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  transform: translateY(-50%) rotate(90deg);
+}
+
+.agent-material-attachment-card {
   min-width: 0;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
@@ -300,12 +342,6 @@
   cursor: pointer;
 }
 
-.agent-first-reply-attachment-grid button.is-selected {
-  border-color: #aaa5ff;
-  background: #f7f6ff;
-}
-
-.agent-first-reply-attachment-grid img,
 .agent-material-attachment-card > img {
   width: 38px;
   height: 38px;
@@ -314,7 +350,6 @@
   background: #f2f4f8;
 }
 
-.agent-first-reply-attachment-grid button > span,
 .agent-material-attachment-card > span {
   display: grid;
   min-width: 0;
@@ -581,9 +616,6 @@
     border-bottom: 1px solid #e6eaf0;
   }
 
-  .agent-first-reply-choice-list,
-  .agent-first-reply-choice-list.is-compact,
-  .agent-first-reply-attachment-grid,
   .agent-material-attachment-grid {
     grid-template-columns: 1fr;
   }
