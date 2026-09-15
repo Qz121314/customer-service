@@ -54,7 +54,7 @@
 .agent-self-statistics-dialog .agent-statistics-dialog-head {
   position: absolute;
   top: 14px;
-  right: 14px;
+  right: 20px;
   z-index: 2;
   min-height: 0;
   padding: 0;
@@ -64,6 +64,20 @@
 
 .agent-self-statistics-dialog .agent-statistics-head-actions {
   gap: 0;
+}
+
+.agent-self-statistics-dialog .agent-statistics-head-actions .modal-close {
+  border-color: transparent;
+  background: transparent;
+  color: var(--admin-muted-strong, var(--agent-muted, #56616e));
+}
+
+.agent-self-statistics-dialog
+  .agent-statistics-head-actions
+  .modal-close
+  .ui-icon {
+  width: 20px;
+  height: 20px;
 }
 
 .agent-self-statistics-dialog .agent-statistics-dialog-body {
