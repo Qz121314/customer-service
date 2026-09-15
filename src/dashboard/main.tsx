@@ -3,6 +3,7 @@ import './ui-system.css';
 
 const isTauriDesktop =
   isTauri() ||
+  '__TAURI_INTERNALS__' in window ||
   window.location.protocol === 'tauri:' ||
   window.location.hostname === 'tauri.localhost';
 

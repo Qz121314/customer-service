@@ -38,6 +38,7 @@ test('dashboard keeps admin and agent route entries isolated behind dynamic impo
 
 test('Tauri desktop always opens the agent login route', () => {
   assert.match(mainEntry, /isTauri\(\)/u);
+  assert.match(mainEntry, /['"]__TAURI_INTERNALS__['"] in window/u);
   assert.match(mainEntry, /window\.location\.protocol === ['"]tauri:['"]/u);
   assert.match(
     mainEntry,
@@ -60,6 +61,10 @@ test('Tauri desktop loads the agent page from the production Worker', () => {
   const agentUrl = 'https://customer-service-app.fcqz121314.workers.dev/agent';
   assert.equal(tauriConfig.app.windows[0].url, agentUrl);
   assert.equal(tauriConfig.build.frontendDist, agentUrl);
+});
+
+test('Windows NSIS installer uses Simplified Chinese prompts', () => {
+  assert.deepEqual(tauriConfig.bundle.windows.nsis.languages, ['SimpChinese']);
 });
 
 test('desktop package versions stay aligned across manifests', () => {

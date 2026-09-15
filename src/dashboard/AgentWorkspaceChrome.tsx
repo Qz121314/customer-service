@@ -84,8 +84,7 @@ export function AgentActionToolbar({
           >
             <a
               href={WINDOWS_DOWNLOAD_URL}
-              target="_blank"
-              rel="noreferrer"
+              download="customer-service-agent-windows-x64.exe"
               aria-label="下载/更新客服应用"
               data-tooltip="下载/更新客服应用"
             >

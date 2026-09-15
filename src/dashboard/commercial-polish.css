@@ -646,6 +646,12 @@
     box-shadow: 0 18px 44px rgb(22 24 22 / 10%);
   }
 
+  html.is-tauri-desktop .workspace-shell {
+    border-color: transparent;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
   .workspace-shell .workspace-sidebar {
     border-right-color: rgb(255 255 255 / 6%);
     background: #171817;
