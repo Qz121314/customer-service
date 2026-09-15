@@ -245,12 +245,8 @@
   position: relative;
 }
 
-.workspace-shell
-  .agent-first-reply-dialog
-  .agent-first-reply-picker-control
-  select {
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-material-trigger {
   min-height: 38px;
-  padding: 0 36px 0 12px;
   border-color: var(--cs-line-strong);
   background: #fffefa;
   color: var(--cs-ink);
@@ -262,18 +258,30 @@
 
 .workspace-shell
   .agent-first-reply-dialog
-  .agent-first-reply-picker-control
-  select:hover:not(:disabled) {
+  .agent-first-reply-material-trigger:hover:not(:disabled),
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-material-trigger[aria-expanded='true'] {
   border-color: var(--agent-selected-line);
   background: var(--cs-accent-soft);
 }
 
+.workspace-shell .agent-first-reply-dialog .agent-first-reply-material-options {
+  border-color: var(--cs-line);
+  background: #fffefa;
+  box-shadow: var(--cs-shadow-sm);
+}
+
 .workspace-shell
   .agent-first-reply-dialog
-  .agent-first-reply-picker-control
-  select:focus-visible {
-  border-color: var(--cs-accent-strong);
-  box-shadow: var(--cs-shadow-focus);
+  .agent-first-reply-material-options
+  button:hover,
+.workspace-shell
+  .agent-first-reply-dialog
+  .agent-first-reply-material-options
+  button[aria-selected='true'] {
+  background: var(--cs-accent-soft);
+  color: #44551b;
 }
 
 .workspace-shell .agent-first-reply-dialog [data-ui='input'],
