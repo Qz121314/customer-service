@@ -54,7 +54,7 @@
 .agent-self-statistics-dialog .agent-statistics-dialog-head {
   position: absolute;
   top: 14px;
-  right: 20px;
+  right: 12px;
   z-index: 2;
   min-height: 0;
   padding: 0;
@@ -81,7 +81,7 @@
 }
 
 .agent-self-statistics-dialog .agent-statistics-dialog-body {
-  padding: 14px;
+  padding: 14px 56px 14px 14px;
 }
 
 .agent-statistics-overview {
