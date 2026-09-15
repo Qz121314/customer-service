@@ -1,4 +1,4 @@
-#[cfg(not(target_os = "windows")]
+#[cfg(not(target_os = "windows"))]
 use std::io::Cursor;
 #[cfg(target_os = "windows")]
 use std::thread;
