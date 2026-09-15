@@ -167,6 +167,7 @@ export const AgentInboxPane = memo(function AgentInboxPane({
     pullRefreshEnabled && !busy,
     onRefresh,
   );
+  const [refreshing, setRefreshing] = useState(false);
   const [notificationOpenPending, setNotificationOpenPending] = useState<
     string | null
   >(() => agentNotificationOpenTarget());
@@ -190,6 +191,16 @@ export const AgentInboxPane = memo(function AgentInboxPane({
       onSelectConversation(conversationId, source),
     [onSelectConversation],
   );
+
+  const handleRefresh = useCallback(async () => {
+    if (busy || refreshing || !networkOnline) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [busy, networkOnline, onRefresh, refreshing]);
 
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
@@ -260,6 +271,16 @@ export const AgentInboxPane = memo(function AgentInboxPane({
           </h1>
         </div>
         <div className="conversation-head-status">
+          <button
+            type="button"
+            className={`inbox-refresh-button${refreshing ? ' is-refreshing' : ''}`}
+            aria-label="刷新会话列表"
+            title="刷新会话列表"
+            disabled={busy || refreshing || !networkOnline}
+            onClick={() => void handleRefresh()}
+          >
+            <UiIcon name="refresh" />
+          </button>
           <button
             type="button"
             className={`availability-pill is-${availability}`}
