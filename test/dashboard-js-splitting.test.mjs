@@ -37,6 +37,7 @@ test('dashboard keeps admin and agent route entries isolated behind dynamic impo
 });
 
 test('Tauri desktop always opens the agent login route', () => {
+  assert.match(mainEntry, /isTauri\(\)/u);
   assert.match(mainEntry, /window\.location\.protocol === ['"]tauri:['"]/u);
   assert.match(
     mainEntry,

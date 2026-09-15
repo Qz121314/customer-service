@@ -1,6 +1,8 @@
+import { isTauri } from '@tauri-apps/api/core';
 import './ui-system.css';
 
 const isTauriDesktop =
+  isTauri() ||
   window.location.protocol === 'tauri:' ||
   window.location.hostname === 'tauri.localhost';
 
