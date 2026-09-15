@@ -117,6 +117,9 @@ test('agent can configure cards inline with preset text and custom icon', async 
     .locator('.agent-material-attachment-card')
     .filter({ hasText: '短信名片' });
   await expect(smsCard).toBeVisible();
+  await expect(
+    smsCard.evaluate((element) => getComputedStyle(element).display),
+  ).resolves.toBe('grid');
   await expect(smsCard.getByText('SMS', { exact: false })).toBeVisible();
   await expect(
     smsCard.locator(
