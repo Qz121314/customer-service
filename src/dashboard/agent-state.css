@@ -91,6 +91,50 @@
     color 120ms ease;
 }
 
+.workspace-shell .inbox-refresh-button {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #6e7885;
+  background: transparent;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.workspace-shell .inbox-refresh-button:hover:not(:disabled) {
+  border-color: #d9ebe3;
+  color: #277b5b;
+  background: #f1f9f5;
+}
+
+.workspace-shell .inbox-refresh-button:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.workspace-shell .inbox-refresh-button.is-refreshing .ui-icon {
+  animation: agent-inbox-refresh-spin 720ms linear infinite;
+}
+
+@keyframes agent-inbox-refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell .inbox-refresh-button.is-refreshing .ui-icon {
+    animation: none;
+  }
+}
+
 .workspace-shell .availability-pill {
   border-color: #d9ebe3;
   color: #277b5b;

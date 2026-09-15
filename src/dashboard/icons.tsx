@@ -24,6 +24,7 @@ import {
   Pencil,
   Phone,
   Plus,
+  RefreshCw,
   Search,
   Send,
   Settings,
@@ -62,6 +63,7 @@ export type UiIconName =
   | 'user'
   | 'contact'
   | 'plus'
+  | 'refresh'
   | 'phone'
   | 'link'
   | 'channel-sms'
@@ -98,6 +100,7 @@ const ICONS: Record<UiIconName, LucideIcon> = {
   user: UserRound,
   contact: ContactRound,
   plus: Plus,
+  refresh: RefreshCw,
   phone: Phone,
   link: Link,
   'channel-sms': MessageSquareText,

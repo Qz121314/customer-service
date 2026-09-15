@@ -44,6 +44,9 @@ async function expectAgentWorkspace(page) {
   await expect(page.locator('.workspace-shell')).toBeVisible();
   await expect(page.locator('.conversation-pane')).toBeVisible();
   await expect(page.getByText('连接正常')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '刷新会话列表' }),
+  ).toBeVisible();
 }
 
 async function loginAgent(page, username, password) {
@@ -117,6 +120,14 @@ test('core multi-device agent workflow remains usable', async ({
   try {
     await loginAgent(desktop, username, password);
     await loginAgent(phone, username, password);
+
+    const refreshResponse = desktop.waitForResponse(
+      (response) =>
+        response.url() === url('/api/agent/conversations') &&
+        response.request().method() === 'GET',
+    );
+    await desktop.getByRole('button', { name: '刷新会话列表' }).click();
+    expect((await refreshResponse).ok()).toBeTruthy();
 
     const autoReply = await desktop.request.patch(
       url('/api/agent/settings/auto-reply'),
