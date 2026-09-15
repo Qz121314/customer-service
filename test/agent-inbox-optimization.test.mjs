@@ -13,7 +13,10 @@ test('agent inbox returns overview, conversations, messages and media in two req
   ]);
 
   assert.match(api, /getAgentInbox/u);
-  assert.match(api, /request<AgentInbox>\('\/api\/agent\/conversations'\)/u);
+  assert.match(
+    api,
+    /request<AgentInbox>\('\/api\/agent\/conversations',\s*\{[\s\S]*?AbortSignal\.timeout\(/u,
+  );
   assert.match(worker, /loadAgentInbox/u);
   assert.doesNotMatch(worker, /quickReplies/u);
   assert.doesNotMatch(api, /export type AgentInbox = \{[\s\S]*?quickReplies/u);

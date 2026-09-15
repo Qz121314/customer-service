@@ -215,6 +215,7 @@ test('mobile settings keeps its navigation context after child dialogs close', a
   await page.waitForTimeout(220);
   await expect(autoReplyDialog.getByText('正在读取设置…')).toBeVisible();
   const autoReplyGeometryBeforeLoad = await autoReplyDialog.boundingBox();
+  await expect(autoReplyDialog.getByText('正在读取设置…')).toBeHidden();
   await expect(
     autoReplyDialog.getByRole('checkbox', { name: /自动发送问候语/u }),
   ).toBeVisible();

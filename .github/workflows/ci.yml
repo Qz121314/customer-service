@@ -130,7 +130,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  browser-smoke:
+  pre-deploy-smoke:
     needs: build-and-bundle
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -217,7 +217,11 @@ jobs:
 
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8787/api/health >/dev/null; then
+            health="$(curl --fail --silent http://127.0.0.1:8787/api/health || true)"
+            if [ -n "$health" ] && node -e '
+              const body = JSON.parse(process.argv[1]);
+              if (body.service !== "customer-service" || body.environment !== "ui-smoke") process.exit(1);
+            ' "$health"; then
               ready=1
               break
             fi
@@ -255,7 +259,7 @@ jobs:
       - static-checks
       - database-tests
       - build-and-bundle
-      - browser-smoke
+      - pre-deploy-smoke
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -420,7 +424,7 @@ jobs:
       - static-checks
       - database-tests
       - build-and-bundle
-      - browser-smoke
+      - pre-deploy-smoke
     permissions:
       contents: write
     if: startsWith(github.ref, 'refs/tags/v')
