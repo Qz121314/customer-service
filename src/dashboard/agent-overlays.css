@@ -394,6 +394,7 @@
 }
 
 .agent-material-attachment-card {
+  display: grid;
   min-width: 0;
   grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
