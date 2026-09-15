@@ -21,6 +21,61 @@
   flex-direction: column;
 }
 
+.agent-self-statistics-dialog {
+  position: relative;
+  width: min(1120px, 100%);
+}
+
+.agent-self-statistics-dialog .agent-statistics-dialog-head {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  min-height: 0;
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.agent-self-statistics-dialog .agent-statistics-head-actions {
+  gap: 0;
+}
+
+.agent-self-statistics-dialog .agent-statistics-dialog-body {
+  padding-top: 20px;
+}
+
+.agent-statistics-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.9fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.agent-self-statistics-dialog .agent-statistics-calendar {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.agent-self-statistics-dialog
+  .agent-statistics-calendar
+  .agent-statistics-days {
+  flex: 1;
+  align-content: start;
+}
+
+.agent-self-statistics-dialog .agent-statistics-summary {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-content: stretch;
+  margin-bottom: 0;
+}
+
+.agent-self-statistics-dialog .agent-statistics-summary > div {
+  min-height: 0;
+}
+
 .agent-statistics-dialog-head {
   min-height: 92px;
   padding: 18px 20px;
@@ -392,6 +447,59 @@
 
   .agent-statistics-days .has-value strong {
     color: #4f4dc2;
+  }
+
+  .agent-self-statistics-dialog .agent-statistics-dialog-head {
+    top: 8px;
+    right: 8px;
+    min-height: 0;
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .agent-self-statistics-dialog .agent-statistics-dialog-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    overflow-y: auto;
+  }
+
+  .agent-self-statistics-dialog .agent-statistics-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .agent-self-statistics-dialog .agent-statistics-calendar {
+    flex: 0 0 auto;
+  }
+
+  .agent-self-statistics-dialog
+    .agent-statistics-calendar
+    .agent-statistics-days {
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .agent-self-statistics-dialog .agent-statistics-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 8px;
+    border: 1px solid #e3e5e9;
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  .agent-self-statistics-dialog .agent-statistics-summary > div {
+    min-height: 72px;
+    padding: 8px 4px 7px;
+    border: 1px solid #eef0f3;
+    border-radius: 9px;
+    background: #fff;
   }
 }
 
