@@ -14,7 +14,6 @@ const CHAT_TIME_ZONE = 'America/Los_Angeles';
 type AgentStatisticsCloseReason = 'dismiss' | 'notification';
 
 export function AgentStatisticsModal({
-  identity,
   onClose,
 }: {
   identity: AgentIdentity;
@@ -81,20 +80,14 @@ export function AgentStatisticsModal({
       onMouseDown={() => onClose('dismiss')}
     >
       <section
-        className="agent-statistics-dialog"
+        className="agent-statistics-dialog agent-self-statistics-dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="agent-statistics-title"
+        aria-label="坐席接待数据"
         onMouseDown={(event) => event.stopPropagation()}
       >
         <header className="agent-statistics-dialog-head">
-          <div>
-            <span className="eyebrow">坐席统计</span>
-            <h2 id="agent-statistics-title">{identity.name} · 接待数据</h2>
-            <p>访客首次进入坐席时计 1 次，系统恢复同一会话不重复计数。</p>
-          </div>
           <div className="agent-statistics-head-actions">
-            <MonthPicker value={month} onChange={setMonth} label="月份" />
             <button
               type="button"
               className="modal-close"
@@ -109,69 +102,69 @@ export function AgentStatisticsModal({
         <div className="agent-statistics-dialog-body">
           {error && <div className="notice error">{error}</div>}
 
-          <section className="agent-statistics-summary">
-            <div>
-              <span>本月接待</span>
-              <strong>{busy ? '—' : (stats?.total ?? 0)}</strong>
-              <small>完整自然月累计</small>
-            </div>
-            <div>
-              <span>今日接待</span>
-              <strong>{busy ? '—' : (stats?.todayCount ?? 0)}</strong>
-              <small>西海岸自然日</small>
-            </div>
-            <div>
-              <span>每日上限</span>
-              <strong>
-                {busy ? '—' : stats?.dailyLimit ? stats.dailyLimit : '不限'}
-              </strong>
-              <small>达到后停止新分流</small>
-            </div>
-            <div>
-              <span>剩余额度</span>
-              <strong>
-                {busy
-                  ? '—'
-                  : stats?.trafficQuotaEnabled
-                    ? (stats?.trafficQuotaRemaining ?? 0)
-                    : '不限'}
-              </strong>
-              <small>
-                {stats?.trafficQuotaEnabled
-                  ? `总 ${stats.trafficQuotaTotal} · 已用 ${stats.trafficQuotaUsed}`
-                  : '未启用总额度限制'}
-              </small>
-            </div>
-          </section>
-
-          <section className="agent-statistics-card">
-            <div className="agent-statistics-card-head">
-              <div>
-                <strong>{month} 每日接待</strong>
-                <span>
-                  完整展示本月 {days.length} 天，颜色越深代表接待量越高
-                </span>
+          <div className="agent-statistics-overview">
+            <section className="agent-statistics-card agent-statistics-calendar">
+              <div className="agent-statistics-card-head">
+                <div>
+                  <strong>每日接待</strong>
+                  <span>完整展示本月 {days.length} 天</span>
+                </div>
+                <MonthPicker value={month} onChange={setMonth} label="月份" />
               </div>
-              <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
-            </div>
-            <div className="agent-statistics-days">
-              {days.map((day) => {
-                const value = countMap.get(day) ?? 0;
-                const dateLabel = `${month}-${String(day).padStart(2, '0')}`;
-                return (
-                  <div
-                    key={day}
-                    className={value ? 'has-value' : ''}
-                    aria-label={`${dateLabel} 接待 ${busy ? '加载中' : `${value} 次`}`}
-                    title={dateLabel}
-                  >
-                    <span>{day}</span>
-                    <strong>{busy ? '·' : value}</strong>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
+              <div className="agent-statistics-days">
+                {days.map((day) => {
+                  const value = countMap.get(day) ?? 0;
+                  const dateLabel = `${month}-${String(day).padStart(2, '0')}`;
+                  return (
+                    <div
+                      key={day}
+                      className={value ? 'has-value' : ''}
+                      aria-label={`${dateLabel} 接待 ${busy ? '加载中' : `${value} 次`}`}
+                      title={dateLabel}
+                    >
+                      <span>{day}</span>
+                      <strong>{busy ? '·' : value}</strong>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="agent-statistics-summary" aria-label="接待数据">
+              <div>
+                <span>本月接待</span>
+                <strong>{busy ? '—' : (stats?.total ?? 0)}</strong>
+                <small>完整自然月累计</small>
+              </div>
+              <div>
+                <span>今日接待</span>
+                <strong>{busy ? '—' : (stats?.todayCount ?? 0)}</strong>
+                <small>西海岸自然日</small>
+              </div>
+              <div>
+                <span>每日上限</span>
+                <strong>
+                  {busy ? '—' : stats?.dailyLimit ? stats.dailyLimit : '不限'}
+                </strong>
+                <small>达到后停止新分流</small>
+              </div>
+              <div>
+                <span>剩余额度</span>
+                <strong>
+                  {busy
+                    ? '—'
+                    : stats?.trafficQuotaEnabled
+                      ? (stats?.trafficQuotaRemaining ?? 0)
+                      : '不限'}
+                </strong>
+                <small>
+                  {stats?.trafficQuotaEnabled
+                    ? `总 ${stats.trafficQuotaTotal} · 已用 ${stats.trafficQuotaUsed}`
+                    : '未启用总额度限制'}
+                </small>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
     </div>
