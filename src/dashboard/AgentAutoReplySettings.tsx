@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getAgentFirstReplySettings,
   updateAgentFirstReplySettings,
@@ -364,7 +364,11 @@ export function AgentAutoReplySettingsModal({
                       }
                       options={cardPresets.map((preset) => ({
                         id: preset.id,
-                        label: `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.label}`,
+                        label:
+                          preset.label.trim().toLowerCase() ===
+                          CONTACT_CARD_LABELS[preset.kind].toLowerCase()
+                            ? preset.label
+                            : `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.label}`,
                       }))}
                       emptyLabel="不使用名片"
                       emptyState="素材库暂无名片"
@@ -452,31 +456,88 @@ function MaterialPicker({
   emptyState: string;
   onChange: (value: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const selected = options.find((option) => option.id === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        rootRef.current &&
+        !rootRef.current.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  useEffect(() => {
+    if (options.length === 0) setOpen(false);
+  }, [options.length]);
+
   return (
-    <label className="agent-first-reply-picker">
+    <div className="agent-first-reply-picker">
       <span className="agent-first-reply-picker-label">
         <strong>{label}</strong>
         <small>{hint}</small>
       </span>
       <span className="agent-first-reply-picker-control">
-        <select
-          aria-label={`${label}素材`}
-          value={value}
-          disabled={options.length === 0}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          <option value="">
-            {options.length === 0 ? emptyState : emptyLabel}
-          </option>
-          {options.map((option) => (
-            <option value={option.id} key={option.id}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <UiIcon name="chevron" />
+        <div className="agent-first-reply-material-select" ref={rootRef}>
+          <button
+            type="button"
+            className="agent-first-reply-material-trigger"
+            aria-label={`${label}素材`}
+            aria-expanded={open}
+            disabled={options.length === 0}
+            onClick={() => setOpen((current) => !current)}
+          >
+            <span>
+              {selected?.label ?? (options.length ? emptyLabel : emptyState)}
+            </span>
+            <UiIcon name="chevron" />
+          </button>
+          {open ? (
+            <div
+              className="agent-first-reply-material-options"
+              role="listbox"
+              aria-label={`${label}素材选项`}
+            >
+              <button
+                type="button"
+                role="option"
+                aria-selected={!value}
+                onClick={() => {
+                  onChange('');
+                  setOpen(false);
+                }}
+              >
+                <span>{emptyLabel}</span>
+                {!value ? <UiIcon name="check" /> : null}
+              </button>
+              {options.map((option) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === option.id}
+                  key={option.id}
+                  onClick={() => {
+                    onChange(option.id);
+                    setOpen(false);
+                  }}
+                >
+                  <span>{option.label}</span>
+                  {value === option.id ? <UiIcon name="check" /> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </span>
-    </label>
+    </div>
   );
 }
 
