@@ -10,6 +10,16 @@ export type NoAgentMessageSettings = {
   format: NoAgentMessageFormat;
 };
 
+export type PhoneCollectionDownloadLog = {
+  downloadedAt: string;
+  rowCount: number;
+};
+
+export type PhoneCollectionPayload = {
+  count: number;
+  logs: PhoneCollectionDownloadLog[];
+};
+
 export type ProductCatalogItem = {
   id: string;
   title: string;
@@ -329,6 +339,14 @@ export async function updateNoAgentMessage(
     },
   );
   return response.noAgentMessage;
+}
+
+export async function getPhoneCollection(): Promise<PhoneCollectionPayload> {
+  return request('/api/admin/phone-collection');
+}
+
+export async function downloadPhoneCollection(): Promise<Blob> {
+  return requestBlob('/api/admin/phone-collection/export');
 }
 
 export async function getAgents(): Promise<AgentAccount[]> {
@@ -833,4 +851,26 @@ async function request<T = { ok: boolean }>(
     throw new Error(errorMessage ?? errorMessages[code] ?? code);
   }
   return body;
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(path, {
+    cache: 'no-store',
+    headers: { Accept: 'text/csv' },
+  });
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: string | { code?: string; message?: string };
+      message?: string;
+    };
+    const errorBody = body.error;
+    const code =
+      typeof errorBody === 'string'
+        ? errorBody
+        : (errorBody?.code ?? 'REQUEST_FAILED');
+    const errorMessage =
+      typeof errorBody === 'object' ? errorBody.message : body.message;
+    throw new Error(errorMessage ?? errorMessages[code] ?? code);
+  }
+  return response.blob();
 }

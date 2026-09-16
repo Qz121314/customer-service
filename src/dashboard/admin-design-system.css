@@ -51,6 +51,104 @@
   accent-color: var(--admin-accent);
 }
 
+.phone-collection-page {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 920px);
+}
+
+.phone-collection-header,
+.phone-collection-count,
+.phone-collection-logs {
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius-lg);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-shadow-xs);
+}
+
+.phone-collection-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+}
+
+.phone-collection-header h2,
+.phone-collection-logs h3 {
+  margin: 0;
+  color: var(--admin-text-strong);
+}
+
+.phone-collection-header p {
+  margin: 6px 0 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.phone-collection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.phone-collection-count {
+  display: grid;
+  gap: 4px;
+  padding: 20px;
+}
+
+.phone-collection-count span {
+  color: var(--admin-muted-strong);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.phone-collection-count strong {
+  color: var(--admin-text-strong);
+  font-size: clamp(32px, 5vw, 48px);
+  line-height: 1;
+}
+
+.phone-collection-count small {
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+
+.phone-collection-logs {
+  overflow: hidden;
+}
+
+.phone-collection-logs .admin-table-title > span {
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+
+.phone-collection-empty {
+  margin: 0;
+  padding: 24px 20px;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+.phone-collection-table-wrap {
+  overflow-x: auto;
+}
+
+.phone-collection-table-wrap .admin-table {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .phone-collection-header {
+    flex-direction: column;
+  }
+
+  .phone-collection-actions {
+    width: 100%;
+  }
+}
+
 .eyebrow,
 .admin-section-kicker {
   display: block;
