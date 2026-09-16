@@ -46,6 +46,78 @@ integrationApi.get('/integration/v1/status', (c) =>
   }),
 );
 
+integrationApi.get('/integration/v1/phone-collection/summary', async (c) => {
+  const authError = integrationAuthError(c);
+  if (authError) return authError;
+
+  const row = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS count FROM visitor_phone_numbers`,
+  ).first<{ count: number | string }>();
+  c.header('Cache-Control', 'no-store');
+  return c.json({ count: Number(row?.count ?? 0) });
+});
+
+integrationApi.get('/integration/v1/phone-collection/export', async (c) => {
+  const authError = integrationAuthError(c);
+  if (authError) return authError;
+
+  const result = await c.env.DB.prepare(
+    `SELECT number, first_collected_at
+     FROM visitor_phone_numbers
+     ORDER BY first_collected_at ASC, number ASC`,
+  ).all<{ number: string; first_collected_at: string }>();
+  const rows = result.results ?? [];
+  const csv = [
+    '时间,号码',
+    ...rows.map(
+      (row) => `${escapeCsv(row.first_collected_at)},${escapeCsv(row.number)}`,
+    ),
+  ].join('\r\n');
+  await c.env.DB.prepare(
+    `INSERT INTO visitor_phone_download_logs
+       (id, downloaded_at, row_count)
+     VALUES (?1, ?2, ?3)`,
+  )
+    .bind(crypto.randomUUID(), new Date().toISOString(), rows.length)
+    .run();
+
+  return new Response(`\uFEFF${csv}\r\n`, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="visitor-phone-numbers.csv"',
+    },
+  });
+});
+
+integrationApi.get(
+  '/integration/v1/phone-collection/download-logs',
+  async (c) => {
+    const authError = integrationAuthError(c);
+    if (authError) return authError;
+
+    const requestedLimit = Number(c.req.query('limit') ?? 20);
+    const limit = Number.isFinite(requestedLimit)
+      ? Math.min(Math.max(Math.floor(requestedLimit), 1), 100)
+      : 20;
+    const result = await c.env.DB.prepare(
+      `SELECT downloaded_at, row_count
+     FROM visitor_phone_download_logs
+     ORDER BY downloaded_at DESC, id DESC
+     LIMIT ?1`,
+    )
+      .bind(limit)
+      .all<{ downloaded_at: string; row_count: number }>();
+    c.header('Cache-Control', 'no-store');
+    return c.json({
+      logs: (result.results ?? []).map((row) => ({
+        downloadedAt: row.downloaded_at,
+        rowCount: Number(row.row_count),
+      })),
+    });
+  },
+);
+
 /**
  * Control-plane verification used by Site admin. Site may include the current
  * product catalog so this customer-service admin can assign products to agents.
@@ -273,6 +345,33 @@ function bearerToken(authorization?: string): string | null {
   const match = authorization?.match(/^Bearer\s+(.+)$/iu);
   const token = match?.[1]?.trim();
   return token || null;
+}
+
+function integrationAuthError(c: Context<IntegrationEnv>) {
+  const configuredToken = c.env.INTEGRATION_VERIFY_TOKEN?.trim();
+  if (!configuredToken) {
+    return integrationError(
+      c,
+      503,
+      'INTEGRATION_NOT_CONFIGURED',
+      'Integration verification is not configured.',
+    );
+  }
+
+  const suppliedToken = bearerToken(c.req.header('Authorization'));
+  if (!suppliedToken || !timingSafeEqual(suppliedToken, configuredToken)) {
+    return integrationError(
+      c,
+      401,
+      'INVALID_VERIFY_TOKEN',
+      'Integration verification token is invalid.',
+    );
+  }
+  return null;
+}
+
+function escapeCsv(value: string): string {
+  return /[",\r\n]/u.test(value) ? `"${value.replace(/"/gu, '""')}"` : value;
 }
 
 function timingSafeEqual(left: string, right: string): boolean {

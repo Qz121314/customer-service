@@ -25,6 +25,10 @@ import {
   type AgentNotificationEvent,
   type AgentNotificationVariables,
 } from './agent-notification-event';
+import {
+  collectVisitorPhoneMessage,
+  extractVisitorPhoneNumbers,
+} from './visitor-phone-collection';
 
 type ClientBindings = {
   DB: D1Database;
@@ -891,6 +895,18 @@ clientApi.post('/client/v1/conversations/:id/messages', async (c) => {
     return c.json({ message: clientMessage(persistedMessage.message) });
   }
   const createdMessage = persistedMessage.message;
+  if (extractVisitorPhoneNumbers(createdMessage.body).length > 0) {
+    void deferClientRealtime(
+      c,
+      collectVisitorPhoneMessage(c.env.DB, {
+        id: createdMessage.id,
+        body: createdMessage.body,
+        created_at: createdMessage.created_at,
+      }).catch((error) => {
+        console.warn('Visitor phone collection failed.', error);
+      }),
+    );
+  }
   const conversationSnapshot: ConversationEventSnapshot | undefined =
     persistedMessage.conversationUpdated
       ? {
