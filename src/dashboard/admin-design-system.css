@@ -175,6 +175,12 @@
   color: var(--admin-danger);
 }
 
+.notice.success {
+  border: 1px solid var(--admin-success-border);
+  background: var(--admin-success-soft);
+  color: var(--admin-success);
+}
+
 .empty-state {
   display: grid;
   min-height: 130px;

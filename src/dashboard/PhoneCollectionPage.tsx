@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  clearPhoneCollection,
   downloadPhoneCollection,
   getPhoneCollection,
   type PhoneCollectionDownloadLog,
@@ -17,7 +18,9 @@ export function PhoneCollectionPage() {
   const [logs, setLogs] = useState<PhoneCollectionDownloadLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +62,29 @@ export function PhoneCollectionPage() {
     }
   }
 
+  async function handleClear() {
+    if (clearing || loading || downloading) return;
+    const confirmed = window.confirm(
+      '确定清空已采集的号码库吗？\n\n此操作不可撤销，下载日志会保留。',
+    );
+    if (!confirmed) return;
+
+    setClearing(true);
+    setError('');
+    setMessage('');
+    try {
+      const result = await clearPhoneCollection();
+      setMessage(
+        `号码库已清空，共删除 ${result.deletedCount.toLocaleString('zh-CN')} 个号码。`,
+      );
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '号码库清理失败。');
+    } finally {
+      setClearing(false);
+    }
+  }
+
   return (
     <section
       className="phone-collection-page"
@@ -82,15 +108,29 @@ export function PhoneCollectionPage() {
           </Button>
           <Button
             type="button"
-            disabled={loading || downloading}
+            disabled={loading || downloading || clearing}
             onClick={() => void handleDownload()}
           >
             <UiIcon name="install" />
             {downloading ? '下载中…' : '下载 Excel'}
           </Button>
+          <Button
+            variant="destructive"
+            type="button"
+            disabled={loading || downloading || clearing}
+            onClick={() => void handleClear()}
+          >
+            <UiIcon name="trash" />
+            {clearing ? '清理中…' : '清空号码库'}
+          </Button>
         </div>
       </div>
 
+      {message ? (
+        <div className="notice success" role="status">
+          {message}
+        </div>
+      ) : null}
       {error ? (
         <div className="notice error" role="alert">
           {error}
