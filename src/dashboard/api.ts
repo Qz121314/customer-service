@@ -345,6 +345,12 @@ export async function getPhoneCollection(): Promise<PhoneCollectionPayload> {
   return request('/api/admin/phone-collection');
 }
 
+export async function clearPhoneCollection(): Promise<{
+  deletedCount: number;
+}> {
+  return request('/api/admin/phone-collection', { method: 'DELETE' });
+}
+
 export async function downloadPhoneCollection(): Promise<Blob> {
   return requestBlob('/api/admin/phone-collection/export');
 }

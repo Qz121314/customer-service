@@ -187,6 +187,15 @@ adminConfigApi.get('/api/admin/phone-collection/export', async (c) => {
   });
 });
 
+adminConfigApi.delete('/api/admin/phone-collection', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+
+  const result = await c.env.DB.prepare(
+    `DELETE FROM visitor_phone_numbers`,
+  ).run();
+  return c.json({ deletedCount: result.meta.changes ?? 0 });
+});
+
 adminConfigApi.get('/api/admin/agents', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
   return c.json({ agents: await loadAgents(c.env.DB) });
