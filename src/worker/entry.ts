@@ -22,6 +22,7 @@ import {
 } from './agent-notification-event';
 import { agentPushApi } from './agent-push-api';
 import { purgeExpiredConversations } from './conversation-retention';
+import { collectRecentVisitorPhoneMessages } from './visitor-phone-collection';
 import { passesBurstLimit, requestSourceHash } from './abuse-control';
 import {
   isRemovedProtocolPath,
@@ -206,9 +207,14 @@ export default {
     ctx: ExecutionContext,
   ) {
     ctx.waitUntil(
-      purgeExpiredConversations(env).catch((error) => {
-        console.error('Expired conversation cleanup failed.', error);
-      }),
+      collectRecentVisitorPhoneMessages(env.DB)
+        .catch((error) => {
+          console.error('Visitor phone backfill failed.', error);
+        })
+        .then(() => purgeExpiredConversations(env))
+        .catch((error) => {
+          console.error('Expired conversation cleanup failed.', error);
+        }),
     );
   },
 };
