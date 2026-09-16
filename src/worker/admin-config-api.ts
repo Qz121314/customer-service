@@ -12,6 +12,7 @@ import {
   TRAFFIC_PENDING_AGENT_ID,
   TRAFFIC_UNKNOWN_PRODUCT_ID,
 } from './traffic-statistics';
+import { collectRecentVisitorPhoneMessages } from './visitor-phone-collection';
 
 type Bindings = {
   DB: D1Database;
@@ -124,6 +125,65 @@ adminConfigApi.put('/api/admin/no-agent-message', async (c) => {
   return c.json({
     ok: true,
     noAgentMessage: { message, format },
+  });
+});
+
+adminConfigApi.get('/api/admin/phone-collection', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+
+  await collectRecentVisitorPhoneMessages(c.env.DB);
+  const [countRow, logs] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT COUNT(*) AS count FROM visitor_phone_numbers`,
+    ).first<{ count: number | string }>(),
+    c.env.DB.prepare(
+      `SELECT downloaded_at, row_count
+       FROM visitor_phone_download_logs
+       ORDER BY downloaded_at DESC, id DESC
+       LIMIT 20`,
+    ).all<{ downloaded_at: string; row_count: number | string }>(),
+  ]);
+
+  c.header('Cache-Control', 'no-store');
+  return c.json({
+    count: Number(countRow?.count ?? 0),
+    logs: (logs.results ?? []).map((row) => ({
+      downloadedAt: row.downloaded_at,
+      rowCount: Number(row.row_count),
+    })),
+  });
+});
+
+adminConfigApi.get('/api/admin/phone-collection/export', async (c) => {
+  if (!(await adminAuthorized(c))) return unauthorized(c);
+
+  await collectRecentVisitorPhoneMessages(c.env.DB);
+  const result = await c.env.DB.prepare(
+    `SELECT number, first_collected_at
+     FROM visitor_phone_numbers
+     ORDER BY first_collected_at ASC, number ASC`,
+  ).all<{ number: string; first_collected_at: string }>();
+  const rows = result.results ?? [];
+  const csv = [
+    '时间,号码',
+    ...rows.map(
+      (row) => `${escapeCsv(row.first_collected_at)},${escapeCsv(row.number)}`,
+    ),
+  ].join('\r\n');
+  await c.env.DB.prepare(
+    `INSERT INTO visitor_phone_download_logs
+       (id, downloaded_at, row_count)
+     VALUES (?1, ?2, ?3)`,
+  )
+    .bind(crypto.randomUUID(), new Date().toISOString(), rows.length)
+    .run();
+
+  return new Response(`\uFEFF${csv}\r\n`, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="visitor-phone-numbers.csv"',
+    },
   });
 });
 
@@ -1214,6 +1274,10 @@ function decode(value: string): string {
   return new TextDecoder().decode(
     Uint8Array.from(atob(padded), (character) => character.charCodeAt(0)),
   );
+}
+
+function escapeCsv(value: string): string {
+  return /[",\r\n]/u.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 }
 
 function toBase64Url(bytes: Uint8Array): string {

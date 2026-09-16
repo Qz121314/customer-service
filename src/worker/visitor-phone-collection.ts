@@ -53,47 +53,50 @@ export async function collectRecentVisitorPhoneMessages(
     )
     .bind(new Date(now.getTime() - SCAN_RETENTION_MS).toISOString())
     .run();
-  const result = await db
-    .prepare(
-      `SELECT m.id, m.body, m.created_at
-       FROM messages m
-       LEFT JOIN visitor_phone_collection_scans scan
-         ON scan.message_id = m.id
-       WHERE m.sender_type = 'visitor'
-         AND m.created_at >= ?1
-         AND m.body GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*'
-         AND scan.message_id IS NULL
-       ORDER BY m.created_at ASC, m.id ASC
-       LIMIT ?2`,
-    )
-    .bind(cutoffIso, BACKFILL_BATCH_SIZE)
-    .all<VisitorPhoneMessage>();
-  const messages = result.results ?? [];
-  if (messages.length === 0) return 0;
+  let scannedMessageCount = 0;
+  while (true) {
+    const result = await db
+      .prepare(
+        `SELECT m.id, m.body, m.created_at
+         FROM messages m
+         LEFT JOIN visitor_phone_collection_scans scan
+           ON scan.message_id = m.id
+         WHERE m.sender_type = 'visitor'
+           AND m.created_at >= ?1
+           AND m.body GLOB '*[0-9][0-9][0-9][0-9][0-9][0-9][0-9]*'
+           AND scan.message_id IS NULL
+         ORDER BY m.created_at ASC, m.id ASC
+         LIMIT ?2`,
+      )
+      .bind(cutoffIso, BACKFILL_BATCH_SIZE)
+      .all<VisitorPhoneMessage>();
+    const messages = result.results ?? [];
+    if (messages.length === 0) return scannedMessageCount;
 
-  const statements: D1PreparedStatement[] = [];
-  for (const message of messages) {
-    for (const number of extractVisitorPhoneNumbers(message.body)) {
+    const statements: D1PreparedStatement[] = [];
+    for (const message of messages) {
+      for (const number of extractVisitorPhoneNumbers(message.body)) {
+        statements.push(
+          db
+            .prepare(
+              `INSERT OR IGNORE INTO visitor_phone_numbers
+                 (number, first_collected_at)
+               VALUES (?1, ?2)`,
+            )
+            .bind(number, message.created_at),
+        );
+      }
       statements.push(
         db
           .prepare(
-            `INSERT OR IGNORE INTO visitor_phone_numbers
-               (number, first_collected_at)
+            `INSERT OR IGNORE INTO visitor_phone_collection_scans
+               (message_id, scanned_at)
              VALUES (?1, ?2)`,
           )
-          .bind(number, message.created_at),
+          .bind(message.id, nowIso),
       );
     }
-    statements.push(
-      db
-        .prepare(
-          `INSERT OR IGNORE INTO visitor_phone_collection_scans
-             (message_id, scanned_at)
-           VALUES (?1, ?2)`,
-        )
-        .bind(message.id, nowIso),
-    );
+    await db.batch(statements);
+    scannedMessageCount += messages.length;
   }
-  await db.batch(statements);
-  return messages.length;
 }

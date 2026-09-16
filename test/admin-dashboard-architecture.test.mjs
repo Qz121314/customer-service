@@ -72,13 +72,21 @@ test('agents owns contextual account and inline routing-diagnostics workspaces',
   assert.doesNotMatch(portal, /AdminRoutingDiagnoseTrigger/u);
 });
 
-test('brand logo is a global header action and settings owns availability', () => {
-  assert.match(portal, /type SettingsView = 'availability';/u);
+test('brand logo is a global header action and settings owns availability and phone collection', () => {
+  assert.match(
+    portal,
+    /type SettingsView = 'availability' \| 'phone-collection';/u,
+  );
   assert.doesNotMatch(portal, /label: '品牌'/u);
   assert.match(shell, /aria-label="上传品牌 Logo"/u);
   assert.match(portal, /<SiteLogoQuickUpload/u);
   assert.match(portal, /label: '客服可用性'/u);
-  assert.match(portal, /<SiteSettingsPage[\s\S]*?view=\{settingsView\}/u);
+  assert.match(portal, /label: '号码采集'/u);
+  assert.match(portal, /<SiteSettingsPage[\s\S]*?view="availability"/u);
+  assert.match(
+    portal,
+    /settingsView === 'phone-collection'[\s\S]*?<PhoneCollectionPage/u,
+  );
   assert.match(siteSettings, /view: 'availability'/u);
   assert.match(siteSettings, /className="site-logo-file-input"/u);
   assert.match(siteSettings, /<NoAgentMessageSettingsPanel/u);

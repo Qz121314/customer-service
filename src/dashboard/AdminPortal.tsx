@@ -24,12 +24,13 @@ import {
   type AdminSection,
 } from './AdminShell';
 import { AdminAgentsPage } from './AdminAgentsPage';
+import { PhoneCollectionPage } from './PhoneCollectionPage';
 import { getSiteLogo, type SiteLogoInfo } from './site-logo-client';
 import { useAdminAgentsController } from './useAdminAgentsController';
 import { useAdminStatisticsController } from './useAdminStatisticsController';
 
 type AgentsView = 'accounts' | 'diagnostics';
-type SettingsView = 'availability';
+type SettingsView = 'availability' | 'phone-collection';
 
 export function AdminPortal() {
   const [state, setState] = useState<LoadState>('loading');
@@ -177,6 +178,13 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
                 active: settingsView === 'availability',
                 onSelect: () => setSettingsView('availability'),
               },
+              {
+                id: 'phone-collection',
+                label: '号码采集',
+                description: '查看数量、下载 Excel 与下载日志',
+                active: settingsView === 'phone-collection',
+                onSelect: () => setSettingsView('phone-collection'),
+              },
             ],
           }
         : null;
@@ -255,13 +263,19 @@ function AdminCenter({ onLogout }: { onLogout: () => Promise<void> }) {
         <AdminRoutingDiagnoseWorkspace products={products} />
       )}
 
-      {section === 'settings' && noAgentMessage ? (
+      {section === 'settings' &&
+      settingsView === 'availability' &&
+      noAgentMessage ? (
         <SiteSettingsPage
-          view={settingsView}
+          view="availability"
           noAgentMessage={noAgentMessage}
           noAgentSaving={settingsSaving}
           onSaveNoAgentMessage={saveNoAgentMessage}
         />
+      ) : null}
+
+      {section === 'settings' && settingsView === 'phone-collection' ? (
+        <PhoneCollectionPage />
       ) : null}
     </AdminShell>
   );
