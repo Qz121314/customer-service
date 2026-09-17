@@ -305,7 +305,6 @@ export function AgentAutoReplySettingsModal({
       >
         <header className="agent-auto-reply-head">
           <div>
-            <span className="eyebrow">客服自动化</span>
             <h2>首次回复</h2>
           </div>
           <div className="agent-auto-reply-head-tools">
@@ -350,10 +349,7 @@ export function AgentAutoReplySettingsModal({
           <div className="agent-first-reply-body">
             <aside className="agent-first-reply-profiles">
               <div className="agent-first-reply-section-head">
-                <span>
-                  <strong>配置选择</strong>
-                  <small>保存多套组合，启用其中一套</small>
-                </span>
+                <strong>配置选择</strong>
                 <Button
                   type="button"
                   variant="ghost"
@@ -377,15 +373,6 @@ export function AgentAutoReplySettingsModal({
                   >
                     <span>
                       <strong>{profile.name}</strong>
-                      <small>
-                        {profile.items.length} 个内容项 ·{' '}
-                        {
-                          profile.items.filter(
-                            (item) => item.type === 'greeting',
-                          ).length
-                        }{' '}
-                        个问候语
-                      </small>
                     </span>
                     {settings.enabled && profile.id === selectedProfile?.id ? (
                       <UiIcon name="check" />
@@ -422,12 +409,7 @@ export function AgentAutoReplySettingsModal({
                 </div>
                 <section className="agent-first-reply-choice">
                   <div className="agent-first-reply-choice-head">
-                    <div>
-                      <strong>方案内容</strong>
-                      <small>
-                        按访客看到的顺序排列，可重复添加同一类型素材
-                      </small>
-                    </div>
+                    <strong>方案内容</strong>
                     <Button
                       type="button"
                       variant="ghost"
@@ -486,7 +468,7 @@ export function AgentAutoReplySettingsModal({
                     </ol>
                   ) : (
                     <div className="agent-first-reply-content-empty">
-                      还没有内容项，点击右上角加号添加素材。
+                      暂无内容
                     </div>
                   )}
                   {addContentOpen ? (

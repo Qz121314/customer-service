@@ -269,7 +269,8 @@
 
 .agent-first-reply-content-list {
   display: grid;
-  gap: 7px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
   margin: 10px 0 0;
   padding: 0;
   list-style: none;
@@ -280,10 +281,18 @@
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 52px;
+  min-height: 60px;
   padding: 8px 10px;
   border: 1px solid #e1e6ee;
   border-radius: 11px;
+  background: #fbfcfe;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease;
+}
+
+.agent-first-reply-content-list li:hover {
+  border-color: #cfd8a9;
   background: #fff;
 }
 
@@ -863,6 +872,44 @@
 
   .agent-material-attachment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .agent-first-reply-content-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 761px) {
+  .agent-auto-reply-dialog.agent-first-reply-dialog {
+    height: min(720px, calc(100dvh - 64px));
+    max-height: calc(100dvh - 64px);
+  }
+
+  .agent-auto-reply-dialog.agent-first-reply-dialog .agent-first-reply-body {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .agent-auto-reply-dialog.agent-first-reply-dialog .agent-first-reply-editor {
+    display: grid;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .agent-auto-reply-dialog.agent-first-reply-dialog .agent-first-reply-choice {
+    display: grid;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+
+  .agent-auto-reply-dialog.agent-first-reply-dialog
+    .agent-first-reply-content-list {
+    min-height: 0;
+    overflow-y: auto;
+    align-content: start;
+    padding-right: 4px;
   }
 }
 
