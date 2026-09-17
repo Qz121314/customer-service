@@ -20,12 +20,20 @@ export type AgentGreetingPreset = {
 
 export type AgentCtaPreset = AgentGreetingCta;
 
+export type AgentFirstReplyItemType =
+  'greeting' | 'cta' | 'contact_card' | 'image';
+
+export type AgentFirstReplyItem = {
+  id: string;
+  type: AgentFirstReplyItemType;
+  materialId: string;
+  sortOrder: number;
+};
+
 export type AgentFirstReplyProfile = {
   id: string;
   name: string;
-  greetingId: string | null;
-  attachmentIds: string[];
-  ctaIds: string[];
+  items: AgentFirstReplyItem[];
 };
 
 export type AgentFirstReplySettings = {
@@ -64,7 +72,7 @@ export async function getAgentFirstReplySettings(): Promise<AgentFirstReplySetti
   const response = await autoReplyRequest<{
     settings: AgentFirstReplySettings;
   }>('/api/agent/first-reply');
-  return response.settings;
+  return normalizeFirstReplySettings(response.settings);
 }
 
 export async function updateAgentFirstReplySettings(
@@ -76,7 +84,63 @@ export async function updateAgentFirstReplySettings(
     method: 'PATCH',
     body: JSON.stringify(settings),
   });
-  return response.settings;
+  return normalizeFirstReplySettings(response.settings);
+}
+
+function normalizeFirstReplySettings(
+  settings: AgentFirstReplySettings,
+): AgentFirstReplySettings {
+  return {
+    ...settings,
+    profiles: settings.profiles.map((profile) => {
+      const legacy = profile as AgentFirstReplyProfile & {
+        greetingId?: string | null;
+        attachmentIds?: string[];
+        ctaIds?: string[];
+      };
+      if (Array.isArray(profile.items)) {
+        return {
+          id: profile.id,
+          name: profile.name,
+          items: profile.items.map((item, index) => ({
+            ...item,
+            sortOrder: index,
+          })),
+        };
+      }
+      const greetingId = legacy.greetingId ?? null;
+      const attachmentIds = legacy.attachmentIds ?? [];
+      const ctaIds = legacy.ctaIds ?? [];
+      return {
+        id: profile.id,
+        name: profile.name,
+        items: [
+          ...(greetingId
+            ? [
+                {
+                  id: `${profile.id}:greeting:${greetingId}`,
+                  type: 'greeting' as const,
+                  materialId: greetingId,
+                  sortOrder: 0,
+                },
+              ]
+            : []),
+          ...attachmentIds.map((materialId, index) => ({
+            id: `${profile.id}:attachment:${materialId}`,
+            type: 'contact_card' as const,
+            materialId,
+            sortOrder: index + (greetingId ? 1 : 0),
+          })),
+          ...ctaIds.map((materialId, index) => ({
+            id: `${profile.id}:cta:${materialId}`,
+            type: 'cta' as const,
+            materialId,
+            sortOrder: index + (greetingId ? 1 : 0) + attachmentIds.length,
+          })),
+        ],
+      };
+    }),
+  };
 }
 
 async function autoReplyRequest<T>(
