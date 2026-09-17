@@ -112,6 +112,12 @@ test('0070 materializes legacy first-reply data and removes invalid relations', 
       'utf8',
     ),
   );
+  database.exec(
+    readFileSync(
+      `${migrationsDirectory}/0072_first_reply_content_items.sql`,
+      'utf8',
+    ),
+  );
 
   const greeting = database
     .prepare(
@@ -175,7 +181,10 @@ test('0070 materializes legacy first-reply data and removes invalid relations', 
     name: '新问候语',
     text: '新增内容',
   });
-  settings.settings.profiles[0].greetingId = 'new-greeting';
+  settings.settings.profiles[0].items = settings.settings.profiles[0].items.map(
+    (item) =>
+      item.type === 'greeting' ? { ...item, materialId: 'new-greeting' } : item,
+  );
   const added = await agentAutoReplyApi.request(
     '/api/agent/first-reply',
     {
@@ -193,7 +202,7 @@ test('0070 materializes legacy first-reply data and removes invalid relations', 
   const updated = await added.json();
   updated.settings.enabled = false;
   updated.settings.greetings = [];
-  updated.settings.profiles[0].greetingId = null;
+  updated.settings.profiles[0].items = [];
   const removed = await agentAutoReplyApi.request(
     '/api/agent/first-reply',
     {

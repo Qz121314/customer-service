@@ -25,7 +25,22 @@ type AgentGreetingPreset = {
 
 type AgentCtaPreset = AgentGreetingCta;
 
+type AgentFirstReplyItemType = 'greeting' | 'cta' | 'contact_card' | 'image';
+
+type AgentFirstReplyItem = {
+  id: string;
+  type: AgentFirstReplyItemType;
+  materialId: string;
+  sortOrder: number;
+};
+
 type AgentFirstReplyProfile = {
+  id: string;
+  name: string;
+  items: AgentFirstReplyItem[];
+};
+
+type LegacyFirstReplyProfile = {
   id: string;
   name: string;
   greetingId: string | null;
@@ -49,15 +64,32 @@ const PROFILE_LIMIT = 20;
 export function removeMissingLegacyAttachmentIds(
   profiles: AgentFirstReplyProfile[],
   ownedAttachmentIds: ReadonlySet<string>,
-): AgentFirstReplyProfile[] {
+): AgentFirstReplyProfile[];
+export function removeMissingLegacyAttachmentIds(
+  profiles: LegacyFirstReplyProfile[],
+  ownedAttachmentIds: ReadonlySet<string>,
+): LegacyFirstReplyProfile[];
+export function removeMissingLegacyAttachmentIds(
+  profiles: Array<AgentFirstReplyProfile | LegacyFirstReplyProfile>,
+  ownedAttachmentIds: ReadonlySet<string>,
+): Array<AgentFirstReplyProfile | LegacyFirstReplyProfile> {
   return profiles.map((profile) =>
     profile.id === 'legacy-first-reply'
-      ? {
-          ...profile,
-          attachmentIds: profile.attachmentIds.filter((id) =>
-            ownedAttachmentIds.has(id),
-          ),
-        }
+      ? 'items' in profile
+        ? {
+            ...profile,
+            items: profile.items.filter((item) =>
+              item.type !== 'contact_card' && item.type !== 'image'
+                ? true
+                : ownedAttachmentIds.has(item.materialId),
+            ),
+          }
+        : {
+            ...profile,
+            attachmentIds: profile.attachmentIds.filter((id) =>
+              ownedAttachmentIds.has(id),
+            ),
+          }
       : profile,
   );
 }
@@ -114,40 +146,70 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
   const profileIds = new Set(profiles.map((item) => item.id));
   if (
     (body.activeProfileId !== null && !profileIds.has(body.activeProfileId)) ||
-    profiles.some(
-      (profile) =>
-        (profile.greetingId !== null && !greetingIds.has(profile.greetingId)) ||
-        profile.ctaIds.some((id) => !ctaIds.has(id)),
+    profiles.some((profile) =>
+      profile.items.some(
+        (item) =>
+          (item.type === 'greeting' && !greetingIds.has(item.materialId)) ||
+          (item.type === 'cta' && !ctaIds.has(item.materialId)),
+      ),
     )
   ) {
     return c.json({ error: 'INVALID_FIRST_REPLY' }, 400);
   }
 
   const attachmentIds = [
-    ...new Set(profiles.flatMap((profile) => profile.attachmentIds)),
+    ...new Set(
+      profiles.flatMap((profile) =>
+        profile.items
+          .filter(
+            (item) => item.type === 'contact_card' || item.type === 'image',
+          )
+          .map((item) => item.materialId),
+      ),
+    ),
   ];
-  const ownedAttachmentIds = new Set<string>();
+  const ownedAttachmentKinds = new Map<string, string>();
   if (attachmentIds.length > 0) {
     const owned = await c.env.DB.prepare(
-      `SELECT id
+      `SELECT id, kind
        FROM agent_attachment_presets
        WHERE agent_id = ?1
          AND id IN (SELECT CAST(value AS TEXT) FROM json_each(?2))`,
     )
       .bind(agent.id, JSON.stringify(attachmentIds))
-      .all<{ id: string }>();
+      .all<{ id: string; kind: string }>();
     for (const item of owned.results ?? []) {
-      ownedAttachmentIds.add(item.id);
+      ownedAttachmentKinds.set(item.id, item.kind);
     }
-    if (!isLegacyPayload && ownedAttachmentIds.size !== attachmentIds.length) {
+    if (
+      !isLegacyPayload &&
+      ownedAttachmentKinds.size !== attachmentIds.length
+    ) {
       return c.json({ error: 'INVALID_FIRST_REPLY' }, 400);
     }
     if (isLegacyPayload) {
       profilesToPersist = removeMissingLegacyAttachmentIds(
         profiles,
-        ownedAttachmentIds,
+        new Set(ownedAttachmentKinds.keys()),
       );
     }
+  }
+
+  if (
+    profilesToPersist.some((profile) =>
+      profile.items.some((item) => {
+        if (item.type !== 'contact_card' && item.type !== 'image') return false;
+        const kind = ownedAttachmentKinds.get(item.materialId);
+        return Boolean(
+          !kind ||
+          (!isLegacyPayload &&
+            ((item.type === 'image' && kind !== 'image') ||
+              (item.type === 'contact_card' && kind === 'image'))),
+        );
+      }),
+    )
+  ) {
+    return c.json({ error: 'INVALID_FIRST_REPLY' }, 400);
   }
 
   const activeProfile =
@@ -156,19 +218,30 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
           (profile) => profile.id === body.activeProfileId,
         ) ?? null)
       : null;
-  const activeGreeting = activeProfile?.greetingId
-    ? (greetings.find((item) => item.id === activeProfile.greetingId) ?? null)
-    : null;
+  const activeGreetingItems = activeProfile
+    ? activeProfile.items.filter((item) => item.type === 'greeting')
+    : [];
+  const activeGreeting = activeGreetingItems
+    .map((item) =>
+      greetings.find((greeting) => greeting.id === item.materialId),
+    )
+    .filter((item): item is AgentGreetingPreset => Boolean(item));
   const activeCtas = activeProfile
-    ? activeProfile.ctaIds
-        .map((id) => ctas.find((item) => item.id === id))
+    ? activeProfile.items
+        .filter((item) => item.type === 'cta')
+        .map((item) => ctas.find((cta) => cta.id === item.materialId))
         .filter((item): item is AgentCtaPreset => Boolean(item))
+    : [];
+  const activeAttachments = activeProfile
+    ? activeProfile.items
+        .filter((item) => item.type === 'contact_card' || item.type === 'image')
+        .map((item) => item.materialId)
     : [];
   if (
     body.enabled &&
     (!activeProfile ||
-      (!activeGreeting?.text.trim() &&
-        activeProfile.attachmentIds.length === 0))
+      (!activeGreeting.some((item) => item.text.trim()) &&
+        activeAttachments.length === 0))
   ) {
     return c.json({ error: 'FIRST_REPLY_CONTENT_REQUIRED' }, 400);
   }
@@ -176,9 +249,7 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
   const greetingsJson = JSON.stringify(greetings);
   const ctasJson = JSON.stringify(ctas);
   const profilesJson = JSON.stringify(profilesToPersist);
-  const activeAttachmentsJson = JSON.stringify(
-    activeProfile?.attachmentIds ?? [],
-  );
+  const activeAttachmentsJson = JSON.stringify(activeAttachments);
   const activeCtasJson = JSON.stringify(activeCtas);
   const statements = [
     c.env.DB.prepare(
@@ -222,28 +293,52 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
       `INSERT INTO agent_first_reply_profiles (
          id, agent_id, name, greeting_id, is_active, sort_order
        )
-       SELECT json_extract(value, '$.id'), ?1,
-              json_extract(value, '$.name'), json_extract(value, '$.greetingId'),
-              CASE WHEN json_extract(value, '$.id') = ?2 THEN 1 ELSE 0 END,
+       SELECT json_extract(profile.value, '$.id'), ?1,
+              json_extract(profile.value, '$.name'),
+              (
+                SELECT json_extract(item.value, '$.materialId')
+                FROM json_each(json_extract(profile.value, '$.items')) item
+                WHERE json_extract(item.value, '$.type') = 'greeting'
+                ORDER BY CAST(json_extract(item.value, '$.sortOrder') AS INTEGER)
+                LIMIT 1
+              ),
+              CASE WHEN json_extract(profile.value, '$.id') = ?2 THEN 1 ELSE 0 END,
               key
-       FROM json_each(?3)`,
+       FROM json_each(?3) profile`,
     ).bind(agent.id, body.activeProfileId, profilesJson),
+    c.env.DB.prepare(
+      `INSERT INTO agent_first_reply_items (
+         id, profile_id, material_type, material_id, sort_order
+       )
+       SELECT json_extract(item.value, '$.id'),
+              json_extract(profile.value, '$.id'),
+              json_extract(item.value, '$.type'),
+              json_extract(item.value, '$.materialId'),
+              CAST(json_extract(item.value, '$.sortOrder') AS INTEGER)
+       FROM json_each(?1) profile
+       JOIN json_each(json_extract(profile.value, '$.items')) item`,
+    ).bind(profilesJson),
     c.env.DB.prepare(
       `INSERT INTO agent_first_reply_profile_attachments (
          profile_id, preset_id, sort_order
        )
-       SELECT json_extract(profile.value, '$.id'), attachment.value,
-              attachment.key
+       SELECT json_extract(profile.value, '$.id'),
+              json_extract(item.value, '$.materialId'),
+              CAST(json_extract(item.value, '$.sortOrder') AS INTEGER)
        FROM json_each(?1) profile
-       JOIN json_each(json_extract(profile.value, '$.attachmentIds')) attachment`,
+       JOIN json_each(json_extract(profile.value, '$.items')) item
+       WHERE json_extract(item.value, '$.type') IN ('contact_card', 'image')`,
     ).bind(profilesJson),
     c.env.DB.prepare(
       `INSERT INTO agent_first_reply_profile_ctas (
          profile_id, cta_id, sort_order
        )
-       SELECT json_extract(profile.value, '$.id'), cta.value, cta.key
+       SELECT json_extract(profile.value, '$.id'),
+              json_extract(item.value, '$.materialId'),
+              CAST(json_extract(item.value, '$.sortOrder') AS INTEGER)
        FROM json_each(?1) profile
-       JOIN json_each(json_extract(profile.value, '$.ctaIds')) cta`,
+       JOIN json_each(json_extract(profile.value, '$.items')) item
+       WHERE json_extract(item.value, '$.type') = 'cta'`,
     ).bind(profilesJson),
     c.env.DB.prepare(
       `UPDATE agents
@@ -251,7 +346,14 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
            auto_greeting_text = ?2,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = ?3`,
-    ).bind(body.enabled ? 1 : 0, activeGreeting?.text.trim() || null, agent.id),
+    ).bind(
+      body.enabled ? 1 : 0,
+      activeGreeting
+        .map((item) => item.text.trim())
+        .filter(Boolean)
+        .join('\n\n') || null,
+      agent.id,
+    ),
     c.env.DB.prepare(
       `DELETE FROM agent_auto_greeting_attachments WHERE agent_id = ?1`,
     ).bind(agent.id),
@@ -276,7 +378,14 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
     ).bind(agent.id, activeCtasJson),
   ];
   await c.env.DB.batch(statements);
-  return c.json({ settings: await firstReplyPayload(c.env.DB, agent) });
+  const updated = await c.env.DB.prepare(
+    `SELECT id, auto_greeting_enabled, auto_greeting_text
+     FROM agents WHERE id = ?1 LIMIT 1`,
+  )
+    .bind(agent.id)
+    .first<AgentSettingsRow>();
+  if (!updated) return c.json({ error: 'UNAUTHORIZED' }, 401);
+  return c.json({ settings: await firstReplyPayload(c.env.DB, updated) });
 });
 
 agentAutoReplyApi.get('/api/agent/settings/auto-reply', async (c) => {
@@ -461,49 +570,50 @@ async function firstReplyPayload(
     answer: item.answer,
     enabled: item.enabled === 1,
   }));
-  const [attachmentRows, profileCtaRows] = await Promise.all([
-    db
-      .prepare(
-        `SELECT relation.profile_id, relation.preset_id
-         FROM agent_first_reply_profile_attachments relation
-         JOIN agent_first_reply_profiles profile
-           ON profile.id = relation.profile_id
-         WHERE profile.agent_id = ?1
-         ORDER BY relation.profile_id, relation.sort_order, relation.preset_id`,
-      )
-      .bind(row.id)
-      .all<{ profile_id: string; preset_id: string }>(),
-    db
-      .prepare(
-        `SELECT relation.profile_id, relation.cta_id
-         FROM agent_first_reply_profile_ctas relation
-         JOIN agent_first_reply_profiles profile
-           ON profile.id = relation.profile_id
-         WHERE profile.agent_id = ?1
-         ORDER BY relation.profile_id, relation.sort_order, relation.cta_id`,
-      )
-      .bind(row.id)
-      .all<{ profile_id: string; cta_id: string }>(),
-  ]);
-  const attachmentsByProfile = new Map<string, string[]>();
-  for (const item of attachmentRows.results ?? []) {
-    const current = attachmentsByProfile.get(item.profile_id) ?? [];
-    current.push(item.preset_id);
-    attachmentsByProfile.set(item.profile_id, current);
+  const itemRows = await db
+    .prepare(
+      `SELECT item.id, item.profile_id, item.material_type, item.material_id,
+              item.sort_order
+       FROM agent_first_reply_items item
+       JOIN agent_first_reply_profiles profile
+         ON profile.id = item.profile_id
+       WHERE profile.agent_id = ?1
+       ORDER BY item.profile_id, item.sort_order, item.id`,
+    )
+    .bind(row.id)
+    .all<AgentFirstReplyItemRow>();
+  const itemsByProfile = new Map<string, AgentFirstReplyItem[]>();
+  for (const item of itemRows.results ?? []) {
+    const current = itemsByProfile.get(item.profile_id) ?? [];
+    current.push({
+      id: item.id,
+      type: item.material_type,
+      materialId: item.material_id,
+      sortOrder: item.sort_order,
+    });
+    itemsByProfile.set(item.profile_id, current);
   }
-  const ctasByProfile = new Map<string, string[]>();
-  for (const item of profileCtaRows.results ?? []) {
-    const current = ctasByProfile.get(item.profile_id) ?? [];
-    current.push(item.cta_id);
-    ctasByProfile.set(item.profile_id, current);
-  }
-  const profiles = (profileRows.results ?? []).map((item) => ({
-    id: item.id,
-    name: item.name,
-    greetingId: item.greeting_id,
-    attachmentIds: attachmentsByProfile.get(item.id) ?? [],
-    ctaIds: ctasByProfile.get(item.id) ?? [],
-  }));
+  const profiles = (profileRows.results ?? []).map((item) => {
+    const items = itemsByProfile.get(item.id) ?? [];
+    return {
+      id: item.id,
+      name: item.name,
+      items,
+      // Keep the old projection in the response for older desktop clients.
+      greetingId:
+        items.find((content) => content.type === 'greeting')?.materialId ??
+        null,
+      attachmentIds: items
+        .filter(
+          (content) =>
+            content.type === 'contact_card' || content.type === 'image',
+        )
+        .map((content) => content.materialId),
+      ctaIds: items
+        .filter((content) => content.type === 'cta')
+        .map((content) => content.materialId),
+    };
+  });
 
   if (profiles.length > 0) {
     return {
@@ -518,21 +628,57 @@ async function firstReplyPayload(
   }
 
   const legacyCtas = await loadGreetingCtas(db, row.id);
+  const legacyAttachmentRows = await db
+    .prepare(
+      `SELECT relation.preset_id, preset.kind
+       FROM agent_auto_greeting_attachments relation
+       JOIN agent_attachment_presets preset
+         ON preset.id = relation.preset_id
+        AND preset.agent_id = relation.agent_id
+       WHERE relation.agent_id = ?1
+       ORDER BY relation.sort_order ASC, relation.preset_id ASC`,
+    )
+    .bind(row.id)
+    .all<{ preset_id: string; kind: string }>();
   const hasLegacyContent = Boolean(
-    row.auto_greeting_text?.trim() ||
-    (await db
-      .prepare(
-        `SELECT 1 FROM agent_auto_greeting_attachments
-           WHERE agent_id = ?1 LIMIT 1`,
-      )
-      .bind(row.id)
-      .first()),
+    row.auto_greeting_text?.trim() || legacyAttachmentRows.results?.length,
   );
+  const legacyItems: AgentFirstReplyItem[] = [
+    ...(row.auto_greeting_text?.trim()
+      ? [
+          {
+            id: 'legacy-greeting-item',
+            type: 'greeting' as const,
+            materialId: 'legacy-greeting',
+            sortOrder: 0,
+          },
+        ]
+      : []),
+    ...(legacyAttachmentRows.results ?? []).map((item, index) => ({
+      id: `legacy-attachment-item-${item.preset_id}`,
+      type:
+        item.kind === 'image' ? ('image' as const) : ('contact_card' as const),
+      materialId: item.preset_id,
+      sortOrder: index + (row.auto_greeting_text?.trim() ? 1 : 0),
+    })),
+    ...legacyCtas.map((item, index) => ({
+      id: `legacy-cta-item-${item.id}`,
+      type: 'cta' as const,
+      materialId: item.id,
+      sortOrder:
+        index +
+        (row.auto_greeting_text?.trim() ? 1 : 0) +
+        (legacyAttachmentRows.results?.length ?? 0),
+    })),
+  ];
   const legacyProfile = {
     id: 'legacy-first-reply',
     name: '默认首次回复',
+    items: legacyItems,
     greetingId: row.auto_greeting_text?.trim() ? 'legacy-greeting' : null,
-    attachmentIds: await legacyAttachmentIds(db, row.id),
+    attachmentIds: (legacyAttachmentRows.results ?? []).map(
+      (item) => item.preset_id,
+    ),
     ctaIds: legacyCtas.map((cta) => cta.id),
   };
   return {
@@ -550,22 +696,6 @@ async function firstReplyPayload(
     ctas: legacyCtas,
     profiles: [legacyProfile],
   };
-}
-
-async function legacyAttachmentIds(
-  db: D1Database,
-  agentId: string,
-): Promise<string[]> {
-  const rows = await db
-    .prepare(
-      `SELECT preset_id
-       FROM agent_auto_greeting_attachments
-       WHERE agent_id = ?1
-       ORDER BY sort_order ASC, preset_id ASC`,
-    )
-    .bind(agentId)
-    .all<{ preset_id: string }>();
-  return (rows.results ?? []).map((item) => item.preset_id);
 }
 
 async function loadGreetingCtas(
@@ -603,8 +733,15 @@ type AgentGreetingCtaRow = Omit<AgentGreetingCta, 'enabled'> & {
 type AgentFirstReplyProfileRow = {
   id: string;
   name: string;
-  greeting_id: string | null;
   is_active: number;
+};
+
+type AgentFirstReplyItemRow = {
+  id: string;
+  profile_id: string;
+  material_type: AgentFirstReplyItemType;
+  material_id: string;
+  sort_order: number;
 };
 
 function normalizeGreetingPresets(
@@ -648,36 +785,109 @@ function normalizeFirstReplyProfiles(
     const record = item as Record<string, unknown>;
     const id = typeof record.id === 'string' ? record.id.trim() : '';
     const name = typeof record.name === 'string' ? record.name.trim() : '';
-    const greetingId =
-      record.greetingId === null
-        ? null
-        : typeof record.greetingId === 'string'
-          ? record.greetingId.trim()
-          : '';
-    if (!Array.isArray(record.attachmentIds) || !Array.isArray(record.ctaIds)) {
-      return null;
+    let items: AgentFirstReplyItem[];
+    if (Array.isArray(record.items)) {
+      const normalizedItems: AgentFirstReplyItem[] = [];
+      for (const rawItem of record.items) {
+        if (!rawItem || typeof rawItem !== 'object' || Array.isArray(rawItem)) {
+          return null;
+        }
+        const item = rawItem as Record<string, unknown>;
+        const itemId = typeof item.id === 'string' ? item.id.trim() : '';
+        const materialId =
+          typeof item.materialId === 'string' ? item.materialId.trim() : '';
+        const type = item.type;
+        if (
+          !itemId ||
+          itemId.length > 100 ||
+          !materialId ||
+          materialId.length > 200 ||
+          !isFirstReplyItemType(type) ||
+          normalizedItems.some((current) => current.id === itemId)
+        ) {
+          return null;
+        }
+        normalizedItems.push({
+          id: itemId,
+          type,
+          materialId,
+          sortOrder: normalizedItems.length,
+        });
+      }
+      items = normalizedItems;
+    } else {
+      if (
+        !Array.isArray(record.attachmentIds) ||
+        !Array.isArray(record.ctaIds)
+      ) {
+        return null;
+      }
+      const greetingId =
+        record.greetingId === null
+          ? null
+          : typeof record.greetingId === 'string'
+            ? record.greetingId.trim()
+            : '';
+      const attachmentIds = normalizeAttachmentIds(record.attachmentIds);
+      const ctaIds = normalizeAttachmentIds(record.ctaIds);
+      if (
+        greetingId === '' ||
+        attachmentIds.length > AUTO_GREETING_ATTACHMENT_LIMIT ||
+        ctaIds.length > CTA_LIMIT ||
+        (Array.isArray(record.attachmentIds) &&
+          attachmentIds.length !== record.attachmentIds.length) ||
+        (Array.isArray(record.ctaIds) && ctaIds.length !== record.ctaIds.length)
+      ) {
+        return null;
+      }
+      items = [
+        ...(greetingId
+          ? [
+              {
+                id: `${id}:greeting:${greetingId}`,
+                type: 'greeting' as const,
+                materialId: greetingId,
+                sortOrder: 0,
+              },
+            ]
+          : []),
+        ...attachmentIds.map((materialId, index) => ({
+          id: `${id}:attachment:${materialId}`,
+          type: 'contact_card' as const,
+          materialId,
+          sortOrder: index + (greetingId ? 1 : 0),
+        })),
+        ...ctaIds.map((materialId, index) => ({
+          id: `${id}:cta:${materialId}`,
+          type: 'cta' as const,
+          materialId,
+          sortOrder: index + (greetingId ? 1 : 0) + attachmentIds.length,
+        })),
+      ];
     }
-    const attachmentIds = normalizeAttachmentIds(record.attachmentIds);
-    const ctaIds = normalizeAttachmentIds(record.ctaIds);
     if (
       !id ||
       id.length > 80 ||
       !name ||
       name.length > MATERIAL_NAME_LIMIT ||
-      greetingId === '' ||
-      attachmentIds.length > AUTO_GREETING_ATTACHMENT_LIMIT ||
-      ctaIds.length > CTA_LIMIT ||
-      (Array.isArray(record.attachmentIds) &&
-        attachmentIds.length !== record.attachmentIds.length) ||
-      (Array.isArray(record.ctaIds) &&
-        ctaIds.length !== record.ctaIds.length) ||
       result.some((profile) => profile.id === id)
     ) {
       return null;
     }
-    result.push({ id, name, greetingId, attachmentIds, ctaIds });
+    result.push({ id, name, items });
   }
   return result;
+}
+
+function isFirstReplyItemType(
+  value: unknown,
+): value is AgentFirstReplyItemType {
+  return (
+    value === 'greeting' ||
+    value === 'cta' ||
+    value === 'contact_card' ||
+    value === 'image'
+  );
 }
 
 function normalizeGreetingCtas(value: unknown): AgentGreetingCta[] | null {

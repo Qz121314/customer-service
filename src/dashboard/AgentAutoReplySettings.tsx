@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   getAgentFirstReplySettings,
   updateAgentFirstReplySettings,
+  type AgentFirstReplyItem,
+  type AgentFirstReplyItemType,
   type AgentFirstReplyProfile,
   type AgentFirstReplySettings,
 } from './agent-auto-reply-client';
@@ -23,9 +25,7 @@ import { Button, Input, Textarea } from './ui';
 const EMPTY_PROFILE: AgentFirstReplyProfile = {
   id: 'new-first-reply',
   name: '默认首次回复',
-  greetingId: null,
-  attachmentIds: [],
-  ctaIds: [],
+  items: [],
 };
 const EMPTY_SETTINGS: AgentFirstReplySettings = {
   enabled: false,
@@ -41,6 +41,12 @@ const CONTACT_CARD_LABELS: Record<AgentContactCardKind, string> = {
   whatsapp: 'WhatsApp',
   telegram: 'Telegram',
   website: '网站',
+};
+const FIRST_REPLY_ITEM_LABELS: Record<AgentFirstReplyItemType, string> = {
+  greeting: '问候语',
+  cta: 'CTA',
+  contact_card: '名片',
+  image: '图片',
 };
 
 export function AgentAutoReplySettingsModal({
@@ -59,6 +65,10 @@ export function AgentAutoReplySettingsModal({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [addContentOpen, setAddContentOpen] = useState(false);
+  const [addContentType, setAddContentType] =
+    useState<AgentFirstReplyItemType>('greeting');
+  const [addMaterialId, setAddMaterialId] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -106,9 +116,7 @@ export function AgentAutoReplySettingsModal({
     settings.profiles[0] ??
     null;
   const changed = JSON.stringify(settings) !== JSON.stringify(saved);
-  const activeContent = Boolean(
-    selectedProfile?.greetingId || selectedProfile?.attachmentIds.length,
-  );
+  const activeContent = Boolean(selectedProfile?.items.length);
   const canSave =
     !loading &&
     !saving &&
@@ -144,9 +152,10 @@ export function AgentAutoReplySettingsModal({
           label: item.label.trim(),
           answer: item.answer.trim(),
         })),
-        profiles: settings.profiles.map((profile) => ({
-          ...profile,
-          name: profile.name.trim(),
+        profiles: settings.profiles.map(({ id, name, items }) => ({
+          id,
+          name: name.trim(),
+          items,
         })),
       });
       setSettings(next);
@@ -166,9 +175,7 @@ export function AgentAutoReplySettingsModal({
     const profile: AgentFirstReplyProfile = {
       id: crypto.randomUUID(),
       name: `首次回复方案 ${settings.profiles.length + 1}`,
-      greetingId: null,
-      attachmentIds: [],
-      ctaIds: [],
+      items: [],
     };
     setSettings((current) => ({
       ...current,
@@ -186,27 +193,101 @@ export function AgentAutoReplySettingsModal({
     setSelectedProfileId(profiles[0]?.id ?? null);
   };
 
-  const replaceAttachmentType = (kind: 'card' | 'image', presetId: string) => {
+  const getMaterialOptions = (type: AgentFirstReplyItemType) => {
+    if (type === 'greeting') {
+      return settings.greetings.map((item) => ({
+        id: item.id,
+        label: item.name,
+      }));
+    }
+    if (type === 'cta') {
+      return settings.ctas.map((item) => ({ id: item.id, label: item.label }));
+    }
+    return presets
+      .filter((item) =>
+        type === 'image' ? item.kind === 'image' : item.kind !== 'image',
+      )
+      .map((item) => ({
+        id: item.id,
+        label:
+          item.kind === 'image'
+            ? item.label
+            : item.label.trim().toLowerCase() ===
+                CONTACT_CARD_LABELS[item.kind].toLowerCase()
+              ? item.label
+              : `${CONTACT_CARD_LABELS[item.kind]} · ${item.label}`,
+      }));
+  };
+  const addMaterialOptions = getMaterialOptions(addContentType);
+
+  const openAddContent = () => {
+    setAddContentType('greeting');
+    setAddMaterialId(getMaterialOptions('greeting')[0]?.id ?? '');
+    setAddContentOpen(true);
+  };
+
+  const addContentItem = () => {
+    if (!addMaterialId) return;
     updateSelectedProfile((profile) => ({
       ...profile,
-      attachmentIds: [
-        ...profile.attachmentIds.filter(
-          (id) =>
-            !presets.some(
-              (preset) =>
-                preset.id === id &&
-                (kind === 'image'
-                  ? preset.kind === 'image'
-                  : preset.kind !== 'image'),
-            ),
-        ),
-        ...(presetId ? [presetId] : []),
+      items: [
+        ...profile.items,
+        {
+          id: crypto.randomUUID(),
+          type: addContentType,
+          materialId: addMaterialId,
+          sortOrder: profile.items.length,
+        },
       ],
+    }));
+    setAddContentOpen(false);
+  };
+
+  const removeContentItem = (itemId: string) => {
+    updateSelectedProfile((profile) => ({
+      ...profile,
+      items: profile.items
+        .filter((item) => item.id !== itemId)
+        .map((item, index) => ({ ...item, sortOrder: index })),
     }));
   };
 
-  const cardPresets = presets.filter((preset) => preset.kind !== 'image');
-  const imagePresets = presets.filter((preset) => preset.kind === 'image');
+  const moveContentItem = (index: number, direction: -1 | 1) => {
+    updateSelectedProfile((profile) => {
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= profile.items.length) return profile;
+      const items = [...profile.items];
+      [items[index], items[nextIndex]] = [items[nextIndex], items[index]];
+      return {
+        ...profile,
+        items: items.map((item, itemIndex) => ({
+          ...item,
+          sortOrder: itemIndex,
+        })),
+      };
+    });
+  };
+
+  const materialLabel = (item: AgentFirstReplyItem) => {
+    if (item.type === 'greeting') {
+      return (
+        settings.greetings.find((material) => material.id === item.materialId)
+          ?.name ?? item.materialId
+      );
+    }
+    if (item.type === 'cta') {
+      return (
+        settings.ctas.find((material) => material.id === item.materialId)
+          ?.label ?? item.materialId
+      );
+    }
+    const preset = presets.find((material) => material.id === item.materialId);
+    return preset
+      ? preset.kind === 'image'
+        ? preset.label
+        : `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.label}`
+      : item.materialId;
+  };
 
   return (
     <div
@@ -297,9 +378,13 @@ export function AgentAutoReplySettingsModal({
                     <span>
                       <strong>{profile.name}</strong>
                       <small>
-                        {profile.greetingId ? '问候语' : '无问候语'} ·{' '}
-                        {profile.attachmentIds.length} 个附件 ·{' '}
-                        {profile.ctaIds.length} 个 CTA
+                        {profile.items.length} 个内容项 ·{' '}
+                        {
+                          profile.items.filter(
+                            (item) => item.type === 'greeting',
+                          ).length
+                        }{' '}
+                        个问候语
                       </small>
                     </span>
                     {settings.enabled && profile.id === selectedProfile?.id ? (
@@ -336,84 +421,145 @@ export function AgentAutoReplySettingsModal({
                   </Button>
                 </div>
                 <section className="agent-first-reply-choice">
-                  <div className="agent-first-reply-picker-stack">
-                    <MaterialPicker
-                      label="问候语"
-                      hint="可选，首次回复前置文案"
-                      value={selectedProfile.greetingId ?? ''}
-                      options={settings.greetings.map((greeting) => ({
-                        id: greeting.id,
-                        label: greeting.name,
-                      }))}
-                      emptyLabel="不使用问候语"
-                      emptyState="素材库暂无问候语"
-                      onChange={(value) =>
-                        updateSelectedProfile((profile) => ({
-                          ...profile,
-                          greetingId: value || null,
-                        }))
-                      }
-                    />
-                    <MaterialPicker
-                      label="名片"
-                      hint="可选，选择已录入的联系方式"
-                      value={
-                        selectedProfile.attachmentIds.find((id) =>
-                          cardPresets.some((preset) => preset.id === id),
-                        ) ?? ''
-                      }
-                      options={cardPresets.map((preset) => ({
-                        id: preset.id,
-                        label:
-                          preset.label.trim().toLowerCase() ===
-                          CONTACT_CARD_LABELS[preset.kind].toLowerCase()
-                            ? preset.label
-                            : `${CONTACT_CARD_LABELS[preset.kind]} · ${preset.label}`,
-                      }))}
-                      emptyLabel="不使用名片"
-                      emptyState="素材库暂无名片"
-                      onChange={(value) => replaceAttachmentType('card', value)}
-                    />
-                    <MaterialPicker
-                      label="CTA"
-                      hint="可选，显示在首次回复下方"
-                      value={selectedProfile.ctaIds[0] ?? ''}
-                      options={settings.ctas.map((cta) => ({
-                        id: cta.id,
-                        label: cta.label,
-                      }))}
-                      emptyLabel="不使用 CTA"
-                      emptyState="素材库暂无 CTA"
-                      onChange={(value) =>
-                        updateSelectedProfile((profile) => ({
-                          ...profile,
-                          ctaIds: value ? [value] : [],
-                        }))
-                      }
-                    />
-                    <MaterialPicker
-                      label="图片"
-                      hint="可选，选择已录入的图片"
-                      value={
-                        selectedProfile.attachmentIds.find((id) =>
-                          imagePresets.some((preset) => preset.id === id),
-                        ) ?? ''
-                      }
-                      options={imagePresets.map((preset) => ({
-                        id: preset.id,
-                        label: preset.label,
-                      }))}
-                      emptyLabel="不使用图片"
-                      emptyState="素材库暂无图片"
-                      onChange={(value) =>
-                        replaceAttachmentType('image', value)
-                      }
-                    />
+                  <div className="agent-first-reply-choice-head">
+                    <div>
+                      <strong>方案内容</strong>
+                      <small>
+                        按访客看到的顺序排列，可重复添加同一类型素材
+                      </small>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="添加方案内容"
+                      onClick={openAddContent}
+                    >
+                      <UiIcon name="plus" />
+                    </Button>
                   </div>
+                  {selectedProfile.items.length ? (
+                    <ol className="agent-first-reply-content-list">
+                      {selectedProfile.items.map((item, index) => (
+                        <li key={item.id}>
+                          <span className="agent-first-reply-content-index">
+                            {index + 1}
+                          </span>
+                          <span className="agent-first-reply-content-copy">
+                            <strong>
+                              {FIRST_REPLY_ITEM_LABELS[item.type]}
+                            </strong>
+                            <small>{materialLabel(item)}</small>
+                          </span>
+                          <span className="agent-first-reply-content-actions">
+                            <button
+                              type="button"
+                              className="agent-first-reply-order-button"
+                              aria-label={`上移第 ${index + 1} 个内容项`}
+                              disabled={index === 0}
+                              onClick={() => moveContentItem(index, -1)}
+                            >
+                              <UiIcon name="chevron" />
+                            </button>
+                            <button
+                              type="button"
+                              className="agent-first-reply-order-button is-down"
+                              aria-label={`下移第 ${index + 1} 个内容项`}
+                              disabled={
+                                index === selectedProfile.items.length - 1
+                              }
+                              onClick={() => moveContentItem(index, 1)}
+                            >
+                              <UiIcon name="chevron" />
+                            </button>
+                            <button
+                              type="button"
+                              className="agent-first-reply-remove-button"
+                              aria-label={`删除第 ${index + 1} 个内容项`}
+                              onClick={() => removeContentItem(item.id)}
+                            >
+                              <UiIcon name="close" />
+                            </button>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <div className="agent-first-reply-content-empty">
+                      还没有内容项，点击右上角加号添加素材。
+                    </div>
+                  )}
+                  {addContentOpen ? (
+                    <div
+                      className="agent-first-reply-content-dialog"
+                      role="dialog"
+                      aria-label="添加方案内容"
+                    >
+                      <div className="agent-first-reply-content-dialog-head">
+                        <strong>添加内容</strong>
+                        <button
+                          type="button"
+                          aria-label="关闭添加内容"
+                          onClick={() => setAddContentOpen(false)}
+                        >
+                          <UiIcon name="close" />
+                        </button>
+                      </div>
+                      <label>
+                        <span>类型</span>
+                        <select
+                          value={addContentType}
+                          onChange={(event) => {
+                            const nextType = event.target
+                              .value as AgentFirstReplyItemType;
+                            setAddContentType(nextType);
+                            setAddMaterialId(
+                              getMaterialOptions(nextType)[0]?.id ?? '',
+                            );
+                          }}
+                        >
+                          {Object.entries(FIRST_REPLY_ITEM_LABELS).map(
+                            ([type, label]) => (
+                              <option key={type} value={type}>
+                                {label}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+                      <label>
+                        <span>素材</span>
+                        <select
+                          value={addMaterialId}
+                          disabled={!addMaterialOptions.length}
+                          onChange={(event) =>
+                            setAddMaterialId(event.target.value)
+                          }
+                        >
+                          {addMaterialOptions.length ? (
+                            addMaterialOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">暂无可用素材</option>
+                          )}
+                        </select>
+                      </label>
+                      <Button
+                        type="button"
+                        disabled={!addMaterialId}
+                        onClick={addContentItem}
+                      >
+                        添加到方案
+                      </Button>
+                    </div>
+                  ) : null}
                 </section>
                 {settings.enabled && !activeContent ? (
                   <div className="auth-error">
-                    开启后至少选择一个问候语或附件。
+                    开启后至少添加一个可发送的问候语、名片或图片。
                   </div>
                 ) : null}
                 {error ? <div className="auth-error">{error}</div> : null}
@@ -432,110 +578,6 @@ function SectionHead({ title, detail }: { title: string; detail?: string }) {
       <span>
         <strong>{title}</strong>
         {detail ? <small>{detail}</small> : null}
-      </span>
-    </div>
-  );
-}
-
-type MaterialPickerOption = { id: string; label: string };
-
-function MaterialPicker({
-  label,
-  hint,
-  value,
-  options,
-  emptyLabel,
-  emptyState,
-  onChange,
-}: {
-  label: string;
-  hint: string;
-  value: string;
-  options: MaterialPickerOption[];
-  emptyLabel: string;
-  emptyState: string;
-  onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const selected = options.find((option) => option.id === value);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        rootRef.current &&
-        !rootRef.current.contains(event.target)
-      ) {
-        setOpen(false);
-      }
-    };
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [open]);
-
-  useEffect(() => {
-    if (options.length === 0) setOpen(false);
-  }, [options.length]);
-
-  return (
-    <div className="agent-first-reply-picker">
-      <span className="agent-first-reply-picker-label">
-        <strong>{label}</strong>
-        <small>{hint}</small>
-      </span>
-      <span className="agent-first-reply-picker-control">
-        <div className="agent-first-reply-material-select" ref={rootRef}>
-          <button
-            type="button"
-            className="agent-first-reply-material-trigger"
-            aria-label={`${label}素材`}
-            aria-expanded={open}
-            disabled={options.length === 0}
-            onClick={() => setOpen((current) => !current)}
-          >
-            <span>
-              {selected?.label ?? (options.length ? emptyLabel : emptyState)}
-            </span>
-            <UiIcon name="chevron" />
-          </button>
-          {open ? (
-            <div
-              className="agent-first-reply-material-options"
-              role="listbox"
-              aria-label={`${label}素材选项`}
-            >
-              <button
-                type="button"
-                role="option"
-                aria-selected={!value}
-                onClick={() => {
-                  onChange('');
-                  setOpen(false);
-                }}
-              >
-                <span>{emptyLabel}</span>
-                {!value ? <UiIcon name="check" /> : null}
-              </button>
-              {options.map((option) => (
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={value === option.id}
-                  key={option.id}
-                  onClick={() => {
-                    onChange(option.id);
-                    setOpen(false);
-                  }}
-                >
-                  <span>{option.label}</span>
-                  {value === option.id ? <UiIcon name="check" /> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
       </span>
     </div>
   );
@@ -663,7 +705,14 @@ export function AgentMaterialsModal({
     setSaving(true);
     setError('');
     try {
-      const value = await updateAgentFirstReplySettings(next);
+      const value = await updateAgentFirstReplySettings({
+        ...next,
+        profiles: next.profiles.map(({ id, name, items }) => ({
+          id,
+          name,
+          items,
+        })),
+      });
       setSettings(value);
       setSaved(value);
     } catch (reason) {
@@ -698,20 +747,27 @@ export function AgentMaterialsModal({
   };
   const removeGreeting = (id: string) => {
     const greetings = settings.greetings.filter((item) => item.id !== id);
-    const profiles = settings.profiles.map((profile) =>
-      profile.greetingId === id ? { ...profile, greetingId: null } : profile,
-    );
+    const profiles = settings.profiles.map((profile) => ({
+      ...profile,
+      items: profile.items
+        .filter((item) => !(item.type === 'greeting' && item.materialId === id))
+        .map((item, index) => ({ ...item, sortOrder: index })),
+    }));
     const activeProfile = settings.profiles.find(
       (profile) => profile.id === settings.activeProfileId,
     );
     const activeHasAttachment = Boolean(
-      activeProfile?.attachmentIds.some((presetId) =>
-        presets.some((preset) => preset.id === presetId),
+      activeProfile?.items.some(
+        (item) =>
+          (item.type === 'contact_card' || item.type === 'image') &&
+          presets.some((preset) => preset.id === item.materialId),
       ),
     );
     const disableAutomation =
       settings.enabled &&
-      activeProfile?.greetingId === id &&
+      activeProfile?.items.some(
+        (item) => item.type === 'greeting' && item.materialId === id,
+      ) &&
       !activeHasAttachment;
     void saveMaterials({
       ...settings,
@@ -739,7 +795,9 @@ export function AgentMaterialsModal({
     const ctas = settings.ctas.filter((item) => item.id !== id);
     const profiles = settings.profiles.map((profile) => ({
       ...profile,
-      ctaIds: profile.ctaIds.filter((ctaId) => ctaId !== id),
+      items: profile.items
+        .filter((item) => !(item.type === 'cta' && item.materialId === id))
+        .map((item, index) => ({ ...item, sortOrder: index })),
     }));
     void saveMaterials({ ...settings, ctas, profiles });
     if (ctaId === id) resetCtaEditor();
@@ -788,7 +846,15 @@ export function AgentMaterialsModal({
         ...current,
         profiles: current.profiles.map((profile) => ({
           ...profile,
-          attachmentIds: profile.attachmentIds.filter((id) => id !== preset.id),
+          items: profile.items
+            .filter(
+              (item) =>
+                !(
+                  (item.type === 'contact_card' || item.type === 'image') &&
+                  item.materialId === preset.id
+                ),
+            )
+            .map((item, index) => ({ ...item, sortOrder: index })),
         })),
       }));
     } catch (reason) {
@@ -880,7 +946,15 @@ export function AgentMaterialsModal({
         ...current,
         profiles: current.profiles.map((profile) => ({
           ...profile,
-          attachmentIds: profile.attachmentIds.filter((id) => id !== preset.id),
+          items: profile.items
+            .filter(
+              (item) =>
+                !(
+                  (item.type === 'contact_card' || item.type === 'image') &&
+                  item.materialId === preset.id
+                ),
+            )
+            .map((item, index) => ({ ...item, sortOrder: index })),
         })),
       }));
       if (cardEditingId === preset.id) resetCardEditor();
