@@ -112,6 +112,37 @@ export function AdminAgentStatisticsModal({
             <h2 id="admin-agent-statistics-title">{agent.name} · 接待统计</h2>
             <p>统计所选日期内每天首次有效接待的会话。</p>
           </div>
+          <div className="admin-agent-statistics-range">
+            <label>
+              开始日期
+              <input
+                type="date"
+                value={from}
+                min={reportingRetentionStart(today)}
+                max={to || today}
+                onChange={(event) => {
+                  setStats(null);
+                  setBusy(true);
+                  setFrom(event.target.value);
+                }}
+              />
+            </label>
+            <span aria-hidden="true">至</span>
+            <label>
+              结束日期
+              <input
+                type="date"
+                value={to}
+                min={from || reportingRetentionStart(today)}
+                max={today}
+                onChange={(event) => {
+                  setStats(null);
+                  setBusy(true);
+                  setTo(event.target.value);
+                }}
+              />
+            </label>
+          </div>
           <div className="agent-statistics-head-actions">
             <button
               type="button"
@@ -125,43 +156,6 @@ export function AdminAgentStatisticsModal({
         </header>
         <div className="agent-statistics-dialog-body">
           {error && <div className="notice error">{error}</div>}
-          <div className="admin-agent-statistics-range">
-            <div className="admin-agent-statistics-range-copy">
-              <strong>统计日期</strong>
-              <span>选择开始和结束日期</span>
-            </div>
-            <div className="admin-agent-statistics-range-fields">
-              <label>
-                开始日期
-                <input
-                  type="date"
-                  value={from}
-                  min={reportingRetentionStart(today)}
-                  max={to || today}
-                  onChange={(event) => {
-                    setStats(null);
-                    setBusy(true);
-                    setFrom(event.target.value);
-                  }}
-                />
-              </label>
-              <span aria-hidden="true">至</span>
-              <label>
-                结束日期
-                <input
-                  type="date"
-                  value={to}
-                  min={from || reportingRetentionStart(today)}
-                  max={today}
-                  onChange={(event) => {
-                    setStats(null);
-                    setBusy(true);
-                    setTo(event.target.value);
-                  }}
-                />
-              </label>
-            </div>
-          </div>
           <section className="agent-statistics-summary admin-agent-statistics-summary">
             <div>
               <span>区间接待</span>
