@@ -168,6 +168,35 @@
   gap: 10px;
 }
 
+.admin-agent-statistics-range {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--admin-muted, #737d89);
+  font-size: 11px;
+}
+
+.admin-agent-statistics-range label {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-agent-statistics-range input {
+  width: 154px;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--admin-border, #e1e4e9);
+  border-radius: 8px;
+  background: var(--admin-surface, #fff);
+  color: var(--admin-text-strong, #22242a);
+  font-family: inherit;
+  font-size: 12px;
+}
+
 .agent-statistics-dialog-body {
   min-height: 0;
   padding: 20px;
@@ -361,6 +390,22 @@
     padding: 8px;
     overflow: hidden;
     background: #f4f5f7;
+  }
+
+  .admin-agent-statistics-dialog .agent-statistics-dialog-body {
+    display: block;
+    overflow-y: auto;
+  }
+
+  .admin-agent-statistics-range {
+    gap: 6px;
+  }
+
+  .admin-agent-statistics-range input {
+    width: 140px;
+    min-height: 40px;
+    padding: 0 6px;
+    font-size: 12px;
   }
 
   .agent-statistics-dialog-body > .notice {

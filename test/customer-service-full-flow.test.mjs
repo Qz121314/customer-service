@@ -1728,7 +1728,6 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   assert.equal(conversationTrafficReceipt.agent_id, 'agent-e2e');
   assert.equal(conversationTrafficReceipt.agent_name, 'Agent E2E');
 
-  const statisticsMonth = trafficReceipt.business_date.slice(0, 7);
   const trafficStatsResponse = await adminConfigApi.request(
     `/api/admin/traffic-stats?from=${conversationTrafficReceipt.business_date}&to=${conversationTrafficReceipt.business_date}`,
     { headers: { cookie: adminCookie('admin-password') } },
@@ -1749,14 +1748,14 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   ]);
 
   const agentStatsResponse = await adminConfigApi.request(
-    `/api/admin/agent-stats?month=${statisticsMonth}&agentId=agent-e2e`,
+    `/api/admin/agent-stats?from=${trafficReceipt.business_date}&to=${trafficReceipt.business_date}&agentId=agent-e2e`,
     { headers: { cookie: adminCookie('admin-password') } },
     env,
   );
   assert.equal(agentStatsResponse.status, 200);
   const agentStats = await json(agentStatsResponse);
   assert.deepEqual(agentStats.counts, [
-    { day: Number(trafficReceipt.business_date.slice(-2)), count: 1 },
+    { date: trafficReceipt.business_date, count: 1 },
   ]);
 
   const cookie = `cs_agent_session=${token}`;

@@ -23,7 +23,7 @@ test('statistics period covers every day in the selected calendar month', () => 
   assert.equal(calendarMonthPeriod('2026-12').end, '2026-12-31');
 });
 
-test('admin and agent statistics query the complete calendar month', () => {
+test('admin statistics accept ranges and agent statistics retain month queries', () => {
   const admin = readFileSync(
     new URL('../src/worker/admin-config-api.ts', import.meta.url),
     'utf8',
@@ -33,7 +33,14 @@ test('admin and agent statistics query the complete calendar month', () => {
     'utf8',
   );
 
-  for (const source of [admin, agent]) {
+  assert.ok(admin.includes("normalizeReportingDate(c.req.query('from'))"));
+  assert.ok(admin.includes("normalizeReportingDate(c.req.query('to'))"));
+  assert.ok(admin.includes('business_date >= ?1'));
+  assert.ok(admin.includes('business_date <= ?2'));
+  assert.ok(admin.includes('calendarMonthPeriod(legacyMonth)'));
+  assert.ok(admin.includes('days: legacyPeriod.days'));
+
+  for (const source of [agent]) {
     assert.ok(source.includes('calendarMonthPeriod(month)'));
     assert.ok(source.includes('period.start'));
     assert.ok(source.includes('period.end'));
@@ -43,7 +50,7 @@ test('admin and agent statistics query the complete calendar month', () => {
   }
 });
 
-test('statistics surfaces use the shared controlled month picker', () => {
+test('admin statistics use dates and agent statistics use the shared month picker', () => {
   const picker = readFileSync(
     new URL('../src/dashboard/MonthPicker.tsx', import.meta.url),
     'utf8',
@@ -61,10 +68,10 @@ test('statistics surfaces use the shared controlled month picker', () => {
     ],
   ].map(surfaceSource);
 
-  for (const source of surfaces) {
-    assert.ok(source.includes('<MonthPicker'));
-    assert.ok(!source.includes('type="month"'));
-  }
+  assert.ok(!surfaces[0].includes('<MonthPicker'));
+  assert.ok(surfaces[0].includes('type="date"'));
+  assert.ok(surfaces[1].includes('<MonthPicker'));
+  assert.ok(!surfaces[1].includes('type="month"'));
 
   assert.ok(picker.includes('createPortal'));
   assert.ok(picker.includes('aria-haspopup="dialog"'));

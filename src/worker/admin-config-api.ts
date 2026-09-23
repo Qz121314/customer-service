@@ -255,34 +255,52 @@ adminConfigApi.get('/api/admin/realtime/stats', async (c) => {
 
 adminConfigApi.get('/api/admin/agent-stats', async (c) => {
   if (!(await adminAuthorized(c))) return unauthorized(c);
-  const month = normalizeMonth(c.req.query('month'));
+  const fromValue = c.req.query('from');
+  const toValue = c.req.query('to');
+  const legacyMonth =
+    fromValue || toValue ? null : normalizeMonth(c.req.query('month'));
+  const legacyPeriod = legacyMonth ? calendarMonthPeriod(legacyMonth) : null;
+  const requestedFrom =
+    legacyPeriod?.start ?? normalizeReportingDate(fromValue);
+  const requestedTo = legacyPeriod?.end ?? normalizeReportingDate(toValue);
   const agentId = normalizeIdentifier(c.req.query('agentId'));
-  if (!month) return c.json({ error: 'INVALID_MONTH' }, 400);
+  if (!requestedFrom || !requestedTo || requestedFrom > requestedTo) {
+    return c.json({ error: 'INVALID_REPORTING_RANGE' }, 400);
+  }
   if (!agentId) return c.json({ error: 'INVALID_AGENT' }, 400);
-  const period = calendarMonthPeriod(month);
   const retainedFrom = reportingRetentionCutoff();
-  const result = await c.env.DB.prepare(
-    `SELECT CAST(substr(business_date, 9, 2) AS INTEGER) AS day,
-       conversation_count AS count
-     FROM agent_daily_stats
-     WHERE site_id = 'default'
-       AND business_date >= ?1
-       AND business_date <= ?2
-       AND business_date >= ?3
-       AND agent_id = ?4
-     ORDER BY business_date ASC`,
-  )
-    .bind(period.start, period.end, retainedFrom, agentId)
-    .all<{ day: number; count: number }>();
+  const today = reportingBusinessDate();
+  const from = requestedFrom < retainedFrom ? retainedFrom : requestedFrom;
+  const to = requestedTo > today ? today : requestedTo;
+  const rangeExpired = from > to;
+  if (rangeExpired && !legacyPeriod) {
+    return c.json({ error: 'REPORTING_RANGE_EXPIRED' }, 400);
+  }
+  const result = rangeExpired
+    ? { results: [] }
+    : await c.env.DB.prepare(
+        `SELECT business_date AS date,
+           conversation_count AS count
+         FROM agent_daily_stats
+         WHERE site_id = 'default'
+           AND business_date >= ?1
+           AND business_date <= ?2
+           AND agent_id = ?3
+         ORDER BY business_date ASC`,
+      )
+        .bind(from, to, agentId)
+        .all<{ date: string; count: number }>();
 
   return c.json({
-    month,
+    ...(legacyMonth && legacyPeriod
+      ? { month: legacyMonth, days: legacyPeriod.days }
+      : { from, to }),
     agentId,
-    days: period.days,
-    counts: (result.results ?? []).map((row) => ({
-      day: Number(row.day),
-      count: Number(row.count),
-    })),
+    counts: (result.results ?? []).map((row) =>
+      legacyPeriod
+        ? { day: Number(row.date.slice(8, 10)), count: Number(row.count) }
+        : { date: row.date, count: Number(row.count) },
+    ),
     retainedFrom,
   });
 });
