@@ -115,11 +115,11 @@ export type AdminTrafficRealtimeEvent = {
   };
 };
 
-export type AdminAgentMonthlyStats = {
-  month: string;
+export type AdminAgentDateRangeStats = {
+  from: string;
+  to: string;
   agentId: string;
-  days: number[];
-  counts: Array<{ day: number; count: number }>;
+  counts: Array<{ date: string; count: number }>;
   retainedFrom: string;
 };
 
@@ -427,12 +427,13 @@ export async function getTrafficOverviewStats(
   );
 }
 
-export async function getAdminAgentMonthlyStats(
-  month: string,
+export async function getAdminAgentDateRangeStats(
+  from: string,
+  to: string,
   agentId: string,
-): Promise<AdminAgentMonthlyStats> {
+): Promise<AdminAgentDateRangeStats> {
   return request(
-    `/api/admin/agent-stats?month=${encodeURIComponent(month)}&agentId=${encodeURIComponent(agentId)}`,
+    `/api/admin/agent-stats?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&agentId=${encodeURIComponent(agentId)}`,
   );
 }
 

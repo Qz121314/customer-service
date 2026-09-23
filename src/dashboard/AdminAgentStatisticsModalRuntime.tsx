@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  type AdminAgentMonthlyStats,
+  type AdminAgentDateRangeStats,
   type AgentAccount,
-  getAdminAgentMonthlyStats,
+  getAdminAgentDateRangeStats,
 } from './api';
-import { calendarMonthPeriod } from '../shared/calendar-month';
-import { CHAT_TIME_ZONE, message } from './dashboard-runtime';
-import { MonthPicker } from './MonthPicker';
+import { message } from './dashboard-runtime';
+import {
+  currentReportingDate,
+  reportingRetentionStart,
+  shiftReportingDate,
+} from './traffic-statistics-range';
 import { UiIcon } from './icons';
 
 export function AdminAgentStatisticsModal({
@@ -16,8 +19,10 @@ export function AdminAgentStatisticsModal({
   agent: AgentAccount;
   onClose: () => void;
 }) {
-  const [month, setMonth] = useState(() => currentBusinessMonth());
-  const [stats, setStats] = useState<AdminAgentMonthlyStats | null>(null);
+  const today = currentReportingDate();
+  const [from, setFrom] = useState(() => `${today.slice(0, 7)}-01`);
+  const [to, setTo] = useState(today);
+  const [stats, setStats] = useState<AdminAgentDateRangeStats | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,7 +30,15 @@ export function AdminAgentStatisticsModal({
     let active = true;
     setBusy(true);
     setError('');
-    getAdminAgentMonthlyStats(month, agent.id)
+    setStats(null);
+    if (!from || !to || from > to) {
+      setBusy(false);
+      setError('请选择有效的开始和结束日期');
+      return () => {
+        active = false;
+      };
+    }
+    getAdminAgentDateRangeStats(from, to, agent.id)
       .then((value) => {
         if (active) setStats(value);
       })
@@ -38,7 +51,7 @@ export function AdminAgentStatisticsModal({
     return () => {
       active = false;
     };
-  }, [agent.id, month]);
+  }, [agent.id, from, to]);
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -49,19 +62,33 @@ export function AdminAgentStatisticsModal({
   }, [onClose]);
 
   const countMap = useMemo(
-    () => new Map((stats?.counts ?? []).map((item) => [item.day, item.count])),
+    () => new Map((stats?.counts ?? []).map((item) => [item.date, item.count])),
     [stats],
   );
-  const days =
-    stats?.month === month ? stats.days : calendarMonthPeriod(month).days;
-  const total = days.reduce((sum, day) => sum + (countMap.get(day) ?? 0), 0);
-  const activeDays = days.filter((day) => (countMap.get(day) ?? 0) > 0).length;
+  const days = useMemo(() => {
+    if (!from || !to || from > to) return [];
+    const rangeFrom = stats?.from ?? from;
+    const rangeTo = stats?.to ?? to;
+    const dates: string[] = [];
+    for (
+      let date = rangeFrom;
+      date <= rangeTo;
+      date = shiftReportingDate(date, 1)
+    ) {
+      dates.push(date);
+    }
+    return dates;
+  }, [from, stats, to]);
+  const total = days.reduce((sum, date) => sum + (countMap.get(date) ?? 0), 0);
+  const activeDays = days.filter(
+    (date) => (countMap.get(date) ?? 0) > 0,
+  ).length;
   const peak = days.reduce(
     (current, day) => {
       const count = countMap.get(day) ?? 0;
-      return count > current.count ? { day, count } : current;
+      return count > current.count ? { date: day, count } : current;
     },
-    { day: 0, count: 0 },
+    { date: '', count: 0 },
   );
 
   return (
@@ -77,10 +104,9 @@ export function AdminAgentStatisticsModal({
           <div>
             <span className="eyebrow">客服统计</span>
             <h2 id="admin-agent-statistics-title">{agent.name} · 接待统计</h2>
-            <p>只统计每天首次有效接待的会话，不展示产品归因。</p>
+            <p>统计所选日期内每天首次有效接待的会话。</p>
           </div>
           <div className="agent-statistics-head-actions">
-            <MonthPicker value={month} onChange={setMonth} label="月份" />
             <button
               type="button"
               className="modal-close"
@@ -93,9 +119,40 @@ export function AdminAgentStatisticsModal({
         </header>
         <div className="agent-statistics-dialog-body">
           {error && <div className="notice error">{error}</div>}
+          <div className="admin-agent-statistics-range">
+            <label>
+              开始日期
+              <input
+                type="date"
+                value={from}
+                min={reportingRetentionStart(today)}
+                max={to || today}
+                onChange={(event) => {
+                  setStats(null);
+                  setBusy(true);
+                  setFrom(event.target.value);
+                }}
+              />
+            </label>
+            <span aria-hidden="true">至</span>
+            <label>
+              结束日期
+              <input
+                type="date"
+                value={to}
+                min={from || reportingRetentionStart(today)}
+                max={today}
+                onChange={(event) => {
+                  setStats(null);
+                  setBusy(true);
+                  setTo(event.target.value);
+                }}
+              />
+            </label>
+          </div>
           <section className="agent-statistics-summary admin-agent-statistics-summary">
             <div>
-              <span>本月接待</span>
+              <span>区间接待</span>
               <strong>{busy ? '—' : total}</strong>
               <small>首次有效接待累计</small>
             </div>
@@ -107,7 +164,7 @@ export function AdminAgentStatisticsModal({
             <div>
               <span>单日最高</span>
               <strong>{busy ? '—' : peak.count}</strong>
-              <small>{peak.count ? `${peak.day} 日` : '暂无接待'}</small>
+              <small>{peak.date || '暂无接待'}</small>
             </div>
           </section>
           <section className="agent-statistics-card">
@@ -115,23 +172,23 @@ export function AdminAgentStatisticsModal({
               <div>
                 <strong>每日接待</strong>
                 <span>
-                  {month} · 共 {days.length} 天
+                  {stats?.from ?? from} 至 {stats?.to ?? to} · 共 {days.length}{' '}
+                  天
                 </span>
               </div>
               <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
             </div>
             <div className="agent-statistics-days">
-              {days.map((day) => {
-                const value = countMap.get(day) ?? 0;
-                const date = `${month}-${String(day).padStart(2, '0')}`;
+              {days.map((date) => {
+                const value = countMap.get(date) ?? 0;
                 return (
                   <div
-                    key={day}
+                    key={date}
                     className={value ? 'has-value' : ''}
                     aria-label={`${date} 接待 ${busy ? '加载中' : `${value} 次`}`}
                     title={date}
                   >
-                    <span>{day}</span>
+                    <span>{date.slice(5)}</span>
                     <strong>{busy ? '·' : value}</strong>
                   </div>
                 );
@@ -142,16 +199,4 @@ export function AdminAgentStatisticsModal({
       </section>
     </div>
   );
-}
-
-function currentBusinessMonth(): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: CHAT_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(
-    parts.map((part) => [part.type, part.value]),
-  );
-  return `${values.year}-${values.month}`;
 }
