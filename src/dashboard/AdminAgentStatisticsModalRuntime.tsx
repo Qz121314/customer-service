@@ -79,6 +79,12 @@ export function AdminAgentStatisticsModal({
     }
     return dates;
   }, [from, stats, to]);
+  const calendarCells = useMemo(() => {
+    if (!days.length) return [];
+    const [year, month, day] = days[0].split('-').map(Number);
+    const mondayOffset = (new Date(year, month - 1, day).getDay() + 6) % 7;
+    return [...Array<string | null>(mondayOffset).fill(null), ...days];
+  }, [days]);
   const total = days.reduce((sum, date) => sum + (countMap.get(date) ?? 0), 0);
   const activeDays = days.filter(
     (date) => (countMap.get(date) ?? 0) > 0,
@@ -120,35 +126,41 @@ export function AdminAgentStatisticsModal({
         <div className="agent-statistics-dialog-body">
           {error && <div className="notice error">{error}</div>}
           <div className="admin-agent-statistics-range">
-            <label>
-              开始日期
-              <input
-                type="date"
-                value={from}
-                min={reportingRetentionStart(today)}
-                max={to || today}
-                onChange={(event) => {
-                  setStats(null);
-                  setBusy(true);
-                  setFrom(event.target.value);
-                }}
-              />
-            </label>
-            <span aria-hidden="true">至</span>
-            <label>
-              结束日期
-              <input
-                type="date"
-                value={to}
-                min={from || reportingRetentionStart(today)}
-                max={today}
-                onChange={(event) => {
-                  setStats(null);
-                  setBusy(true);
-                  setTo(event.target.value);
-                }}
-              />
-            </label>
+            <div className="admin-agent-statistics-range-copy">
+              <strong>统计日期</strong>
+              <span>选择开始和结束日期</span>
+            </div>
+            <div className="admin-agent-statistics-range-fields">
+              <label>
+                开始日期
+                <input
+                  type="date"
+                  value={from}
+                  min={reportingRetentionStart(today)}
+                  max={to || today}
+                  onChange={(event) => {
+                    setStats(null);
+                    setBusy(true);
+                    setFrom(event.target.value);
+                  }}
+                />
+              </label>
+              <span aria-hidden="true">至</span>
+              <label>
+                结束日期
+                <input
+                  type="date"
+                  value={to}
+                  min={from || reportingRetentionStart(today)}
+                  max={today}
+                  onChange={(event) => {
+                    setStats(null);
+                    setBusy(true);
+                    setTo(event.target.value);
+                  }}
+                />
+              </label>
+            </div>
           </div>
           <section className="agent-statistics-summary admin-agent-statistics-summary">
             <div>
@@ -167,7 +179,7 @@ export function AdminAgentStatisticsModal({
               <small>{peak.date || '暂无接待'}</small>
             </div>
           </section>
-          <section className="agent-statistics-card">
+          <section className="agent-statistics-card admin-agent-statistics-card">
             <div className="agent-statistics-card-head">
               <div>
                 <strong>每日接待</strong>
@@ -178,13 +190,32 @@ export function AdminAgentStatisticsModal({
               </div>
               <small>可查询范围从 {stats?.retainedFrom ?? '—'} 起</small>
             </div>
-            <div className="agent-statistics-days">
-              {days.map((date) => {
+            <div
+              className="admin-agent-statistics-calendar"
+              role="group"
+              aria-label="每日接待统计"
+            >
+              {['一', '二', '三', '四', '五', '六', '日'].map((weekday) => (
+                <span key={weekday} className="admin-agent-statistics-weekday">
+                  {weekday}
+                </span>
+              ))}
+              {calendarCells.map((date, index) => {
+                if (!date) {
+                  return (
+                    <span
+                      key={`blank-${index}`}
+                      className="admin-agent-statistics-day-blank"
+                      aria-hidden="true"
+                    />
+                  );
+                }
                 const value = countMap.get(date) ?? 0;
                 return (
                   <div
                     key={date}
-                    className={value ? 'has-value' : ''}
+                    className={`admin-agent-statistics-day${value ? ' has-value' : ''}`}
+                    role="group"
                     aria-label={`${date} 接待 ${busy ? '加载中' : `${value} 次`}`}
                     title={date}
                   >
