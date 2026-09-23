@@ -79,12 +79,6 @@ export function AdminAgentStatisticsModal({
     }
     return dates;
   }, [from, stats, to]);
-  const calendarCells = useMemo(() => {
-    if (!days.length) return [];
-    const [year, month, day] = days[0].split('-').map(Number);
-    const mondayOffset = (new Date(year, month - 1, day).getDay() + 6) % 7;
-    return [...Array<string | null>(mondayOffset).fill(null), ...days];
-  }, [days]);
   const total = days.reduce((sum, date) => sum + (countMap.get(date) ?? 0), 0);
   const activeDays = days.filter(
     (date) => (countMap.get(date) ?? 0) > 0,
@@ -189,21 +183,7 @@ export function AdminAgentStatisticsModal({
               role="group"
               aria-label="每日接待统计"
             >
-              {['一', '二', '三', '四', '五', '六', '日'].map((weekday) => (
-                <span key={weekday} className="admin-agent-statistics-weekday">
-                  {weekday}
-                </span>
-              ))}
-              {calendarCells.map((date, index) => {
-                if (!date) {
-                  return (
-                    <span
-                      key={`blank-${index}`}
-                      className="admin-agent-statistics-day-blank"
-                      aria-hidden="true"
-                    />
-                  );
-                }
+              {days.map((date) => {
                 const value = countMap.get(date) ?? 0;
                 return (
                   <div
