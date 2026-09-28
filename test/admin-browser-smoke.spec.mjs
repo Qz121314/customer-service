@@ -275,7 +275,10 @@ async function captureCoreSurfaces(page, key, seedName) {
   ).toBeVisible();
   await capture(page, `${key}-agents`);
 
-  await page.getByRole('button', { name: '新增客服', exact: true }).click();
+  await page
+    .locator('header')
+    .getByRole('button', { name: '新增客服', exact: true })
+    .click();
   const createDialog = page.getByRole('dialog', { name: '新增客服' });
   await expect(createDialog).toBeVisible();
   await capture(page, `${key}-new-agent`);
@@ -340,7 +343,10 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     expect(agents.contextPosition).toBe('static');
     evidence.geometry.push({ name: `${key}-agents`, ...agents });
 
-    await page.getByRole('button', { name: '新增客服', exact: true }).click();
+    await page
+      .locator('header')
+      .getByRole('button', { name: '新增客服', exact: true })
+      .click();
     const dialog = page.getByRole('dialog', { name: '新增客服' });
     const editor = await editorGeometry(dialog);
     expect(editor).not.toBeNull();
@@ -569,7 +575,10 @@ test('mobile workbench remains touch-safe', async ({ page }) => {
       ),
     ).toBeGreaterThanOrEqual(44);
   }
-  await page.getByRole('button', { name: '新增客服', exact: true }).click();
+  await page
+    .locator('header')
+    .getByRole('button', { name: '新增客服', exact: true })
+    .click();
   const dialog = page.getByRole('dialog', { name: '新增客服' });
   const geometry = await dialog.evaluate((element) => {
     const input = element.querySelector('input');
