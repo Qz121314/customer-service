@@ -99,11 +99,15 @@ async function dashboardGeometry(page) {
     const lists = cards.map((card) =>
       card.querySelector('.traffic-distribution-list'),
     );
-    if (lists.some((list) => !list)) return null;
+    const period = globalThis.document.querySelector(
+      '.traffic-summary-metric.is-period strong',
+    );
+    if (lists.some((list) => !list) || !period) return null;
     const summaryRect = summary.getBoundingClientRect();
     const gridRect = grid.getBoundingClientRect();
     return {
       summaryHeight: summaryRect.height,
+      periodValueFits: period.scrollWidth <= period.clientWidth + 1,
       summaryBottom: summaryRect.bottom,
       distributionsTop: gridRect.top,
       cardHeights: cards.map((card) => card.getBoundingClientRect().height),
@@ -316,6 +320,7 @@ test('desktop workbench is compact at required viewports', async ({ page }) => {
     const dashboard = await dashboardGeometry(page);
     expect(dashboard).not.toBeNull();
     expect(dashboard.summaryHeight).toBeLessThanOrEqual(72);
+    expect(dashboard.periodValueFits).toBe(true);
     expect(dashboard.distributionsTop).toBeGreaterThanOrEqual(
       dashboard.summaryBottom,
     );
