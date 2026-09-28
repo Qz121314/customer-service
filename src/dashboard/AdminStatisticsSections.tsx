@@ -244,7 +244,8 @@ export function AdminStatisticsDistributionCard({
 export function AdminStatisticsFooter() {
   return (
     <footer className="traffic-overview-foot">
-      数据按 America/Los_Angeles 自然日统计，保留 90 天。
+      数据按 America/Los_Angeles 自然日统计，保留 90
+      天。会话总数和客服分布按首次接待日期，产品分布按会话开始日期。
     </footer>
   );
 }

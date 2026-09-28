@@ -24,8 +24,15 @@ const rollupMigrationUrl = new URL(
 const FIXED_TODAY = '2026-09-05';
 const RETAINED_FROM = '2026-06-08';
 
-const LEGACY_TRAFFIC_STATS_SQL = `WITH scoped AS MATERIALIZED (
-       SELECT product_id, product_title, agent_id, agent_name
+const LEGACY_TRAFFIC_STATS_SQL = `WITH receptions AS MATERIALIZED (
+       SELECT agent_id, conversation_count
+       FROM agent_daily_stats
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     ),
+     products AS MATERIALIZED (
+       SELECT product_id, product_title
        FROM conversation_traffic_receipts
        WHERE site_id = 'default'
          AND business_date >= ?1
@@ -34,21 +41,24 @@ const LEGACY_TRAFFIC_STATS_SQL = `WITH scoped AS MATERIALIZED (
      SELECT 'summary' AS dimension,
        NULL AS item_id,
        NULL AS item_name,
-       COUNT(*) AS count
-     FROM scoped
+       COALESCE(SUM(conversation_count), 0) AS count
+     FROM receptions
      UNION ALL
      SELECT 'agent' AS dimension,
-       COALESCE(agent_id, '__pending__') AS item_id,
-       COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
-       COUNT(*) AS count
-     FROM scoped
-     GROUP BY agent_id
+       receptions.agent_id AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(agents.name), '')), receptions.agent_id) AS item_name,
+       SUM(receptions.conversation_count) AS count
+     FROM receptions
+     LEFT JOIN agents
+       ON agents.site_id = 'default'
+      AND agents.id = receptions.agent_id
+     GROUP BY receptions.agent_id
      UNION ALL
      SELECT 'product' AS dimension,
        COALESCE(product_id, '__unknown__') AS item_id,
        COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
        COUNT(*) AS count
-     FROM scoped
+     FROM products
      GROUP BY product_id
      ORDER BY dimension ASC, count DESC, item_name ASC`;
 
@@ -132,6 +142,7 @@ function insertReceipt(
     productTitle = null,
     agentId = null,
     agentName = null,
+    receptionDate = businessDate,
   },
 ) {
   database
@@ -150,6 +161,19 @@ function insertReceipt(
       agentName,
       `${businessDate}T12:00:00.000Z`,
     );
+  if (agentId) insertReception(database, agentId, receptionDate);
+}
+
+function insertReception(database, agentId, businessDate, count = 1) {
+  database
+    .prepare(
+      `INSERT INTO agent_daily_stats (
+         site_id, agent_id, business_date, conversation_count
+       ) VALUES ('default', ?1, ?2, ?3)
+       ON CONFLICT(site_id, agent_id, business_date) DO UPDATE SET
+         conversation_count = conversation_count + excluded.conversation_count`,
+    )
+    .run(agentId, businessDate, count);
 }
 
 function seedReceipts(database, rowCount) {
@@ -178,6 +202,18 @@ function seedReceipts(database, rowCount) {
         `${businessDate}T12:00:00.000Z`,
       );
     }
+    database.exec(`
+      INSERT INTO agent_daily_stats (
+        site_id, agent_id, business_date, conversation_count
+      )
+      SELECT 'default', agent_id, business_date, COUNT(*)
+      FROM conversation_traffic_receipts
+      WHERE site_id = 'default'
+        AND agent_id IS NOT NULL
+      GROUP BY agent_id, business_date
+      ON CONFLICT(site_id, agent_id, business_date) DO UPDATE SET
+        conversation_count = excluded.conversation_count;
+    `);
     database.exec('COMMIT; ANALYZE;');
   } catch (error) {
     database.exec('ROLLBACK');
@@ -344,6 +380,38 @@ test('fresh migration chain includes the rollup schema', () => {
       )
       .get().count,
     1,
+  );
+  database.close();
+});
+
+test('dashboard totals follow agent reception dates instead of session start dates', async () => {
+  const database = createDatabaseThrough0060();
+  insertReceipt(database, {
+    conversationId: 'received-next-day',
+    businessDate: '2026-08-10',
+    productId: 'product-a',
+    productTitle: 'Product A',
+    agentId: 'agent-a',
+    receptionDate: '2026-08-11',
+  });
+  applyRollupMigration(database);
+
+  const rows = await loadTrafficStatisticsRows(
+    d1(database),
+    '2026-08-11',
+    '2026-08-11',
+    FIXED_TODAY,
+  );
+  assert.equal(rows.find((row) => row.dimension === 'summary')?.count, 1);
+  assert.deepEqual(
+    rows
+      .filter((row) => row.dimension === 'agent')
+      .map((row) => ({ id: row.item_id, count: row.count })),
+    [{ id: 'agent-a', count: 1 }],
+  );
+  assert.deepEqual(
+    rows.filter((row) => row.dimension === 'product'),
+    [],
   );
   database.close();
 });
@@ -555,6 +623,11 @@ test('historical-only and 90-day hybrid plans use indexed bounded sources', () =
     hybridPlan,
     'conversation_traffic_receipts',
     'idx_conversation_traffic_receipts_date',
+  );
+  assertUsesIndex(
+    hybridPlan,
+    'agent_daily_stats',
+    'idx_agent_daily_stats_business_date',
   );
   assert.equal(
     (new Date(`${plan.rawTo}T00:00:00Z`) -
