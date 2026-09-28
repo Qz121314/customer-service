@@ -259,6 +259,14 @@ function formatShare(value: number, total: number): string {
 }
 
 function formatPeriod(from: string, to: string): string {
-  if (from === to) return from;
-  return `${from} — ${from.slice(0, 4) === to.slice(0, 4) ? to.slice(5) : to}`;
+  const [fromYear, fromMonth, fromDay] = from.split('-');
+  const [toYear, toMonth, toDay] = to.split('-');
+  if (from === to) return `${fromYear}/${fromMonth}/${fromDay}`;
+  if (fromYear === toYear && fromMonth === toMonth) {
+    return `${fromYear}/${fromMonth}/${fromDay}–${toDay}`;
+  }
+  if (fromYear === toYear) {
+    return `${fromYear}/${fromMonth}/${fromDay}–${toMonth}/${toDay}`;
+  }
+  return `${from.replaceAll('-', '/')}–${to.replaceAll('-', '/')}`;
 }
