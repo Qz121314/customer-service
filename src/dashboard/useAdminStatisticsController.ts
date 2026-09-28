@@ -19,7 +19,7 @@ import {
 } from './traffic-statistics-cache';
 
 export function useAdminStatisticsController(section: AdminSection) {
-  const [trafficRange, setTrafficRange] = useState<TrafficRange>('3d');
+  const [trafficRange, setTrafficRange] = useState<TrafficRange>('today');
   const [trafficStats, setTrafficStats] = useState<TrafficOverviewStats | null>(
     null,
   );
