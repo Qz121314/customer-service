@@ -28,103 +28,110 @@ type TrafficStatisticsReadPlan =
       rawTo: string;
     };
 
-export const TRAFFIC_STATS_RAW_SQL = `WITH scoped AS MATERIALIZED (
-       SELECT product_id, product_title, agent_id, agent_name
+const TRAFFIC_STATS_RECEPTION_ROWS_SQL = `SELECT 'summary' AS dimension,
+       NULL AS item_id,
+       NULL AS item_name,
+       COALESCE(SUM(conversation_count), 0) AS count
+     FROM receptions
+     UNION ALL
+     SELECT 'agent' AS dimension,
+       receptions.agent_id AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(agents.name), '')), receptions.agent_id) AS item_name,
+       SUM(receptions.conversation_count) AS count
+     FROM receptions
+     LEFT JOIN agents
+       ON agents.site_id = 'default'
+      AND agents.id = receptions.agent_id
+     GROUP BY receptions.agent_id`;
+
+export const TRAFFIC_STATS_RAW_SQL = `WITH receptions AS MATERIALIZED (
+       SELECT agent_id, conversation_count
+       FROM agent_daily_stats
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     ),
+     products AS MATERIALIZED (
+       SELECT product_id, product_title
        FROM conversation_traffic_receipts
        WHERE site_id = 'default'
          AND business_date >= ?1
          AND business_date <= ?2
      )
-     SELECT 'summary' AS dimension,
-       NULL AS item_id,
-       NULL AS item_name,
-       COUNT(*) AS count
-     FROM scoped
-     UNION ALL
-     SELECT 'agent' AS dimension,
-       COALESCE(agent_id, '__pending__') AS item_id,
-       COALESCE(MAX(NULLIF(TRIM(agent_name), '')), '待接待') AS item_name,
-       COUNT(*) AS count
-     FROM scoped
-     GROUP BY agent_id
+     ${TRAFFIC_STATS_RECEPTION_ROWS_SQL}
      UNION ALL
      SELECT 'product' AS dimension,
        COALESCE(product_id, '__unknown__') AS item_id,
        COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
        COUNT(*) AS count
-     FROM scoped
+     FROM products
      GROUP BY product_id
      ORDER BY dimension ASC, count DESC, item_name ASC`;
 
-export const TRAFFIC_STATS_ROLLUP_SQL = `SELECT dimension,
-       CASE WHEN dimension = 'summary' THEN NULL ELSE item_id END AS item_id,
-       CASE
-         WHEN dimension = 'agent'
-           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '待接待')
-         WHEN dimension = 'product'
-           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '未知产品')
-         ELSE NULL
-       END AS item_name,
-       SUM(count) AS count
-     FROM traffic_daily_rollups
-     WHERE site_id = 'default'
-       AND business_date >= ?1
-       AND business_date <= ?2
-     GROUP BY dimension, item_id
-     ORDER BY dimension ASC, count DESC, item_name ASC`;
-
-export const TRAFFIC_STATS_HYBRID_SQL = `WITH historical AS (
-       SELECT dimension, item_id, item_name, count
-       FROM traffic_daily_rollups
+export const TRAFFIC_STATS_ROLLUP_SQL = `WITH receptions AS MATERIALIZED (
+       SELECT agent_id, conversation_count
+       FROM agent_daily_stats
        WHERE site_id = 'default'
          AND business_date >= ?1
          AND business_date <= ?2
      ),
-     live_scoped AS MATERIALIZED (
-       SELECT product_id, product_title, agent_id, agent_name
+     products AS (
+       SELECT CASE WHEN item_id = '__unknown__' THEN NULL ELSE item_id END AS product_id,
+         item_name AS product_title, count
+       FROM traffic_daily_rollups
+       WHERE site_id = 'default'
+         AND dimension = 'product'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     )
+     ${TRAFFIC_STATS_RECEPTION_ROWS_SQL}
+     UNION ALL
+     SELECT 'product' AS dimension,
+       COALESCE(product_id, '__unknown__') AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
+       SUM(count) AS count
+     FROM products
+     GROUP BY product_id
+     ORDER BY dimension ASC, count DESC, item_name ASC`;
+
+export const TRAFFIC_STATS_HYBRID_SQL = `WITH receptions AS MATERIALIZED (
+       SELECT agent_id, conversation_count
+       FROM agent_daily_stats
+       WHERE site_id = 'default'
+         AND business_date >= ?1
+         AND business_date <= ?4
+     ),
+     historical_products AS (
+       SELECT CASE WHEN item_id = '__unknown__' THEN NULL ELSE item_id END AS product_id,
+         item_name AS product_title, count
+       FROM traffic_daily_rollups
+       WHERE site_id = 'default'
+         AND dimension = 'product'
+         AND business_date >= ?1
+         AND business_date <= ?2
+     ),
+     live_products AS MATERIALIZED (
+       SELECT product_id, product_title
        FROM conversation_traffic_receipts
        WHERE site_id = 'default'
          AND business_date >= ?3
          AND business_date <= ?4
      ),
-     live AS (
-       SELECT 'summary' AS dimension,
-         'total' AS item_id,
-         NULL AS item_name,
-         COUNT(*) AS count
-       FROM live_scoped
+     products AS (
+       SELECT product_id, product_title, count FROM historical_products
        UNION ALL
-       SELECT 'agent' AS dimension,
-         COALESCE(agent_id, '__pending__') AS item_id,
-         MAX(NULLIF(TRIM(agent_name), '')) AS item_name,
-         COUNT(*) AS count
-       FROM live_scoped
-       GROUP BY agent_id
-       UNION ALL
-       SELECT 'product' AS dimension,
-         COALESCE(product_id, '__unknown__') AS item_id,
-         MAX(NULLIF(TRIM(product_title), '')) AS item_name,
-         COUNT(*) AS count
-       FROM live_scoped
+       SELECT product_id, product_title, COUNT(*) AS count
+       FROM live_products
        GROUP BY product_id
-     ),
-     combined AS (
-       SELECT dimension, item_id, item_name, count FROM historical
-       UNION ALL
-       SELECT dimension, item_id, item_name, count FROM live
      )
-     SELECT dimension,
-       CASE WHEN dimension = 'summary' THEN NULL ELSE item_id END AS item_id,
-       CASE
-         WHEN dimension = 'agent'
-           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '待接待')
-         WHEN dimension = 'product'
-           THEN COALESCE(MAX(NULLIF(TRIM(item_name), '')), '未知产品')
-         ELSE NULL
-       END AS item_name,
+     ${TRAFFIC_STATS_RECEPTION_ROWS_SQL}
+     UNION ALL
+     SELECT 'product' AS dimension,
+       COALESCE(product_id, '__unknown__') AS item_id,
+       COALESCE(MAX(NULLIF(TRIM(product_title), '')), '未知产品') AS item_name,
        SUM(count) AS count
-     FROM combined
-     GROUP BY dimension, item_id
+     FROM products
+     GROUP BY product_id
      ORDER BY dimension ASC, count DESC, item_name ASC`;
 
 export function shiftReportingDate(date: string, days: number): string {

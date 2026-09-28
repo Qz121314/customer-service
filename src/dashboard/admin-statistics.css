@@ -157,8 +157,12 @@
 
 .traffic-summary-metric.is-period strong {
   color: var(--admin-muted-strong, #56616e);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 650;
+}
+
+.traffic-summary-metric.is-period {
+  min-height: 56px;
 }
 
 .traffic-distribution-grid {

@@ -56,6 +56,7 @@ export function AdminStatisticsPage({
     catalog: row.productId ? productMap.get(row.productId) : null,
   }));
   const total = stats?.total ?? 0;
+  const productTotal = productRows.reduce((sum, row) => sum + row.count, 0);
   const pending = agentRows.find((row) => row.agentId === null)?.count ?? 0;
   const accepted = Math.max(0, total - pending);
   const agentDistributionRows = agentRows.map((row, index) => {
@@ -132,7 +133,7 @@ export function AdminStatisticsPage({
           <AdminStatisticsDistributionCard
             title="产品会话分布"
             emptyLabel="暂无产品会话"
-            total={total}
+            total={productTotal}
             busy={busy}
             rows={productDistributionRows}
           />

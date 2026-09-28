@@ -244,7 +244,8 @@ export function AdminStatisticsDistributionCard({
 export function AdminStatisticsFooter() {
   return (
     <footer className="traffic-overview-foot">
-      数据按 America/Los_Angeles 自然日统计，保留 90 天。
+      数据按 America/Los_Angeles 自然日统计，保留 90
+      天。会话总数和客服分布按首次接待日期，产品分布按会话开始日期。
     </footer>
   );
 }
@@ -258,6 +259,14 @@ function formatShare(value: number, total: number): string {
 }
 
 function formatPeriod(from: string, to: string): string {
-  if (from === to) return from;
-  return `${from} — ${to}`;
+  const [fromYear, fromMonth, fromDay] = from.split('-');
+  const [toYear, toMonth, toDay] = to.split('-');
+  if (from === to) return `${fromYear}/${fromMonth}/${fromDay}`;
+  if (fromYear === toYear && fromMonth === toMonth) {
+    return `${fromYear}/${fromMonth}/${fromDay}–${toDay}`;
+  }
+  if (fromYear === toYear) {
+    return `${fromYear}/${fromMonth}/${fromDay}–${toMonth}/${toDay}`;
+  }
+  return `${from.replaceAll('-', '/')}–${to.replaceAll('-', '/')}`;
 }
