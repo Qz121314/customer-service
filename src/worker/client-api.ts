@@ -120,6 +120,10 @@ type ProductInput = {
   id?: string;
 };
 
+type SectionInput = {
+  id?: string;
+};
+
 type NormalizedProduct = {
   id: string;
   sectionId: string;
@@ -131,8 +135,14 @@ type NormalizedProduct = {
   coverUrl: string | null;
 };
 
+type NormalizedSection = {
+  id: string;
+  name: string;
+  href: string;
+};
+
 export type ProductContextSnapshot = {
-  productId: string;
+  productId: string | null;
   title: string;
   coverUrl: string | null;
   href: string;
@@ -273,6 +283,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
     clientMessageId?: string;
     message?: string;
     product?: ProductInput;
+    section?: SectionInput;
   }>(c.req.raw);
 
   const visitorId = normalizeVisitorId(body?.visitorId);
@@ -281,6 +292,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
   );
   const sourceHandoffId = normalizeHandoffId(body?.sourceHandoffId);
   const productInput = normalizeProduct(body?.product);
+  const sectionInput = normalizeSection(body?.section);
   const messageFieldPresent = body?.message !== undefined;
   const clientMessageFieldPresent = body?.clientMessageId !== undefined;
   const initialMessage =
@@ -311,8 +323,16 @@ clientApi.post('/client/v1/conversations', async (c) => {
       'Client message ID is invalid.',
     );
   }
-  if (!productInput)
+  if (!productInput && !sectionInput)
     return error(c, 400, 'INVALID_PRODUCT', 'Product context is invalid.');
+  if (productInput && sectionInput) {
+    return error(
+      c,
+      400,
+      'INVALID_CONTEXT',
+      'Choose a product or section context.',
+    );
+  }
 
   const site = await findSite(c.env.DB, normalizeProjectId(body?.projectId));
   if (!site)
@@ -334,10 +354,13 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
   const visitor = visitorResult.visitor;
   const issuedVisitorToken = visitorResult.accessToken;
+  const contextType = productInput ? 'product' : 'section';
+  const contextId = productInput?.id ?? sectionInput?.id ?? '';
   const reuseKey = await conversationReuseKey(
     site.id,
     visitor.external_id,
-    productInput.id,
+    contextId,
+    contextType,
   );
 
   // A source handoff still has permanent retry idempotency. A separate reuse
@@ -384,7 +407,8 @@ clientApi.post('/client/v1/conversations', async (c) => {
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.site_id = ?1
          AND v.external_id = ?2
-         AND c.product_id = ?5
+         AND ((?6 = 'product' AND c.product_id = ?5)
+           OR (?6 = 'section' AND c.product_id IS NULL AND c.section_id = ?5))
        ORDER BY
          CASE
            WHEN c.status IN ('open', 'pending')
@@ -410,7 +434,14 @@ clientApi.post('/client/v1/conversations', async (c) => {
        (SELECT last_message_at FROM reuse_match) AS reuse_last_message_at,
        (SELECT expires_at FROM reuse_match) AS reuse_expires_at`,
   )
-    .bind(site.id, visitorId, clientMessageId, sourceHandoffId, productInput.id)
+    .bind(
+      site.id,
+      visitorId,
+      clientMessageId,
+      sourceHandoffId,
+      contextId,
+      contextType,
+    )
     .first<{
       message_conversation_id: string | null;
       handoff_conversation_id: string | null;
@@ -544,9 +575,21 @@ clientApi.post('/client/v1/conversations', async (c) => {
   // reopen a still-valid snapshot even while the product catalog is waiting for
   // its next Site sync. Only a genuinely new conversation requires the current
   // catalog's canonical absolute public URL.
-  const product = await findEnabledProduct(c.env.DB, site.id, productInput.id);
-  if (!product) {
-    return error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.');
+  const product = productInput
+    ? await findEnabledProduct(c.env.DB, site.id, productInput.id)
+    : null;
+  const section = sectionInput
+    ? await findEnabledSection(c.env.DB, site.id, sectionInput.id)
+    : null;
+  const context = product
+    ? productContextFromProduct(product)
+    : section
+      ? productContextFromSection(section)
+      : null;
+  if (!context) {
+    return productInput
+      ? error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.')
+      : error(c, 404, 'SECTION_NOT_FOUND', 'Section was not found.');
   }
 
   const startClaimKey = replay?.reuse_conversation_id
@@ -612,15 +655,15 @@ clientApi.post('/client/v1/conversations', async (c) => {
       conversationId,
       site.id,
       visitor.id,
-      product.title.slice(0, 120),
-      product.id,
-      product.sectionId,
-      product.sectionName,
-      product.categoryId,
-      product.categoryName,
-      product.title,
-      product.coverUrl,
-      product.href,
+      context.title.slice(0, 120),
+      context.productId,
+      context.sectionId,
+      context.sectionName,
+      context.categoryId,
+      context.categoryName,
+      context.title,
+      context.coverUrl,
+      context.href,
       sourceHandoffId,
       startClaimKey,
       affinityAgentId,
@@ -751,12 +794,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
     conversationId,
     senderType: 'visitor',
     senderId: visitor.id,
-    body: initialMessage ?? product.title,
+    body: initialMessage ?? context.title,
     clientMessageId: ctaProductMessageClientId(
       sourceHandoffId,
       clientMessageId,
     ),
-    productContext: productContextFromProduct(product),
+    productContext: context,
   });
   const createdMessage = persistedProductContext.message;
 
@@ -1434,6 +1477,11 @@ function normalizeProduct(value?: ProductInput): NormalizedProduct | null {
     : null;
 }
 
+function normalizeSection(value?: SectionInput): NormalizedSection | null {
+  const id = normalizeId(value?.id, 100);
+  return id ? { id, name: '', href: '' } : null;
+}
+
 function ctaProductMessageClientId(
   sourceHandoffId: string,
   clientMessageId: string | null,
@@ -1456,11 +1504,26 @@ function productContextFromProduct(
   };
 }
 
+function productContextFromSection(
+  section: NormalizedSection,
+): ProductContextSnapshot {
+  return {
+    productId: null,
+    title: section.name,
+    coverUrl: null,
+    href: section.href,
+    sectionId: section.id,
+    sectionName: section.name,
+    categoryId: null,
+    categoryName: null,
+  };
+}
+
 function productContextFromConversation(
   conversation: ConversationRow,
 ): ProductContextSnapshot {
   return {
-    productId: conversation.product_id ?? '',
+    productId: conversation.product_id,
     title: conversation.product_title ?? conversation.subject ?? '',
     coverUrl: conversation.product_cover_url,
     href: conversation.product_href ?? '',
@@ -1487,7 +1550,7 @@ export function productContextFromMessage(
     }
     const snapshot = value as Record<string, unknown>;
     if (
-      typeof snapshot.productId !== 'string' ||
+      (typeof snapshot.productId !== 'string' && snapshot.productId !== null) ||
       typeof snapshot.title !== 'string' ||
       typeof snapshot.href !== 'string' ||
       typeof snapshot.sectionId !== 'string'
@@ -1574,6 +1637,25 @@ async function findEnabledProduct(
     categoryId: row.category_id,
     categoryName: row.category_name,
   };
+}
+
+async function findEnabledSection(
+  db: D1Database,
+  siteId: string,
+  sectionId: string,
+): Promise<NormalizedSection | null> {
+  const row = await db
+    .prepare(
+      `SELECT id, name, href, is_enabled
+       FROM section_catalog
+       WHERE site_id = ?1 AND id = ?2 AND is_enabled = 1
+       LIMIT 1`,
+    )
+    .bind(siteId, sectionId)
+    .first<{ id: string; name: string; href: string; is_enabled: number }>();
+  if (!row || row.is_enabled !== 1 || !row.name) return null;
+  const href = normalizeCatalogProductHref(row.href);
+  return href ? { id: row.id, name: row.name, href } : null;
 }
 
 function normalizeCatalogProductHref(value: string | null): string | null {
@@ -2006,13 +2088,16 @@ function isAfterReuseBoundary(value: string): boolean {
 async function conversationReuseKey(
   siteId: string,
   visitorId: string,
-  productId: string,
+  contextId: string,
+  contextType: 'product' | 'section',
 ): Promise<string> {
+  const key =
+    contextType === 'product'
+      ? `cta-reuse-v1\n${siteId}\n${visitorId}\n${contextId}`
+      : `cta-reuse-section-v1\n${siteId}\n${visitorId}\n${contextId}`;
   const digest = await crypto.subtle.digest(
     'SHA-256',
-    new TextEncoder().encode(
-      `cta-reuse-v1\n${siteId}\n${visitorId}\n${productId}`,
-    ),
+    new TextEncoder().encode(key),
   );
   return Array.from(new Uint8Array(digest), (byte) =>
     byte.toString(16).padStart(2, '0'),
@@ -2214,7 +2299,7 @@ function conversationSummary(conversation: ConversationRow) {
       conversation.assigned_agent && conversation.agent_avatar_version
         ? `/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}?v=${encodeURIComponent(conversation.agent_avatar_version)}`
         : null,
-    productId: conversation.product_id ?? '',
+    productId: conversation.product_id,
     sectionId: conversation.section_id ?? '',
     productTitle: conversation.product_title ?? conversation.subject ?? '',
     productCoverUrl: conversation.product_cover_url,

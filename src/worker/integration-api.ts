@@ -23,6 +23,14 @@ type ProductCatalogItem = {
 
 type ProductCatalogInput = {
   products: ProductCatalogItem[];
+  sections?: SectionCatalogItem[];
+};
+
+type SectionCatalogItem = {
+  id: string;
+  name: string;
+  href: string;
+  isEnabled: boolean;
 };
 
 const PRODUCT_SYNC_CHUNK_SIZE = 250;
@@ -162,6 +170,7 @@ integrationApi.post('/integration/v1/verify', async (c) => {
 
   const body = await readJson<{ productCatalog?: unknown }>(c.req.raw);
   let productCount = 0;
+  let sectionCount: number | null = null;
   if (body?.productCatalog !== undefined) {
     const catalog = normalizeProductCatalog(body.productCatalog);
     if (!catalog) {
@@ -173,6 +182,13 @@ integrationApi.post('/integration/v1/verify', async (c) => {
       );
     }
     productCount = await syncProductCatalog(c.env.DB, site.id, catalog);
+    if (catalog.sections) {
+      sectionCount = await syncSectionCatalog(
+        c.env.DB,
+        site.id,
+        catalog.sections,
+      );
+    }
   }
 
   const requestUrl = new URL(c.req.url);
@@ -185,7 +201,10 @@ integrationApi.post('/integration/v1/verify', async (c) => {
     protocolVersion: 'v1',
     clientApiUrl: new URL('/client/v1', origin).toString().replace(/\/$/u, ''),
     realtimeUrl: realtimeUrl.toString(),
-    productCatalog: { productCount },
+    productCatalog: {
+      productCount,
+      ...(sectionCount !== null ? { sectionCount } : {}),
+    },
   });
 });
 
@@ -236,7 +255,97 @@ function normalizeProductCatalog(value: unknown): ProductCatalogInput | null {
       isEnabled: rawProduct.isEnabled !== false,
     });
   }
-  return { products };
+  let sections: SectionCatalogItem[] | undefined;
+  if (value.sections !== undefined) {
+    if (!Array.isArray(value.sections) || value.sections.length > 1000)
+      return null;
+    sections = [];
+    const seenSectionIds = new Set<string>();
+    for (const rawSection of value.sections) {
+      if (!isRecord(rawSection)) return null;
+      const id = normalizeText(rawSection.id, 100);
+      const name = normalizeText(rawSection.name, 120);
+      const href = normalizePublicSectionHref(rawSection.href);
+      if (!id || !name || !href || seenSectionIds.has(id)) return null;
+      seenSectionIds.add(id);
+      sections.push({
+        id,
+        name,
+        href,
+        isEnabled: rawSection.isEnabled !== false,
+      });
+    }
+  }
+  return { products, ...(sections ? { sections } : {}) };
+}
+
+function normalizePublicSectionHref(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim() || value.length > 1000)
+    return null;
+  try {
+    const url = new URL(value);
+    const localHttp =
+      url.protocol === 'http:' &&
+      (url.hostname === 'localhost' || url.hostname === '127.0.0.1');
+    if (
+      (url.protocol !== 'https:' && !localHttp) ||
+      url.username ||
+      url.password
+    ) {
+      return null;
+    }
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function syncSectionCatalog(
+  db: D1Database,
+  siteId: string,
+  sections: SectionCatalogItem[],
+): Promise<number> {
+  const statements: D1PreparedStatement[] = [];
+  for (
+    let offset = 0;
+    offset < sections.length;
+    offset += PRODUCT_SYNC_CHUNK_SIZE
+  ) {
+    const chunk = sections.slice(offset, offset + PRODUCT_SYNC_CHUNK_SIZE);
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO section_catalog (site_id, id, name, href, is_enabled, updated_at)
+           SELECT ?1,
+             json_extract(value, '$.id'),
+             json_extract(value, '$.name'),
+             json_extract(value, '$.href'),
+             CASE WHEN json_extract(value, '$.isEnabled') THEN 1 ELSE 0 END,
+             CURRENT_TIMESTAMP
+           FROM json_each(?2)
+           WHERE json_type(value) = 'object'
+           ON CONFLICT(site_id, id) DO UPDATE SET
+             name = excluded.name,
+             href = excluded.href,
+             is_enabled = excluded.is_enabled,
+             updated_at = CURRENT_TIMESTAMP`,
+        )
+        .bind(siteId, JSON.stringify(chunk)),
+    );
+  }
+  statements.push(
+    db
+      .prepare(
+        `UPDATE section_catalog
+         SET is_enabled = 0, updated_at = CURRENT_TIMESTAMP
+         WHERE site_id = ?1
+           AND id NOT IN (SELECT CAST(value AS TEXT) FROM json_each(?2))`,
+      )
+      .bind(siteId, JSON.stringify(sections.map((section) => section.id))),
+  );
+  await db.batch(statements);
+  return sections.filter((section) => section.isEnabled).length;
 }
 
 function normalizePublicProductHref(value: unknown): string | null {

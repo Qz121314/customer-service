@@ -261,7 +261,7 @@ function visitorConversationSummary(
       conversation.assigned_agent && conversation.agent_avatar_version
         ? `/client/v1/avatars/${encodeURIComponent(conversation.assigned_agent)}?v=${encodeURIComponent(conversation.agent_avatar_version)}`
         : null,
-    productId: conversation.product_id ?? '',
+    productId: conversation.product_id,
     sectionId: conversation.section_id ?? '',
     productTitle: conversation.product_title ?? conversation.subject ?? '',
     productCoverUrl: conversation.product_cover_url,

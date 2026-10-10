@@ -1,8 +1,8 @@
 # Client v1 conversation start
 
-## Product contract
+## Product and section context
 
-`POST /client/v1/conversations` means **the visitor clicked a product CTA**. The click is both the consultation start and a durable customer `product_context` message.
+`POST /client/v1/conversations` starts a consultation from either a product CTA or a section CTA. The click is both the consultation start and a durable customer `product_context` message.
 
 A storefront CTA should therefore create the conversation immediately when the user chooses to start support. The visitor does not need to type a message first.
 
@@ -32,6 +32,20 @@ The request requires the existing visitor, handoff and product context but does 
   }
 }
 ```
+
+A section CTA sends `section` instead of `product`. The section ID must exist in the Site-synchronized `section_catalog`; the resulting conversation has a null `productId`, the selected `sectionId`, and a section title and link in its immutable context snapshot.
+
+```json
+{
+  "visitorId": "ABC123",
+  "sourceHandoffId": "11111111-1111-4111-8111-111111111111",
+  "section": {
+    "id": "section-1"
+  }
+}
+```
+
+Each request must supply exactly one of `product` or `section`.
 
 The product ID is resolved by namespace: normal IDs use the Site-synchronized `product_catalog`, while `h5:product:*` IDs use the internal `h5_product_catalog` only when the H5 page is enabled, has published HTML, and is bound to an enabled chat Conversion Pool. Both product types produce the same canonical conversation snapshot and durable `product_context` message (`productId`, `title`, `coverUrl`, `href`, `sectionId`, `sectionName`, `categoryId`, `categoryName`). H5 `href` is derived from `h5_settings.public_origin` and the page slug. Historical messages render this snapshot and never reread the current catalog.
 

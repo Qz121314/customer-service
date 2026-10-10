@@ -202,7 +202,7 @@ export type Message = {
 };
 
 export type ProductContextSnapshot = {
-  productId: string;
+  productId: string | null;
   title: string;
   coverUrl: string | null;
   href: string;
