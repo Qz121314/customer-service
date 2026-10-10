@@ -350,13 +350,13 @@ function ProductContextCard({
         </span>
       )}
       <span className="product-context-copy">
-        <small>咨询商品</small>
+        <small>{snapshot.productId ? '咨询商品' : '咨询分区'}</small>
         <strong>{snapshot.title}</strong>
         {details ? <span>{details}</span> : null}
       </span>
       {snapshot.href ? (
         <span className="product-context-action">
-          查看商品
+          {snapshot.productId ? '查看商品' : '查看分区'}
           <UiIcon name="external" />
         </span>
       ) : null}
