@@ -28,6 +28,8 @@ const otherwiseValidBody = {
   product,
 };
 
+const visitorTokens = new WeakMap();
+
 function applyMigrations(database) {
   const directory = fileURLToPath(new URL('../migrations/', import.meta.url));
   for (const name of readdirSync(directory)
@@ -145,6 +147,9 @@ async function startConversation(
   overrides = {},
 ) {
   const selectedProduct = overrides.product ?? product;
+  const visitorToken = Object.hasOwn(overrides, 'visitorToken')
+    ? overrides.visitorToken
+    : visitorTokens.get(database);
   database
     .prepare(
       `INSERT OR IGNORE INTO product_catalog (
@@ -162,16 +167,14 @@ async function startConversation(
       selectedProduct.categoryId,
       selectedProduct.categoryName,
     );
-  return clientApi.request(
+  const response = await clientApi.request(
     '/client/v1/conversations',
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         visitorId: overrides.visitorId ?? 'ABC123',
-        ...(overrides.visitorToken
-          ? { visitorToken: overrides.visitorToken }
-          : {}),
+        ...(visitorToken ? { visitorToken } : {}),
         sourceHandoffId,
         product: selectedProduct,
       }),
@@ -181,6 +184,9 @@ async function startConversation(
       CONVERSATION_ROOMS: rooms.namespace,
     },
   );
+  const payload = await response.clone().json();
+  if (payload.visitorToken) visitorTokens.set(database, payload.visitorToken);
+  return response;
 }
 
 test('visitor product fields cannot override the Site-synchronized catalog', async () => {
@@ -508,12 +514,23 @@ test('visitor access token can replace the short visitor id for reads', async ()
   database.close();
 });
 
-test('concurrent CTA starts coalesce into one conversation and one quota receipt', async () => {
+test('concurrent CTA starts for different products coalesce into one conversation', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
+  const otherProduct = {
+    ...product,
+    id: 'product-2',
+    title: 'Product 2',
+    href: 'https://storefront.example/sections/west/products/product-2/',
+  };
   const responses = await Promise.all([
-    startConversation(database, rooms, '16161616-1616-4616-8616-161616161616'),
-    startConversation(database, rooms, '17171717-1717-4717-8717-171717171717'),
+    startConversation(database, rooms, '16161616-1616-4616-8616-161616161616', {
+      visitorToken: 'concurrent-visitor-token-000000000001',
+    }),
+    startConversation(database, rooms, '17171717-1717-4717-8717-171717171717', {
+      visitorToken: 'concurrent-visitor-token-000000000001',
+      product: otherProduct,
+    }),
   ]);
   const values = await Promise.all(
     responses.map((response) => response.json()),
@@ -575,8 +592,12 @@ test('concurrent no-agent starts leave no reusable claim or handoff', async () =
   database.exec(`UPDATE agents SET status = 'offline' WHERE id = 'cta-agent'`);
 
   const responses = await Promise.all([
-    startConversation(database, rooms, '20202020-2020-4020-8020-202020202020'),
-    startConversation(database, rooms, '21212121-2121-4121-8121-212121212121'),
+    startConversation(database, rooms, '20202020-2020-4020-8020-202020202020', {
+      visitorToken: 'concurrent-visitor-token-000000000002',
+    }),
+    startConversation(database, rooms, '21212121-2121-4121-8121-212121212121', {
+      visitorToken: 'concurrent-visitor-token-000000000002',
+    }),
   ]);
   const values = await Promise.all(
     responses.map((response) => response.json()),
@@ -641,6 +662,7 @@ test('repeated no-agent starts do not exhaust the successful creation limit', as
         database,
         rooms,
         `00000000-0000-4000-8000-${String(index + 30).padStart(12, '0')}`,
+        { visitorToken: 'concurrent-visitor-token-000000000003' },
       ),
     ),
   );
@@ -830,7 +852,7 @@ test('an active historical conversation reopens before a legacy catalog URL is r
   database.close();
 });
 
-test('different products keep independent conversations', async () => {
+test('different products reuse an active conversation and add product context', async () => {
   const database = setup({ greetingEnabled: false });
   const rooms = fakeRooms();
   const otherProduct = {
@@ -855,11 +877,42 @@ test('different products keep independent conversations', async () => {
   const secondValue = await second.json();
 
   assert.equal(first.status, 201);
-  assert.equal(second.status, 201);
-  assert.notEqual(secondValue.conversation.id, firstValue.conversation.id);
+  assert.equal(second.status, 200);
+  assert.equal(secondValue.conversation.id, firstValue.conversation.id);
   assert.equal(
     scalar(database, 'SELECT COUNT(*) AS count FROM conversations', 'count'),
-    2,
+    1,
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT json_extract(structured_payload_json, '$.productId') AS product_id
+         FROM messages
+         WHERE conversation_id = ? AND message_kind = 'product_context'
+         ORDER BY created_at, id`,
+      )
+      .all(firstValue.conversation.id)
+      .map((row) => row.product_id)
+      .sort(),
+    ['product-1', 'product-2'],
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT COUNT(*) AS count FROM conversation_traffic_receipts',
+      'count',
+    ),
+    1,
+    'one conversation start produces one traffic receipt',
+  );
+  assert.equal(
+    scalar(
+      database,
+      'SELECT product_id FROM conversation_traffic_receipts LIMIT 1',
+      'product_id',
+    ),
+    'product-1',
+    'conversation-level product attribution stays with the first CTA',
   );
 
   database.close();

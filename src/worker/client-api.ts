@@ -354,18 +354,10 @@ clientApi.post('/client/v1/conversations', async (c) => {
   }
   const visitor = visitorResult.visitor;
   const issuedVisitorToken = visitorResult.accessToken;
-  const contextType = productInput ? 'product' : 'section';
-  const contextId = productInput?.id ?? sectionInput?.id ?? '';
-  const reuseKey = await conversationReuseKey(
-    site.id,
-    visitor.external_id,
-    contextId,
-    contextType,
-  );
+  const reuseKey = await conversationReuseKey(site.id, visitor.id);
 
-  // A source handoff still has permanent retry idempotency. A separate reuse
-  // match coalesces fresh CTA starts for the same visitor + product for two
-  // hours, even though each click intentionally has a different handoff ID.
+  // A source handoff still has permanent retry idempotency. Fresh CTA starts
+  // coalesce across products for the same visitor for two hours.
   const replay = await c.env.DB.prepare(
     `WITH message_match AS (
        SELECT m.conversation_id
@@ -407,8 +399,6 @@ clientApi.post('/client/v1/conversations', async (c) => {
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.site_id = ?1
          AND v.external_id = ?2
-         AND ((?6 = 'product' AND c.product_id = ?5)
-           OR (?6 = 'section' AND c.product_id IS NULL AND c.section_id = ?5))
        ORDER BY
          CASE
            WHEN c.status IN ('open', 'pending')
@@ -434,14 +424,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
        (SELECT last_message_at FROM reuse_match) AS reuse_last_message_at,
        (SELECT expires_at FROM reuse_match) AS reuse_expires_at`,
   )
-    .bind(
-      site.id,
-      visitorId,
-      clientMessageId,
-      sourceHandoffId,
-      contextId,
-      contextType,
-    )
+    .bind(site.id, visitorId, clientMessageId, sourceHandoffId)
     .first<{
       message_conversation_id: string | null;
       handoff_conversation_id: string | null;
@@ -521,6 +504,24 @@ clientApi.post('/client/v1/conversations', async (c) => {
       visitorId,
     );
     if (conversation) {
+      const sameRequestedContext = productInput
+        ? conversation.product_id === productInput.id
+        : conversation.product_id === null &&
+          conversation.section_id === sectionInput?.id;
+      let requestedContext: ProductContextSnapshot | null = null;
+      if (!sameRequestedContext) {
+        requestedContext = await findRequestedProductContext(
+          c.env.DB,
+          site.id,
+          productInput,
+          sectionInput,
+        );
+        if (!requestedContext) {
+          return productInput
+            ? error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.')
+            : error(c, 404, 'SECTION_NOT_FOUND', 'Section was not found.');
+        }
+      }
       const handoffOwner = await rememberSourceHandoff(
         c.env.DB,
         site.id,
@@ -548,11 +549,32 @@ clientApi.post('/client/v1/conversations', async (c) => {
         if (!(await reusableConversationIsAvailable(c.env.DB, conversation))) {
           return noAgentResponse(c, site);
         }
+        const sameContext = productInput
+          ? conversation.product_id === productInput.id
+          : conversation.product_id === null &&
+            conversation.section_id === sectionInput?.id;
+        let productContext = productContextFromConversation(conversation);
+        if (!sameContext) {
+          const context =
+            requestedContext ??
+            (await findRequestedProductContext(
+              c.env.DB,
+              site.id,
+              productInput,
+              sectionInput,
+            ));
+          if (!context) {
+            return productInput
+              ? error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.')
+              : error(c, 404, 'SECTION_NOT_FOUND', 'Section was not found.');
+          }
+          productContext = context;
+        }
         const continuation = await continueConversationStart(c.env, {
           conversation,
           siteId: site.id,
           visitorId,
-          productContext: productContextFromConversation(conversation),
+          productContext,
           productMessageBody: initialMessage,
           productMessageClientId: ctaProductMessageClientId(
             sourceHandoffId,
@@ -575,17 +597,12 @@ clientApi.post('/client/v1/conversations', async (c) => {
   // reopen a still-valid snapshot even while the product catalog is waiting for
   // its next Site sync. Only a genuinely new conversation requires the current
   // catalog's canonical absolute public URL.
-  const product = productInput
-    ? await findEnabledProduct(c.env.DB, site.id, productInput.id)
-    : null;
-  const section = sectionInput
-    ? await findEnabledSection(c.env.DB, site.id, sectionInput.id)
-    : null;
-  const context = product
-    ? productContextFromProduct(product)
-    : section
-      ? productContextFromSection(section)
-      : null;
+  const context = await findRequestedProductContext(
+    c.env.DB,
+    site.id,
+    productInput,
+    sectionInput,
+  );
   if (!context) {
     return productInput
       ? error(c, 404, 'PRODUCT_NOT_FOUND', 'Product was not found.')
@@ -735,7 +752,7 @@ clientApi.post('/client/v1/conversations', async (c) => {
       conversation,
       siteId: site.id,
       visitorId,
-      productContext: productContextFromConversation(conversation),
+      productContext: context,
       productMessageBody: initialMessage,
       productMessageClientId: ctaProductMessageClientId(
         sourceHandoffId,
@@ -1658,6 +1675,23 @@ async function findEnabledSection(
   return href ? { id: row.id, name: row.name, href } : null;
 }
 
+async function findRequestedProductContext(
+  db: D1Database,
+  siteId: string,
+  product: NormalizedProduct | null,
+  section: NormalizedSection | null,
+): Promise<ProductContextSnapshot | null> {
+  if (product) {
+    const enabled = await findEnabledProduct(db, siteId, product.id);
+    return enabled ? productContextFromProduct(enabled) : null;
+  }
+  if (section) {
+    const enabled = await findEnabledSection(db, siteId, section.id);
+    return enabled ? productContextFromSection(enabled) : null;
+  }
+  return null;
+}
+
 function normalizeCatalogProductHref(value: string | null): string | null {
   if (!value) return null;
   try {
@@ -2088,13 +2122,8 @@ function isAfterReuseBoundary(value: string): boolean {
 async function conversationReuseKey(
   siteId: string,
   visitorId: string,
-  contextId: string,
-  contextType: 'product' | 'section',
 ): Promise<string> {
-  const key =
-    contextType === 'product'
-      ? `cta-reuse-v1\n${siteId}\n${visitorId}\n${contextId}`
-      : `cta-reuse-section-v1\n${siteId}\n${visitorId}\n${contextId}`;
+  const key = `cta-reuse-v2\n${siteId}\n${visitorId}`;
   const digest = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(key),

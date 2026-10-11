@@ -4,7 +4,7 @@
 
 `POST /client/v1/conversations` starts a consultation from either a product CTA or a section CTA. The click is both the consultation start and a durable customer `product_context` message.
 
-A storefront CTA should therefore create the conversation immediately when the user chooses to start support. The visitor does not need to type a message first.
+A storefront CTA should therefore create the conversation immediately when the user chooses to start support. The visitor does not need to type a message first. While a conversation is active, CTA clicks from the same site and visitor reuse it for two hours across products and sections. Each newly selected item is appended as its own durable `product_context` message, while the conversation keeps its original assignment and first-product snapshot.
 
 ```text
 CTA click
@@ -33,6 +33,8 @@ The request requires the existing visitor, handoff and product context but does 
 }
 ```
 
+The first request for a new `visitorId` may omit `visitorToken`; the response returns one, and clients should store and send it on later CTA and visitor API requests. The Site `/chat` client creates and persists the token before its first request, so parallel tabs share the same visitor identity. The API still accepts short-ID-only requests for legacy-client compatibility.
+
 A section CTA sends `section` instead of `product`. The section ID must exist in the Site-synchronized `section_catalog`; the resulting conversation has a null `productId`, the selected `sectionId`, and a section title and link in its immutable context snapshot.
 
 ```json
@@ -53,7 +55,7 @@ H5 Product starts use this same endpoint and therefore the same routing scopes, 
 
 The H5 CTA runtime navigates to the configured Customer Service public origin at `/chat` with only `productId` and a UUID v4 `sourceHandoffId`. The `/chat` surface owns stable visitor identity in browser storage, calls this endpoint once per launch, and uses the existing conversation detail, message and realtime endpoints. It never treats title, agent, pool, quota or product href from the URL as authoritative.
 
-`sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing conversation and must not create a second conversation, traffic receipt, quota charge or greeting.
+`sourceHandoffId` remains the idempotency boundary for one CTA consultation. Retrying the same handoff returns the existing conversation and must not create a second conversation, traffic receipt, quota charge or greeting. A different handoff for another product can append a separate product card to the same active conversation; it does not create a new conversation-level traffic receipt. Product reporting remains attributed to the first product in that conversation.
 
 ## Optional legacy body compatibility
 
