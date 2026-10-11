@@ -276,6 +276,8 @@ async function attachmentRequest<T = { ok: boolean }>(
 
 function attachmentError(code?: string): string {
   switch (code) {
+    case 'ATTACHMENT_PRESET_IN_USE':
+      return '此素材仍绑定在首次回复方案中，请先在首次回复配置里解绑';
     case 'INVALID_ATTACHMENT_PRESET':
       return '名片类型、目标或预设话术格式无效';
     case 'INVALID_CARD_ICON':

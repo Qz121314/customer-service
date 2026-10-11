@@ -728,35 +728,18 @@ export function AgentMaterialsModal({
     void saveMaterials({ ...settings, greetings });
   };
   const removeGreeting = (id: string) => {
+    if (
+      settings.profiles.some((profile) =>
+        profile.items.some(
+          (item) => item.type === 'greeting' && item.materialId === id,
+        ),
+      )
+    ) {
+      setError('此素材仍绑定在首次回复方案中，请先在首次回复配置里解绑');
+      return;
+    }
     const greetings = settings.greetings.filter((item) => item.id !== id);
-    const profiles = settings.profiles.map((profile) => ({
-      ...profile,
-      items: profile.items
-        .filter((item) => !(item.type === 'greeting' && item.materialId === id))
-        .map((item, index) => ({ ...item, sortOrder: index })),
-    }));
-    const activeProfile = settings.profiles.find(
-      (profile) => profile.id === settings.activeProfileId,
-    );
-    const activeHasAttachment = Boolean(
-      activeProfile?.items.some(
-        (item) =>
-          (item.type === 'contact_card' || item.type === 'image') &&
-          presets.some((preset) => preset.id === item.materialId),
-      ),
-    );
-    const disableAutomation =
-      settings.enabled &&
-      activeProfile?.items.some(
-        (item) => item.type === 'greeting' && item.materialId === id,
-      ) &&
-      !activeHasAttachment;
-    void saveMaterials({
-      ...settings,
-      enabled: disableAutomation ? false : settings.enabled,
-      greetings,
-      profiles,
-    });
+    void saveMaterials({ ...settings, greetings });
     if (greetingId === id) resetGreetingEditor();
   };
   const saveCta = () => {
@@ -774,33 +757,19 @@ export function AgentMaterialsModal({
     void saveMaterials({ ...settings, ctas });
   };
   const removeCta = (id: string) => {
-    const ctas = settings.ctas.filter((item) => item.id !== id);
-    const profiles = settings.profiles.map((profile) => ({
-      ...profile,
-      items: profile.items
-        .filter((item) => !(item.type === 'cta' && item.materialId === id))
-        .map((item, index) => ({ ...item, sortOrder: index })),
-    }));
-    void saveMaterials({ ...settings, ctas, profiles });
-    if (ctaId === id) resetCtaEditor();
-  };
-  const replaceImage = async (file: File, current: AgentAttachmentPreset) => {
-    setImageUploading(true);
-    setError('');
-    try {
-      const replacement = await uploadAgentAttachmentImage(
-        file,
-        file.name || '素材图片',
-      );
-      await deleteAgentAttachmentPreset(current.id);
-      setPresets((items) =>
-        items.map((item) => (item.id === current.id ? replacement : item)),
-      );
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '图片替换失败');
-    } finally {
-      setImageUploading(false);
+    if (
+      settings.profiles.some((profile) =>
+        profile.items.some(
+          (item) => item.type === 'cta' && item.materialId === id,
+        ),
+      )
+    ) {
+      setError('此素材仍绑定在首次回复方案中，请先在首次回复配置里解绑');
+      return;
     }
+    const ctas = settings.ctas.filter((item) => item.id !== id);
+    void saveMaterials({ ...settings, ctas });
+    if (ctaId === id) resetCtaEditor();
   };
   const uploadImage = async (file: File) => {
     setImageUploading(true);
@@ -824,21 +793,6 @@ export function AgentMaterialsModal({
     try {
       await deleteAgentAttachmentPreset(preset.id);
       setPresets((current) => current.filter((item) => item.id !== preset.id));
-      setSettings((current) => ({
-        ...current,
-        profiles: current.profiles.map((profile) => ({
-          ...profile,
-          items: profile.items
-            .filter(
-              (item) =>
-                !(
-                  (item.type === 'contact_card' || item.type === 'image') &&
-                  item.materialId === preset.id
-                ),
-            )
-            .map((item, index) => ({ ...item, sortOrder: index })),
-        })),
-      }));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '图片删除失败');
     } finally {
@@ -924,21 +878,6 @@ export function AgentMaterialsModal({
     try {
       await deleteAgentAttachmentPreset(preset.id);
       setPresets((current) => current.filter((item) => item.id !== preset.id));
-      setSettings((current) => ({
-        ...current,
-        profiles: current.profiles.map((profile) => ({
-          ...profile,
-          items: profile.items
-            .filter(
-              (item) =>
-                !(
-                  (item.type === 'contact_card' || item.type === 'image') &&
-                  item.materialId === preset.id
-                ),
-            )
-            .map((item, index) => ({ ...item, sortOrder: index })),
-        })),
-      }));
       if (cardEditingId === preset.id) resetCardEditor();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '名片删除失败');
@@ -1358,22 +1297,6 @@ export function AgentMaterialsModal({
                         <small>{preset.originalName || '图片'}</small>
                       </span>
                       <div className="agent-material-card-actions">
-                        <label
-                          className="agent-material-image-edit"
-                          aria-label={`编辑 ${preset.label}`}
-                        >
-                          <UiIcon name="edit" />
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            disabled={imageUploading}
-                            onChange={(event) => {
-                              const file = event.target.files?.[0];
-                              event.currentTarget.value = '';
-                              if (file) void replaceImage(file, preset);
-                            }}
-                          />
-                        </label>
                         <button
                           type="button"
                           aria-label={`删除 ${preset.label}`}

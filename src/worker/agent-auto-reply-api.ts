@@ -141,6 +141,31 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
     profiles.some((profile) => profile.id === 'legacy-first-reply');
   let profilesToPersist = profiles;
 
+  if (canonicalProfile) {
+    const boundMaterialBeingDeleted = await c.env.DB.prepare(
+      `SELECT 1
+       FROM agent_first_reply_items item
+       JOIN agent_first_reply_profiles profile ON profile.id = item.profile_id
+       WHERE profile.agent_id = ?1
+         AND (
+           (item.material_type = 'greeting' AND NOT EXISTS (
+             SELECT 1 FROM json_each(?2) material
+             WHERE json_extract(material.value, '$.id') = item.material_id
+           ))
+           OR (item.material_type = 'cta' AND NOT EXISTS (
+             SELECT 1 FROM json_each(?3) material
+             WHERE json_extract(material.value, '$.id') = item.material_id
+           ))
+         )
+       LIMIT 1`,
+    )
+      .bind(agent.id, JSON.stringify(greetings), JSON.stringify(ctas))
+      .first();
+    if (boundMaterialBeingDeleted) {
+      return c.json({ error: 'FIRST_REPLY_MATERIAL_IN_USE' }, 409);
+    }
+  }
+
   const greetingIds = new Set(greetings.map((item) => item.id));
   const ctaIds = new Set(ctas.map((item) => item.id));
   const profileIds = new Set(profiles.map((item) => item.id));
@@ -308,16 +333,17 @@ agentAutoReplyApi.patch('/api/agent/first-reply', async (c) => {
     ).bind(agent.id, body.activeProfileId, profilesJson),
     c.env.DB.prepare(
       `INSERT INTO agent_first_reply_items (
-         id, profile_id, material_type, material_id, sort_order
+         id, profile_id, agent_id, material_type, material_id, sort_order
        )
        SELECT json_extract(item.value, '$.id'),
               json_extract(profile.value, '$.id'),
+              ?1,
               json_extract(item.value, '$.type'),
               json_extract(item.value, '$.materialId'),
               CAST(json_extract(item.value, '$.sortOrder') AS INTEGER)
-       FROM json_each(?1) profile
+       FROM json_each(?2) profile
        JOIN json_each(json_extract(profile.value, '$.items')) item`,
-    ).bind(profilesJson),
+    ).bind(agent.id, profilesJson),
     c.env.DB.prepare(
       `INSERT INTO agent_first_reply_profile_attachments (
          profile_id, preset_id, sort_order

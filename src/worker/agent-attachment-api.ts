@@ -279,12 +279,36 @@ agentAttachmentApi.patch('/api/agent/attachments/presets/:id', async (c) => {
 agentAttachmentApi.delete('/api/agent/attachments/presets/:id', async (c) => {
   const agent = await requireAgentSession(c);
   if (!agent) return c.json({ error: 'UNAUTHORIZED' }, 401);
-  const result = await c.env.DB.prepare(
+  const id = c.req.param('id');
+  const preset = await presetForAgent(c.env.DB, id, agent.id);
+  if (!preset) return c.json({ error: 'NOT_FOUND' }, 404);
+  const isBound = await c.env.DB.prepare(
+    `SELECT 1
+     FROM agent_first_reply_items item
+     JOIN agent_first_reply_profiles profile ON profile.id = item.profile_id
+     WHERE item.material_id = ?1 AND profile.agent_id = ?2
+       AND item.material_type IN ('contact_card', 'image')
+     LIMIT 1`,
+  )
+    .bind(id, agent.id)
+    .first();
+  const isBoundInLegacyProjection = await c.env.DB.prepare(
+    `SELECT 1
+     FROM agent_first_reply_profile_attachments relation
+     JOIN agent_first_reply_profiles profile ON profile.id = relation.profile_id
+     WHERE relation.preset_id = ?1 AND profile.agent_id = ?2
+     LIMIT 1`,
+  )
+    .bind(id, agent.id)
+    .first();
+  if (isBound || isBoundInLegacyProjection) {
+    return c.json({ error: 'ATTACHMENT_PRESET_IN_USE' }, 409);
+  }
+  await c.env.DB.prepare(
     `DELETE FROM agent_attachment_presets WHERE id = ?1 AND agent_id = ?2`,
   )
-    .bind(c.req.param('id'), agent.id)
+    .bind(id, agent.id)
     .run();
-  if (!result.meta.changes) return c.json({ error: 'NOT_FOUND' }, 404);
   // Image/icon objects are intentionally retained. Previously sent messages may
   // still reference immutable R2 objects after the reusable preset is deleted.
   return c.json({ ok: true });

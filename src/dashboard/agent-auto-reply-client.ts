@@ -167,6 +167,9 @@ async function autoReplyRequest<T>(
     if (body.error === 'INVALID_FIRST_REPLY') {
       throw new Error('首次回复配置无效，请检查素材和组合关系');
     }
+    if (body.error === 'FIRST_REPLY_MATERIAL_IN_USE') {
+      throw new Error('请先在首次回复配置中解绑此素材，再从素材库删除');
+    }
     if (body.error === 'FIRST_REPLY_CONTENT_REQUIRED') {
       throw new Error('开启自动回复时至少保留一个问候语或附件');
     }

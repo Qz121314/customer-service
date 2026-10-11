@@ -2412,6 +2412,140 @@ test('isolated client -> routing -> agent -> client flow works through real Hono
   database.close();
 });
 
+test('deleting an attachment preset keeps first-reply settings saveable', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database);
+  database
+    .prepare(
+      `INSERT INTO agents (
+         id, site_id, name, username, password_hash, password_salt,
+         status, is_enabled, last_seen_at, traffic_quota_enabled,
+         auto_greeting_enabled
+       ) VALUES (
+         'delete-agent', 'default', 'Delete', 'delete', 'hash', 'salt',
+         'online', 1, CURRENT_TIMESTAMP, 0, 0
+       )`,
+    )
+    .run();
+  const token = 'delete-token';
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES ('delete-session', 'delete-agent', ?, datetime('now', '+1 day'))`,
+    )
+    .run(sha256(token));
+  database
+    .prepare(
+      `INSERT INTO agent_attachment_presets (
+         id, agent_id, kind, label, value
+       ) VALUES ('delete-card', 'delete-agent', 'sms', '短信', '+1 555 0100')`,
+    )
+    .run();
+  const env = { DB: d1(database) };
+  const cookie = { cookie: `cs_agent_session=${token}` };
+  const settings = {
+    enabled: true,
+    activeProfileId: 'delete-profile',
+    greetings: [{ id: 'delete-greeting', name: '问候', text: '你好' }],
+    ctas: [],
+    profiles: [
+      {
+        id: 'delete-profile',
+        name: '默认',
+        items: [
+          {
+            id: 'delete-greeting-item',
+            type: 'greeting',
+            materialId: 'delete-greeting',
+            sortOrder: 0,
+          },
+          {
+            id: 'delete-card-item',
+            type: 'contact_card',
+            materialId: 'delete-card',
+            sortOrder: 1,
+          },
+        ],
+      },
+    ],
+  };
+  const saved = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(settings),
+    },
+    env,
+  );
+  assert.equal(saved.status, 200);
+
+  const blockedDelete = await agentAttachmentApi.request(
+    '/api/agent/attachments/presets/delete-card',
+    { method: 'DELETE', headers: cookie },
+    env,
+  );
+  assert.equal(blockedDelete.status, 409);
+  assert.equal((await json(blockedDelete)).error, 'ATTACHMENT_PRESET_IN_USE');
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM agent_attachment_presets
+         WHERE id = 'delete-card'`,
+      )
+      .get().count,
+    1,
+  );
+
+  const unboundSettings = {
+    ...settings,
+    profiles: settings.profiles.map((profile) => ({
+      ...profile,
+      items: profile.items.filter((item) => item.materialId !== 'delete-card'),
+    })),
+  };
+  const unbound = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(unboundSettings),
+    },
+    env,
+  );
+  assert.equal(unbound.status, 200);
+
+  const deleted = await agentAttachmentApi.request(
+    '/api/agent/attachments/presets/delete-card',
+    { method: 'DELETE', headers: cookie },
+    env,
+  );
+  assert.equal(deleted.status, 200);
+
+  const loaded = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    { headers: cookie },
+    env,
+  );
+  const updatedSettings = (await loaded.json()).settings;
+  assert.deepEqual(
+    updatedSettings.profiles[0].items.map((item) => item.type),
+    ['greeting'],
+  );
+  const savedAgain = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(updatedSettings),
+    },
+    env,
+  );
+  assert.equal(savedAgain.status, 200);
+
+  database.close();
+});
+
 test('consultation quota commercial lifecycle remains consistent end to end', async () => {
   const database = new DatabaseSync(':memory:');
   applyMigrations(database);

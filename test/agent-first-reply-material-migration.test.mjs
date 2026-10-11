@@ -118,6 +118,18 @@ test('0070 materializes legacy first-reply data and removes invalid relations', 
       'utf8',
     ),
   );
+  database.exec(
+    readFileSync(
+      `${migrationsDirectory}/0074_repair_first_reply_material_references.sql`,
+      'utf8',
+    ),
+  );
+  database.exec(
+    readFileSync(
+      `${migrationsDirectory}/0075_first_reply_material_registry.sql`,
+      'utf8',
+    ),
+  );
 
   const greeting = database
     .prepare(
@@ -201,9 +213,8 @@ test('0070 materializes legacy first-reply data and removes invalid relations', 
 
   const updated = await added.json();
   updated.settings.enabled = false;
-  updated.settings.greetings = [];
   updated.settings.profiles[0].items = [];
-  const removed = await agentAutoReplyApi.request(
+  const unbound = await agentAutoReplyApi.request(
     '/api/agent/first-reply',
     {
       method: 'PATCH',
@@ -212,6 +223,23 @@ test('0070 materializes legacy first-reply data and removes invalid relations', 
         'content-type': 'application/json',
       },
       body: JSON.stringify(updated.settings),
+    },
+    { DB: d1 },
+  );
+  assert.equal(unbound.status, 200);
+
+  const unboundSettings = await unbound.json();
+  unboundSettings.settings.greetings = [];
+  unboundSettings.settings.ctas = [];
+  const removed = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: {
+        cookie: 'cs_agent_session=legacy-token',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(unboundSettings.settings),
     },
     { DB: d1 },
   );
@@ -277,6 +305,246 @@ test('0070 cleans stale canonical attachment relations', () => {
     .get('canonical-agent');
   assert.equal(canonicalAgent.auto_greeting_enabled, 0);
   assert.equal(canonicalAgent.auto_greeting_text, null);
+
+  database.close();
+});
+
+test('0074 repairs stale polymorphic references so first reply can be saved', async () => {
+  const database = new DatabaseSync(':memory:');
+  applyMigrations(database, '0074_repair_first_reply_material_references.sql');
+  for (const [id, username] of [
+    ['repair-agent', 'repair'],
+    ['other-agent', 'other'],
+  ]) {
+    database
+      .prepare(
+        `INSERT INTO agents (
+           id, site_id, name, username, password_hash, password_salt,
+           status, is_enabled, last_seen_at, traffic_quota_enabled,
+           auto_greeting_enabled
+         ) VALUES (?, 'default', ?, ?, 'hash', 'salt', 'online', 1,
+                   CURRENT_TIMESTAMP, 0, 1)`,
+      )
+      .run(id, username, username);
+  }
+  database
+    .prepare(
+      `INSERT INTO agent_greeting_presets (id, agent_id, name, text)
+       VALUES ('valid-greeting', 'repair-agent', '问候', '你好')`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO agent_greeting_presets (id, agent_id, name, text)
+       VALUES ('other-greeting', 'other-agent', '问候', '你好')`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO agent_attachment_presets (
+         id, agent_id, kind, label, value
+       ) VALUES ('valid-card', 'repair-agent', 'sms', '短信', '+1 555 0100')`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO agent_first_reply_profiles (
+         id, agent_id, name, is_active
+       ) VALUES ('repair-profile', 'repair-agent', '默认', 1)`,
+    )
+    .run();
+  database
+    .prepare(
+      `INSERT INTO agent_sessions (id, agent_id, token_hash, expires_at)
+       VALUES ('repair-session', 'repair-agent', ?, datetime('now', '+1 day'))`,
+    )
+    .run(await hashAgentSessionToken('repair-token'));
+  database
+    .prepare(
+      `INSERT INTO agent_first_reply_items (
+         id, profile_id, material_type, material_id, sort_order
+       ) VALUES
+         ('valid-greeting-item', 'repair-profile', 'greeting', 'valid-greeting', 0),
+         ('valid-card-item', 'repair-profile', 'contact_card', 'valid-card', 1),
+         ('deleted-card-item', 'repair-profile', 'contact_card', 'deleted-card', 2),
+         ('wrong-type-item', 'repair-profile', 'image', 'valid-card', 3),
+         ('foreign-greeting-item', 'repair-profile', 'greeting', 'other-greeting', 4)`,
+    )
+    .run();
+
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM agent_first_reply_items
+         WHERE id IN ('deleted-card-item', 'wrong-type-item', 'foreign-greeting-item')`,
+      )
+      .get().count,
+    3,
+  );
+  database.exec(
+    readFileSync(
+      `${migrationsDirectory}/0074_repair_first_reply_material_references.sql`,
+      'utf8',
+    ),
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        `SELECT id FROM agent_first_reply_items
+         ORDER BY sort_order, id`,
+      )
+      .all()
+      .map((row) => row.id),
+    ['valid-greeting-item', 'valid-card-item'],
+  );
+  database.exec(
+    readFileSync(
+      `${migrationsDirectory}/0075_first_reply_material_registry.sql`,
+      'utf8',
+    ),
+  );
+  assert.throws(
+    () =>
+      database
+        .prepare(
+          `INSERT INTO agent_first_reply_items (
+             id, profile_id, agent_id, material_type, material_id, sort_order
+           ) VALUES (
+             'missing-material-item', 'repair-profile', 'repair-agent',
+             'image', 'missing-material', 3
+           )`,
+        )
+        .run(),
+    /FOREIGN KEY constraint failed/u,
+  );
+  assert.throws(
+    () =>
+      database
+        .prepare(
+          `INSERT INTO agent_first_reply_items (
+             id, profile_id, agent_id, material_type, material_id, sort_order
+           ) VALUES (
+             'wrong-type-item', 'repair-profile', 'repair-agent',
+             'image', 'valid-card', 3
+           )`,
+        )
+        .run(),
+    /FOREIGN KEY constraint failed/u,
+  );
+  assert.throws(
+    () =>
+      database
+        .prepare(
+          `INSERT INTO agent_first_reply_items (
+             id, profile_id, agent_id, material_type, material_id, sort_order
+           ) VALUES (
+             'foreign-material-item', 'repair-profile', 'other-agent',
+             'greeting', 'valid-greeting', 3
+           )`,
+        )
+        .run(),
+    /FOREIGN KEY constraint failed/u,
+  );
+  assert.throws(
+    () =>
+      database
+        .prepare(
+          `INSERT INTO agent_first_reply_items (
+             id, profile_id, agent_id, material_type, material_id, sort_order
+           ) VALUES (
+             'foreign-profile-item', 'repair-profile', 'other-agent',
+             'greeting', 'other-greeting', 3
+           )`,
+        )
+        .run(),
+    /FOREIGN KEY constraint failed/u,
+  );
+  assert.throws(
+    () =>
+      database
+        .prepare(`DELETE FROM agent_attachment_presets WHERE id = 'valid-card'`)
+        .run(),
+    /FOREIGN KEY constraint failed/u,
+  );
+  const cookie = { cookie: 'cs_agent_session=repair-token' };
+  const loaded = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    { headers: cookie },
+    { DB: createD1(database) },
+  );
+  const settings = (await loaded.json()).settings;
+  const deleteWhileBound = {
+    ...settings,
+    greetings: [],
+    profiles: settings.profiles.map((profile) => ({
+      ...profile,
+      items: profile.items.filter((item) => item.type !== 'greeting'),
+    })),
+  };
+  const blockedDelete = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(deleteWhileBound),
+    },
+    { DB: createD1(database) },
+  );
+  assert.equal(blockedDelete.status, 409);
+  assert.equal(
+    (await blockedDelete.json()).error,
+    'FIRST_REPLY_MATERIAL_IN_USE',
+  );
+
+  const unboundSettings = {
+    ...settings,
+    profiles: settings.profiles.map((profile) => ({
+      ...profile,
+      items: profile.items.filter((item) => item.type !== 'greeting'),
+    })),
+  };
+  const unbound = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(unboundSettings),
+    },
+    { DB: createD1(database) },
+  );
+  assert.equal(unbound.status, 200);
+
+  const unreferencedDelete = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ ...unboundSettings, greetings: [] }),
+    },
+    { DB: createD1(database) },
+  );
+  assert.equal(unreferencedDelete.status, 200);
+
+  const saved = await agentAutoReplyApi.request(
+    '/api/agent/first-reply',
+    {
+      method: 'PATCH',
+      headers: { ...cookie, 'content-type': 'application/json' },
+      body: JSON.stringify(unboundSettings),
+    },
+    { DB: createD1(database) },
+  );
+  assert.equal(saved.status, 200);
+
+  database.prepare(`DELETE FROM agents WHERE id = 'repair-agent'`).run();
+  assert.equal(
+    database
+      .prepare(
+        `SELECT COUNT(*) AS count FROM agent_materials WHERE agent_id = ?`,
+      )
+      .get('repair-agent').count,
+    0,
+  );
 
   database.close();
 });
