@@ -10,10 +10,10 @@ import {
 import { join } from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { routeRegistration } from './helpers/source-contract.mjs';
 
-const workerPath = new URL('../src/worker/', import.meta.url).pathname;
+const workerPath = fileURLToPath(new URL('../src/worker/', import.meta.url));
 const moduleShims = [];
 for (const name of readdirSync(workerPath)) {
   if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue;
@@ -43,8 +43,9 @@ const cursorMigration = await readFile(
 );
 
 function applyMigrations(database) {
-  const migrationsDirectory = new URL('../migrations/', import.meta.url)
-    .pathname;
+  const migrationsDirectory = fileURLToPath(
+    new URL('../migrations/', import.meta.url),
+  );
   for (const name of readdirSync(migrationsDirectory)
     .filter((value) => /^\d+.*\.sql$/u.test(value))
     .sort()) {
