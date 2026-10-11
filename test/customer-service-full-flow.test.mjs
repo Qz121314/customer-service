@@ -2486,10 +2486,7 @@ test('deleting an attachment preset keeps first-reply settings saveable', async 
     env,
   );
   assert.equal(blockedDelete.status, 409);
-  assert.equal(
-    (await blockedDelete.json()).error,
-    'ATTACHMENT_PRESET_IN_USE',
-  );
+  assert.equal((await blockedDelete.json()).error, 'ATTACHMENT_PRESET_IN_USE');
   assert.equal(
     database
       .prepare(
