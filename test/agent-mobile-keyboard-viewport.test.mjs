@@ -4,7 +4,10 @@ import { URL } from 'node:url';
 import test from 'node:test';
 
 function source(path) {
-  return readFileSync(new URL(path, import.meta.url), 'utf8');
+  return readFileSync(new URL(path, import.meta.url), 'utf8').replaceAll(
+    '\r\n',
+    '\n',
+  );
 }
 
 test('mobile agent follows the visual viewport without subtree layout work', () => {

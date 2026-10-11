@@ -20,8 +20,8 @@ export function VisitorChatPage() {
   );
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [visitorId] = useState(() => getOrCreateVisitorId());
-  const [visitorToken, setVisitorToken] = useState(
-    () => localStorage.getItem(VISITOR_TOKEN_KEY) ?? '',
+  const [visitorToken, setVisitorToken] = useState(() =>
+    getOrCreateVisitorToken(),
   );
   const visitorTokenRef = useRef(visitorToken);
   const [error, setError] = useState('');
@@ -345,6 +345,14 @@ function getOrCreateVisitorId(): string {
   if (existing) return existing;
   const value = `visitor-${crypto.randomUUID()}`;
   localStorage.setItem(VISITOR_ID_KEY, value);
+  return value;
+}
+
+function getOrCreateVisitorToken(): string {
+  const existing = localStorage.getItem(VISITOR_TOKEN_KEY);
+  if (existing) return existing;
+  const value = `${crypto.randomUUID()}${crypto.randomUUID()}`;
+  localStorage.setItem(VISITOR_TOKEN_KEY, value);
   return value;
 }
 
