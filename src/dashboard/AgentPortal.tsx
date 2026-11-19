@@ -669,10 +669,14 @@ function AgentWorkspace({
   }, [totalUnread]);
 
   const applyInbox = useCallback((inbox: AgentInbox) => {
+    const expiredIds = expiredConversationIds(inbox.conversations);
+    const conversations = inbox.conversations.filter(
+      (conversation) => !expiredIds.has(conversation.id),
+    );
     setOverview(inbox.overview);
-    setConversations(inbox.conversations);
+    setConversations(conversations);
     unreadCountRef.current = new Map(
-      inbox.conversations.map((conversation) => [
+      conversations.map((conversation) => [
         conversation.id,
         conversation.agent_unread_count,
       ]),
