@@ -2010,4 +2010,3 @@ function AgentWorkspace({
     </div>
   );
 }
-
