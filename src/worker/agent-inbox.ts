@@ -63,7 +63,7 @@ export async function loadAgentOverview(db: D1Database, agentId: string) {
        FROM agents a
        LEFT JOIN conversations c
          ON c.assigned_agent = a.id
-        AND c.expires_at > CURRENT_TIMESTAMP
+        AND julianday(c.expires_at) > julianday('now')
        LEFT JOIN agent_daily_stats s
          ON s.site_id = a.site_id
         AND s.agent_id = a.id
@@ -137,7 +137,7 @@ export async function loadAgentInbox(
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.assigned_agent = ?1
          AND c.status = ?2
-         AND c.expires_at > CURRENT_TIMESTAMP
+         AND julianday(c.expires_at) > julianday('now')
        ORDER BY c.last_message_at DESC, c.id DESC
        LIMIT COALESCE(?3, -1)`,
     );
@@ -179,7 +179,7 @@ export async function loadAgentInbox(
        FROM conversations c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.assigned_agent = ?1
-         AND c.expires_at > CURRENT_TIMESTAMP
+         AND julianday(c.expires_at) > julianday('now')
      )
      SELECT * FROM ranked
      WHERE status <> 'closed' OR __closed_rank <= ?2
@@ -221,3 +221,4 @@ export async function loadAgentInbox(
     },
   };
 }
+
