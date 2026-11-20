@@ -773,7 +773,9 @@ export function openAdminStatisticsSocket(): WebSocket {
   return openSocket('/api/admin/realtime/stats', true);
 }
 
-const REALTIME_RECONNECT_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
+const REALTIME_RECONNECT_DELAYS_MS = [
+  1000, 2000, 4000, 8000, 15000, 30000, 60000,
+];
 
 export function realtimeReconnectDelay(
   attempt: number,

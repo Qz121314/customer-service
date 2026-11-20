@@ -8,11 +8,15 @@ const read = (path) => readFile(new URL(path, import.meta.url), 'utf8');
 
 test('realtime reconnect uses capped exponential backoff with jitter', () => {
   assert.deepEqual(
-    [0, 1, 2, 3, 4, 8].map((attempt) => realtimeReconnectDelay(attempt, 0.5)),
-    [1000, 2000, 4000, 8000, 15000, 15000],
+    [0, 1, 2, 3, 4, 5, 6, 8].map((attempt) =>
+      realtimeReconnectDelay(attempt, 0.5),
+    ),
+    [1000, 2000, 4000, 8000, 15000, 30000, 60000, 60000],
   );
   assert.equal(realtimeReconnectDelay(4, 0), 12000);
   assert.equal(realtimeReconnectDelay(4, 1), 18000);
+  assert.equal(realtimeReconnectDelay(8, 0), 48000);
+  assert.equal(realtimeReconnectDelay(8, 1), 72000);
 });
 
 test('agent workspace exposes explicit connection states and delta recovery', async () => {
@@ -35,6 +39,13 @@ test('agent workspace exposes explicit connection states and delta recovery', as
   assert.match(api, /afterCreatedAt/u);
   assert.match(worker, /INVALID_MESSAGE_CURSOR/u);
   assert.match(media, /clientUploadId/u);
+});
+
+test('visitor reconnect uses the shared backoff and recovers missing messages', async () => {
+  const visitor = await read('../src/dashboard/VisitorChatPage.tsx');
+  assert.match(visitor, /realtimeReconnectDelay\(retryAttempt\)/u);
+  assert.match(visitor, /if \(openedOnce\) void loadMissing\(\)/u);
+  assert.match(visitor, /window\.addEventListener\('online', reconnectNow\)/u);
 });
 
 test('media reservations are idempotent and abandoned uploads are quarantined', async () => {
