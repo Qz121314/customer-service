@@ -19,6 +19,14 @@ test('admin statistics use an authenticated realtime delta channel without polli
   assert.match(controller, /traffic\.receipt\.created/u);
   assert.doesNotMatch(controller, /setInterval\(/u);
   assert.match(controller, /loadStats\(\{ current: active \}\)/u);
+  assert.match(
+    controller,
+    /stableTimer = window\.setTimeout\([\s\S]*?reconnectAttempt = 0;[\s\S]*?10_000/u,
+  );
+  assert.match(
+    controller,
+    /window\.addEventListener\('online', reconnectNow\)/u,
+  );
 });
 
 test('traffic receipt events reuse the assignment snapshot and do not add a D1 read', () => {
