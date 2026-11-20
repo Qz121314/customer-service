@@ -4,6 +4,7 @@ import {
   markVisitorConversationRead,
   normalizeVisitorMessage,
   openVisitorConversationSocket,
+  realtimeReconnectDelay,
   sendVisitorMessage,
   sendVisitorGreetingCta,
   startVisitorConversation,
@@ -167,7 +168,7 @@ export function VisitorChatPage() {
             socketRef.current = null;
             if (stableTimer !== null) window.clearTimeout(stableTimer);
             stableTimer = null;
-            const delay = Math.min(30_000, 1_000 * 2 ** retryAttempt);
+            const delay = realtimeReconnectDelay(retryAttempt);
             retryAttempt += 1;
             timer = window.setTimeout(connect, delay);
           });
