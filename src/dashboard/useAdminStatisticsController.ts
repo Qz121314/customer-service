@@ -95,6 +95,7 @@ export function useAdminStatisticsController(section: AdminSection) {
     let active = true;
     let socket: WebSocket | null = null;
     let reconnectTimer: number | null = null;
+    let stableTimer: number | null = null;
     let reconnectAttempt = 0;
     let resyncOnReconnect = false;
 
@@ -132,7 +133,10 @@ export function useAdminStatisticsController(section: AdminSection) {
           resyncOnReconnect = false;
           void loadStats({ current: active }).catch(() => undefined);
         }
-        reconnectAttempt = 0;
+        if (stableTimer !== null) window.clearTimeout(stableTimer);
+        stableTimer = window.setTimeout(() => {
+          reconnectAttempt = 0;
+        }, 10_000);
       });
       socket.addEventListener('message', (event) => {
         try {
@@ -145,6 +149,9 @@ export function useAdminStatisticsController(section: AdminSection) {
       });
       socket.addEventListener('close', () => {
         if (!active) return;
+        socket = null;
+        if (stableTimer !== null) window.clearTimeout(stableTimer);
+        stableTimer = null;
         resyncOnReconnect = true;
         const delay = realtimeReconnectDelay(reconnectAttempt);
         reconnectAttempt += 1;
@@ -152,10 +159,20 @@ export function useAdminStatisticsController(section: AdminSection) {
       });
     };
 
+    const reconnectNow = () => {
+      if (!active || socket) return;
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      reconnectAttempt = 0;
+      connect();
+    };
     connect();
+    window.addEventListener('online', reconnectNow);
     return () => {
       active = false;
+      window.removeEventListener('online', reconnectNow);
       if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      if (stableTimer !== null) window.clearTimeout(stableTimer);
       socket?.close();
     };
   }, [loadStats, section, trafficRange]);
